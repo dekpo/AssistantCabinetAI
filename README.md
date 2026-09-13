@@ -19,9 +19,13 @@ Help staff process large volumes of documents (DOC, DOCX, PDF, text and similar)
 | Target host | Apple Silicon Mac mini, 64 GB | Internal server, unified memory |
 | Clients | Windows PCs (macOS later) | Existing habits stay |
 
+## Local prototype
+
+Docker Compose on localhost (Ollama + Open WebUI). Install steps: [docs/user/local-compose.md](docs/user/local-compose.md). Fictional GP files: `fixtures/gp-sandbox/`. Licence register: [models/LICENSES.md](models/LICENSES.md).
+
 ## Project status
 
-Framing is ready to start a prototype. **Pilot:** French liberal GP. **Next step:** Docker Compose with Ollama + Open WebUI on localhost (not Open WebUI Computer).
+**Pilot:** French liberal GP (admin only). Compose files are in this repo. Do not use Open WebUI Computer on a practice machine.
 
 Public docs and contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). Owner-only notes live under `docs/` on the local machine and are **not** in git. Published user guides will go in `docs/user/`.
 

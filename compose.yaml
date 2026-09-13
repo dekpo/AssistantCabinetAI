@@ -1,0 +1,68 @@
+# Official local stack. Same file on Windows and later on the Mac mini.
+# Bind published ports to 127.0.0.1 only. Do not add Open WebUI Computer.
+
+name: assistant-cabinet
+
+services:
+  ollama:
+    image: ollama/ollama:${OLLAMA_DOCKER_TAG:-latest}
+    container_name: assistant-cabinet-ollama
+    restart: unless-stopped
+    # Listen on all interfaces *inside* the Compose network. The host mapping
+    # below keeps the published port on localhost only.
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    ports:
+      - "127.0.0.1:${OLLAMA_HOST_PORT:-11434}:11434"
+    volumes:
+      - ollama:/root/.ollama
+    networks:
+      - cabinet
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    # Optional NVIDIA GPU. Uncomment only if the NVIDIA Container Toolkit is installed.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG:-main}
+    container_name: assistant-cabinet-open-webui
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${OPEN_WEBUI_HOST_PORT:-3000}:8080"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      WEBUI_AUTH: "true"
+      # First visitor becomes admin. After that account exists, set ENABLE_SIGNUP=false.
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
+      ENABLE_OPENAI_API: "false"
+      ENABLE_COMMUNITY_SHARING: "false"
+      ENABLE_WEB_SEARCH: "false"
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-change-me-locally}
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+      ANONYMIZED_TELEMETRY: "false"
+    volumes:
+      - open-webui:/app/backend/data
+    networks:
+      - cabinet
+
+networks:
+  cabinet:
+    driver: bridge
+
+volumes:
+  ollama:
+  open-webui:

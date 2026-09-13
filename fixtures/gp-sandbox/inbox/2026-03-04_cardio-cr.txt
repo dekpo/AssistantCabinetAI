@@ -1,0 +1,13 @@
+FICTIF — compte rendu d'arrivée.
+
+Centre inventé : Imagerie du Parc
+Date de l'examen : 03/03/2026
+Patient fictif : Camille EXEMPLE, née le 12/03/1978
+Prescripteur fictif : Dr Léa Pilote
+
+Examen : électrocardiogramme de repos
+Texte (inventé) :
+Rythme sinusal. Fréquence 72 / min. Pas d'anomalie de conduction dans ce compte rendu fictif.
+Conclusion du correspondant : tracé sans particularité dans ce document d'exemple.
+
+Ne pas modifier un traitement à partir de ce texte.

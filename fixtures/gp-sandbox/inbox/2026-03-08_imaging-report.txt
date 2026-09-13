@@ -1,0 +1,10 @@
+FICTIF — imagerie d'arrivée.
+
+Centre inventé : Radio des Halles
+Date : 07/03/2026
+Patient fictif : Omar SAND, né le 30/09/1984
+Examen : radiographie de cheville gauche
+
+Indication saisie (inventée) : douleur après torsion en marchant.
+Compte rendu (inventé) : pas de fracture visible sur les clichés fournis dans cet exemple.
+Conclusion : à relire par la médecin. Ne pas poser de diagnostic automatique.

@@ -1,0 +1,19 @@
+# Internal owner notes (French cadrage). Not published.
+/docs/*
+!/docs/user/
+!/docs/user/**
+
+.env
+.env.*
+!.env.example
+.ollama/
+models/*.gguf
+*.pem
+*.p12
+node_modules/
+.venv/
+__pycache__/
+.DS_Store
+Thumbs.db
+fixtures/gp-sandbox/real/
+*.log

@@ -1,0 +1,16 @@
+---
+description: Git et GitHub — anglais pour le versionnage, écriture réservée à Elise
+alwaysApply: true
+---
+
+# Git
+
+Elise exécute toute écriture Git. Les agents ne lancent jamais `git commit`, `git push`, `git add` (sauf demande explicite de classement dans ce message), ni amend, rebase, reset, force-push, ou `--no-verify`.
+
+Après un changement utile, **proposer en anglais** :
+
+- branche : `feat|fix|docs|chore/<short-topic>`
+- sujet de commit : Conventional Commits, 72 caractères ou moins
+- si besoin : titre de PR et plan de test
+
+Pas de secrets, pas de noms de patients, pas de `.env`, **pas de doc interne** (`docs/` hors `docs/user/`). Politique : `CONTRIBUTING.md`.

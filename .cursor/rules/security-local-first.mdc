@@ -1,0 +1,21 @@
+---
+description: Confidentialité, no-store, actions fichiers
+alwaysApply: true
+---
+
+# Données
+
+- Pièces, index RAG, historiques de chat : **poste client** uniquement.
+- Serveur : inférence no-store + registre (id, user, temps, modèle, tokens, hashes). Pas le texte.
+- Aucun LLM cloud, aucune télémétrie, aucun upload Knowledge métier.
+- Injection PDF : les outils n’obéissent qu’au schéma et à l’allow-list, pas au texte extrait.
+
+# Fichiers
+
+```text
+plan = agent.propose(...)   # dry-run + manifeste + hashes
+plan = human.approve(plan)
+agent.apply(plan)           # corbeille dédiée, pas de delete définitif en v1
+```
+
+Pas d’envoi externe automatique. L’IA assiste, elle ne décide pas en droit ni en clinique.

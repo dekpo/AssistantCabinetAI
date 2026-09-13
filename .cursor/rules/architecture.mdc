@@ -1,0 +1,21 @@
+---
+description: Passerelle /v1, contrats, portabilité
+alwaysApply: true
+---
+
+# Contrats stables
+
+1. Tous les clients parlent à la passerelle OpenAI-compat (`/v1`), jamais à Ollama.
+2. Catalogue d’outils versionné + format de plan d’action.
+3. Audit métadonnées. Runtimes (Open WebUI, MCP, Hermes, OpenClaw) = adaptateurs.
+4. Plugins IDE (Continue, Cline) : scope `chat` seulement.
+5. `/v1/audio/*` et `/v1/jobs` sont **réservés**. STT cloud interdit.
+6. Prototype = Ollama + Open WebUI localhost. Open WebUI Computer (`cptr`) : pas sur un poste de cabinet.
+
+# Portabilité
+
+Environnement officiel : **Docker Compose** (`docs/DOCKER.md`). Même fichier sur Windows et sur Mac mini. Chemins agnostiques dans le code. Dev → Mac mini = même Compose, modèles plus capables.
+
+# Hors scope tant que le pilote n’a pas tenu
+
+Fine-tune, mobile, index serveur d’affaires, actions irréversibles sans revue, second métier partagé.

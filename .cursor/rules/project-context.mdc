@@ -1,0 +1,22 @@
+---
+description: Contexte durable pour chaque session
+alwaysApply: true
+---
+
+# Assistant Cabinet AI
+
+IA locale pour cabinets. Pilote : médecin généraliste libéral. Pile à tester en premier : **Docker Compose** (Ollama + Open WebUI, localhost). Ne pas installer Open WebUI Computer sur un poste de cabinet.
+
+Lire : `AGENTS.md`, `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`.
+
+# Produit
+
+Chat, plus tard un volet sur le dossier, plans de fichiers validés par l’humain. Pas un remplacement du logiciel métier. Pas d’entrepôt de dossiers médicaux sur le serveur d’IA. Données fictives tant que l’entretien et une ébauche d’AIPD n’existent pas.
+
+# Contraintes de session
+
+- Un métier à la fois (généraliste maintenant).
+- Git : Elise seule écrit ; branches et commits en anglais. **Ne pas versionner** la doc interne (`docs/` hors `docs/user/`).
+- Langues : `docs/LANGUE.md` — pas de franglais.
+- Environnement officiel = Compose, portable Windows → Mac mini.
+- Ne jamais exposer Ollama ; ne jamais verser de vrais dossiers dans Knowledge ; pas de modèle distant.

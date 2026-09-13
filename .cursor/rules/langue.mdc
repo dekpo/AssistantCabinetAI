@@ -1,0 +1,13 @@
+---
+description: Français interne, anglais public et Git — jamais de franglais
+alwaysApply: true
+---
+
+# Langue
+
+Un fichier = une langue. Détail : `docs/LANGUE.md`.
+
+- **Français seulement, hors Git** : chat avec Elise, cadrage dans `docs/` (sauf `docs/user/`).
+- **Anglais seulement, dans Git** : branches, commits, PR, code, `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/user/`, identifiants.
+
+Interdit : mélanger les deux dans le même document (franglais). Les sigles officiels français (DMP, FSE, MSSanté) et les noms de produits (Docker, Ollama) restent tels quels dans un texte français.

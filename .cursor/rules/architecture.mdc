@@ -10,7 +10,7 @@ alwaysApply: true
 3. Audit métadonnées. Runtimes (Open WebUI, MCP, Hermes, OpenClaw) = adaptateurs.
 4. Plugins IDE (Continue, Cline) : scope `chat` seulement.
 5. `/v1/audio/*` et `/v1/jobs` sont **réservés**. STT cloud interdit.
-6. Prototype = Ollama + Open WebUI localhost. Open WebUI Computer (`cptr`) : pas sur un poste de cabinet.
+6. Prototype inférence = Ollama + Open WebUI localhost (**admin / banc d’essai**). Écran métier = fenêtre native (Tauri), pas le navigateur. Open WebUI Computer (`cptr`) : pas sur un poste de cabinet. Détail local : `docs/CLIENT-NATIF.md`.
 
 # Portabilité
 

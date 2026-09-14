@@ -7,10 +7,16 @@ alwaysApply: true
 
 Elise exécute toute écriture Git. Les agents ne lancent jamais `git commit`, `git push`, `git add` (sauf demande explicite de classement dans ce message), ni amend, rebase, reset, force-push, ou `--no-verify`.
 
-Après un changement utile, **proposer en anglais** :
+Après un changement utile, **proposer en anglais** et **coller les commandes complètes**, prêtes à exécuter (une par ligne), pas seulement un nom de branche. Modèle :
 
-- branche : `feat|fix|docs|chore/<short-topic>`
-- sujet de commit : Conventional Commits, 72 caractères ou moins
-- si besoin : titre de PR et plan de test
+```text
+git status
+git checkout -b feat/exemple-sujet
+git add chemin/fichier1 chemin/fichier2
+git commit -m "feat: short subject in english"
+git status
+```
+
+Ne jamais lister `docs/` (sauf `docs/user/`). Si rien n’est versionnable (notes internes seulement) : le dire clairement, **sans** bloc git.
 
 Pas de secrets, pas de noms de patients, pas de `.env`, **pas de doc interne** (`docs/` hors `docs/user/`). Politique : `CONTRIBUTING.md`.

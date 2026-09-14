@@ -16,7 +16,7 @@ Owner-facing notes in `docs/` are French only (`docs/LANGUE.md`). Do not write F
 
 ## Git
 
-Owner-only. Never commit or push. Suggest English branch names and Conventional Commit messages. See `CONTRIBUTING.md`.
+Owner-only. Never commit or push. Suggest English branch names, Conventional Commit messages, and **full copy-paste git commands**. See `CONTRIBUTING.md`.
 
 **Do not version internal notes.** Never stage `docs/` except `docs/user/`. Cadrage, audits, and interview files stay local.
 

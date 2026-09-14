@@ -24,11 +24,23 @@ The human owner runs every `git` write. Agents **must not** run:
 - `git add` (unless the owner explicitly asked to stage in that message)
 - `git commit --amend`, rebase, reset, force-push, or hook skips
 
-Agents **must** propose, in English:
+Agents **must** propose, in English, **copy-pasteable commands** (not only a branch name):
 
-- a branch name
-- a short Conventional Commit subject (optional body)
-- a PR title and test plan when a branch is ready
+```text
+git status
+git checkout -b feat/<short-topic>
+git add path/to/file1 path/to/file2
+git commit -m "feat: short subject in english"
+git status
+```
+
+Also name:
+
+- branch: `feat|fix|docs|chore/<short-topic>`
+- Conventional Commit subject, 72 characters or fewer
+- PR title and test plan when a branch is ready
+
+If the only edits are internal `docs/` (not `docs/user/`), **do not** propose a commit. Say that the notes stay local.
 
 ## Branch names
 

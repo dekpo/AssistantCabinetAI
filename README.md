@@ -13,11 +13,12 @@ Help staff process large volumes of documents (DOC, DOCX, PDF, text and similar)
 | Environment | Docker Compose | Same stack on a Windows PC and later on a Mac mini |
 | Inference | [Ollama](https://ollama.com/) | Local models |
 | Gateway | OpenAI-compatible `/v1` | All clients (pane, Open WebUI, VS Code / Continue) |
-| Admin UI | [Open WebUI](https://openwebui.com/) | Advanced chat and admin — **not** a store for case files |
+| Admin UI | [Open WebUI](https://openwebui.com/) | Owner workbench only — **not** the GP’s screen, **not** a store for case files |
+| Practice app | Assistant Cabinet AI (Tauri) | Native window on Windows and Mac: work folder + plan + chat |
 | Retrieval | Index **on each workstation** | Sensitive files are not stored on the AI server |
 | Models | [Hugging Face](https://huggingface.co/) via Ollama | Open weights; check the licence before practice use |
-| Target host | Apple Silicon Mac mini, 64 GB | Internal server, unified memory |
-| Clients | Windows PCs (macOS later) | Existing habits stay |
+| Target host | Apple Silicon Mac mini, 64 GB | Internal **inference** server, unified memory |
+| Workstations | Windows and macOS PCs | Existing habits stay (practice software unchanged) |
 
 ## Local prototype
 
@@ -25,10 +26,10 @@ Docker Compose on localhost (Ollama + Open WebUI). Install steps: [docs/user/loc
 
 ## Project status
 
-**Pilot:** French liberal GP (admin only). Compose files are in this repo. Do not use Open WebUI Computer on a practice machine.
+**Pilot:** French liberal GP (admin only). Compose files are in this repo. The practice UI is a native **Assistant Cabinet AI** window, not Open WebUI in a browser. Do not use Open WebUI Computer on a practice machine.
 
 Public docs and contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). Owner-only notes live under `docs/` on the local machine and are **not** in git. Published user guides will go in `docs/user/`.
 
 ## Short verdict
 
-A Mac mini M4 Pro 64 GB can serve about **1–8 seats** depending on mix (especially if retrieval and OCR stay on the PCs). Beyond that: a second node or a GPU. Chat matters, but the product is the **gateway + folder pane + approved plans**. Case files do not live on the AI server.
+A Mac mini M4 Pro 64 GB can serve about **1–8 seats** depending on mix (especially if retrieval and OCR stay on the PCs). Beyond that: a second node or a GPU. Chat matters, but the product is **Assistant Cabinet AI** (native window) + the **gateway + approved folder plans**. Case files do not live on the AI server. Open WebUI is the owner’s workbench only.

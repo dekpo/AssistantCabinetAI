@@ -7,11 +7,13 @@ alwaysApply: true
 
 IA locale pour cabinets. Pilote : médecin généraliste libéral. Pile à tester en premier : **Docker Compose** (Ollama + Open WebUI, localhost). Ne pas installer Open WebUI Computer sur un poste de cabinet.
 
-Lire : `AGENTS.md`, `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`.
+Lire : `AGENTS.md`, `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`. Coquilles d’interface Open WebUI : `docs/TRADUCTION-OPEN-WEBUI.md`. Réglages globaux : `docs/REGLAGES-OPEN-WEBUI.md`. Sauvegardes `data/` : `docs/SAUVEGARDES-LOCALES.md`.
 
 # Produit
 
-Chat, plus tard un volet sur le dossier, plans de fichiers validés par l’humain. Pas un remplacement du logiciel métier. Pas d’entrepôt de dossiers médicaux sur le serveur d’IA. Données fictives tant que l’entretien et une ébauche d’AIPD n’existent pas.
+Écran métier : **Assistant Cabinet AI**, fenêtre native (Tauri), Windows et Mac, sans URL. Open WebUI = **établi** de la porteuse, jamais l’écran du médecin. Plans de fichiers validés par l’humain. Pas un remplacement du logiciel métier. Pas d’entrepôt de dossiers médicaux sur le serveur d’IA. Données fictives tant que l’entretien et une ébauche d’AIPD n’existent pas.
+
+Priorité pilote (généraliste) : synthèse des comptes rendus + plan de nommage **avec doublons**. Pas de module comptable, pas de compte Ameli, pas de clone des modèles Medilink (certificats, adressage).
 
 # Contraintes de session
 

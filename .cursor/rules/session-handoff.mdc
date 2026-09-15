@@ -1,0 +1,14 @@
+---
+description: Consigne d’onglet = un fichier à glisser, pas un pavé dans le chat
+alwaysApply: true
+---
+
+# Onglets / consignes de session
+
+Quand Elise demande un prompt pour **un autre onglet** Cursor :
+
+1. Écrire **un fichier** local (hors Git) : `docs/SESSION-<sujet-court>.md`, français, une langue.
+2. Dans le chat : donner le **chemin** et le **nom d’onglet** (le nom de la feature, pas « Prompt … »). **Ne pas** coller le long texte.
+3. Elle **glisse** ce fichier dans la nouvelle fenêtre de chat.
+
+Interdit : pavé à copier-coller comme unique livrable. Les autres agents font pareil.

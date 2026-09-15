@@ -18,7 +18,9 @@ Owner-facing notes in `docs/` are French only (`docs/LANGUE.md`). Do not write F
 
 Owner-only. Never commit or push. Suggest English branch names, Conventional Commit messages, and **full copy-paste git commands**. See `CONTRIBUTING.md`.
 
-**Do not version internal notes.** Never stage `docs/` except `docs/user/`. Cadrage, audits, and interview files stay local.
+**Do not version internal notes.** Never stage `docs/` except `docs/user/`. Cadrage, audits, interview files, and `docs/SESSION-*.md` handoff files stay local.
+
+When the owner asks for a prompt for **another Cursor tab**: write `docs/SESSION-<topic>.md` (French, not git). In chat, give the **path** and the **tab name** (the feature name, not “Prompt …”). Do not paste a long handoff as the only deliverable. She drags that file into the new chat.
 
 ## Language
 

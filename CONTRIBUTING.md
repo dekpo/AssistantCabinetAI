@@ -75,9 +75,11 @@ Ship a `compose.yaml` as the portable environment (Ollama + Open WebUI, later th
 | Source code, `compose.yaml`, tests | `docs/*` except `docs/user/` |
 | `README.md`, `CONTRIBUTING.md`, `AGENTS.md` | Cadrage, audits, interview notes, next-session prompts |
 | `docs/user/` (end-user guides, English) | Patient-like fixtures marked `real/` |
-| `.cursor/rules/`, `.gitignore`, `.env.example` | `.env`, keys, model weight files |
+| `.cursor/rules/`, `.gitignore`, `.env.example` | `.env`, keys, model weight files, `docs/SESSION-*.md` (tab handoffs) |
 
-Agents must never suggest `git add docs/` or `git add docs/VISION.md` and similar.
+Agents must never suggest `git add docs/` or `git add docs/VISION.md` and similar. Open WebUI prompts created in the UI live in `data/` (not git): do not invent a commit for that test.
+
+When the owner asks for another Cursor tab: write `docs/SESSION-<topic>.md` locally and point to it. Do not dump a long handoff only in chat.
 
 ## Team workflow (when GitHub exists)
 

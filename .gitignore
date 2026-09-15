@@ -17,3 +17,5 @@ __pycache__/
 Thumbs.db
 fixtures/gp-sandbox/real/
 *.log
+/data/
+/backups/

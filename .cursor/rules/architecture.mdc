@@ -18,4 +18,4 @@ Environnement officiel : **Docker Compose** (`docs/DOCKER.md`). Même fichier su
 
 # Hors scope tant que le pilote n’a pas tenu
 
-Fine-tune, mobile, index serveur d’affaires, actions irréversibles sans revue, second métier partagé.
+Fine-tune, mobile, index serveur d’affaires, actions irréversibles sans revue, second métier partagé, module comptable, compte Ameli.

@@ -8,7 +8,7 @@ Owner-facing notes in `docs/` are French only (`docs/LANGUE.md`). Do not write F
 
 ## Before any change
 
-1. Read `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`.
+1. Read `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`. Open WebUI UI wording: `docs/TRADUCTION-OPEN-WEBUI.md`. Local stack data lives in `data/` (not git); backup notes: `docs/SAUVEGARDES-LOCALES.md`.
 2. No cloud LLM, no telemetry, no real patient files, no Open WebUI Knowledge for medical documents.
 3. File actions = plan + human approve. No destructive writes.
 4. Do not install Open WebUI Computer (`cptr`) on a practice machine.
@@ -28,5 +28,7 @@ Owner-only. Never commit or push. Suggest English branch names, Conventional Com
 ## Out of scope for now
 
 - Diagnosis, prescriptions, FSE / Vitale, DMP / MSSanté send.
+- Ameli professional account (sick leave, occupational disease, work accident).
+- Accounting module (e-invoicing and the accountant’s software stay theirs).
 - Native mobile app, cloud speech.
 - Custom `/v1` gateway before `docker compose up` is the documented path.

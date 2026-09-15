@@ -66,7 +66,7 @@ Present tense, 72 characters or fewer on the subject line. No secrets, no patien
 
 ## Environment
 
-Ship a `compose.yaml` as the portable environment (Ollama + Open WebUI, later the gateway). Do not treat a native Windows-only install as the official path. Owner-only notes: `docs/DOCKER.md` (not in git).
+Ship a `compose.yaml` as the portable environment (Ollama + Open WebUI, later the gateway). Do not treat a native Windows-only install as the official path. Open WebUI **flags** live in Compose (`ENABLE_PERSISTENT_CONFIG=false`). Account, chats, and models live in host folder `data/` (gitignored); back up with `scripts/backup-local-data.ps1`. Owner-only notes: `docs/DOCKER.md` and `docs/REGLAGES-OPEN-WEBUI.md` (not in git).
 
 ## What is versioned
 

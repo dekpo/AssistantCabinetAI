@@ -1,5 +1,9 @@
 # Official local stack. Same file on Windows and later on the Mac mini.
 # Bind published ports to 127.0.0.1 only. Do not add Open WebUI Computer.
+# Settings in this file are the source of truth (ENABLE_PERSISTENT_CONFIG=false).
+# Account, chats, prompts, and models live in ./data on the host (not named
+# volumes). `docker compose down -v` does not delete that folder. Back up with
+# scripts/backup-local-data.ps1. Do not commit ./data or ./backups.
 
 name: assistant-cabinet
 
@@ -15,7 +19,7 @@ services:
     ports:
       - "127.0.0.1:${OLLAMA_HOST_PORT:-11434}:11434"
     volumes:
-      - ollama:/root/.ollama
+      - ./data/ollama:/root/.ollama
     networks:
       - cabinet
     healthcheck:
@@ -45,24 +49,35 @@ services:
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       WEBUI_AUTH: "true"
-      # First visitor becomes admin. After that account exists, set ENABLE_SIGNUP=false.
+      # Compose wins over the Admin UI after restart. New machines get the same flags.
+      ENABLE_PERSISTENT_CONFIG: ${ENABLE_PERSISTENT_CONFIG:-false}
+      DEFAULT_LOCALE: fr-FR
+      # First visitor becomes admin. After that account exists, set ENABLE_SIGNUP=false in .env.
       ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
       ENABLE_OPENAI_API: "false"
       ENABLE_COMMUNITY_SHARING: "false"
       ENABLE_WEB_SEARCH: "false"
+      # No follow-up questions (they invent clinical next steps). No auto-tags (they come out in English).
+      ENABLE_FOLLOW_UP_GENERATION: "false"
+      ENABLE_TAGS_GENERATION: "false"
+      # Starter chips: empty [] would restore the built-in English ones. French GP admin only.
+      DEFAULT_PROMPT_SUGGESTIONS: >-
+        [{"title":["Synthèse de courrier","Compte rendu de spécialiste fictif"],"content":"Rédige une synthèse d'aide à la lecture du texte collé ensuite. 5 à 8 puces. Au plus cinq citations, une par fait, sans doublon. Pas de diagnostic, pas d'envoi. Termine par : Synthèse d'aide à la lecture. La médecin reste seule décideuse. Pas d'envoi automatique."},{"title":["Plan de classement","Fichiers d'arrivée fictifs"],"content":"Propose un plan de renommage pour les fichiers listés ensuite. Tableau : nom actuel, nom proposé, doublon, confiance. Ne déplace rien. Pas d'envoi."}]
+      # Chat titles: French only.
+      TITLE_GENERATION_PROMPT_TEMPLATE: >-
+        Generate a concise chat title of 2 to 6 words.
+        The title MUST be in French only. Never English. No emoji, no quotation marks.
+        Output JSON only: {"title": "your title"}
+        Chat history: {{MESSAGES:END:2}}
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-change-me-locally}
       SCARF_NO_ANALYTICS: "true"
       DO_NOT_TRACK: "true"
       ANONYMIZED_TELEMETRY: "false"
     volumes:
-      - open-webui:/app/backend/data
+      - ./data/open-webui:/app/backend/data
     networks:
       - cabinet
 
 networks:
   cabinet:
     driver: bridge
-
-volumes:
-  ollama:
-  open-webui:

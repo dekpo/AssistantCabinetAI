@@ -1,0 +1,52 @@
+---
+description: v0 sprint — milestones 30 September and 14 October 2026, code layout and boundaries
+alwaysApply: true
+---
+
+# v0 — installable prototype
+
+Canonical direction: `docs/BRIEF-V0-PROTOTYPE.md`. Dated plan, acceptance criteria and risks: `docs/ROADMAP.md`.
+
+Two milestones. **30 September 2026:** the chain holds end to end on `fixtures/gp-sandbox/`.
+**14 October 2026:** the pilot GP uses it on her own documents, with a Windows installer and deployment
+at her practice.
+
+One goal: an **installable** prototype on her workstation, with a Mac mini **at her practice** as the
+server. Given a choice between one more impressive feature and making the existing flow more reliable,
+private, testable and replaceable, choose the latter. Do not rewrite what works.
+
+The chain to make hold: workstation (Tauri) → local index → FastAPI gateway → Ollama → answer **with sources**.
+
+# Layout
+
+```text
+apps/desktop/            Tauri 2 + React + TypeScript. UI in TypeScript, never in Rust.
+apps/desktop/src-tauri/  Rust: work folder, extraction, local index, applying approved plans.
+apps/server/             Python + FastAPI + Pydantic. OpenAI-compatible /v1 plus product endpoints.
+```
+
+Tooling: `pnpm` (client), `uv` (server). Tests: `vitest`, `cargo test`, `pytest`. Nothing hardcoded: the
+server URL, the model alias, the work folder and the locale are settings.
+
+# Boundaries not to cross
+
+- The webview never calls the server directly; it goes through Tauri commands. The path allow-list, the
+  context cap and no-store live **in code**, not in the view and not in a prompt.
+- Business code imports no Ollama or Open WebUI client. `AIProvider` (`generate`, `embed`, `rerank`), the
+  index and the embedder sit behind replaceable interfaces.
+- The server writes **no** document text anywhere: no file, no database, no log, no debug trace. The
+  request register holds metadata only.
+- Nothing is transmitted, deleted, moved or modified without explicit confirmation. "Export" means
+  producing a validated artefact in the work folder or on the clipboard; **she** sends it from her own
+  software. No MSSanté, no Medilink, no Ameli.
+
+# Frozen until 14 October 2026
+
+Open WebUI development, voice, vision, scan OCR (contract only), certificates, referral letters, Ameli,
+accounting, mobile, app stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
+
+# Tests weekly, not at the end
+
+Retrieval, source attribution, refusal to answer beyond the sources, server data isolation. When the
+documents do not carry the answer, the product says so instead of generating one. A flow without a test
+does not count as delivered.

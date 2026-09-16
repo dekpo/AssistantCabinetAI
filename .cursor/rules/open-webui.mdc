@@ -1,0 +1,18 @@
+---
+description: Open WebUI is the owner's English workbench, frozen during the v0 sprint
+alwaysApply: true
+---
+
+# Open WebUI
+
+Open WebUI stays the **English workbench** of the project owner. It is not the GP's screen, and there is
+no `fr-FR` overlay while that is true. It is **frozen for the v0 sprint**: no development, no theming, no
+translation work.
+
+- Do not retranslate Open WebUI. Do not build a language overlay unless explicitly asked.
+- Do not patch the Docker image by hand; it is overwritten on update.
+- Flags live in `compose.yaml`, not in the admin interface (`ENABLE_PERSISTENT_CONFIG=false`).
+- Never put business documents in Knowledge. Never install Open WebUI Computer (`cptr`) on a practice machine.
+- Once the gateway exists, Open WebUI points at it rather than at Ollama.
+
+Settings reference: `docs/OPERATIONS.md`.

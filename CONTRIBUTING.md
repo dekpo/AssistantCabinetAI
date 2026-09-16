@@ -1,23 +1,23 @@
 # Contributing
 
-This file is public. It is written in English.
+Written in English, like the whole repository.
 
-Internal design notes for the project owner live in French under `docs/` (except `docs/user/` and `docs/SESSION-*.md`). They stay **on the local machine**. They are **not** committed. Do not mix French and English in the same document. Owner language notes: `docs/LANGUE.md` (local only).
+`docs/` is the versioned English specification. Two exceptions stay on the local machine and are **not** committed: `docs/private/` (personal context about the pilot, purchase logistics, commercial notes) and `docs/SESSION-*.md` (Cursor tab handoffs). Never mix two languages in one document.
 
 ## Language
 
+The rule: **instruct the model in English, show the user their own language.** Full design, including where the `locale` variable lives and how a language is added: `docs/LANGUAGE-AND-LOCALE.md`.
+
 | Surface | Language |
 | --- | --- |
-| Instructions **to** the model (`prompts/`) | English, **versioned** |
-| Model **output** (summary, table, proposed file names) | French for the pilot (later: the firm’s working language) |
+| Instructions **to** the model (`prompts/`) and prompt keys | English, **versioned** |
+| Everything a user reads in the product: interface, model output, proposed file names, errors, disclaimers | The user's `locale` — French for the pilot |
 | Open WebUI (owner workbench) | English |
-| Chat with the owner, local framing under `docs/` (not `docs/user/`, not `SESSION-*`) | French only, **not versioned** |
-| Tab handoffs `docs/SESSION-*.md` | English, **not versioned** |
+| All documentation under `docs/` | English |
 | Branch names, commits, pull requests | English |
-| Source code, comments, APIs, tests, image names | English |
-| `README.md`, this file, `AGENTS.md`, `docs/user/` | English, **versioned** |
-| Prompt **keys** | English (`gp-letter-summary`, `gp-inbox-classify`) |
-| UI copy shown to the GP | French (in Assistant Cabinet AI, not in Open WebUI) |
+| Source code, comments, APIs, tests, image names, machine error codes | English |
+| `README.md`, this file, `AGENTS.md` | English, **versioned** |
+| `docs/user/` | English when the reader is the project owner (for example the Compose install guide); the user's language when the reader is the GP |
 
 ## Git ownership
 
@@ -44,7 +44,7 @@ Also name:
 - Conventional Commit subject, 72 characters or fewer
 - PR title and test plan when a branch is ready
 
-If the only edits are internal `docs/` (not `docs/user/`), **do not** propose a commit. Say that the notes stay local.
+If the only edits are in `docs/private/` or a `docs/SESSION-*.md` handoff, **do not** propose a commit. Say that those notes stay local.
 
 ## Branch names
 
@@ -70,20 +70,20 @@ Present tense, 72 characters or fewer on the subject line. No secrets, no patien
 
 ## Environment
 
-Ship a `compose.yaml` as the portable environment (Ollama + Open WebUI, later the gateway). Do not treat a native Windows-only install as the official path. Open WebUI **flags** live in Compose (`ENABLE_PERSISTENT_CONFIG=false`). Account, chats, and models live in host folder `data/` (gitignored); back up with `scripts/backup-local-data.ps1`. Owner-only notes: `docs/DOCKER.md` and `docs/REGLAGES-OPEN-WEBUI.md` (not in git).
+Ship a `compose.yaml` as the portable environment (Ollama + Open WebUI, later the gateway). Do not treat a native Windows-only install as the official path. Open WebUI **flags** live in Compose (`ENABLE_PERSISTENT_CONFIG=false`). Account, chats, and models live in host folder `data/` (gitignored); back up with `scripts/backup-local-data.ps1`. Details: `docs/OPERATIONS.md`.
 
 ## What is versioned
 
-| In git (public) | Not in git (local only) |
+| In git | Not in git (local only) |
 | --- | --- |
-| Source code, `compose.yaml`, `prompts/`, tests | `docs/*` except `docs/user/` |
-| `README.md`, `CONTRIBUTING.md`, `AGENTS.md` | Cadrage, audits, interview notes |
-| `docs/user/` (end-user guides, English) | Patient-like fixtures marked `real/` |
-| `.cursor/rules/`, `.gitignore`, `.env.example` | `.env`, keys, model weight files, `docs/SESSION-*.md` (tab handoffs) |
+| Source code, `compose.yaml`, `prompts/`, tests | `docs/private/` (pilot personal context, purchase, commercial) |
+| `docs/` — the English specification | `docs/SESSION-*.md` (tab handoffs) |
+| `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/user/` | `.env`, keys, model weight files, `data/`, `backups/` |
+| `.cursor/rules/`, `.gitignore`, `.env.example` | Patient-like fixtures marked `real/` |
 
-Agents must never suggest `git add docs/` or `git add docs/VISION.md` and similar. Open WebUI copies created in the UI live in `data/` (not git): do not invent a commit for that paste. Versioned prompt text is `prompts/`.
+The remote is `github.com/dekpo/AssistantCabinetAI`, **private**, and stays private through the pilot. Publication is reconsidered only after real-world validation, so do not treat versioned files as already public. Open WebUI copies created in the UI live in `data/` (not git): do not invent a commit for that paste. Versioned prompt text is `prompts/`.
 
-When the owner asks for another Cursor tab: write `docs/SESSION-<topic>.md` locally (**English**) and point to it. Do not dump a long handoff only in chat.
+When the owner asks for another Cursor tab: write `docs/SESSION-<topic>.md` locally and point to it. Do not dump a long handoff only in chat.
 
 ## Team workflow (when GitHub exists)
 

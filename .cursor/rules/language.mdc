@@ -1,0 +1,38 @@
+---
+description: Hybrid language rule — English prompts in, user's language out, translatable by design
+alwaysApply: true
+---
+
+# Language
+
+**Instruct the model in English. Show the user their own language.** Full design, including where the
+setting lives and how a language is added: `docs/LANGUAGE-AND-LOCALE.md`.
+
+One variable, `locale` (BCP 47, `fr-FR` for the pilot), owned by the client in its `settings.json`.
+It drives three things and nothing else decides language:
+
+1. Interface strings, through the React catalogues in `apps/desktop/src/locales/`.
+2. Error text: Rust and Python return **machine codes**, the UI localises them.
+3. Model output: the client sends `output_locale`; the server appends a rendered output-language
+   directive to the **English** system prompt.
+
+# English, always
+
+System prompts (`prompts/`) and prompt keys. Source code, comments, tests, commit messages, branch names,
+pull requests. All project documentation, including `docs/` and these rules. Open WebUI, the owner
+workbench, which is frozen for the v0 sprint. Machine codes, JSON fields, API routes, audit fields.
+**Chat with Elise in Cursor** (decided 16 September 2026; the earlier French-chat rule is retired).
+
+# The user's language, always
+
+Everything a human reads in Assistant Cabinet AI: interface, model answers, proposed file names, error
+messages, disclaimers. French for the pilot.
+
+# Forbidden
+
+A system prompt written in the user's language. A visible answer in English for a French user. A French
+string literal in `apps/server` or `apps/desktop/src-tauri`. A translation catalogue keyed by a French
+sentence instead of a structural key. A second copy of a prompt for a second language. Asking the model
+to reproduce a fixed disclaimer verbatim instead of appending it from the catalogue.
+
+One language per file. Do not mix two languages in one document.

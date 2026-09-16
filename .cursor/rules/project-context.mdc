@@ -1,24 +1,38 @@
 ---
-description: Contexte durable pour chaque session
+description: Durable context for every session
 alwaysApply: true
 ---
 
 # Assistant Cabinet AI
 
-IA locale pour cabinets. Pilote : médecin généraliste libéral. Pile à tester en premier : **Docker Compose** (Ollama + Open WebUI, localhost). Ne pas installer Open WebUI Computer sur un poste de cabinet.
+Local AI for professional practices. Pilot: a French liberal GP, **admin work only**, never clinical care.
+Never install Open WebUI Computer on a practice machine.
 
-Lire : `AGENTS.md`, `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`. Coquilles d’interface Open WebUI : `docs/TRADUCTION-OPEN-WEBUI.md`. Réglages globaux : `docs/REGLAGES-OPEN-WEBUI.md`. Sauvegardes `data/` : `docs/SAUVEGARDES-LOCALES.md`.
+**In progress: the v0 sprint.** Direction: `docs/BRIEF-V0-PROTOTYPE.md`. Dated plan: `docs/ROADMAP.md`. Sprint rule:
+`.cursor/rules/v0-sprint.mdc`, which wins over the ordering in older notes.
 
-# Produit
+Read: `AGENTS.md`, `CONTRIBUTING.md`, `docs/ARCHITECTURE.md`, `docs/LANGUAGE-AND-LOCALE.md`,
+`docs/RETRIEVAL.md`, `docs/PRIVACY-AND-SECURITY.md`, `docs/PILOT-GP.md`, `docs/DECISIONS.md`.
+Operations and Compose: `docs/OPERATIONS.md`. Local stack data lives in `data/` (not git).
 
-Écran métier : **Assistant Cabinet AI**, fenêtre native (Tauri), Windows et Mac, sans URL. Open WebUI = **établi** de la porteuse, jamais l’écran du médecin. Plans de fichiers validés par l’humain. Pas un remplacement du logiciel métier. Pas d’entrepôt de dossiers médicaux sur le serveur d’IA. Données fictives tant que l’entretien et une ébauche d’AIPD n’existent pas.
+# Product
 
-Priorité pilote (généraliste) : synthèse des comptes rendus + plan de nommage **avec doublons**. Pas de module comptable, pas de compte Ameli, pas de clone des modèles Medilink (certificats, adressage).
+The practice screen is **Assistant Cabinet AI**: a native Tauri window on Windows and Mac, with no URL.
+Open WebUI is the owner's workbench, never the GP's screen. File plans are approved by a human. It does
+not replace the practice software. No medical records warehouse on the AI server.
 
-# Contraintes de session
+Pilot priority: specialist report summaries, then the naming plan **with duplicates**. No accounting
+module, no Ameli account, no clone of the Medilink templates (certificates, referral letters). Nothing is
+sent: she transmits it herself from her own software.
 
-- Un métier à la fois (généraliste maintenant).
-- Git : Elise seule écrit ; branches et commits en anglais. **Ne pas versionner** la doc interne (`docs/` hors `docs/user/`).
-- Langues : `docs/LANGUE.md` — consignes modèle et Open WebUI en **anglais** ; sortie métier et noms de fichiers en **français** ; cadrage Elise en français ; `docs/SESSION-*.md` en anglais. Pas de franglais.
-- Environnement officiel = Compose, portable Windows → Mac mini.
-- Ne jamais exposer Ollama ; ne jamais verser de vrais dossiers dans Knowledge ; pas de modèle distant.
+Real documents are allowed at the week-4 deployment, **after** a written DPIA draft, a named data
+controller, and disk encryption on both machines. Before that: `fixtures/gp-sandbox/` only.
+
+# Session constraints
+
+- One profession at a time (the GP for now).
+- Git: Elise performs every write. Branches and commits in English.
+- Language: `docs/LANGUAGE-AND-LOCALE.md`. English prompts, code and documentation; the user's language
+  for everything a human reads in the product.
+- Official environment is Compose, portable from Windows to the Mac mini.
+- Never expose Ollama. Never put real records in Open WebUI Knowledge. No remote model.

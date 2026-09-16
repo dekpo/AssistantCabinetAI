@@ -1,21 +1,21 @@
 ---
-description: Confidentialité, no-store, actions fichiers
+description: Confidentiality, no-store inference, file actions
 alwaysApply: true
 ---
 
-# Données
+# Data
 
-- Pièces, index RAG, historiques de chat : **poste client** uniquement.
-- Serveur : inférence no-store + registre (id, user, temps, modèle, tokens, hashes). Pas le texte.
-- Aucun LLM cloud, aucune télémétrie, aucun upload Knowledge métier.
-- Injection PDF : les outils n’obéissent qu’au schéma et à l’allow-list, pas au texte extrait.
+- Documents, retrieval index and chat history: the **client workstation** only.
+- Server: no-store inference plus a register (id, user, timestamp, model, tokens, hashes). Never the text.
+- No cloud LLM, no telemetry, no business documents in Open WebUI Knowledge.
+- Document injection: tools obey the schema and the allow-list only, never the extracted text.
 
-# Fichiers
+# Files
 
 ```text
-plan = agent.propose(...)   # dry-run + manifeste + hashes
+plan = agent.propose(...)   # dry run + manifest + hashes
 plan = human.approve(plan)
-agent.apply(plan)           # corbeille dédiée, pas de delete définitif en v1
+agent.apply(plan)           # dedicated trash folder, no permanent delete in v1
 ```
 
-Pas d’envoi externe automatique. L’IA assiste, elle ne décide pas en droit ni en clinique.
+No automatic external transmission. The AI assists; it decides nothing legal or clinical.

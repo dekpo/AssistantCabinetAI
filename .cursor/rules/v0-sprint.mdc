@@ -1,39 +1,52 @@
 ---
-description: Sprint v0 — jalons 30 septembre et 14 octobre 2026, arborescence et frontières du code
+description: v0 sprint — milestones 30 September and 14 October 2026, code layout and boundaries
 alwaysApply: true
 ---
 
-# v0 — prototype installable
+# v0 — installable prototype
 
-Direction canonique : `docs/BRIEF-V0-PROTOTYPE.md` (anglais, local). Calendrier daté, recettes et risques : `docs/ROADMAP.md`.
+Canonical direction: `docs/BRIEF-V0-PROTOTYPE.md`. Dated plan, acceptance criteria and risks: `docs/ROADMAP.md`.
 
-Deux jalons : **30 septembre 2026**, la chaîne tient de bout en bout sur `fixtures/gp-sandbox/` ; **14 octobre 2026**, elle l’utilise sur ses documents, avec l’installateur Windows et le déploiement au cabinet.
+Two milestones. **30 September 2026:** the chain holds end to end on `fixtures/gp-sandbox/`.
+**14 October 2026:** the pilot GP uses it on her own documents, with a Windows installer and deployment
+at her practice.
 
-Objectif unique : un prototype **installable**, déployé sur le poste de la généraliste, avec un Mac mini **au cabinet** comme serveur. Devant un choix entre une fonction impressionnante de plus et un flux existant plus fiable, privé, testable et remplaçable : prendre le second. Ne pas réécrire ce qui marche.
+One goal: an **installable** prototype on her workstation, with a Mac mini **at her practice** as the
+server. Given a choice between one more impressive feature and making the existing flow more reliable,
+private, testable and replaceable, choose the latter. Do not rewrite what works.
 
-Chaîne à faire tenir : poste (Tauri) → index local → passerelle FastAPI → Ollama → réponse **avec sources**.
+The chain to make hold: workstation (Tauri) → local index → FastAPI gateway → Ollama → answer **with sources**.
 
-# Arborescence
+# Layout
 
 ```text
-apps/desktop/            Tauri 2 + React + TypeScript. UI en TypeScript, jamais en Rust.
-apps/desktop/src-tauri/  Rust : sas, extraction, index local, application des plans validés.
-apps/server/             Python + FastAPI + Pydantic. Passerelle /v1 + points produit.
+apps/desktop/            Tauri 2 + React + TypeScript. UI in TypeScript, never in Rust.
+apps/desktop/src-tauri/  Rust: work folder, extraction, local index, applying approved plans.
+apps/server/             Python + FastAPI + Pydantic. OpenAI-compatible /v1 plus product endpoints.
 ```
 
-Outils : `pnpm` (client), `uv` (serveur). Tests : `vitest`, `cargo test`, `pytest`. Rien de codé en dur : l’URL du serveur, le modèle et le sas sont des réglages.
+Tooling: `pnpm` (client), `uv` (server). Tests: `vitest`, `cargo test`, `pytest`. Nothing hardcoded: the
+server URL, the model alias, the work folder and the locale are settings.
 
-# Frontières à ne pas franchir
+# Boundaries not to cross
 
-- La vue web n’appelle jamais le serveur directement : elle passe par des commandes Tauri. Liste blanche, plafond de contexte et no-store vivent **dans le code**, pas dans la vue ni dans un prompt.
-- Le métier n’importe aucun client Ollama ni Open WebUI. `AIProvider` (`generate`, `embed`, `rerank`), l’index et les embeddings sont derrière des interfaces remplaçables.
-- Le serveur n’écrit **aucun** texte de document : ni fichier, ni base, ni journal, ni trace de mise au point. Registre = métadonnées seulement.
-- Rien n’est transmis, supprimé, déplacé ni modifié sans confirmation explicite. « Exporter » = produire une pièce validée dans le sas ou le presse-papiers ; **elle** l’envoie depuis ses logiciels. Pas de MSSanté, pas de Medilink, pas d’Ameli.
+- The webview never calls the server directly; it goes through Tauri commands. The path allow-list, the
+  context cap and no-store live **in code**, not in the view and not in a prompt.
+- Business code imports no Ollama or Open WebUI client. `AIProvider` (`generate`, `embed`, `rerank`), the
+  index and the embedder sit behind replaceable interfaces.
+- The server writes **no** document text anywhere: no file, no database, no log, no debug trace. The
+  request register holds metadata only.
+- Nothing is transmitted, deleted, moved or modified without explicit confirmation. "Export" means
+  producing a validated artefact in the work folder or on the clipboard; **she** sends it from her own
+  software. No MSSanté, no Medilink, no Ameli.
 
-# Gelé jusqu’au 14 octobre 2026
+# Frozen until 14 October 2026
 
-Open WebUI (établi, aucun développement), voix, vision, OCR des scans (contrat seulement), certificats, courrier d’adressage, Ameli, comptabilité, mobile, boutiques, multi-poste, RBAC, facturation, statistiques.
+Open WebUI development, voice, vision, scan OCR (contract only), certificates, referral letters, Ameli,
+accounting, mobile, app stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
 
-# Tests, chaque semaine et non à la fin
+# Tests weekly, not at the end
 
-Récupération, attribution des sources, refus de répondre hors sources, isolation des données côté serveur. Réponse par défaut quand les documents ne portent pas l’information : « Je n'ai pas trouvé assez d'informations dans les documents disponibles. » Un flux sans test ne compte pas comme livré.
+Retrieval, source attribution, refusal to answer beyond the sources, server data isolation. When the
+documents do not carry the answer, the product says so instead of generating one. A flow without a test
+does not count as delivered.

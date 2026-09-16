@@ -1,22 +1,28 @@
 ---
-description: Git et GitHub — anglais pour le versionnage, écriture réservée à Elise
+description: Git and GitHub — English for versioning, writes reserved to Elise
 alwaysApply: true
 ---
 
 # Git
 
-Elise exécute toute écriture Git. Les agents ne lancent jamais `git commit`, `git push`, `git add` (sauf demande explicite de classement dans ce message), ni amend, rebase, reset, force-push, ou `--no-verify`.
+Elise performs every Git write. Agents never run `git commit`, `git push`, `git add` (unless she asked to
+stage in that same message), nor amend, rebase, reset, force-push, or `--no-verify`.
 
-Après un changement utile, **proposer en anglais** et **coller les commandes complètes**, prêtes à exécuter (une par ligne), pas seulement un nom de branche. Modèle :
+Remote: `github.com/dekpo/AssistantCabinetAI`, **private**. Default branch `main`.
+
+After a useful change, **propose in English** and **paste the full commands**, ready to run, one per line,
+not just a branch name. Template:
 
 ```text
 git status
-git checkout -b feat/exemple-sujet
-git add chemin/fichier1 chemin/fichier2
+git checkout -b feat/example-topic
+git add path/file1 path/file2
 git commit -m "feat: short subject in english"
 git status
 ```
 
-Ne jamais lister `docs/` (sauf `docs/user/`). Les `docs/SESSION-*.md` restent locaux. Versionner `prompts/` (corps anglais). Si rien n’est versionnable (notes internes seulement) : le dire clairement, **sans** bloc git.
+One branch per change: `feat|fix|docs|chore/<short-topic>`. Conventional Commit subject, 72 characters or
+fewer. Do not mix unrelated changes in one commit; give a stray one-line fix its own branch off `main`.
 
-Pas de secrets, pas de noms de patients, pas de `.env`, **pas de doc interne** (`docs/` hors `docs/user/`). Politique : `CONTRIBUTING.md`.
+Never commit secrets, patient names, `.env`, `data/`, `backups/`, or model weights. Policy:
+`CONTRIBUTING.md`. Private working notes live in `docs/private/` and are not versioned.

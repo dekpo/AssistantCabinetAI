@@ -1,22 +1,28 @@
 ---
-description: Passerelle /v1, contrats, portabilité
+description: Gateway, stable contracts, portability
 alwaysApply: true
 ---
 
-# Contrats stables
+# Stable contracts
 
-1. Tous les clients parlent à la passerelle (`apps/server`, FastAPI), jamais à Ollama. Elle expose `/v1` compatible OpenAI **et** les points produit. Open WebUI y est branché aussi.
-2. Catalogue d’outils versionné + format de plan d’action.
-3. Audit métadonnées. Runtimes (Open WebUI, MCP, Hermes, OpenClaw) = adaptateurs.
-4. Plugins IDE (Continue, Cline) : scope `chat` seulement.
-5. `/v1/audio/*` et `/v1/jobs` sont **réservés**. STT cloud interdit.
-6. Écran métier = fenêtre native (Tauri), pas le navigateur. Open WebUI = **établi** de la porteuse, gelé pendant le sprint v0. Open WebUI Computer (`cptr`) : pas sur un poste de cabinet. Détail local : `docs/CLIENT-NATIF.md`.
-7. Inférence v0 = Ollama derrière la passerelle, sur un **Mac mini au cabinet**. L’URL du serveur est un réglage, jamais une constante.
+1. Every client talks to the gateway (`apps/server`, FastAPI), never to Ollama. It exposes an
+   OpenAI-compatible `/v1` **and** the product endpoints. Open WebUI goes through it too.
+2. Versioned tool catalogue plus an action-plan format.
+3. Metadata-only audit. Runtimes (Open WebUI, MCP, Hermes, OpenClaw) are adapters.
+4. IDE plugins (Continue, Cline): `chat` scope only.
+5. `/v1/audio/*` and `/v1/jobs` are **reserved**. Cloud speech-to-text is forbidden.
+6. The practice screen is a native window (Tauri), not a browser. Open WebUI is the owner's workbench,
+   frozen during the v0 sprint. Open WebUI Computer (`cptr`): never on a practice machine. Detail:
+   `docs/CLIENT.md`.
+7. v0 inference is Ollama behind the gateway, on a **Mac mini at the practice**. The server URL is a
+   setting, never a constant.
 
-# Portabilité
+# Portability
 
-Environnement officiel : **Docker Compose** (`docs/DOCKER.md`). Même fichier sur Windows et sur Mac mini. Chemins agnostiques dans le code. Dev → Mac mini = même Compose, modèles plus capables.
+Official environment: **Docker Compose** (`docs/OPERATIONS.md`). Same file on Windows and on the Mac mini.
+Platform-agnostic paths in code. Development to Mac mini is the same Compose with more capable models.
 
-# Hors scope tant que le pilote n’a pas tenu
+# Out of scope until the pilot holds
 
-Fine-tune, mobile, index serveur d’affaires, actions irréversibles sans revue, second métier partagé, module comptable, compte Ameli.
+Fine-tuning, mobile, a server-side case index, irreversible actions without review, a second shared
+profession, an accounting module, the Ameli professional account.

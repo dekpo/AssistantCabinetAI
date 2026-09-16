@@ -1,7 +1,7 @@
-# Internal owner notes (French cadrage). Not published.
-/docs/*
-!/docs/user/
-!/docs/user/**
+# Documentation under docs/ is the versioned English specification.
+# Only personal context and tab handoffs stay local.
+/docs/private/
+/docs/SESSION-*.md
 
 .env
 .env.*

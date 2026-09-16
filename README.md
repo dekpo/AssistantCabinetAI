@@ -32,7 +32,7 @@ Docker Compose on localhost (Ollama + Open WebUI, English workbench). Install st
 
 **Pilot:** French liberal GP (admin only). Compose files are in this repo. Model instructions: `prompts/` (English in, French out). Open WebUI is an English owner workbench. The practice UI is a native **Assistant Cabinet AI** window, not Open WebUI in a browser. Do not use Open WebUI Computer on a practice machine.
 
-Public docs and contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). Owner-only notes live under `docs/` on the local machine and are **not** in git. Published user guides will go in `docs/user/`.
+Contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). The English specification lives in [docs/](docs/) — start with [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DECISIONS.md](docs/DECISIONS.md). Personal pilot context and tab handoffs stay local under `docs/private/`. End-user guides go in `docs/user/`, written in the user's language.
 
 ## Short verdict
 

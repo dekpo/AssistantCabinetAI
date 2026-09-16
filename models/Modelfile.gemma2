@@ -1,0 +1,9 @@
+FROM /root/.ollama/import/gemma-2-9b-it-Q4_K_M-fp16.gguf
+TEMPLATE """<start_of_turn>user
+{{ if .System }}{{ .System }} {{ end }}{{ .Prompt }}<end_of_turn>
+<start_of_turn>model
+{{ .Response }}<end_of_turn>"""
+PARAMETER stop "<start_of_turn>"
+PARAMETER stop "<end_of_turn>"
+PARAMETER temperature 0.2
+PARAMETER num_ctx 4096

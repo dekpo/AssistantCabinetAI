@@ -17,6 +17,6 @@ git commit -m "feat: short subject in english"
 git status
 ```
 
-Ne jamais lister `docs/` (sauf `docs/user/`). Si rien n’est versionnable (notes internes seulement) : le dire clairement, **sans** bloc git.
+Ne jamais lister `docs/` (sauf `docs/user/`). Les `docs/SESSION-*.md` restent locaux. Versionner `prompts/` (corps anglais). Si rien n’est versionnable (notes internes seulement) : le dire clairement, **sans** bloc git.
 
 Pas de secrets, pas de noms de patients, pas de `.env`, **pas de doc interne** (`docs/` hors `docs/user/`). Politique : `CONTRIBUTING.md`.

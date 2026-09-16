@@ -2,18 +2,22 @@
 
 This file is public. It is written in English.
 
-Internal design notes for the project owner live in French under `docs/` (except `docs/user/`). They stay **on the local machine**. They are **not** committed. Do not mix French and English in the same document. Owner language notes: `docs/LANGUE.md` (local only).
+Internal design notes for the project owner live in French under `docs/` (except `docs/user/` and `docs/SESSION-*.md`). They stay **on the local machine**. They are **not** committed. Do not mix French and English in the same document. Owner language notes: `docs/LANGUE.md` (local only).
 
 ## Language
 
 | Surface | Language |
 | --- | --- |
-| Chat with the owner, local framing under `docs/` (not `docs/user/`) | French only, **not versioned** |
+| Instructions **to** the model (`prompts/`) | English, **versioned** |
+| Model **output** (summary, table, proposed file names) | French for the pilot (later: the firm’s working language) |
+| Open WebUI (owner workbench) | English |
+| Chat with the owner, local framing under `docs/` (not `docs/user/`, not `SESSION-*`) | French only, **not versioned** |
+| Tab handoffs `docs/SESSION-*.md` | English, **not versioned** |
 | Branch names, commits, pull requests | English |
 | Source code, comments, APIs, tests, image names | English |
 | `README.md`, this file, `AGENTS.md`, `docs/user/` | English, **versioned** |
-| UI string **keys** | English (`gp-referral-letter`) |
-| UI copy shown to the GP | French (in the product, not in this repo’s cadrage mix) |
+| Prompt **keys** | English (`gp-letter-summary`, `gp-inbox-classify`) |
+| UI copy shown to the GP | French (in Assistant Cabinet AI, not in Open WebUI) |
 
 ## Git ownership
 
@@ -72,14 +76,14 @@ Ship a `compose.yaml` as the portable environment (Ollama + Open WebUI, later th
 
 | In git (public) | Not in git (local only) |
 | --- | --- |
-| Source code, `compose.yaml`, tests | `docs/*` except `docs/user/` |
-| `README.md`, `CONTRIBUTING.md`, `AGENTS.md` | Cadrage, audits, interview notes, next-session prompts |
+| Source code, `compose.yaml`, `prompts/`, tests | `docs/*` except `docs/user/` |
+| `README.md`, `CONTRIBUTING.md`, `AGENTS.md` | Cadrage, audits, interview notes |
 | `docs/user/` (end-user guides, English) | Patient-like fixtures marked `real/` |
 | `.cursor/rules/`, `.gitignore`, `.env.example` | `.env`, keys, model weight files, `docs/SESSION-*.md` (tab handoffs) |
 
-Agents must never suggest `git add docs/` or `git add docs/VISION.md` and similar. Open WebUI prompts created in the UI live in `data/` (not git): do not invent a commit for that test.
+Agents must never suggest `git add docs/` or `git add docs/VISION.md` and similar. Open WebUI copies created in the UI live in `data/` (not git): do not invent a commit for that paste. Versioned prompt text is `prompts/`.
 
-When the owner asks for another Cursor tab: write `docs/SESSION-<topic>.md` locally and point to it. Do not dump a long handoff only in chat.
+When the owner asks for another Cursor tab: write `docs/SESSION-<topic>.md` locally (**English**) and point to it. Do not dump a long handoff only in chat.
 
 ## Team workflow (when GitHub exists)
 

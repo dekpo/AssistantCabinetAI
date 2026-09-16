@@ -22,11 +22,11 @@ Help staff process large volumes of documents (DOC, DOCX, PDF, text and similar)
 
 ## Local prototype
 
-Docker Compose on localhost (Ollama + Open WebUI). Install steps: [docs/user/local-compose.md](docs/user/local-compose.md). Fictional GP files: `fixtures/gp-sandbox/`. Licence register: [models/LICENSES.md](models/LICENSES.md).
+Docker Compose on localhost (Ollama + Open WebUI, English workbench). Install steps: [docs/user/local-compose.md](docs/user/local-compose.md). Admin prompt bodies: `prompts/`. Fictional GP files: `fixtures/gp-sandbox/`. Licence register: [models/LICENSES.md](models/LICENSES.md).
 
 ## Project status
 
-**Pilot:** French liberal GP (admin only). Compose files are in this repo. The practice UI is a native **Assistant Cabinet AI** window, not Open WebUI in a browser. Do not use Open WebUI Computer on a practice machine.
+**Pilot:** French liberal GP (admin only). Compose files are in this repo. Model instructions: `prompts/` (English in, French out). Open WebUI is an English owner workbench. The practice UI is a native **Assistant Cabinet AI** window, not Open WebUI in a browser. Do not use Open WebUI Computer on a practice machine.
 
 Public docs and contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). Owner-only notes live under `docs/` on the local machine and are **not** in git. Published user guides will go in `docs/user/`.
 

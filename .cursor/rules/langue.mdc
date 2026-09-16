@@ -1,13 +1,14 @@
 ---
-description: Français interne, anglais public et Git — jamais de franglais
+description: Couches de langue — modèle EN, sortie FR, établi EN
 alwaysApply: true
 ---
 
 # Langue
 
-Un fichier = une langue. Détail : `docs/LANGUE.md`.
+Détail : `docs/LANGUE.md`.
 
-- **Français seulement, hors Git** : chat avec Elise, cadrage dans `docs/` (sauf `docs/user/`).
-- **Anglais seulement, dans Git** : branches, commits, PR, code, `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/user/`, identifiants.
+- **Anglais** : consignes **au** modèle (`prompts/`), Open WebUI (établi), `docs/SESSION-*.md`, Git, code.
+- **Français** : chat avec Elise, cadrage `docs/` (sauf `docs/user/` et `SESSION`), **sortie** du modèle et noms de fichiers du pilote.
+- Plus tard : UI d’Assistant Cabinet AI traduite ; le prompt système reste en anglais.
 
-Interdit : mélanger les deux dans le même document (franglais). Les sigles officiels français (DMP, FSE, MSSanté) et les noms de produits (Docker, Ollama) restent tels quels dans un texte français.
+Interdit : consigne modèle en français « pour faire joli ». Interdit : réponse modèle en anglais pour le pilote français. Pas de franglais dans un texte français de cadrage.

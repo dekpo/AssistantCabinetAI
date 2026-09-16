@@ -24,20 +24,24 @@ On macOS or Linux use `cp .env.example .env`. Edit `WEBUI_SECRET_KEY` in `.env` 
 docker compose up -d
 ```
 
-4. Pull the first model (see `models/LICENSES.md`):
+4. Load a licensed model (see `models/LICENSES.md`). Library pull:
 
 ```text
 docker compose exec ollama ollama pull mistral
 ```
 
-5. Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Create the first account (that user is the admin). Then set `ENABLE_SIGNUP=false` in `.env` and run `docker compose up -d` again.
+To register a `.gguf` already on this PC (no download, no Compose restart): copy it into `data/ollama/import/` and follow `models/README.md`.
+
+5. Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The UI locale is English. Create the first account (that user is the admin). Then set `ENABLE_SIGNUP=false` in `.env` and run `docker compose up -d` again.
+
+6. Recreate Workspace prompts from `prompts/*.md` (English instructions; the model must answer in French). Copies in the UI live in `data/` and are not git.
 
 ## What is kept where
 
 | Kind | Where | Survives `up` / `down` / `down -v` | New machine |
 | --- | --- | --- | --- |
 | Flags (follow-ups, tags, titles, locale) | `compose.yaml` and `.env` | Yes | Same files |
-| Admin account, chats, UI prompts | `data/open-webui/` (host folder, not git) | Yes, even with `-v`. Lost if you delete `data/` | Recreate from `docs` prompts |
+| Admin account, chats, UI prompts | `data/open-webui/` (host folder, not git) | Yes, even with `-v`. Lost if you delete `data/` | Recreate from `prompts/` |
 | Model weights | `data/ollama/` (host folder, not git) | Same | Pull again |
 
 `ENABLE_PERSISTENT_CONFIG=false` means Compose wins after a restart. If a setting must stick and travel, put it in `compose.yaml`.
@@ -57,7 +61,7 @@ Restore:
 ## Rules for this prototype
 
 - Chat only. Do not upload case files into Open WebUI Knowledge.
-- Use the fictional files under `fixtures/gp-sandbox/` only.
+- Use the fictional files under `fixtures/gp-sandbox/` only. Prompt bodies: `prompts/` (English instructions, French output). Open WebUI locale is English.
 - After the first admin exists, keep sign-up closed.
 - Ollama is published on `127.0.0.1` only. Do not publish it on the LAN.
 

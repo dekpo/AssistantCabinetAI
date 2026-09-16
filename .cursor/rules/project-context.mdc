@@ -19,6 +19,6 @@ Priorité pilote (généraliste) : synthèse des comptes rendus + plan de nommag
 
 - Un métier à la fois (généraliste maintenant).
 - Git : Elise seule écrit ; branches et commits en anglais. **Ne pas versionner** la doc interne (`docs/` hors `docs/user/`).
-- Langues : `docs/LANGUE.md` — pas de franglais.
+- Langues : `docs/LANGUE.md` — consignes modèle et Open WebUI en **anglais** ; sortie métier et noms de fichiers en **français** ; cadrage Elise en français ; `docs/SESSION-*.md` en anglais. Pas de franglais.
 - Environnement officiel = Compose, portable Windows → Mac mini.
 - Ne jamais exposer Ollama ; ne jamais verser de vrais dossiers dans Knowledge ; pas de modèle distant.

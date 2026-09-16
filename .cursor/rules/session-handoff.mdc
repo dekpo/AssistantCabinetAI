@@ -1,14 +1,14 @@
 ---
-description: Consigne d’onglet = un fichier à glisser, pas un pavé dans le chat
+description: Tab handoff = one English file to drag, not a chat dump
 alwaysApply: true
 ---
 
-# Onglets / consignes de session
+# Session handoffs
 
-Quand Elise demande un prompt pour **un autre onglet** Cursor :
+When Elise asks for a prompt for **another** Cursor tab:
 
-1. Écrire **un fichier** local (hors Git) : `docs/SESSION-<sujet-court>.md`, français, une langue.
-2. Dans le chat : donner le **chemin** et le **nom d’onglet** (le nom de la feature, pas « Prompt … »). **Ne pas** coller le long texte.
-3. Elle **glisse** ce fichier dans la nouvelle fenêtre de chat.
+1. Write **one** local file (not git): `docs/SESSION-<short-topic>.md`, **English**.
+2. In chat: give the **path** and the **tab name** (the feature name, not “Prompt …”). Do not paste the long text.
+3. She **drags** that file into the new chat.
 
-Interdit : pavé à copier-coller comme unique livrable. Les autres agents font pareil.
+Do not use a copy-paste wall as the only deliverable. Other agents do the same.

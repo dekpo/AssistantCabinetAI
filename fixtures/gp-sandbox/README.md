@@ -13,4 +13,4 @@ Do not copy files from a practice system into this tree. A `real/` folder is git
 | `gp-referral-letter` | `notes/referral-notes-camille-exemple.txt` | Later (pilot already writes referrals in the practice software) |
 | `gp-certificate-draft` | `forms/certificate-form-hugo-bacasable.txt` | Later (templates already in the practice software; sick leave is Ameli, not this prompt) |
 
-Success for this prototype: a specialist-letter summary with citations, and a rename plan that **flags the duplicate**. File names shown in the GP trial are French. Nothing is sent. A human must review every output.
+Success for this prototype: a specialist-letter summary in **French** with citations, and a French Markdown rename plan that **flags the duplicate**. Prompt **bodies** are English (`prompts/`). File-name stems in the plan are French (`lettre-specialiste`). Nothing is sent. A human must review every output.

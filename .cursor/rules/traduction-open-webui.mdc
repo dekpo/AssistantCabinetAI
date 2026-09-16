@@ -5,9 +5,9 @@ alwaysApply: true
 
 # Traduction Open WebUI
 
-Coquilles d’interface : **un seul fichier** — `docs/TRADUCTION-OPEN-WEBUI.md` (local, hors Git).
-Réglages globaux (titres français, tags, questions de suivi) : `docs/REGLAGES-OPEN-WEBUI.md`.
+Open WebUI reste l’**établi anglais** (pas l’écran médecin). Pas d’overlay `fr-FR` tant que c’est le cas.
 
-- Consigne au fil des tests. Ne pas retraduire tout le produit.
-- Overlay volume (clés changées seulement) + proposition au projet Open WebUI : voir ce fichier. **Ne pas coder** l’overlay tant que Elise n’a pas fini les tests de prompts, sauf demande explicite.
+Journal historique : `docs/TRADUCTION-OPEN-WEBUI.md` (local, hors Git). Réglages : `docs/REGLAGES-OPEN-WEBUI.md`.
+
+- Ne pas retraduire Open WebUI. Ne pas coder d’overlay, sauf demande explicite.
 - Ne pas patcher l’image Docker à la main (écrasée à la mise à jour).

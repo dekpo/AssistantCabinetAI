@@ -52,6 +52,7 @@ services:
       # Compose wins over the Admin UI after restart. New machines get the same flags.
       ENABLE_PERSISTENT_CONFIG: ${ENABLE_PERSISTENT_CONFIG:-false}
       DEFAULT_LOCALE: en-US
+      DEFAULT_MODEL_PARAMS: '{"function_calling":"legacy"}'
       # First visitor becomes admin. After that account exists, set ENABLE_SIGNUP=false in .env.
       ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
       ENABLE_OPENAI_API: "false"

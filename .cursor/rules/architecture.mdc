@@ -5,12 +5,13 @@ alwaysApply: true
 
 # Contrats stables
 
-1. Tous les clients parlent à la passerelle OpenAI-compat (`/v1`), jamais à Ollama.
+1. Tous les clients parlent à la passerelle (`apps/server`, FastAPI), jamais à Ollama. Elle expose `/v1` compatible OpenAI **et** les points produit. Open WebUI y est branché aussi.
 2. Catalogue d’outils versionné + format de plan d’action.
 3. Audit métadonnées. Runtimes (Open WebUI, MCP, Hermes, OpenClaw) = adaptateurs.
 4. Plugins IDE (Continue, Cline) : scope `chat` seulement.
 5. `/v1/audio/*` et `/v1/jobs` sont **réservés**. STT cloud interdit.
-6. Prototype inférence = Ollama + Open WebUI localhost (**admin / banc d’essai**). Écran métier = fenêtre native (Tauri), pas le navigateur. Open WebUI Computer (`cptr`) : pas sur un poste de cabinet. Détail local : `docs/CLIENT-NATIF.md`.
+6. Écran métier = fenêtre native (Tauri), pas le navigateur. Open WebUI = **établi** de la porteuse, gelé pendant le sprint v0. Open WebUI Computer (`cptr`) : pas sur un poste de cabinet. Détail local : `docs/CLIENT-NATIF.md`.
+7. Inférence v0 = Ollama derrière la passerelle, sur un **Mac mini au cabinet**. L’URL du serveur est un réglage, jamais une constante.
 
 # Portabilité
 

@@ -13,6 +13,12 @@ models/*.gguf
 node_modules/
 .venv/
 __pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
 .DS_Store
 Thumbs.db
 fixtures/gp-sandbox/real/

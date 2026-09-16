@@ -12,10 +12,10 @@ Help staff process large volumes of documents (DOC, DOCX, PDF, text and similar)
 | --- | --- | --- |
 | Environment | Docker Compose | Same stack on a Windows PC and later on a Mac mini |
 | Inference | [Ollama](https://ollama.com/) | Local models |
-| Gateway | OpenAI-compatible `/v1` | All clients (pane, Open WebUI, VS Code / Continue) |
+| Gateway | Python, FastAPI, Pydantic (`apps/server`) | OpenAI-compatible `/v1` plus product endpoints. Every client goes through it, never straight to Ollama |
 | Admin UI | [Open WebUI](https://openwebui.com/) | Owner workbench only — **not** the GP’s screen, **not** a store for case files |
-| Practice app | Assistant Cabinet AI (Tauri) | Native window on Windows and Mac: work folder + plan + chat |
-| Retrieval | Index **on each workstation** | Sensitive files are not stored on the AI server |
+| Practice app | Assistant Cabinet AI — Tauri 2, React, TypeScript (`apps/desktop`) | Native window on Windows and Mac: work folder + plan + chat |
+| Retrieval | Index **on each workstation** | Parsing, chunking and the index stay local. Sensitive files are not stored on the AI server |
 | Models | [Hugging Face](https://huggingface.co/) via Ollama | Open weights; check the licence before practice use |
 | Target host | Apple Silicon Mac mini, 64 GB | Internal **inference** server, unified memory |
 | Workstations | Windows and macOS PCs | Existing habits stay (practice software unchanged) |
@@ -23,6 +23,10 @@ Help staff process large volumes of documents (DOC, DOCX, PDF, text and similar)
 ## Local prototype
 
 Docker Compose on localhost (Ollama + Open WebUI, English workbench). Install steps: [docs/user/local-compose.md](docs/user/local-compose.md). Admin prompt bodies: `prompts/`. Fictional GP files: `fixtures/gp-sandbox/`. Licence register: [models/LICENSES.md](models/LICENSES.md).
+
+## Current milestone
+
+**v0 prototype.** By 30 September 2026 the whole chain holds on fictional fixtures: native window, gateway, local index, answer with sources, and a test proving the server keeps no document. By 14 October 2026 the pilot GP uses it on her own documents, with a Windows installer and the server on a Mac mini at her practice. Answers cite filename, page and passage; when the documents do not carry the answer, the product says so rather than generating one.
 
 ## Project status
 

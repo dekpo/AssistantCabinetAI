@@ -1,0 +1,39 @@
+---
+description: Sprint v0 — jalons 30 septembre et 14 octobre 2026, arborescence et frontières du code
+alwaysApply: true
+---
+
+# v0 — prototype installable
+
+Direction canonique : `docs/BRIEF-V0-PROTOTYPE.md` (anglais, local). Calendrier daté, recettes et risques : `docs/ROADMAP.md`.
+
+Deux jalons : **30 septembre 2026**, la chaîne tient de bout en bout sur `fixtures/gp-sandbox/` ; **14 octobre 2026**, elle l’utilise sur ses documents, avec l’installateur Windows et le déploiement au cabinet.
+
+Objectif unique : un prototype **installable**, déployé sur le poste de la généraliste, avec un Mac mini **au cabinet** comme serveur. Devant un choix entre une fonction impressionnante de plus et un flux existant plus fiable, privé, testable et remplaçable : prendre le second. Ne pas réécrire ce qui marche.
+
+Chaîne à faire tenir : poste (Tauri) → index local → passerelle FastAPI → Ollama → réponse **avec sources**.
+
+# Arborescence
+
+```text
+apps/desktop/            Tauri 2 + React + TypeScript. UI en TypeScript, jamais en Rust.
+apps/desktop/src-tauri/  Rust : sas, extraction, index local, application des plans validés.
+apps/server/             Python + FastAPI + Pydantic. Passerelle /v1 + points produit.
+```
+
+Outils : `pnpm` (client), `uv` (serveur). Tests : `vitest`, `cargo test`, `pytest`. Rien de codé en dur : l’URL du serveur, le modèle et le sas sont des réglages.
+
+# Frontières à ne pas franchir
+
+- La vue web n’appelle jamais le serveur directement : elle passe par des commandes Tauri. Liste blanche, plafond de contexte et no-store vivent **dans le code**, pas dans la vue ni dans un prompt.
+- Le métier n’importe aucun client Ollama ni Open WebUI. `AIProvider` (`generate`, `embed`, `rerank`), l’index et les embeddings sont derrière des interfaces remplaçables.
+- Le serveur n’écrit **aucun** texte de document : ni fichier, ni base, ni journal, ni trace de mise au point. Registre = métadonnées seulement.
+- Rien n’est transmis, supprimé, déplacé ni modifié sans confirmation explicite. « Exporter » = produire une pièce validée dans le sas ou le presse-papiers ; **elle** l’envoie depuis ses logiciels. Pas de MSSanté, pas de Medilink, pas d’Ameli.
+
+# Gelé jusqu’au 14 octobre 2026
+
+Open WebUI (établi, aucun développement), voix, vision, OCR des scans (contrat seulement), certificats, courrier d’adressage, Ameli, comptabilité, mobile, boutiques, multi-poste, RBAC, facturation, statistiques.
+
+# Tests, chaque semaine et non à la fin
+
+Récupération, attribution des sources, refus de répondre hors sources, isolation des données côté serveur. Réponse par défaut quand les documents ne portent pas l’information : « Je n'ai pas trouvé assez d'informations dans les documents disponibles. » Un flux sans test ne compte pas comme livré.

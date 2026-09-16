@@ -5,7 +5,9 @@ alwaysApply: true
 
 # Assistant Cabinet AI
 
-IA locale pour cabinets. Pilote : médecin généraliste libéral. Pile à tester en premier : **Docker Compose** (Ollama + Open WebUI, localhost). Ne pas installer Open WebUI Computer sur un poste de cabinet.
+IA locale pour cabinets. Pilote : médecin généraliste libéral. Ne pas installer Open WebUI Computer sur un poste de cabinet.
+
+**En cours : sprint v0, prototype installable au 30 septembre 2026.** Direction : `docs/BRIEF-V0-PROTOTYPE.md`. Calendrier : `docs/ROADMAP.md`. Règle de sprint : `.cursor/rules/v0-sprint.mdc`. Elle prime sur l’ordre des anciennes notes.
 
 Lire : `AGENTS.md`, `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs/PROTOTYPE-PLAN.md`, `docs/PILOT-GP-FRANCE.md`, `docs/CONFIDENTIALITE-ET-SECURITE.md`. Coquilles d’interface Open WebUI : `docs/TRADUCTION-OPEN-WEBUI.md`. Réglages globaux : `docs/REGLAGES-OPEN-WEBUI.md`. Sauvegardes `data/` : `docs/SAUVEGARDES-LOCALES.md`.
 
@@ -13,7 +15,9 @@ Lire : `AGENTS.md`, `CONTRIBUTING.md`, `docs/LANGUE.md`, `docs/DOCKER.md`, `docs
 
 Écran métier : **Assistant Cabinet AI**, fenêtre native (Tauri), Windows et Mac, sans URL. Open WebUI = **établi** de la porteuse, jamais l’écran du médecin. Plans de fichiers validés par l’humain. Pas un remplacement du logiciel métier. Pas d’entrepôt de dossiers médicaux sur le serveur d’IA. Données fictives tant que l’entretien et une ébauche d’AIPD n’existent pas.
 
-Priorité pilote (généraliste) : synthèse des comptes rendus + plan de nommage **avec doublons**. Pas de module comptable, pas de compte Ameli, pas de clone des modèles Medilink (certificats, adressage).
+Priorité pilote (généraliste) : synthèse des comptes rendus + plan de nommage **avec doublons**. Pas de module comptable, pas de compte Ameli, pas de clone des modèles Medilink (certificats, adressage). Rien n’est envoyé : elle transmet elle-même depuis ses logiciels.
+
+Vrais documents : autorisés au déploiement de la semaine 4, **après** ébauche d’AIPD écrite, responsable de traitement identifié, et chiffrement du disque (poste + Mac mini). Avant cela : `fixtures/gp-sandbox/` seulement.
 
 # Contraintes de session
 

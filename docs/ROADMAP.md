@@ -31,7 +31,7 @@ milestones.
 | **A — the chain holds** | **30 September 2026** | Native window, gateway, local index, answer with sources, isolation test | `fixtures/gp-sandbox/` (fictional) |
 | **B — she uses it** | **14 October 2026** | The three GP flows, the Windows installer, deployment at the practice | Her own documents, **after** the legal gate |
 
-## Sprint 1 — vertical slice (16 → 23 September)
+## Sprint 1 — vertical slice (16 → 23 September) — **delivered 17 September 2026**
 
 Deliverable: `Tauri → FastAPI → Ollama → answer`, visible in a window with no address bar.
 
@@ -45,6 +45,26 @@ Deliverable: `Tauri → FastAPI → Ollama → answer`, visible in a window with
 - `compose.yaml`: add the `server` service and point Open WebUI at the gateway instead of Ollama.
 - Acceptance: she types a sentence and gets a French answer; with the server stopped she gets a clear
   message rather than a stack trace.
+
+**Delivered.** Merged as pull request #1, `feat: vertical slice from tauri window to ollama through the
+gateway`, 86 files. What exists now, verified on the pilot workstation:
+
+- `apps/server`: `GET /health`, `GET /v1/models`, `POST /v1/chat/completions` (streaming and not),
+  `AIProvider` with `OllamaProvider` as the only implementation, alias resolution from configuration,
+  locale packs, the output-language directive appended to an English body, no-store headers, and a
+  metadata-only register. 31 pytest, `ruff` clean.
+- `apps/desktop`: React and TypeScript window with themes, settings, chat, server status and error
+  banner; every visible string through the `en-US` and `fr-FR` catalogues. 47 vitest, `tsc` clean.
+- `apps/desktop/src-tauri`: `settings.json` in the app-config directory, the work folder allow-list, the
+  gateway client with SSE parsing, and five Tauri commands as the only bridge to the webview.
+  22 `cargo test`.
+- `compose.yaml`: the `server` service on `127.0.0.1`, with Open WebUI routed through the gateway.
+- Evidence: `/health` green with the provider reachable, a French answer produced from the English system
+  prompt, streaming delta by delta, and a register line carrying hashes and counts but no document text.
+
+Not done in sprint 1, and inherited by sprint 2: there is no `/v1/embeddings` route although
+`AIProvider.embed` exists, `fixtures/gp-sandbox/` still holds only `.txt`, there is no `uv.lock`, and
+nothing reads a document yet.
 
 ## Sprint 2 — local retrieval (24 → 30 September)
 

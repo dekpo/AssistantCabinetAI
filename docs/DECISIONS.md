@@ -25,6 +25,8 @@ that were spread across the earlier French notes. If a decision changes, change 
 | Copying patient files onto the Mac mini | **No.** It would become a health-record store |
 | Real patient documents | **Not** before a written DPIA draft, a named data controller, and disk encryption |
 | Consumer assistants (ChatGPT and similar) for practice files | Closed: forbidden, and the pilot understands why |
+| Reporting what a document states | **Yes**, including findings, treatments, identifiers and what a letter calls a pathology, **with a citation**. That is reading assistance for the GP. There is no extra clinical filter on top of retrieval |
+| The model's own diagnosis, prescription or clinical advice | **No**. The practitioner remains the sole decision maker. The disclaimer on screen is that rule, not a reason to hide what a document already says |
 
 ## Technology
 
@@ -41,6 +43,20 @@ that were spread across the earlier French notes. If a decision changes, change 
 | Model choice | Alias allow-list only, licence record mandatory, no clinical-care weights |
 | Language | One `locale` variable owned by the client. English prompts in, user's language out |
 | Documentation language | English, as of 16 September 2026 |
+
+## Settled while building the vertical slice (sprint 1, 17 September 2026)
+
+| Subject | Decision |
+| --- | --- |
+| The webview's only bridge | Tauri commands. Sprint 1 has five: snapshot, save settings, choose work folder, check health, send message. The server URL, the alias, the locale and the allow-list stay in Rust |
+| Streaming to the interface | A Tauri `Channel` emitting `delta` then `completed`, not polling and not a webview fetch |
+| Errors across every boundary | Rust and Python return a machine code plus structured data; the React catalogues turn it into a sentence. A code without a catalogue entry fails a guard test |
+| Settings location | `settings.json` in the Tauri app-config directory, resolved at runtime. Never a written path |
+| Work folder allow-list | Built from what the platform reports (home, Documents, Desktop, Downloads), not from hardcoded strings, so one rule set covers Windows and macOS |
+| `MODEL_ALIASES` format | `alias=model` pairs **or** JSON, because Compose cannot interpolate a default containing braces. An empty map serves nothing rather than guessing an installed model |
+| Register storage | In memory with a capacity bound. Metadata and SHA-256 hashes only, never prompt or answer text, not even in debug |
+| Guard tests as policy | A French literal or a non-ASCII character in `apps/server` or `src-tauri`, a user-visible literal in a component, and a catalogue key mismatch each fail a test rather than a review |
+| Open WebUI's route to the model | Through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so the workbench sees aliases and not the model shelf |
 
 ## Known blind spots to keep in mind
 

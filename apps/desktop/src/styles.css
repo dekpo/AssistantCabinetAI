@@ -195,12 +195,22 @@ body {
 }
 
 .message {
-  border-left: 3px solid var(--border);
-  padding-left: 10px;
+  max-width: 78%;
 }
 
 .message--assistant {
-  border-left-color: var(--accent);
+  align-self: flex-start;
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+
+.message--user {
+  align-self: flex-end;
+  text-align: right;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
 }
 
 .message__author {

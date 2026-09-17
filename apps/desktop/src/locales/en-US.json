@@ -1,0 +1,86 @@
+{
+  "app": {
+    "name": "Assistant Cabinet AI",
+    "subtitle": "Administrative assistance, on the practice network",
+    "loading": "Starting..."
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "openSettings": "Settings",
+    "retry": "Try again",
+    "save": "Save",
+    "send": "Send"
+  },
+  "status": {
+    "label": "Server",
+    "checking": "Checking...",
+    "online": "Connected",
+    "degraded": "Connected, but no model is available",
+    "offline": "Not connected",
+    "recheck": "Check the connection"
+  },
+  "chat": {
+    "emptyTitle": "Ask a question",
+    "emptyBody": "What you write stays on the practice network. Nothing is sent outside it.",
+    "placeholder": "Write your question...",
+    "authorUser": "You",
+    "authorAssistant": "Assistant",
+    "pending": "Writing the answer...",
+    "keyboardHint": "Enter sends. Shift and Enter start a new line.",
+    "disclaimer": "Administrative assistance. Always check the answer: the practitioner remains the sole decision maker. Nothing is sent automatically."
+  },
+  "workFolder": {
+    "title": "Work folder",
+    "description": "The only folder this software may write into. Choose a dedicated subfolder, not the whole of your documents.",
+    "none": "No folder chosen yet",
+    "choose": "Choose a folder...",
+    "change": "Change the folder..."
+  },
+  "settings": {
+    "title": "Settings",
+    "storedAt": "Stored in {path}",
+    "saved": "Settings saved",
+    "themeLabel": "Appearance",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "Follow the system",
+    "languageLabel": "Language",
+    "languageDescription": "The interface, the messages and the language the answers are written in.",
+    "serverUrlLabel": "Server address",
+    "serverUrlDescription": "The practice server. Never a public service.",
+    "modelAliasLabel": "Model profile",
+    "modelAliasDescription": "Which profile answers. The list comes from the server.",
+    "modelAliasUnavailable": "The server has not listed its profiles yet."
+  },
+  "errorBanner": {
+    "title": "This did not work"
+  },
+  "errors": {
+    "context_too_large": "This question is too long for one request ({chars} characters for a limit of {limit}). Shorten it.",
+    "internal_error": "The server ran into an unexpected problem. Try again; if it persists, note the time and report it.",
+    "invalid_request": "The server refused the request because it was malformed. Please report it.",
+    "model_alias_not_allowed": "The profile {requested} is not offered by this server. Choose another one in the settings.",
+    "output_locale_not_supported": "This software cannot yet answer in the language {requested}.",
+    "provider_capability_unsupported": "The server cannot do this yet ({capability}).",
+    "provider_error": "The model did not answer correctly. Try again.",
+    "provider_unreachable": "The server is running but its model is not answering. Warn whoever looks after the machine.",
+    "server_error": "The server replied with an error (code {status}).",
+    "server_response_invalid": "The server reply could not be read.",
+    "server_timeout": "The server took too long to answer. Try again.",
+    "server_unreachable": "No answer from the server at {url}. Check that the machine is on and on the same network.",
+    "server_url_invalid": "This server address cannot be used ({url}). It must start with http:// or https://.",
+    "settings_read_failed": "Your settings could not be read, so the default ones are in use.",
+    "settings_write_failed": "Your settings could not be saved.",
+    "unknown_error": "Something unexpected happened.",
+    "work_folder_is_drive_root": "A whole disk cannot be the work folder ({path}). Choose a folder inside it.",
+    "work_folder_is_protected": "This folder is protected, or it holds all of your personal files ({path}). Choose a dedicated subfolder.",
+    "work_folder_is_symlink": "This folder is a shortcut to somewhere else ({path}). Choose the real folder.",
+    "work_folder_not_a_directory": "This is a file, not a folder ({path}).",
+    "work_folder_not_found": "This folder no longer exists ({path}).",
+    "work_folder_not_writable": "This software cannot write into this folder ({path}).",
+    "work_folder_path_not_absolute": "This folder path is incomplete ({path}).",
+    "work_folder_selection_cancelled": "No folder was chosen.",
+    "work_folder_unc_not_supported": "A network folder cannot be the work folder yet ({path})."
+  }
+}

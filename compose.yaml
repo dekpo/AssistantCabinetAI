@@ -37,6 +37,33 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  # The gateway. Every client talks to it, never to Ollama: aliases, the output-language
+  # directive, no-store and the metadata register all live here. It writes nothing to disk, so it
+  # has no volume and runs unprivileged.
+  server:
+    build:
+      context: ./apps/server
+    container_name: assistant-cabinet-server
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SERVER_HOST_PORT:-8080}:8080"
+    environment:
+      # Reachable inside the Compose network only. Port 11434 stays off the practice LAN.
+      LLM_BASE_URL: http://ollama:11434
+      # `alias=model` pairs: Compose cannot interpolate a default containing braces, so the JSON
+      # form is left for a hand-written .env. A weight name belongs here, never in code.
+      MODEL_ALIASES: ${MODEL_ALIASES:-cabinet-chat=mistral,cabinet-rapide=mistral}
+      DEFAULT_MODEL_ALIAS: ${DEFAULT_MODEL_ALIAS:-cabinet-chat}
+      # Safety net for a request that arrives without an output locale. Never silently English.
+      DEFAULT_OUTPUT_LOCALE: ${DEFAULT_OUTPUT_LOCALE:-fr-FR}
+      MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-48000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - cabinet
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG:-main}
     container_name: assistant-cabinet-open-webui
@@ -44,10 +71,18 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      server:
+        condition: service_healthy
     ports:
       - "127.0.0.1:${OPEN_WEBUI_HOST_PORT:-3000}:8080"
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
+      # The owner workbench goes through the gateway like any other client, so what it sees is
+      # the alias catalogue rather than the model shelf.
+      ENABLE_OLLAMA_API: "false"
+      OPENAI_API_BASE_URL: http://server:8080/v1
+      # The gateway does not check keys yet (per-person keys are sprint 4); a value is sent
+      # because the client insists on one.
+      OPENAI_API_KEY: ${GATEWAY_API_KEY:-local-owner-key}
       WEBUI_AUTH: "true"
       # Compose wins over the Admin UI after restart. New machines get the same flags.
       ENABLE_PERSISTENT_CONFIG: ${ENABLE_PERSISTENT_CONFIG:-false}
@@ -55,7 +90,7 @@ services:
       DEFAULT_MODEL_PARAMS: '{"function_calling":"legacy"}'
       # First visitor becomes admin. After that account exists, set ENABLE_SIGNUP=false in .env.
       ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
-      ENABLE_OPENAI_API: "false"
+      ENABLE_OPENAI_API: "true"
       ENABLE_COMMUNITY_SHARING: "false"
       ENABLE_WEB_SEARCH: "false"
       # No follow-up questions (they invent clinical next steps). No auto-tags.

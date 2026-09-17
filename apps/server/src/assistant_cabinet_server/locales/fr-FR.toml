@@ -1,0 +1,14 @@
+# Locale pack read by the user, not by the model. See docs/LANGUAGE-AND-LOCALE.md.
+# The file name is the BCP 47 tag; adding a language means adding a file here.
+
+language_name = "French"
+disclaimer = "Synthèse d'aide à la lecture. La médecin reste seule décideuse. Pas d'envoi automatique."
+
+# Vocabulary the naming plan may propose (sprint 3). Never a free-form invention.
+[filename_stems]
+specialist_letter = "lettre-specialiste"
+imaging = "imagerie"
+labs = "bio"
+letter = "courrier"
+certificate = "certificat"
+other = "autre"

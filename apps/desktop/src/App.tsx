@@ -69,7 +69,7 @@ export default function App() {
             ))}
             {healthError === null ? null : <ErrorBanner error={healthError} onRetry={refresh} />}
           </aside>
-          <ChatPanel />
+          <ChatPanel onFailure={refresh} />
         </main>
         {settingsOpen ? (
           <SettingsDialog

@@ -13,7 +13,11 @@ export interface ChatState {
   send: (question: string) => Promise<void>;
 }
 
-export function useChat(): ChatState {
+/**
+ * `onFailure` runs when a message could not be answered. The window uses it to re-ask the gateway
+ * how it is, so a server that went down is reported by the indicator and not only by this banner.
+ */
+export function useChat(onFailure?: () => void): ChatState {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -49,11 +53,12 @@ export function useChat(): ChatState {
         setError(normaliseError(raw));
         // Drop the half-written answer: an incomplete summary is worse than none.
         setEntries((current) => current.filter((entry) => entry.id !== answerId));
+        onFailure?.();
       } finally {
         setPending(false);
       }
     },
-    [entries, pending],
+    [entries, pending, onFailure],
   );
 
   return { entries, pending, error, send };

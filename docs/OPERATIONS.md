@@ -13,8 +13,9 @@ Data rules: `docs/PRIVACY-AND-SECURITY.md`. Layers: `docs/ARCHITECTURE.md`.
 ## Decisions
 
 - Compose is the environment baseline from the first prototype.
-- Services today: `ollama` + `open-webui`, internal network, ports published on `127.0.0.1` only.
-- The gateway (`apps/server`, `/v1`) joins **the same** Compose file once local chat is stable — not a
+- Services today: `server` + `ollama` + `open-webui`, internal network, ports published on `127.0.0.1`
+  only.
+- The gateway (`apps/server`, `/v1`) is **in the same** Compose file since 16 September 2026, not a
   parallel "Windows only" script.
 - Host folders under `data/` (account, chats, prompts, model weights) live on the project disk, outside
   git. `docker compose down -v` does not erase them.
@@ -22,6 +23,26 @@ Data rules: `docs/PRIVACY-AND-SECURITY.md`. Layers: `docs/ARCHITECTURE.md`.
 - Same repository, same files: `docker compose up` on Windows (Docker Desktop), then on macOS. The volume
   is never copied from one machine to the other.
 - Open WebUI Computer is not installed in this Compose.
+
+## The gateway service
+
+Built from `apps/server`, published on `127.0.0.1:${SERVER_HOST_PORT:-8080}`. It has **no volume**:
+the gateway writes nothing to disk, so giving it one would be giving it a reason to. Ollama is
+reachable from it on the Compose network and from nowhere else.
+
+```powershell
+docker compose up -d --build server
+curl.exe -s http://127.0.0.1:8080/health
+```
+
+`status` is `ok` when the runtime answers and at least one alias is configured; otherwise it is
+`degraded` and `issues` names the machine codes. Aliases come from `MODEL_ALIASES`, written as
+`alias=model` pairs because Compose cannot interpolate a default containing braces. Changing which
+model answers is a change to that line and a restart, never a change to a client.
+
+Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so
+the workbench sees the same alias catalogue as the practice window. The gateway does not check API
+keys yet; per-person keys are sprint 4.
 
 ## Why not a native-only install
 

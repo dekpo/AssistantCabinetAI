@@ -1,0 +1,86 @@
+{
+  "app": {
+    "name": "Assistant Cabinet AI",
+    "subtitle": "Aide administrative, sur le réseau du cabinet",
+    "loading": "Démarrage..."
+  },
+  "actions": {
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "openSettings": "Réglages",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "send": "Envoyer"
+  },
+  "status": {
+    "label": "Serveur",
+    "checking": "Vérification...",
+    "online": "Connecté",
+    "degraded": "Connecté, mais aucun modèle n'est disponible",
+    "offline": "Non connecté",
+    "recheck": "Vérifier la connexion"
+  },
+  "chat": {
+    "emptyTitle": "Posez une question",
+    "emptyBody": "Ce que vous écrivez reste sur le réseau du cabinet. Rien n'est envoyé à l'extérieur.",
+    "placeholder": "Écrivez votre question...",
+    "authorUser": "Vous",
+    "authorAssistant": "Assistant",
+    "pending": "Rédaction de la réponse...",
+    "keyboardHint": "Entrée envoie. Maj et Entrée vont à la ligne.",
+    "disclaimer": "Aide administrative. Vérifiez toujours la réponse : la médecin reste seule décideuse. Aucun envoi automatique."
+  },
+  "workFolder": {
+    "title": "Dossier de travail",
+    "description": "Le seul dossier dans lequel ce logiciel peut écrire. Choisissez un sous-dossier dédié, pas la totalité de vos documents.",
+    "none": "Aucun dossier choisi pour le moment",
+    "choose": "Choisir un dossier...",
+    "change": "Changer de dossier..."
+  },
+  "settings": {
+    "title": "Réglages",
+    "storedAt": "Enregistré dans {path}",
+    "saved": "Réglages enregistrés",
+    "themeLabel": "Apparence",
+    "themeLight": "Clair",
+    "themeDark": "Sombre",
+    "themeSystem": "Suivre le système",
+    "languageLabel": "Langue",
+    "languageDescription": "L'interface, les messages et la langue dans laquelle les réponses sont rédigées.",
+    "serverUrlLabel": "Adresse du serveur",
+    "serverUrlDescription": "Le serveur du cabinet. Jamais un service public.",
+    "modelAliasLabel": "Profil de modèle",
+    "modelAliasDescription": "Le profil qui répond. La liste vient du serveur.",
+    "modelAliasUnavailable": "Le serveur n'a pas encore indiqué ses profils."
+  },
+  "errorBanner": {
+    "title": "Cela n'a pas fonctionné"
+  },
+  "errors": {
+    "context_too_large": "Cette question est trop longue pour une seule demande ({chars} caractères pour une limite de {limit}). Raccourcissez-la.",
+    "internal_error": "Le serveur a rencontré un problème inattendu. Réessayez ; si cela persiste, notez l'heure et signalez-le.",
+    "invalid_request": "Le serveur a refusé la demande car elle était mal formée. Merci de le signaler.",
+    "model_alias_not_allowed": "Le profil {requested} n'est pas proposé par ce serveur. Choisissez-en un autre dans les réglages.",
+    "output_locale_not_supported": "Ce logiciel ne sait pas encore répondre dans la langue {requested}.",
+    "provider_capability_unsupported": "Le serveur ne sait pas encore faire cela ({capability}).",
+    "provider_error": "Le modèle n'a pas répondu correctement. Réessayez.",
+    "provider_unreachable": "Le serveur fonctionne mais son modèle ne répond pas. Prévenez la personne qui s'occupe de la machine.",
+    "server_error": "Le serveur a répondu par une erreur (code {status}).",
+    "server_response_invalid": "La réponse du serveur n'a pas pu être lue.",
+    "server_timeout": "Le serveur a mis trop de temps à répondre. Réessayez.",
+    "server_unreachable": "Aucune réponse du serveur à l'adresse {url}. Vérifiez que la machine est allumée et sur le même réseau.",
+    "server_url_invalid": "Cette adresse de serveur ne peut pas être utilisée ({url}). Elle doit commencer par http:// ou https://.",
+    "settings_read_failed": "Vos réglages n'ont pas pu être lus, ce sont donc les réglages par défaut qui s'appliquent.",
+    "settings_write_failed": "Vos réglages n'ont pas pu être enregistrés.",
+    "unknown_error": "Un problème inattendu s'est produit.",
+    "work_folder_is_drive_root": "Un disque entier ne peut pas être le dossier de travail ({path}). Choisissez un dossier à l'intérieur.",
+    "work_folder_is_protected": "Ce dossier est protégé, ou il contient l'ensemble de vos fichiers personnels ({path}). Choisissez un sous-dossier dédié.",
+    "work_folder_is_symlink": "Ce dossier est un raccourci vers un autre emplacement ({path}). Choisissez le dossier réel.",
+    "work_folder_not_a_directory": "Ceci est un fichier, pas un dossier ({path}).",
+    "work_folder_not_found": "Ce dossier n'existe plus ({path}).",
+    "work_folder_not_writable": "Ce logiciel ne peut pas écrire dans ce dossier ({path}).",
+    "work_folder_path_not_absolute": "Le chemin de ce dossier est incomplet ({path}).",
+    "work_folder_selection_cancelled": "Aucun dossier n'a été choisi.",
+    "work_folder_unc_not_supported": "Un dossier réseau ne peut pas encore être le dossier de travail ({path})."
+  }
+}

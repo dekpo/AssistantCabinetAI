@@ -1,0 +1,13 @@
+# Reference pack. It proves a second language works and it is what English-speaking
+# reviewers read. See docs/LANGUAGE-AND-LOCALE.md.
+
+language_name = "English"
+disclaimer = "Reading aid only. The practitioner remains the sole decision maker. Nothing is sent automatically."
+
+[filename_stems]
+specialist_letter = "specialist-letter"
+imaging = "imaging"
+labs = "labs"
+letter = "letter"
+certificate = "certificate"
+other = "other"

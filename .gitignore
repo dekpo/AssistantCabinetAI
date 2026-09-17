@@ -17,6 +17,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 dist/
+.vite/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 .DS_Store

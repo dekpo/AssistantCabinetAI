@@ -17,6 +17,7 @@ function languageLabel(tag: string, locale: string): string {
 export function SettingsDialog({
   settings,
   settingsPath,
+  suggestedWorkFolder,
   aliases,
   saveError,
   onUpdate,
@@ -24,6 +25,7 @@ export function SettingsDialog({
 }: {
   settings: AppSettings;
   settingsPath: string;
+  suggestedWorkFolder: string | null;
   aliases: string[];
   saveError: AppError | null;
   onUpdate: (patch: Partial<AppSettings>) => void;
@@ -132,6 +134,7 @@ export function SettingsDialog({
 
         <WorkFolderCard
           workFolder={settings.workFolder}
+          suggestedWorkFolder={suggestedWorkFolder}
           onChosen={(path) => onUpdate({ workFolder: path })}
         />
 

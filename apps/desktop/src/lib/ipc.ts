@@ -23,6 +23,8 @@ export interface AppSnapshot {
   systemLocale: string;
   /** Where `settings.json` lives on this machine. Shown in the settings panel, never guessed. */
   settingsPath: string;
+  /** `~/AssistantCabinetAI`, proposed when nothing has been chosen. Null when there is no home. */
+  suggestedWorkFolder: string | null;
   /** Machine codes for what went wrong while reading, without preventing the window opening. */
   warnings: string[];
 }

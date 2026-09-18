@@ -32,8 +32,9 @@
   },
   "workFolder": {
     "title": "Work folder",
-    "description": "The only folder this software may write into. Choose a dedicated subfolder, not the whole of your documents.",
+    "description": "The only folder this software may write into. Choose a dedicated folder, not the whole of your documents, and not a folder copied to a cloud service.",
     "none": "No folder chosen yet",
+    "suggestion": "Suggested: {path}. It sits outside your Documents on purpose, so that nothing is copied to OneDrive or iCloud.",
     "choose": "Choose a folder...",
     "change": "Change the folder..."
   },
@@ -73,8 +74,10 @@
     "settings_read_failed": "Your settings could not be read, so the default ones are in use.",
     "settings_write_failed": "Your settings could not be saved.",
     "unknown_error": "Something unexpected happened.",
+    "work_folder_is_cloud_synced": "This folder is copied to {service} ({path}). Professional documents must not leave the practice, so choose a folder outside it, for example directly in your user folder.",
     "work_folder_is_drive_root": "A whole disk cannot be the work folder ({path}). Choose a folder inside it.",
     "work_folder_is_protected": "This folder is protected, or it holds all of your personal files ({path}). Choose a dedicated subfolder.",
+    "work_folder_no_longer_allowed": "Your work folder no longer meets the safety rules, most often because a cloud service now copies it. Choose it again.",
     "work_folder_is_symlink": "This folder is a shortcut to somewhere else ({path}). Choose the real folder.",
     "work_folder_not_a_directory": "This is a file, not a folder ({path}).",
     "work_folder_not_found": "This folder no longer exists ({path}).",

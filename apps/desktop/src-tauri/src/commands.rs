@@ -4,6 +4,7 @@
 //! through the system dialog, ask the gateway how it is, send one conversation. The address, the
 //! alias, the locale and the allow-list stay on this side of the door.
 
+use std::path::Path;
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -14,7 +15,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::error::AppError;
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::settings::{self, Settings};
-use crate::work_folder::{display, WorkFolderPolicy};
+use crate::work_folder::{display, suggested_work_folder, WorkFolderPolicy};
 
 pub struct AppState {
     pub settings: Mutex<Settings>,
@@ -46,6 +47,9 @@ pub struct AppSnapshot {
     settings: Settings,
     system_locale: String,
     settings_path: String,
+    /// What to propose when no folder has been chosen: `~/AssistantCabinetAI`, outside Documents
+    /// so that no cloud client mirrors it.
+    suggested_work_folder: Option<String>,
     warnings: Vec<String>,
 }
 
@@ -72,12 +76,28 @@ pub fn load_app_snapshot(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppSnapshot, AppError> {
-    let (stored, warnings) = settings::load(&app);
+    let (mut stored, mut warnings) = settings::load(&app);
+
+    // The rules are re-applied to a folder chosen on an earlier run, because the machine changes
+    // underneath us: switching OneDrive on redirects Documents into the cloud without asking the
+    // software. A folder that no longer passes is dropped rather than kept and written into. The
+    // cost is that an unplugged external disk also loses the setting, which is the safe side.
+    if let Some(chosen) = stored.work_folder.clone() {
+        let policy = work_folder_policy(&app);
+        if policy.validate(Path::new(&chosen)).is_err() {
+            stored.work_folder = None;
+            warnings.push(AppError::WorkFolderNoLongerAllowed.code().to_string());
+        }
+    }
+
     state.replace(stored.clone())?;
     Ok(AppSnapshot {
         settings: stored,
         system_locale: sys_locale::get_locale().unwrap_or_default(),
         settings_path: display(&settings::settings_path(&app)?),
+        suggested_work_folder: suggested_work_folder(app.path().home_dir().ok().as_deref())
+            .as_deref()
+            .map(display),
         warnings,
     })
 }

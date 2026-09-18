@@ -9,9 +9,11 @@ const CANCELLED = "work_folder_selection_cancelled";
 
 export function WorkFolderCard({
   workFolder,
+  suggestedWorkFolder,
   onChosen,
 }: {
   workFolder: string | null;
+  suggestedWorkFolder: string | null;
   onChosen: (path: string) => void;
 }) {
   const { t } = useTranslation();
@@ -36,6 +38,11 @@ export function WorkFolderCard({
       <p className={workFolder === null ? "path path--empty" : "path"}>
         {workFolder ?? t("workFolder.none")}
       </p>
+      {workFolder !== null || suggestedWorkFolder === null ? null : (
+        <p className="card__description">
+          {t("workFolder.suggestion", { path: suggestedWorkFolder })}
+        </p>
+      )}
       <button type="button" className="button" onClick={choose}>
         {workFolder === null ? t("workFolder.choose") : t("workFolder.change")}
       </button>

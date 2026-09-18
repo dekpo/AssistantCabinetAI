@@ -30,6 +30,56 @@ These hold from the prototype, not "later".
 Disk encryption (BitLocker, FileVault) on the workstations **and** the Mac mini is mandatory before any real
 pilot.
 
+## The workstation is not automatically local
+
+"On her machine" is not the same as "nowhere else". The operating system copies parts of the profile to a
+cloud service by default, and the folder we originally chose was one of them.
+
+**Windows.** OneDrive's Known Folder Move redirects `Documents`, `Desktop` and `Pictures` into
+`C:\Users\<user>\OneDrive\...`. Windows 11 offers it during setup and keeps asking afterwards. Once it is
+on, `SHGetKnownFolderPath(FOLDERID_Documents)` — which is what the client asks for the Documents folder —
+returns the OneDrive path, so a work folder "under Documents" is a work folder inside Microsoft's cloud.
+The earlier shape, `Documents\AssistantCabinet\travail\`, would have uploaded every specialist letter.
+
+**macOS.** iCloud Drive's "Desktop & Documents Folders" does the same thing, and since macOS 12.3 every
+File Provider client — OneDrive, Dropbox, Google Drive, Box — mounts under `~/Library/CloudStorage/`.
+
+### What the code does about it
+
+The work folder is `~/AssistantCabinetAI`, directly in the home. OneDrive Backup only covers Desktop,
+Documents, Pictures, Music and Videos, and iCloud only Desktop and Documents, so neither reaches it. The
+same is true of File History and the Windows Backup app. The location is a default, not the guarantee;
+the guarantee is in `apps/desktop/src-tauri/src/work_folder.rs`:
+
+- The sync roots the platform reports — `%OneDrive%`, `%OneDriveConsumer%`, `%OneDriveCommercial%` on
+  Windows, `~/Library/CloudStorage` and `~/Library/Mobile Documents` on macOS — are refused with
+  everything inside them.
+- Folder **names** are refused as well, on every component of the path, so a client that is not running
+  is still caught: `OneDrive - Contoso`, `Dropbox`, `Google Drive`, `iCloud Drive`, `Nextcloud`, `pCloud`,
+  `Box`. Short names are matched exactly, so an ordinary folder called `Boxes` still works.
+- On Windows, after the path has been canonicalised — which resolves junctions and symbolic links away —
+  the folder and each of its parents are checked for `FILE_ATTRIBUTE_REPARSE_POINT`. OneDrive tags its
+  whole tree with `IO_REPARSE_TAG_CLOUD`, so what remains is a sync placeholder, and it is refused even
+  for a product we have never heard of.
+- The rule is re-applied **at every launch**, not only when the folder is chosen, because the user can
+  switch OneDrive on afterwards. A folder that no longer passes is dropped and reported, never written to.
+- Bias is toward refusing. A wrongly refused folder is an explained inconvenience; a wrongly accepted one
+  is a disclosure of health data to a third-country processor.
+
+### What this does not solve, and must be written down
+
+- **Roaming profiles and GPO folder redirection.** On a domain-joined machine the whole profile except
+  `AppData\Local` can be copied to a server at logoff, which includes `~\AssistantCabinetAI`. Irrelevant
+  for a standalone practice PC, and a blocker for a managed one.
+- **Local index placement.** The retrieval index holds chunks of every document, so it lives in
+  `%LOCALAPPDATA%` (`app_local_data_dir()`), never in the roaming `%APPDATA%` that holds `settings.json`.
+- **Her existing documents.** `docs/PILOT-GP.md` records that everything she downloads and scans lands in
+  My Documents at the root. If OneDrive Backup is enabled on her machine, **her patient reports are
+  already in Microsoft's cloud today**, independently of this software. She is the named data controller,
+  so the DPIA draft has to state it, and the setting must be checked on her machine during the visit.
+- **Antivirus cloud sample submission and third-party backup tools** are outside our control and belong in
+  the DPIA rather than in the allow-list.
+
 ## Compliance — local is not sufficient
 
 - A named data controller, and an information notice for patients. For this pilot the controller is **the

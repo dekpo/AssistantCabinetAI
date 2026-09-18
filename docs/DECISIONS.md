@@ -27,6 +27,7 @@ that were spread across the earlier French notes. If a decision changes, change 
 | Consumer assistants (ChatGPT and similar) for practice files | Closed: forbidden, and the pilot understands why |
 | Reporting what a document states | **Yes**, including findings, treatments, identifiers and what a letter calls a pathology, **with a citation**. That is reading assistance for the GP. There is no extra clinical filter on top of retrieval |
 | The model's own diagnosis, prescription or clinical advice | **No**. The practitioner remains the sole decision maker. The disclaimer on screen is that rule, not a reason to hide what a document already says |
+| Interviewing other professions (lawyer, notary) | **Yes**, as information only, no selling, no client data. Method and register: `docs/DISCOVERY.md`. Blank forms versioned, completed answers private |
 
 ## Technology
 
@@ -102,3 +103,6 @@ release in v1. Handlers return `501` until a dedicated phase.
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud
 fallback model on real files, a server-side case index, irreversible actions without review, a second shared
 profession, wide-area multi-site access outside a practice VPN.
+
+Asking a second profession questions is not opening one. Discovery findings wait in `docs/DISCOVERY.md` until
+the GP pilot holds.

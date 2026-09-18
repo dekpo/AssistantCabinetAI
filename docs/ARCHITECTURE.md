@@ -38,6 +38,7 @@ See `docs/OPERATIONS.md`, `docs/RETRIEVAL.md`, `docs/CLIENT.md`.
 | Admin UI | Accounts, demos, **non-sensitive** corpora | Open WebUI (owner workbench, frozen for v0) |
 | Practice client | Chat, local index, plans, history | `apps/desktop`: Tauri 2, React, TypeScript |
 | Retrieval | Full-text index plus vectors **on the client** | SQLite in the Rust core (`docs/RETRIEVAL.md`) |
+| Tabular analysis | Workbook inventory plus deterministic lookup, **on the client**, working with the model off | `calamine` and `csv` in the Rust core (`docs/RETRIEVAL.md`) |
 | Extraction / OCR | Native PDF on the workstation; scans local **or** as an ephemeral job | Out of v0 for scans; `/v1/jobs` contract |
 | File tools | list / extract / propose / apply | JSON catalogue plus an MCP façade |
 | Security | VLAN, TLS, scopes, disk encryption | `docs/PRIVACY-AND-SECURITY.md` |
@@ -58,6 +59,80 @@ gateway. Open WebUI is the owner's workbench, never the doctor's screen.
 6. Model aliases (`cabinet-chat`, `cabinet-rapide`, ...): allow-list only, licence record mandatory. No open
    model store, no clinical-care weights in the pilot. See `docs/MODELS.md`.
 7. One language variable, `locale`, owned by the client. See `docs/LANGUAGE-AND-LOCALE.md`.
+8. One `Source` model for every kind of evidence, carrying how it was obtained. See below.
+9. A verified fact and a model's reasoning are distinguishable in the data, not only in the wording.
+
+## Workstation capabilities
+
+The workstation owns the corpus, so it owns the capabilities that read it. Each one is a port; the v0
+implementation behind it is deliberately boring and replaceable. None of these modules imports `tauri`:
+the Tauri commands are a thin adapter over them, which is what keeps a second client possible later
+(`docs/PLATFORM-VISION.md`).
+
+```text
+DocumentSource      discover(work_folder) -> DiscoveredFile[]     extension-driven, allow-list only
+TextExtractor       extract(path) -> ExtractedDocument            pdf / docx / txt / md
+Chunker             chunk(document) -> Chunk[]                    keeps file, page, section
+Embedder            embed(text[]) -> Vector[]                     gateway today, local ONNX later
+IndexStore          upsert / search_lexical / search_vector       SQLite today
+RetrievalService    search(query, scope) -> Evidence[]
+
+TabularDataSource   open(path) -> Workbook                        csv, xlsx
+TabularInventory    build(workbook) -> WorkbookInventory          structure and facts, full pass
+InventoryStore      put / get_by_hash / invalidate                SQLite today
+TabularAnalysis     analyze(query, scope) -> TabularOutcome       deterministic, no model
+```
+
+File discovery is generic. It recognises `.pdf`, `.docx`, `.txt`, `.md`, `.csv` and `.xlsx` by extension
+and contains no assumption about what a folder holds, because the same mechanism must serve a legal,
+accounting or notarial practice unchanged.
+
+Spreadsheets are **not** flattened into text chunks to resemble PDFs. They get their own pipeline, their
+own inventory and their own deterministic operations.
+
+## The common source model
+
+Documents and workbooks differ internally and are identical at the boundary.
+
+```text
+Source {
+  origin:     { relative_path, sha256, modified_at }
+  locator:    Document { page, section, chunk_id, char_range }
+       |      Tabular  { sheet, header_row, column, row_range }
+  derivation: Extracted                                    copied from the file
+       |      Computed { operation, operands, row_count }   we calculated it
+       |      FormulaStored { expression }                  the file says so; we did not verify it
+       |      ModelAsserted                                 the model said it
+}
+```
+
+`derivation` is the contract that keeps a verified fact apart from a generated one. It lets the interface
+render a computed total differently from a model sentence, and it lets a test assert that nothing
+labelled `Computed` ever passed through an LLM. A citation is never invented: an answer may only cite a
+`Source` that the retrieval or analysis step actually returned.
+
+## Deterministic before generative
+
+For anything the workstation can retrieve or compute locally, deterministic computation comes first.
+
+```text
+question
+  → classify (locale pattern pack: data, never literals in Rust)
+      ├─ deterministic path answerable  → compute → answer. No gateway call.
+      └─ not answerable                 → retrieval or the aggregate card
+                                        → minimum evidence under the cap
+                                        → gateway → AIProvider → model
+                                        → verify the cited sources; refuse if evidence is insufficient
+```
+
+Three consequences that are enforced by tests rather than by intent: a deterministic answer makes zero
+HTTP requests; deterministic questions still answer with the gateway stopped; and the same question over
+the same file returns the same number under a different model alias. Changing the model must never change
+a fact.
+
+The refusal is part of the contract. When the deterministic engine cannot establish an answer it returns
+`NOT_DETERMINISTICALLY_ANSWERABLE` with what it does have — the available columns, for instance — rather
+than a guess, and when the sources do not carry an answer the product says so rather than generating one.
 
 ## Runtimes are adapters, never the home of business logic
 

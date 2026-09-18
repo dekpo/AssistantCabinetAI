@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Assistant Cabinet AI — questionnaire cabinet d'avocats</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --soft: #5a5a5a;
+    --rule: #9a9a9a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0 auto;
+    max-width: 18cm;
+    padding: 12mm 8mm;
+    color: var(--ink);
+    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+
+  h1, h2, .meta, .kicker {
+    font-family: "Segoe UI", Calibri, Helvetica, Arial, sans-serif;
+  }
+
+  h1 {
+    margin: 0 0 2mm;
+    font-size: 16pt;
+    letter-spacing: -0.2pt;
+  }
+
+  .kicker {
+    margin: 0 0 6mm;
+    padding-bottom: 4mm;
+    border-bottom: 1.5pt solid var(--ink);
+    color: var(--soft);
+    font-size: 9pt;
+  }
+
+  h2 {
+    margin: 7mm 0 3mm;
+    padding-bottom: 1.5mm;
+    border-bottom: 0.5pt solid var(--rule);
+    font-size: 11pt;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  p { margin: 0 0 3mm; }
+
+  .intro {
+    margin: 0 0 6mm;
+    padding-left: 5mm;
+    border-left: 2pt solid var(--rule);
+  }
+
+  .intro p:last-child { margin-bottom: 0; }
+
+  .meta {
+    margin: 0 0 6mm;
+    font-size: 9.5pt;
+  }
+
+  ol {
+    margin: 0;
+    padding-left: 7mm;
+  }
+
+  li {
+    margin-bottom: 3.5mm;
+    padding-left: 1mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  li > div { margin-top: 1mm; }
+
+  /* An empty square to tick with a pen. */
+  .box {
+    display: inline-block;
+    width: 3.2mm;
+    height: 3.2mm;
+    margin: 0 1.2mm 0 0;
+    border: 0.6pt solid var(--ink);
+    vertical-align: -0.2mm;
+  }
+
+  .opt { display: inline-block; margin-right: 4mm; white-space: nowrap; }
+
+  /* Dotted rules to write on. */
+  .fill {
+    display: inline-block;
+    min-width: 35mm;
+    border-bottom: 0.5pt dotted var(--soft);
+  }
+
+  .line {
+    display: block;
+    height: 5.5mm;
+    border-bottom: 0.5pt dotted var(--soft);
+  }
+
+  .line + .line { margin-top: 1mm; }
+
+  strong { font-weight: 700; }
+
+  .closing {
+    margin-top: 7mm;
+    padding: 4mm 5mm;
+    border: 0.5pt solid var(--rule);
+    font-size: 9.5pt;
+  }
+
+  .closing p:last-child { margin-bottom: 0; }
+
+  .thanks {
+    margin-top: 5mm;
+    font-style: italic;
+  }
+
+  @media print {
+    body { padding: 0; max-width: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Assistant Cabinet AI — questionnaire cabinet d'avocats</h1>
+<p class="kicker">Version 1 — 18 septembre 2026 · environ 10 minutes · aucune réponse n'est obligatoire</p>
+
+<p class="meta">Rempli le <span class="fill" style="min-width:12mm"></span> / <span class="fill" style="min-width:12mm"></span> / 2026,
+par <span class="fill" style="min-width:75mm"></span></p>
+
+<h2>Pourquoi ce questionnaire</h2>
+
+<div class="intro">
+<p>Je suis fonctionnaire temporaire au Secrétariat des Nations Unies et j'attends actuellement le
+renouvellement de mon contrat. En parallèle, je développe un projet qui me tient à cœur :
+<strong>Assistant Cabinet AI</strong>, une intelligence artificielle installée <strong>dans le cabinet</strong>,
+pour le travail administratif des professions tenues au secret professionnel — médecins, avocats, notaires,
+experts-comptables.</p>
+
+<p>Le principe tient en une phrase : <strong>aucun document ne sort du cabinet</strong>. Pas de service en
+ligne, pas d'hébergeur étranger, aucun apprentissage sur vos dossiers. L'outil lit les fichiers du cabinet,
+propose un classement ou un renommage, aide à rédiger un brouillon et retrouve une information en citant la
+pièce et la page. Rien n'est modifié, supprimé ni envoyé sans votre validation.</p>
+
+<p>Je ne vous vends rien et je ne vous demande pas de tester quoi que ce soit. Je cherche à comprendre le
+travail réel d'un cabinet d'avocats, parce qu'un outil conçu sans cette étape est un outil hors sujet. La
+demande existe dans votre secteur ; ce que je ne connais pas, c'est votre quotidien.</p>
+
+<p><strong>Aucune question ne porte sur vos dossiers.</strong> Merci de ne mentionner ni nom de client, ni
+pièce, ni élément couvert par le secret professionnel.</p>
+</div>
+
+<h2>1. Le cabinet</h2>
+<ol>
+  <li>Structure :
+    <span class="opt"><span class="box"></span>individuel</span>
+    <span class="opt"><span class="box"></span>association, SCP, SELARL</span>
+    <span class="opt"><span class="box"></span>autre : <span class="fill" style="min-width:30mm"></span></span>
+    <div>Effectif : avocats <span class="fill" style="min-width:14mm"></span>
+      collaborateurs <span class="fill" style="min-width:14mm"></span>
+      secrétariat ou assistant(e) <span class="fill" style="min-width:14mm"></span></div>
+  </li>
+  <li>Dominantes d'activité :
+    <span class="opt"><span class="box"></span>famille</span>
+    <span class="opt"><span class="box"></span>immobilier et indivision</span>
+    <span class="opt"><span class="box"></span>travail</span>
+    <span class="opt"><span class="box"></span>pénal</span>
+    <span class="opt"><span class="box"></span>commercial et sociétés</span>
+    <span class="opt"><span class="box"></span>autre : <span class="fill" style="min-width:45mm"></span></span>
+  </li>
+  <li>Équipement :
+    <span class="opt"><span class="box"></span>PC Windows</span>
+    <span class="opt"><span class="box"></span>Mac</span>
+    <span class="opt"><span class="box"></span>les deux</span>
+    <div>Serveur ou disque partagé au cabinet :
+      <span class="opt"><span class="box"></span>oui</span>
+      <span class="opt"><span class="box"></span>non</span>
+      <span class="opt"><span class="box"></span>je ne sais pas</span></div>
+  </li>
+  <li>Logiciel métier ou gestion documentaire utilisé (Secib, Kleos, Jarvis, Diapaz, autre, aucun) :
+    <span class="line"></span>
+  </li>
+  <li>Rédaction :
+    <span class="opt"><span class="box"></span>Word</span>
+    <span class="opt"><span class="box"></span>modèles du logiciel métier</span>
+    <span class="opt"><span class="box"></span>les deux</span>
+    <div>Communication :
+      <span class="opt"><span class="box"></span>Outlook</span>
+      <span class="opt"><span class="box"></span>webmail</span>
+      <span class="opt"><span class="box"></span>RPVA, e-Barreau</span>
+      <span class="opt"><span class="box"></span>autre : <span class="fill" style="min-width:35mm"></span></span></div>
+  </li>
+</ol>
+
+<h2>2. Où passe le temps</h2>
+<ol start="6">
+  <li>Sur une semaine ordinaire, combien d'heures de travail purement administratif, hors conseil, rédaction
+    de fond et audience&nbsp;? <span class="fill" style="min-width:20mm"></span> heures
+  </li>
+  <li>Les trois tâches administratives les plus pénibles, dans l'ordre :
+    <span class="line"></span>
+    <span class="line"></span>
+    <span class="line"></span>
+  </li>
+  <li>Quand ce travail se fait-il&nbsp;?
+    <span class="opt"><span class="box"></span>au fil de la journée</span>
+    <span class="opt"><span class="box"></span>le soir</span>
+    <span class="opt"><span class="box"></span>le week-end</span>
+  </li>
+  <li>Qui classe les pièces qui arrivent&nbsp;?
+    <span class="opt"><span class="box"></span>vous</span>
+    <span class="opt"><span class="box"></span>le secrétariat</span>
+    <span class="opt"><span class="box"></span>les deux, selon les dossiers</span>
+  </li>
+</ol>
+
+<h2>3. Les documents</h2>
+<ol start="10">
+  <li>Volume approximatif reçu par semaine (courriers, pièces, conclusions, pièces jointes) :
+    <span class="fill" style="min-width:20mm"></span> documents
+  </li>
+  <li>Formats rencontrés :
+    <span class="opt"><span class="box"></span>PDF natif</span>
+    <span class="opt"><span class="box"></span>PDF scanné, donc image</span>
+    <span class="opt"><span class="box"></span>Word</span>
+    <span class="opt"><span class="box"></span>papier</span>
+    <span class="opt"><span class="box"></span>photos envoyées par les clients</span>
+  </li>
+  <li>Où atterrissent-ils avant d'être classés (téléchargements, boîte mail, dossier partagé, corbeille à
+    papier)&nbsp;? <span class="line"></span>
+  </li>
+  <li>Existe-t-il une règle de nommage des fichiers au cabinet&nbsp;?
+    <span class="opt"><span class="box"></span>oui, stricte</span>
+    <span class="opt"><span class="box"></span>oui, souple</span>
+    <span class="opt"><span class="box"></span>non</span>
+    <div>Si oui, laquelle&nbsp;? <span class="line"></span></div>
+  </li>
+  <li>Recevoir deux fois la même pièce, par voie postale et par voie électronique :
+    <span class="opt"><span class="box"></span>fréquent</span>
+    <span class="opt"><span class="box"></span>rare</span>
+  </li>
+  <li>Sur un dossier moyen, préparer un bordereau de pièces ou une chronologie des faits prend combien de
+    temps&nbsp;? <span class="line"></span>
+  </li>
+</ol>
+
+<h2>4. Rédaction et recherche interne</h2>
+<ol start="16">
+  <li>Que seriez-vous prête à voir préparé <strong>en brouillon</strong>, à relire et corriger, jamais envoyé
+    automatiquement&nbsp;?
+    <div>
+      <span class="opt"><span class="box"></span>résumé d'une pièce longue ou d'un dossier volumineux</span>
+      <span class="opt"><span class="box"></span>chronologie des faits</span>
+      <span class="opt"><span class="box"></span>bordereau de pièces</span>
+      <span class="opt"><span class="box"></span>courrier ou message de suite</span>
+      <span class="opt"><span class="box"></span>premier jet de conclusions</span>
+      <span class="opt"><span class="box"></span>synthèse d'un rapport d'expertise</span>
+      <span class="opt"><span class="box"></span>autre : <span class="fill" style="min-width:40mm"></span></span>
+      <span class="opt"><span class="box"></span>aucun : la rédaction est le métier, pas la charge</span>
+    </div>
+  </li>
+  <li>Retrouver dans quel dossier et dans quelle pièce se trouve une information précise :
+    <span class="opt"><span class="box"></span>facile</span>
+    <span class="opt"><span class="box"></span>pénible</span>
+    <div>Comment faites-vous aujourd'hui&nbsp;? <span class="line"></span></div>
+  </li>
+  <li>Une réponse qui cite le fichier, la page et le passage exact serait :
+    <span class="opt"><span class="box"></span>indispensable</span>
+    <span class="opt"><span class="box"></span>utile</span>
+    <span class="opt"><span class="box"></span>sans intérêt</span>
+  </li>
+  <li>Et si l'outil répond « cette information n'est pas dans les documents fournis » plutôt que de produire
+    une phrase plausible, est-ce rassurant ou décevant&nbsp;?
+    <span class="line"></span>
+  </li>
+</ol>
+
+<h2>5. Secret professionnel, IA et règles</h2>
+<ol start="20">
+  <li>Utilisez-vous déjà une IA&nbsp;?
+    <span class="opt"><span class="box"></span>non, jamais</span>
+    <span class="opt"><span class="box"></span>oui, sans document</span>
+    <span class="opt"><span class="box"></span>oui, avec des extraits anonymisés</span>
+    <span class="opt"><span class="box"></span>oui, avec des documents réels</span>
+    <div>Laquelle&nbsp;? <span class="fill" style="min-width:70mm"></span></div>
+  </li>
+  <li>Si vous avez essayé puis arrêté, ou refusé d'emblée : pourquoi&nbsp;?
+    <span class="line"></span>
+  </li>
+  <li>Le cabinet a-t-il une règle interne écrite sur l'IA&nbsp;?
+    <span class="opt"><span class="box"></span>oui</span>
+    <span class="opt"><span class="box"></span>non</span>
+    <span class="opt"><span class="box"></span>en discussion</span>
+  </li>
+  <li>Le fait que tout reste dans le cabinet, sans aucune donnée sortante, change-t-il quelque chose au
+    regard du secret professionnel&nbsp;?
+    <div>
+      <span class="opt"><span class="box"></span>c'est la condition même</span>
+      <span class="opt"><span class="box"></span>cela aide</span>
+      <span class="opt"><span class="box"></span>non, le sujet est ailleurs</span>
+    </div>
+    <div>Ailleurs, c'est-à-dire : <span class="line"></span></div>
+  </li>
+  <li>Le risque le plus sérieux est-il plutôt le <strong>cloisonnement des dossiers</strong> — qu'un outil
+    « voie » un dossier depuis un autre, avec le risque de conflit d'intérêts&nbsp;?
+    <span class="opt"><span class="box"></span>oui</span>
+    <span class="opt"><span class="box"></span>non</span>
+    <div>Comment cloisonnez-vous aujourd'hui&nbsp;? <span class="line"></span></div>
+  </li>
+  <li>Contraintes ou recommandations dont vous avez connaissance sur ce sujet (CNB, ordre et bâtonnier, RIN,
+    RGPD, assureur en responsabilité civile professionnelle) :
+    <span class="line"></span>
+  </li>
+  <li>Un outil qui propose et n'exécute rien sans validation humaine vous suffit-il, ou faut-il aussi une
+    trace de qui a validé quoi et quand&nbsp;?
+    <span class="opt"><span class="box"></span>la validation suffit</span>
+    <span class="opt"><span class="box"></span>le journal est indispensable</span>
+  </li>
+</ol>
+
+<h2>6. Décision et adoption</h2>
+<ol start="27">
+  <li>Qui décide de l'adoption d'un nouvel outil&nbsp;?
+    <span class="opt"><span class="box"></span>vous</span>
+    <span class="opt"><span class="box"></span>les associés</span>
+    <span class="opt"><span class="box"></span>le prestataire informatique</span>
+    <span class="opt"><span class="box"></span>autre : <span class="fill" style="min-width:35mm"></span></span>
+  </li>
+  <li>Y a-t-il un prestataire informatique, et qui s'occupe des sauvegardes&nbsp;?
+    <span class="line"></span>
+  </li>
+  <li>À quelles conditions un cabinet essaierait-il un tel outil (installation, formation, durée d'essai,
+    réversibilité, possibilité de tout retirer)&nbsp;?
+    <span class="line"></span>
+    <span class="line"></span>
+  </li>
+  <li>Ordre de grandeur acceptable pour un cabinet de votre taille :
+    <div>
+      <span class="opt"><span class="box"></span>moins de 50 € par mois</span>
+      <span class="opt"><span class="box"></span>50 à 150 €</span>
+      <span class="opt"><span class="box"></span>150 à 400 €</span>
+      <span class="opt"><span class="box"></span>plutôt un achat unique avec maintenance</span>
+      <span class="opt"><span class="box"></span>prématuré pour se prononcer</span>
+    </div>
+  </li>
+  <li>Qu'est-ce qui vous ferait dire non immédiatement&nbsp;?
+    <span class="line"></span>
+  </li>
+</ol>
+
+<h2>7. Suite, entièrement facultative</h2>
+<ol start="32">
+  <li>Accepteriez-vous un échange de vingt minutes plus tard, sans engagement et sans devis&nbsp;?
+    <span class="opt"><span class="box"></span>oui</span>
+    <span class="opt"><span class="box"></span>non</span>
+    <span class="opt"><span class="box"></span>plus tard</span>
+  </li>
+  <li>Connaissez-vous un confrère, un prestataire informatique pour cabinets ou une instance à qui poser les
+    mêmes questions&nbsp;?
+    <span class="opt"><span class="box"></span>oui : <span class="fill" style="min-width:55mm"></span></span>
+    <span class="opt"><span class="box"></span>non</span>
+  </li>
+  <li>Comment préférez-vous me répondre si vous complétez ce formulaire plus tard&nbsp;?
+    <span class="opt"><span class="box"></span>par courriel</span>
+    <span class="opt"><span class="box"></span>par téléphone</span>
+    <span class="opt"><span class="box"></span>ce formulaire papier</span>
+  </li>
+  <li>Remarque libre, y compris « ce projet ne répond à aucun besoin chez nous » :
+    <span class="line"></span>
+    <span class="line"></span>
+    <span class="line"></span>
+  </li>
+</ol>
+
+<div class="closing">
+<p><strong>Ce que je fais de vos réponses.</strong> Ce formulaire est conservé par moi seule, sur un poste
+chiffré, et n'est communiqué à personne. Si j'en reprends un élément dans un document de conception, ce sera
+de façon anonyme — « une avocate en cabinet individuel, droit de la famille » — sans votre nom ni celui du
+cabinet. Vous pouvez me demander sa destruction à tout moment, sans justification.</p>
+</div>
+
+<p class="thanks">Merci du temps que vous y consacrez.</p>
+
+</body>
+</html>

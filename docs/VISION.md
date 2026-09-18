@@ -48,4 +48,6 @@ A professional can, on a real test folder, drop a batch of PDFs and DOCX files, 
 and renaming plan, adjust it, apply it, and find a record of who approved what — without a single byte leaving
 the LAN, and without the documents remaining stored on the AI server.
 
-Current pilot and its measured workflows: `docs/PILOT-GP.md`. Current sprint: `docs/ROADMAP.md`.
+Current pilot and its measured workflows: `docs/PILOT-GP.md`. Current sprint: `docs/ROADMAP.md`. The audience
+table above is an assumption for every profession except the GP; what the others actually say is collected in
+`docs/DISCOVERY.md`.

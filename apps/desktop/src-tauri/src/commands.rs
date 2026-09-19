@@ -15,7 +15,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::error::AppError;
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::settings::{self, Settings};
-use crate::work_folder::{display, suggested_work_folder, WorkFolderPolicy};
+use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
 
 pub struct AppState {
     pub settings: Mutex<Settings>,
@@ -127,6 +127,15 @@ pub async fn choose_work_folder(app: AppHandle) -> Result<String, AppError> {
     };
     let path = chosen.into_path().map_err(|_| AppError::Internal)?;
     let accepted = work_folder_policy(&app).validate(&path)?;
+    Ok(display(&accepted))
+}
+
+/// Create `~/AssistantCabinetAI` if needed, then return the accepted path. The interface still
+/// has to save the settings; this command does not write `settings.json` on its own.
+#[tauri::command]
+pub fn ensure_suggested_work_folder(app: AppHandle) -> Result<String, AppError> {
+    let home = app.path().home_dir().ok();
+    let accepted = work_folder::ensure_suggested(&work_folder_policy(&app), home.as_deref())?;
     Ok(display(&accepted))
 }
 

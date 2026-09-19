@@ -23,6 +23,7 @@ pub fn run() {
             commands::load_app_snapshot,
             commands::save_settings,
             commands::choose_work_folder,
+            commands::ensure_suggested_work_folder,
             commands::check_server_health,
             commands::send_chat_message,
         ])

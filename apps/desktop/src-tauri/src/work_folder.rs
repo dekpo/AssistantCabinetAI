@@ -164,6 +164,35 @@ pub fn suggested_work_folder(home: Option<&Path>) -> Option<PathBuf> {
     home.map(|home| home.join(WORK_FOLDER_NAME))
 }
 
+/// Create `~/AssistantCabinetAI` if it is missing, then apply the same rules as a folder she
+/// picked. Nothing is created until she asks: declining leaves the profile untouched.
+pub fn ensure_suggested(
+    policy: &WorkFolderPolicy,
+    home: Option<&Path>,
+) -> Result<PathBuf, AppError> {
+    let path = suggested_work_folder(home).ok_or(AppError::Internal)?;
+    policy.check_path(&path)?;
+
+    match std::fs::symlink_metadata(&path) {
+        Ok(_) => policy.validate(&path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir(&path).map_err(|_| AppError::WorkFolderNotWritable {
+                path: display(&path),
+            })?;
+            match policy.validate(&path) {
+                Ok(accepted) => Ok(accepted),
+                Err(failed) => {
+                    let _ = std::fs::remove_dir(&path);
+                    Err(failed)
+                }
+            }
+        }
+        Err(_) => Err(AppError::WorkFolderNotWritable {
+            path: display(&path),
+        }),
+    }
+}
+
 pub fn display(path: &Path) -> String {
     dunce::simplified(path).display().to_string()
 }
@@ -582,5 +611,57 @@ mod tests {
         assert!(accepted.is_absolute());
         // The probe file must not survive validation.
         assert!(!accepted.join(WRITE_PROBE_NAME).exists());
+    }
+
+    fn home_policy(home: &Path) -> WorkFolderPolicy {
+        WorkFolderPolicy::new(Vec::new(), vec![home.to_path_buf()], Vec::new())
+    }
+
+    #[test]
+    fn creating_the_suggested_folder_makes_it_and_accepts_it() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+        let expected = home.path().join(WORK_FOLDER_NAME);
+
+        let accepted = ensure_suggested(&policy, Some(home.path())).expect("created");
+
+        assert!(expected.is_dir());
+        assert_eq!(accepted, dunce::canonicalize(&expected).expect("resolves"));
+        assert!(!accepted.join(WRITE_PROBE_NAME).exists());
+    }
+
+    #[test]
+    fn creating_the_suggested_folder_a_second_time_reuses_it() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+
+        let first = ensure_suggested(&policy, Some(home.path())).expect("created");
+        let second = ensure_suggested(&policy, Some(home.path())).expect("reused");
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn a_file_blocking_the_suggested_name_is_refused_and_left_alone() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+        let blocking = home.path().join(WORK_FOLDER_NAME);
+        std::fs::write(&blocking, b"not a folder").expect("writes the fixture");
+
+        let error = ensure_suggested(&policy, Some(home.path())).expect_err("expected a refusal");
+
+        assert_eq!(error.code(), "work_folder_not_a_directory");
+        assert!(blocking.is_file());
+    }
+
+    #[test]
+    fn a_suggested_folder_inside_a_sync_tree_is_refused_without_creating_it() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = WorkFolderPolicy::new(Vec::new(), Vec::new(), vec![home.path().to_path_buf()]);
+
+        let error = ensure_suggested(&policy, Some(home.path())).expect_err("expected a refusal");
+
+        assert_eq!(error.code(), "work_folder_is_cloud_synced");
+        assert!(!home.path().join(WORK_FOLDER_NAME).exists());
     }
 }

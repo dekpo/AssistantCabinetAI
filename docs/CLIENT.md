@@ -59,8 +59,9 @@ Desktop and Documents. Detail and the checks in code: `docs/PRIVACY-AND-SECURITY
 
 Rules:
 
-- The suggested folder is `~/AssistantCabinetAI`, shown before anything is chosen;
-  **Browse...** opens the system dialog.
+- The suggested folder is `~/AssistantCabinetAI`, shown before anything is chosen. A primary
+  button **creates it if needed and uses it**; **Choose a folder...** still opens the system dialog.
+  Nothing is created until she asks.
 - Refuse the drive root, system folders, the practice software's own store, and the whole of Documents as
   an allow-list. Today the pilot's downloads and scans land directly in My Documents; the work folder is a
   dedicated folder she **copies into**, not all of Documents.

@@ -60,6 +60,11 @@ export function chooseWorkFolder(): Promise<string> {
   return invoke<string>("choose_work_folder");
 }
 
+/** Create `~/AssistantCabinetAI` if it is missing, then return the accepted path. */
+export function ensureSuggestedWorkFolder(): Promise<string> {
+  return invoke<string>("ensure_suggested_work_folder");
+}
+
 export function checkServerHealth(): Promise<HealthSnapshot> {
   return invoke<HealthSnapshot>("check_server_health");
 }

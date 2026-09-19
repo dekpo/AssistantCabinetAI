@@ -78,6 +78,9 @@ Full reasoning, and the inspection of `LocalGridMind` that produced it: `docs/SP
 | Deterministic answers and the model | A deterministic answer makes **zero** gateway calls, and every deterministic question still answers with the gateway stopped. Proved by tests, including a provider double that panics when called |
 | Copying source files into an app store | **No.** Inventory by path plus SHA-256. The work folder is the corpus; we do not duplicate it |
 | Long-term direction | Lives in `docs/PLATFORM-VISION.md`, without dates. `docs/ROADMAP.md` stays operational and concrete |
+| Embedding weights | Their own alias (`cabinet-embed`) out of the **same** allow-list, with `DEFAULT_EMBEDDING_ALIAS` naming it. Changing it forces a re-index: vectors from two models cannot be compared |
+| A batch that comes back the wrong shape | **Refused**, not stored. A short or ragged batch would bind each chunk to the wrong vector, and the index would cite the wrong passage for as long as it lives |
+| What `/v1/embeddings` records | Alias, counts, characters, dimensions and one SHA-256 over the batch, in an entry type of its own. Widening the chat entry instead would have loosened a closed field list |
 
 ## Known blind spots to keep in mind
 

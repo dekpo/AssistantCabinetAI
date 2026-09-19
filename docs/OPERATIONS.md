@@ -40,6 +40,17 @@ curl.exe -s http://127.0.0.1:8080/health
 `alias=model` pairs because Compose cannot interpolate a default containing braces. Changing which
 model answers is a change to that line and a restart, never a change to a client.
 
+Indexing needs a second model, pulled once and never asked to answer anything:
+
+```powershell
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+It is served under its own alias, `cabinet-embed`, from the same `MODEL_ALIASES` line, and
+`DEFAULT_EMBEDDING_ALIAS` says which alias `/v1/embeddings` uses when a client does not name one.
+Replacing it is one edit and a restart, **plus a re-index of every work folder**: vectors built by two
+different models cannot be compared. `MAX_EMBEDDING_INPUTS` and `MAX_EMBEDDING_CHARS` bound one batch.
+
 Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.

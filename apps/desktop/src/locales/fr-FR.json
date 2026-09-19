@@ -34,7 +34,9 @@
     "title": "Dossier de travail",
     "description": "Le seul dossier dans lequel ce logiciel peut écrire. Choisissez un dossier dédié, pas la totalité de vos documents, et jamais un dossier recopié vers un service en ligne.",
     "none": "Aucun dossier choisi pour le moment",
-    "suggestion": "Suggestion : {path}. Il est volontairement placé en dehors de vos Documents, pour que rien ne soit recopié vers OneDrive ou iCloud.",
+    "suggestionLabel": "Suggestion :",
+    "suggestionWhy": "Il est volontairement placé en dehors de vos Documents, pour que rien ne soit recopié vers OneDrive ou iCloud.",
+    "createSuggested": "Créer et utiliser ce dossier",
     "choose": "Choisir un dossier...",
     "change": "Changer de dossier..."
   },
@@ -58,6 +60,7 @@
     "title": "Cela n'a pas fonctionné"
   },
   "errors": {
+    "batch_too_large": "Trop de passages ont été envoyés en une fois ({count} pour une limite de {limit}). Le dossier est indexé par lots plus petits.",
     "context_too_large": "Cette question est trop longue pour une seule demande ({chars} caractères pour une limite de {limit}). Raccourcissez-la.",
     "internal_error": "Le serveur a rencontré un problème inattendu. Réessayez ; si cela persiste, notez l'heure et signalez-le.",
     "invalid_request": "Le serveur a refusé la demande car elle était mal formée. Merci de le signaler.",

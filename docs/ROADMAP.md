@@ -83,9 +83,12 @@ so nothing else may be added to it.
   a replaceable interface. Not the roaming `%APPDATA%` that holds `settings.json`: the index contains
   document text, and a roaming profile copies `%APPDATA%` to a server. Neither the database nor the
   embedding model may show through into business code.
-- Embeddings: first through a **no-store** call to the gateway, which needs `POST /v1/embeddings` — the
-  route does not exist yet, although `AIProvider.embed` does. A local ONNX computation stays possible
-  later behind the same interface, without touching anything else.
+- Embeddings: first through a **no-store** call to the gateway. `POST /v1/embeddings` is done (18
+  September): its own alias out of the same allow-list, caps on batch count and total characters, and a
+  refusal when the runtime returns a vector count that does not match the inputs, because a silently
+  short batch would bind each chunk to the wrong vector and every later citation would point at the
+  wrong passage. A local ONNX computation stays possible later behind the same interface, without
+  touching anything else.
 - Send only the selected excerpts, with a size cap. Never the whole folder "just in case".
 - An answer that cites file, page and passage, through the common `Source` model in
   `docs/ARCHITECTURE.md`. Without sufficient excerpts, the product says it did not find enough

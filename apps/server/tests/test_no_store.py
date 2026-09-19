@@ -22,10 +22,16 @@ from assistant_cabinet_server.core.no_store import (
     MetadataOnlyFilter,
     log_metadata,
 )
-from assistant_cabinet_server.core.register import RegisterEntry, build_entry
+from assistant_cabinet_server.core.register import (
+    EmbeddingRegisterEntry,
+    RegisterEntry,
+    build_embedding_entry,
+    build_entry,
+)
 
 NONCE = "patient-canary-8f3a1c22"
 QUESTION = {"messages": [{"role": "user", "content": f"Resume ce courrier: {NONCE}"}]}
+PASSAGES = {"input": [f"Extrait du compte rendu: {NONCE}", "Deuxieme passage."]}
 
 
 @pytest.fixture
@@ -59,8 +65,31 @@ def test_no_log_record_carries_the_request_text(
         assert NONCE not in str(record.args)
 
 
+@pytest.mark.usefixtures("propagating_package_logger")
+def test_no_log_record_carries_an_indexed_passage(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Indexing sends far more document text through the gateway than chatting does, so the same
+    # guarantee is checked on that route rather than assumed from the one above.
+    caplog.set_level(logging.DEBUG)
+
+    response = client.post("/v1/embeddings", json=PASSAGES)
+
+    assert response.status_code == 200
+    assert NONCE not in caplog.text
+    for record in caplog.records:
+        assert NONCE not in record.getMessage()
+        assert NONCE not in str(record.args)
+
+
 def test_the_answer_is_not_cacheable(client: TestClient) -> None:
     response = client.post("/v1/chat/completions", json=QUESTION)
+
+    assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate"
+
+
+def test_the_vectors_are_not_cacheable(client: TestClient) -> None:
+    response = client.post("/v1/embeddings", json=PASSAGES)
 
     assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate"
 
@@ -75,6 +104,35 @@ def test_the_register_holds_metadata_and_hashes_only(client: TestClient) -> None
     assert len(entry.prompt_sha256) == 64
     assert entry.outcome == "completed"
     assert entry.model_alias == "cabinet-chat"
+
+
+def test_the_embedding_register_holds_counts_and_a_hash_only(client: TestClient) -> None:
+    client.post("/v1/embeddings", json=PASSAGES)
+
+    entry = client.app.state.register.entries[-1]  # type: ignore[attr-defined]
+    serialised = json.dumps(entry.model_dump(mode="json"))
+    assert NONCE not in serialised
+    assert entry.input_count == 2
+    assert entry.input_chars > 0
+    assert len(entry.inputs_sha256) == 64
+    assert entry.outcome == "completed"
+
+
+def test_the_embedding_register_field_list_is_closed() -> None:
+    entry = build_embedding_entry(
+        request_id="embd-1",
+        actor="anonymous",
+        started_at=datetime.now(tz=UTC),
+        model_alias="cabinet-embed",
+        inputs=[NONCE],
+        vector_count=1,
+        dimensions=4,
+        prompt_tokens=3,
+        outcome="completed",
+    )
+
+    with pytest.raises(ValidationError):
+        EmbeddingRegisterEntry(**{**entry.model_dump(), "inputs": [NONCE]})
 
 
 def test_the_register_field_list_is_closed() -> None:
@@ -103,6 +161,7 @@ def test_no_file_is_written_during_a_request(
     monkeypatch.chdir(tmp_path)
 
     client.post("/v1/chat/completions", json=QUESTION)
+    client.post("/v1/embeddings", json=PASSAGES)
 
     assert list(tmp_path.rglob("*")) == []
     for path in package_root.rglob("*"):

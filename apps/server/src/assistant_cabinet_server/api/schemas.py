@@ -76,6 +76,33 @@ class ChatCompletionChunk(BaseModel):
     choices: list[ChatCompletionChunkChoice]
 
 
+class EmbeddingsRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    #: A gateway alias, never a weight name. Absent means the configured embedding alias.
+    model: str | None = None
+    #: One text or a batch. OpenAI allows both; indexing a folder sends batches.
+    input: str | list[str]
+
+
+class EmbeddingVector(BaseModel):
+    object: Literal["embedding"] = "embedding"
+    index: int
+    embedding: list[float]
+
+
+class EmbeddingUsage(BaseModel):
+    prompt_tokens: int = 0
+    total_tokens: int = 0
+
+
+class EmbeddingsResponse(BaseModel):
+    object: Literal["list"] = "list"
+    data: list[EmbeddingVector]
+    model: str
+    usage: EmbeddingUsage
+
+
 class ModelCard(BaseModel):
     id: str
     object: Literal["model"] = "model"

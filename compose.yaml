@@ -55,11 +55,17 @@ services:
       LLM_BASE_URL: http://ollama:11434
       # `alias=model` pairs: Compose cannot interpolate a default containing braces, so the JSON
       # form is left for a hand-written .env. A weight name belongs here, never in code.
-      MODEL_ALIASES: ${MODEL_ALIASES:-cabinet-chat=mistral,cabinet-rapide=mistral}
+      MODEL_ALIASES: ${MODEL_ALIASES:-cabinet-chat=mistral,cabinet-rapide=mistral,cabinet-embed=nomic-embed-text}
       DEFAULT_MODEL_ALIAS: ${DEFAULT_MODEL_ALIAS:-cabinet-chat}
+      # Indexing asks for its own alias out of the same allow-list. Changing which model builds
+      # the vectors means re-indexing the work folder, never editing a client.
+      DEFAULT_EMBEDDING_ALIAS: ${DEFAULT_EMBEDDING_ALIAS:-cabinet-embed}
       # Safety net for a request that arrives without an output locale. Never silently English.
       DEFAULT_OUTPUT_LOCALE: ${DEFAULT_OUTPUT_LOCALE:-fr-FR}
       MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-48000}
+      # Indexing sends batches of chunks, so it is capped on both count and size.
+      MAX_EMBEDDING_INPUTS: ${MAX_EMBEDDING_INPUTS:-256}
+      MAX_EMBEDDING_CHARS: ${MAX_EMBEDDING_CHARS:-200000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - cabinet

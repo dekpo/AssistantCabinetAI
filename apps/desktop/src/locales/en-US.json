@@ -34,7 +34,9 @@
     "title": "Work folder",
     "description": "The only folder this software may write into. Choose a dedicated folder, not the whole of your documents, and not a folder copied to a cloud service.",
     "none": "No folder chosen yet",
-    "suggestion": "Suggested: {path}. It sits outside your Documents on purpose, so that nothing is copied to OneDrive or iCloud.",
+    "suggestionLabel": "Suggested:",
+    "suggestionWhy": "It sits outside your Documents on purpose, so that nothing is copied to OneDrive or iCloud.",
+    "createSuggested": "Create and use this folder",
     "choose": "Choose a folder...",
     "change": "Change the folder..."
   },
@@ -58,6 +60,7 @@
     "title": "This did not work"
   },
   "errors": {
+    "batch_too_large": "Too many passages were sent at once ({count} for a limit of {limit}). The folder is indexed in smaller batches.",
     "context_too_large": "This question is too long for one request ({chars} characters for a limit of {limit}). Shorten it.",
     "internal_error": "The server ran into an unexpected problem. Try again; if it persists, note the time and report it.",
     "invalid_request": "The server refused the request because it was malformed. Please report it.",

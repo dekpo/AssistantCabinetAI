@@ -33,11 +33,20 @@ class Settings(BaseSettings):
     )
     default_model_alias: str = Field(default="cabinet-chat", alias="DEFAULT_MODEL_ALIAS")
 
+    # Embedding weights are not chat weights, so indexing asks for its own alias out of the same
+    # allow-list. It must be present in `MODEL_ALIASES` like any other.
+    default_embedding_alias: str = Field(default="cabinet-embed", alias="DEFAULT_EMBEDDING_ALIAS")
+
     # Safety net for a request that arrives without `output_locale`.
     default_output_locale: str = Field(default="fr-FR", alias="DEFAULT_OUTPUT_LOCALE")
 
     # Context cap. The client caps too, in Rust; the gateway does not trust the caller.
     max_context_chars: int = Field(default=48_000, alias="MAX_CONTEXT_CHARS")
+
+    # Indexing sends batches of chunks rather than one conversation, so embeddings get their own
+    # caps. They exist to stop a client sending a whole folder, not to tune throughput.
+    max_embedding_chars: int = Field(default=200_000, alias="MAX_EMBEDDING_CHARS")
+    max_embedding_inputs: int = Field(default=256, alias="MAX_EMBEDDING_INPUTS")
 
     register_capacity: int = Field(default=500, alias="REGISTER_CAPACITY")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

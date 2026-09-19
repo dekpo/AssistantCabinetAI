@@ -59,6 +59,21 @@ discards them, storing nothing. A local ONNX computation with a small model can 
 same interface, which would also make indexing work with the server switched off. Since the Mac mini sits at
 the practice, excerpts sent for embedding never leave the practice network.
 
+`POST /v1/embeddings` is OpenAI-compatible: `input` is one text or a batch, and the answer is one vector
+per input in the order they were sent. Three rules matter more than the wire shape.
+
+- The embedding weights are reached through their own alias out of the same allow-list, so which model
+  builds the vectors is configuration. Changing it means **re-indexing**: vectors from two models cannot
+  be compared, and mixing them silently degrades every result.
+- The batch is capped on count and on total characters, in the gateway as well as in the client, because
+  the gateway does not trust a caller.
+- A batch that comes back with the wrong number of vectors, or with vectors of different lengths, is
+  refused rather than stored. Accepting a short batch would bind chunk 2 to the vector of chunk 3, and
+  the index would then cite the wrong passage for as long as it lives.
+
+The register records the alias, how many passages, how many characters, how many vectors, the dimensions
+and one SHA-256 over the batch. Not a passage.
+
 ## Tabular data is a second pipeline, not a special case of the first
 
 Spreadsheets are **not** flattened into text chunks so that they resemble PDFs. Chunking a schedule

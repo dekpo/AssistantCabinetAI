@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from .conftest import CHAT_ALIAS, FAST_ALIAS, RECORDED_MODEL, FakeProvider
+from .conftest import CHAT_ALIAS, CONFIGURED_ALIASES, RECORDED_MODEL, FakeProvider
 
 
 def test_an_alias_resolves_to_the_configured_model(
@@ -43,12 +43,12 @@ def test_an_unknown_alias_is_refused_with_a_code(client: TestClient) -> None:
     assert response.status_code == 400
     error = response.json()["error"]
     assert error["code"] == "model_alias_not_allowed"
-    assert error["data"] == {"requested": "gpt-4o", "allowed": [CHAT_ALIAS, FAST_ALIAS]}
+    assert error["data"] == {"requested": "gpt-4o", "allowed": CONFIGURED_ALIASES}
 
 
 def test_the_model_list_exposes_aliases_only(client: TestClient) -> None:
     response = client.get("/v1/models")
 
     body = response.json()
-    assert [card["id"] for card in body["data"]] == [CHAT_ALIAS, FAST_ALIAS]
+    assert [card["id"] for card in body["data"]] == CONFIGURED_ALIASES
     assert RECORDED_MODEL not in response.text

@@ -26,8 +26,15 @@ from assistant_cabinet_server.providers import (
 )
 
 RECORDED_MODEL = "test-weights:7b"
+RECORDED_EMBEDDING_MODEL = "test-embed:small"
 CHAT_ALIAS = "cabinet-chat"
 FAST_ALIAS = "cabinet-rapide"
+EMBED_ALIAS = "cabinet-embed"
+#: What the gateway publishes, sorted the way it sorts its allow-list. One place to change when
+#: a test configuration gains an alias, rather than three assertions in three files.
+CONFIGURED_ALIASES = sorted([CHAT_ALIAS, FAST_ALIAS, EMBED_ALIAS])
+#: Every fake vector has this many values, so a test can assert the reported dimensions.
+EMBEDDING_DIMENSIONS = 4
 
 
 class FakeProvider:
@@ -46,6 +53,9 @@ class FakeProvider:
         self.reachable = reachable
         self.failure = failure
         self.requests: list[GenerationRequest] = []
+        self.embed_requests: list[EmbeddingRequest] = []
+        #: Set to return fewer vectors than inputs, which is the misalignment the route refuses.
+        self.embed_vectors_returned: int | None = None
         self.closed = False
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[GenerationChunk]:
@@ -57,7 +67,18 @@ class FakeProvider:
         yield GenerationChunk(done=True, prompt_tokens=11, completion_tokens=7)
 
     async def embed(self, request: EmbeddingRequest) -> EmbeddingResult:
-        return EmbeddingResult(vectors=[[0.0] for _ in request.inputs])
+        self.embed_requests.append(request)
+        if self.failure is not None:
+            raise self.failure
+        count = (
+            len(request.inputs)
+            if self.embed_vectors_returned is None
+            else self.embed_vectors_returned
+        )
+        return EmbeddingResult(
+            vectors=[[0.25] * EMBEDDING_DIMENSIONS for _ in range(count)],
+            prompt_tokens=3 * len(request.inputs),
+        )
 
     async def rerank(self, request: RerankRequest) -> RerankResult:
         raise GatewayError(
@@ -82,8 +103,13 @@ class FakeProvider:
 def build_settings(**overrides: object) -> Settings:
     defaults: dict[str, object] = {
         "LLM_BASE_URL": "http://127.0.0.1:11434",
-        "MODEL_ALIASES": f"{CHAT_ALIAS}={RECORDED_MODEL},{FAST_ALIAS}={RECORDED_MODEL}",
+        "MODEL_ALIASES": (
+            f"{CHAT_ALIAS}={RECORDED_MODEL},"
+            f"{FAST_ALIAS}={RECORDED_MODEL},"
+            f"{EMBED_ALIAS}={RECORDED_EMBEDDING_MODEL}"
+        ),
         "DEFAULT_MODEL_ALIAS": CHAT_ALIAS,
+        "DEFAULT_EMBEDDING_ALIAS": EMBED_ALIAS,
         "DEFAULT_OUTPUT_LOCALE": "fr-FR",
     }
     defaults.update(overrides)

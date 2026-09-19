@@ -4,9 +4,15 @@
 //! gateway. The interface is React and TypeScript, and it reaches none of this except through the
 //! commands registered below.
 
+pub mod chunking;
 mod commands;
-mod error;
-mod gateway;
+pub mod discovery;
+pub mod error;
+pub mod extraction;
+pub mod gateway;
+pub mod index_store;
+pub mod indexing;
+pub mod retrieval;
 mod settings;
 mod work_folder;
 
@@ -26,6 +32,8 @@ pub fn run() {
             commands::ensure_suggested_work_folder,
             commands::check_server_health,
             commands::send_chat_message,
+            commands::index_work_folder,
+            commands::ask_with_sources,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

@@ -4,9 +4,17 @@ import { Composer } from "./Composer";
 import { ErrorBanner } from "./ErrorBanner";
 import { MessageList } from "./MessageList";
 
-export function ChatPanel({ onFailure }: { onFailure: () => void }) {
+export function ChatPanel({
+  onFailure,
+  hasWorkFolder,
+  modelAlias,
+}: {
+  onFailure: () => void;
+  hasWorkFolder: boolean;
+  modelAlias: string;
+}) {
   const { t } = useTranslation();
-  const { entries, pending, error, send } = useChat(onFailure);
+  const { entries, pending, error, send } = useChat(onFailure, hasWorkFolder, modelAlias);
 
   return (
     <section className="chat">

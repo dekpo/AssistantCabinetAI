@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { normaliseError, type AppError } from "../lib/errors";
-import { chooseWorkFolder, ensureSuggestedWorkFolder } from "../lib/ipc";
+import {
+  chooseWorkFolder,
+  ensureSuggestedWorkFolder,
+  indexWorkFolder,
+  type IndexSummary,
+} from "../lib/ipc";
 import { ErrorBanner } from "./ErrorBanner";
 
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
@@ -19,10 +24,13 @@ export function WorkFolderCard({
   const { t } = useTranslation();
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
+  const [indexing, setIndexing] = useState(false);
+  const [indexSummary, setIndexSummary] = useState<IndexSummary | null>(null);
   const showSuggestion = workFolder === null && suggestedWorkFolder !== null;
 
   const run = async (action: typeof chooseWorkFolder) => {
     setError(null);
+    setIndexSummary(null);
     setBusy(true);
     try {
       onChosen(await action());
@@ -33,6 +41,18 @@ export function WorkFolderCard({
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const runIndexing = async () => {
+    setError(null);
+    setIndexing(true);
+    try {
+      setIndexSummary(await indexWorkFolder());
+    } catch (raw: unknown) {
+      setError(normaliseError(raw));
+    } finally {
+      setIndexing(false);
     }
   };
 
@@ -70,7 +90,31 @@ export function WorkFolderCard({
         >
           {workFolder === null ? t("workFolder.choose") : t("workFolder.change")}
         </button>
+        {workFolder !== null ? (
+          <button
+            type="button"
+            className="button"
+            disabled={indexing}
+            onClick={() => void runIndexing()}
+          >
+            {indexing ? t("workFolder.indexing") : t("workFolder.indexAction")}
+          </button>
+        ) : null}
       </div>
+      {indexSummary === null ? null : (
+        <p className="card__description">
+          {indexSummary.emptyFiles.length > 0
+            ? t("workFolder.indexSummaryWithEmpty", {
+                indexed: indexSummary.indexedFiles,
+                unchanged: indexSummary.unchangedFiles,
+                empty: indexSummary.emptyFiles.length,
+              })
+            : t("workFolder.indexSummary", {
+                indexed: indexSummary.indexedFiles,
+                unchanged: indexSummary.unchangedFiles,
+              })}
+        </p>
+      )}
       {error === null ? null : <ErrorBanner error={error} />}
     </section>
   );

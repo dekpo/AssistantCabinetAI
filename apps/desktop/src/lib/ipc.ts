@@ -43,9 +43,32 @@ export interface ChatTurn {
   content: string;
 }
 
+export interface Evidence {
+  chunkId: string;
+  relativePath: string;
+  pageNumber: number;
+  section: number;
+  text: string;
+  score: number;
+}
+
 export type ChatStreamEvent =
   | { event: "delta"; text: string }
-  | { event: "completed"; text: string };
+  | { event: "completed"; text: string }
+  | { event: "sources"; sources: Evidence[] };
+
+export interface IndexSummary {
+  scannedFiles: number;
+  indexedFiles: number;
+  unchangedFiles: number;
+  emptyFiles: string[];
+  chunkCount: number;
+}
+
+export interface AskAnswer {
+  answer: string;
+  sources: Evidence[];
+}
 
 export function loadAppSnapshot(): Promise<AppSnapshot> {
   return invoke<AppSnapshot>("load_app_snapshot");
@@ -84,4 +107,26 @@ export function sendChatMessage(
     }
   };
   return invoke<string>("send_chat_message", { turns, onEvent: channel });
+}
+
+/** One pass of discovery, extraction, chunking and embedding over the work folder. */
+export function indexWorkFolder(): Promise<IndexSummary> {
+  return invoke<IndexSummary>("index_work_folder");
+}
+
+/**
+ * Retrieval, then a sourced chat answer. Rejects with `insufficient_evidence` rather than
+ * answering when the local index carries nothing relevant.
+ */
+export function askWithSources(
+  question: string,
+  onDelta: (text: string) => void,
+): Promise<AskAnswer> {
+  const channel = new Channel<ChatStreamEvent>();
+  channel.onmessage = (message) => {
+    if (message.event === "delta") {
+      onDelta(message.text);
+    }
+  };
+  return invoke<AskAnswer>("ask_with_sources", { question, onEvent: channel });
 }

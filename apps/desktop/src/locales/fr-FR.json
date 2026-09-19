@@ -27,6 +27,8 @@
     "authorUser": "Vous",
     "authorAssistant": "Assistant",
     "pending": "Rédaction de la réponse...",
+    "sourceLabel": "Source : {path}, page {page}",
+    "generatedBy": "Généré par {model} en {duration}",
     "keyboardHint": "Entrée envoie. Maj et Entrée vont à la ligne.",
     "disclaimer": "Aide administrative. Vérifiez toujours la réponse : la médecin reste seule décideuse. Aucun envoi automatique."
   },
@@ -38,7 +40,11 @@
     "suggestionWhy": "Il est volontairement placé en dehors de vos Documents, pour que rien ne soit recopié vers OneDrive ou iCloud.",
     "createSuggested": "Créer et utiliser ce dossier",
     "choose": "Choisir un dossier...",
-    "change": "Changer de dossier..."
+    "change": "Changer de dossier...",
+    "indexAction": "Indexer mes documents",
+    "indexing": "Indexation...",
+    "indexSummary": "{indexed} fichier(s) indexé(s), {unchanged} inchangé(s).",
+    "indexSummaryWithEmpty": "{indexed} fichier(s) indexé(s), {unchanged} inchangé(s), {empty} illisible(s) (aucun texte trouvé)."
   },
   "settings": {
     "title": "Réglages",
@@ -62,7 +68,12 @@
   "errors": {
     "batch_too_large": "Trop de passages ont été envoyés en une fois ({count} pour une limite de {limit}). Le dossier est indexé par lots plus petits.",
     "context_too_large": "Cette question est trop longue pour une seule demande ({chars} caractères pour une limite de {limit}). Raccourcissez-la.",
+    "extraction_empty": "Ce fichier ne contient pas de texte lisible ({path}). Un document scanné ne peut pas encore être lu.",
+    "extraction_failed": "Ce fichier n'a pas pu être lu ({path}).",
+    "index_unavailable": "L'index local n'a pas pu être ouvert. Réessayez ; si cela persiste, redémarrez l'application.",
+    "insufficient_evidence": "Aucune information de vos documents ne répond à cette question.",
     "internal_error": "Le serveur a rencontré un problème inattendu. Réessayez ; si cela persiste, notez l'heure et signalez-le.",
+    "no_work_folder_set": "Choisissez un dossier de travail avant de poser une question sur vos documents.",
     "invalid_request": "Le serveur a refusé la demande car elle était mal formée. Merci de le signaler.",
     "model_alias_not_allowed": "Le profil {requested} n'est pas proposé par ce serveur. Choisissez-en un autre dans les réglages.",
     "output_locale_not_supported": "Ce logiciel ne sait pas encore répondre dans la langue {requested}.",

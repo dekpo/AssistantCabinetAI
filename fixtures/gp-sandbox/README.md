@@ -14,3 +14,19 @@ Do not copy files from a practice system into this tree. A `real/` folder is git
 | `gp-certificate-draft` | `forms/certificate-form-hugo-bacasable.txt` | Later (templates already in the practice software; sick leave is Ameli, not this prompt) |
 
 Success for this prototype: a specialist-letter summary in **French** with citations, and a French Markdown rename plan that **flags the duplicate**. Prompt **bodies** are English (`prompts/`). File-name stems in the plan are French (`lettre-specialiste`). Nothing is sent. A human must review every output.
+
+## Binary fixtures (Sprint 2a, document extraction and retrieval)
+
+`inbox/` also holds fictional PDF and DOCX files, generated once by `scripts/gen-sandbox-fixtures.py`
+(stdlib only, no extra install) so extraction can be exercised on real binary formats rather than on
+`.txt` stand-ins:
+
+| File | Stands in for |
+| --- | --- |
+| `2026-03-12_compte-rendu-biologie.pdf` | A native-text, single-page lab report |
+| `2026-03-18_courrier-neurologie.pdf` | A native-text, two-page specialist letter |
+| `2026-03-14_courrier-endocrinologie.docx` | A native-text Word letter |
+| `2026-03-20_radiographie-scan.pdf` | A scanned page with no text layer, reserved for the OCR contract: extraction must report it empty, never guess at it |
+
+Regenerate with `python scripts/gen-sandbox-fixtures.py` from the repository root if these files are
+ever lost or need to change; do not hand-edit the binaries.

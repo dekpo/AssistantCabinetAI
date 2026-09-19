@@ -14,6 +14,9 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::error::AppError;
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
+use crate::index_store::IndexStore;
+use crate::indexing::{self, IndexSummary};
+use crate::retrieval::{self, Evidence};
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
 
@@ -58,16 +61,29 @@ pub struct AppSnapshot {
 pub enum ChatStreamEvent {
     Delta { text: String },
     Completed { text: String },
+    Sources { sources: Vec<Evidence> },
+}
+
+fn open_index(app: &AppHandle) -> Result<IndexStore, AppError> {
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|_| AppError::IndexUnavailable)?;
+    IndexStore::open_in_app_data(&directory)
 }
 
 /// Built from what the platform reports rather than from written paths, so the same rules hold on
 /// Windows and on macOS.
 fn work_folder_policy(app: &AppHandle) -> WorkFolderPolicy {
     let paths = app.path();
-    let personal = [paths.document_dir(), paths.desktop_dir(), paths.download_dir()]
-        .into_iter()
-        .flatten()
-        .collect();
+    let personal = [
+        paths.document_dir(),
+        paths.desktop_dir(),
+        paths.download_dir(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     WorkFolderPolicy::for_machine(paths.home_dir().ok(), personal)
 }
 
@@ -179,4 +195,121 @@ pub async fn send_chat_message(
         text: answer.clone(),
     });
     Ok(answer)
+}
+
+/// Discovery -> extraction -> chunking -> embeddings -> local index, one pass over the current
+/// work folder. Nothing leaves the machine except the chunk text sent for embedding, batched
+/// and capped (`docs/RETRIEVAL.md`).
+#[tauri::command]
+pub async fn index_work_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<IndexSummary, AppError> {
+    let (work_folder, server_url, embedding_alias) = state.read(|settings| {
+        (
+            settings.work_folder.clone(),
+            settings.server_url.clone(),
+            settings.embedding_alias.clone(),
+        )
+    })?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+
+    let mut index = open_index(&app)?;
+    indexing::run(
+        &mut index,
+        &state.gateway,
+        &server_url,
+        &embedding_alias,
+        Path::new(&work_folder),
+    )
+    .await
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskAnswer {
+    pub answer: String,
+    pub sources: Vec<Evidence>,
+}
+
+/// Retrieval, then a sourced chat answer. Refuses rather than answers when the index does not
+/// carry enough evidence for the question (`docs/ARCHITECTURE.md`).
+#[tauri::command]
+pub async fn ask_with_sources(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    question: String,
+    on_event: Channel<ChatStreamEvent>,
+) -> Result<AskAnswer, AppError> {
+    let (work_folder, server_url, model_alias, embedding_alias, locale) =
+        state.read(|settings| {
+            (
+                settings.work_folder.clone(),
+                settings.server_url.clone(),
+                settings.model_alias.clone(),
+                settings.embedding_alias.clone(),
+                settings.locale.clone(),
+            )
+        })?;
+    if work_folder.is_none() {
+        return Err(AppError::NoWorkFolderSet);
+    }
+
+    let index = open_index(&app)?;
+
+    let query_vectors = state
+        .gateway
+        .embed(
+            &server_url,
+            &embedding_alias,
+            std::slice::from_ref(&question),
+        )
+        .await?;
+    let query_embedding = query_vectors.into_iter().next().unwrap_or_default();
+
+    let evidence = retrieval::search(&index, &question, &query_embedding)?;
+    if evidence.is_empty() {
+        return Err(AppError::InsufficientEvidence);
+    }
+
+    let context_turn = retrieval::build_context_turn(&evidence);
+    let turns = vec![
+        ChatTurn {
+            role: "system".to_string(),
+            content: context_turn,
+        },
+        ChatTurn {
+            role: "user".to_string(),
+            content: question,
+        },
+    ];
+
+    let answer = state
+        .gateway
+        .chat(
+            &server_url,
+            &model_alias,
+            locale.as_deref(),
+            &turns,
+            |delta| {
+                let _ = on_event.send(ChatStreamEvent::Delta {
+                    text: delta.to_string(),
+                });
+            },
+        )
+        .await?;
+
+    let _ = on_event.send(ChatStreamEvent::Sources {
+        sources: evidence.clone(),
+    });
+    let _ = on_event.send(ChatStreamEvent::Completed {
+        text: answer.clone(),
+    });
+
+    Ok(AskAnswer {
+        answer,
+        sources: evidence,
+    })
 }

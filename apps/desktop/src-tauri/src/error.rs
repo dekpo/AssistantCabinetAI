@@ -79,6 +79,25 @@ pub enum AppError {
     /// gateway's own vocabulary rather than a paraphrase of it.
     #[error("{code}")]
     Gateway { code: String, data: Value },
+
+    #[error("no_work_folder_set")]
+    NoWorkFolderSet,
+
+    #[error("index_unavailable")]
+    IndexUnavailable,
+
+    /// Extraction ran and found no text at all in the file: a scan, or a genuinely empty file.
+    /// Reported, never silently skipped (`docs/RETRIEVAL.md`).
+    #[error("extraction_empty")]
+    ExtractionEmpty { path: String },
+
+    #[error("extraction_failed")]
+    ExtractionFailed { path: String },
+
+    /// The sourced-answer path found too little evidence to answer responsibly. The product
+    /// says so instead of generating an unsupported answer (`docs/ARCHITECTURE.md`).
+    #[error("insufficient_evidence")]
+    InsufficientEvidence,
 }
 
 impl AppError {
@@ -105,6 +124,11 @@ impl AppError {
             Self::ServerResponseInvalid => "server_response_invalid",
             Self::ContextTooLarge { .. } => "context_too_large",
             Self::Gateway { code, .. } => code,
+            Self::NoWorkFolderSet => "no_work_folder_set",
+            Self::IndexUnavailable => "index_unavailable",
+            Self::ExtractionEmpty { .. } => "extraction_empty",
+            Self::ExtractionFailed { .. } => "extraction_failed",
+            Self::InsufficientEvidence => "insufficient_evidence",
         }
     }
 
@@ -116,7 +140,13 @@ impl AppError {
             | Self::SettingsWriteFailed
             | Self::WorkFolderSelectionCancelled
             | Self::WorkFolderNoLongerAllowed
-            | Self::ServerResponseInvalid => json!({}),
+            | Self::ServerResponseInvalid
+            | Self::NoWorkFolderSet
+            | Self::IndexUnavailable
+            | Self::InsufficientEvidence => json!({}),
+            Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
+                json!({ "path": path })
+            }
             Self::WorkFolderIsCloudSynced { path, service } => {
                 json!({ "path": path, "service": service })
             }

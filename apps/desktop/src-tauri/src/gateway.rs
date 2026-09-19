@@ -18,6 +18,13 @@ pub const MAX_CONTEXT_CHARS: usize = 24_000;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(4);
 const CHAT_TIMEOUT: Duration = Duration::from_secs(300);
+const EMBEDDING_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Caps mirrored from the gateway (`docs/RETRIEVAL.md`): the client caps too, because indexing
+/// sends batches rather than one conversation and a runaway folder should never leave the
+/// machine as a single request.
+pub const MAX_EMBEDDING_INPUTS: usize = 256;
+pub const MAX_EMBEDDING_CHARS: usize = 200_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatTurn {
@@ -157,6 +164,76 @@ impl GatewayClient {
         }
         Ok(answer)
     }
+
+    /// One vector per input, in the order they were sent (OpenAI-compatible). The caller must
+    /// already respect the batch caps; this only enforces them defensively.
+    pub async fn embed(
+        &self,
+        server_url: &str,
+        model_alias: &str,
+        inputs: &[String],
+    ) -> Result<Vec<Vec<f32>>, AppError> {
+        if inputs.is_empty() {
+            return Ok(Vec::new());
+        }
+        if inputs.len() > MAX_EMBEDDING_INPUTS {
+            return Err(AppError::ContextTooLarge {
+                chars: inputs.len(),
+                limit: MAX_EMBEDDING_INPUTS,
+            });
+        }
+        let total_chars: usize = inputs.iter().map(|text| text.chars().count()).sum();
+        if total_chars > MAX_EMBEDDING_CHARS {
+            return Err(AppError::ContextTooLarge {
+                chars: total_chars,
+                limit: MAX_EMBEDDING_CHARS,
+            });
+        }
+
+        let url = endpoint(server_url, "/v1/embeddings");
+        let payload = json!({ "model": model_alias, "input": inputs });
+        let response = self
+            .http
+            .post(&url)
+            .timeout(EMBEDDING_TIMEOUT)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|error| transport_error(error, server_url))?;
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let body = response.text().await.unwrap_or_default();
+            let parsed: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+            return Err(gateway_error(&parsed).unwrap_or(AppError::ServerError { status }));
+        }
+
+        let body: EmbeddingsBody = response
+            .json()
+            .await
+            .map_err(|_| AppError::ServerResponseInvalid)?;
+        let mut ordered: Vec<(usize, Vec<f32>)> = body
+            .data
+            .into_iter()
+            .map(|entry| (entry.index, entry.embedding))
+            .collect();
+        ordered.sort_by_key(|(index, _)| *index);
+        let vectors: Vec<Vec<f32>> = ordered.into_iter().map(|(_, vector)| vector).collect();
+        if vectors.len() != inputs.len() {
+            return Err(AppError::ServerResponseInvalid);
+        }
+        Ok(vectors)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddingsBody {
+    data: Vec<EmbeddingEntryBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddingEntryBody {
+    index: usize,
+    embedding: Vec<f32>,
 }
 
 #[derive(Debug)]
@@ -173,11 +250,14 @@ fn read_event(line: &str) -> Result<Event, AppError> {
     if payload == "[DONE]" {
         return Ok(Event::Done);
     }
-    let event: Value = serde_json::from_str(payload).map_err(|_| AppError::ServerResponseInvalid)?;
+    let event: Value =
+        serde_json::from_str(payload).map_err(|_| AppError::ServerResponseInvalid)?;
     if let Some(error) = gateway_error(&event) {
         return Err(error);
     }
-    let delta = event["choices"][0]["delta"]["content"].as_str().unwrap_or("");
+    let delta = event["choices"][0]["delta"]["content"]
+        .as_str()
+        .unwrap_or("");
     if delta.is_empty() {
         Ok(Event::Ignored)
     } else {
@@ -244,7 +324,8 @@ mod tests {
 
     #[test]
     fn a_gateway_code_in_the_stream_becomes_an_error() {
-        let line = r#"data: {"error":{"code":"provider_unreachable","data":{"provider":"ollama"}}}"#;
+        let line =
+            r#"data: {"error":{"code":"provider_unreachable","data":{"provider":"ollama"}}}"#;
 
         let error = read_event(line).expect_err("expected a refusal");
 

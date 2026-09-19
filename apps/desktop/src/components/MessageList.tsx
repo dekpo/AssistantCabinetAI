@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
+import { formatDuration } from "../lib/duration";
 import type { ChatEntry } from "../state/useChat";
 
 export function MessageList({ entries, pending }: { entries: ChatEntry[]; pending: boolean }) {
@@ -27,8 +28,35 @@ export function MessageList({ entries, pending }: { entries: ChatEntry[]; pendin
             {entry.role === "user" ? t("chat.authorUser") : t("chat.authorAssistant")}
           </p>
           <p className="message__body">
-            {entry.content.length === 0 && pending ? t("chat.pending") : entry.content}
+            {entry.content.length === 0 && pending ? (
+              <span className="message__pending">
+                <span className="spinner" aria-hidden="true" />
+                {t("chat.pending")}
+              </span>
+            ) : (
+              entry.content
+            )}
           </p>
+          {entry.sources !== undefined && entry.sources.length > 0 ? (
+            <ul className="message__sources">
+              {entry.sources.map((source) => (
+                <li key={source.chunkId} className="message__source">
+                  {t("chat.sourceLabel", {
+                    path: source.relativePath,
+                    page: source.pageNumber,
+                  })}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {entry.durationMs !== undefined && entry.modelAlias !== undefined ? (
+            <p className="message__timing">
+              {t("chat.generatedBy", {
+                model: entry.modelAlias,
+                duration: formatDuration(entry.durationMs),
+              })}
+            </p>
+          ) : null}
         </article>
       ))}
       <div ref={bottom} />

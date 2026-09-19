@@ -70,7 +70,11 @@ export default function App() {
             ))}
             {healthError === null ? null : <ErrorBanner error={healthError} onRetry={refresh} />}
           </aside>
-          <ChatPanel onFailure={refresh} />
+          <ChatPanel
+            onFailure={refresh}
+            hasWorkFolder={snapshot.settings.workFolder !== null}
+            modelAlias={snapshot.settings.modelAlias}
+          />
         </main>
         {settingsOpen ? (
           <SettingsDialog

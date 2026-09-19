@@ -24,6 +24,10 @@ const SERVER_URL_ENVIRONMENT_VARIABLE: &str = "ASSISTANT_CABINET_SERVER_URL";
 /// An alias, resolved by the gateway. Never a model weight name.
 const DEFAULT_MODEL_ALIAS: &str = "cabinet-chat";
 
+/// Embedding weights are not chat weights, so indexing asks for its own alias
+/// (`docs/ARCHITECTURE.md`).
+const DEFAULT_EMBEDDING_ALIAS: &str = "cabinet-embed";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
@@ -41,6 +45,7 @@ pub struct Settings {
     pub theme: Theme,
     pub server_url: String,
     pub model_alias: String,
+    pub embedding_alias: String,
     pub work_folder: Option<String>,
 }
 
@@ -52,6 +57,7 @@ impl Default for Settings {
             server_url: std::env::var(SERVER_URL_ENVIRONMENT_VARIABLE)
                 .unwrap_or_else(|_| DEFAULT_SERVER_URL.to_string()),
             model_alias: DEFAULT_MODEL_ALIAS.to_string(),
+            embedding_alias: DEFAULT_EMBEDDING_ALIAS.to_string(),
             work_folder: None,
         }
     }
@@ -69,7 +75,10 @@ pub fn settings_path(app: &AppHandle) -> Result<PathBuf, AppError> {
 /// failure: the window must open even when the file was hand-edited into nonsense.
 pub fn load(app: &AppHandle) -> (Settings, Vec<String>) {
     let Ok(path) = settings_path(app) else {
-        return (Settings::default(), vec![AppError::SettingsReadFailed.code().to_string()]);
+        return (
+            Settings::default(),
+            vec![AppError::SettingsReadFailed.code().to_string()],
+        );
     };
     if !path.exists() {
         return (Settings::default(), Vec::new());
@@ -85,11 +94,16 @@ pub fn load(app: &AppHandle) -> (Settings, Vec<String>) {
 
 /// Validate, then store. The webview is not trusted with the work folder or the address: both are
 /// checked here, so a change in the interface cannot widen the allow-list.
-pub fn save(app: &AppHandle, policy: &WorkFolderPolicy, settings: Settings) -> Result<Settings, AppError> {
+pub fn save(
+    app: &AppHandle,
+    policy: &WorkFolderPolicy,
+    settings: Settings,
+) -> Result<Settings, AppError> {
     let mut checked = settings;
     checked.server_url = checked.server_url.trim().to_string();
     check_server_url(&checked.server_url)?;
     checked.model_alias = checked.model_alias.trim().to_string();
+    checked.embedding_alias = checked.embedding_alias.trim().to_string();
     checked.work_folder = match checked.work_folder.as_deref() {
         None => None,
         Some(chosen) if chosen.trim().is_empty() => None,
@@ -109,7 +123,10 @@ pub fn save(app: &AppHandle, policy: &WorkFolderPolicy, settings: Settings) -> R
 /// remote model service would be neither reachable nor allowed.
 pub fn check_server_url(url: &str) -> Result<(), AppError> {
     let looks_usable = (url.starts_with("http://") || url.starts_with("https://"))
-        && url.split("://").nth(1).is_some_and(|rest| !rest.trim().is_empty());
+        && url
+            .split("://")
+            .nth(1)
+            .is_some_and(|rest| !rest.trim().is_empty());
     if looks_usable {
         Ok(())
     } else {
@@ -130,6 +147,7 @@ mod tests {
             theme: Theme::System,
             server_url: "http://mac-mini.local:8080".into(),
             model_alias: "cabinet-chat".into(),
+            embedding_alias: "cabinet-embed".into(),
             work_folder: Some("D:\\work".into()),
         };
 

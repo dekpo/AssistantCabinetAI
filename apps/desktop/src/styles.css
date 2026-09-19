@@ -236,6 +236,47 @@ body {
   overflow-wrap: anywhere;
 }
 
+.message__sources {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85em;
+  color: var(--muted, #666);
+}
+
+.message__source {
+  margin: 2px 0;
+}
+
+.message__timing {
+  margin: 6px 0 0;
+  font-size: 0.8em;
+  color: var(--muted, #888);
+  font-style: italic;
+}
+
+.message__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border, #ccc);
+  border-top-color: var(--accent, #3a7);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .composer {
   display: flex;
   flex-direction: column;

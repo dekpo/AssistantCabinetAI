@@ -8,6 +8,11 @@ Canonical direction: `docs/BRIEF-V0-PROTOTYPE.md`. Sprint rule: `.cursor/rules/v
 `docs/SPRINT-2-ASSESSMENT.md`. Long-term direction, which is deliberately **not** in this file:
 `docs/PLATFORM-VISION.md`.
 
+**Amended 19 September 2026.** Sprint 2a delivered eleven days early, and scan OCR moves into v0 as
+**Sprint 2.5**, between the document chain and the GP workflows. Direction:
+`docs/BRIEF-SPRINT-2.5-OCR.md`. Engineering assessment: `docs/SPRINT-2.5-ASSESSMENT.md`. The decision it
+reverses ("scan OCR out of v0") is updated in `docs/DECISIONS.md`.
+
 One goal: an **installable** prototype the pilot GP can use, which answers **with its sources** on her own
 documents. Given a choice between one more feature and a more reliable, private, testable and replaceable
 flow, take the second.
@@ -18,6 +23,7 @@ The chain to make hold end to end:
 She opens Assistant Cabinet AI
   → she picks a folder
   → the documents are indexed on her workstation
+  → a scan or a photo is read locally by OCR, like any other document
   → she asks a question
   → retrieval happens on her workstation
   → only the useful excerpts go to the gateway
@@ -35,6 +41,42 @@ milestones.
 | --- | --- | --- | --- |
 | **A — the chain holds** | **30 September 2026** | Native window, gateway, local index, answer with sources, isolation test | `fixtures/gp-sandbox/` (fictional) |
 | **B — she uses it** | **14 October 2026** | The three GP flows, the Windows installer, deployment at the practice | Her own documents, **after** the legal gate |
+
+## Sprint order
+
+Ingestion capability order, which is what the code depends on:
+
+```text
+Sprint 2a  documents      PDF / DOCX / TXT / MD
+   ↓
+Sprint 2.5 local OCR      image-only PDF / JPEG / PNG
+   ↓
+Sprint 2b  tabular data   CSV / XLSX
+   ↓
+Sprint 3   GP workflows   summary, naming with duplicates, structured extraction
+   ↓
+Sprint 4   deployment     Windows installer, the practice
+```
+
+Calendar order, which differs in one place on purpose:
+
+| Sprint | 1 | 2a | 2.5 | 3 | 4 | 2b |
+| --- | --- | --- | --- | --- | --- | --- |
+| Dates | delivered 17 Sep | delivered 19 Sep | 20–30 Sep | 1–7 Oct | 8–14 Oct | from 15 Oct |
+
+Sprint 2b is numbered before Sprint 3 and dated after Sprint 4. The reason was recorded on 18 September
+and has not changed: `docs/PILOT-GP.md` finds no spreadsheet anywhere in her measured workflow, so tabular
+work earns nothing for milestone B, and placing it earlier would displace either her three workflows or
+the deployment.
+
+Late is not the same as optional. The owner confirmed on 19 September that hospital staff who schedule
+from `.csv` and `.xlsx` are a named user group, so sprint 2b is a committed capability with a deliberately
+late date, not a maybe. What it must not become is a spreadsheet application; the nine named operations
+and the data-grid-sheets-only gate exist for that.
+
+OCR is the opposite case, which is why it moved into v0: she receives 10 to 20 scans a week today, and
+Sprint 3 cannot summarise, classify or name a document the pipeline cannot read. It takes the window
+Sprint 2a vacated by finishing eleven days early, and it costs no other sprint a single day.
 
 ## Sprint 1 — vertical slice (16 → 23 September) — **delivered 17 September 2026**
 
@@ -71,7 +113,7 @@ Not done in sprint 1, and inherited by sprint 2: there is no `/v1/embeddings` ro
 `AIProvider.embed` exists, `fixtures/gp-sandbox/` still holds only `.txt`, there is no `uv.lock`, and
 nothing reads a document yet.
 
-## Sprint 2a — local document retrieval (24 → 30 September)
+## Sprint 2a — local document retrieval (24 → 30 September) — **delivered 19 September 2026**
 
 Deliverable: the chain above, on the fictional files, with citations. This sprint carries milestone A,
 so nothing else may be added to it.
@@ -98,12 +140,88 @@ so nothing else may be added to it.
 - Extend the sandbox: it currently holds only `.txt`. It needs fictional native-text PDFs, a DOCX, and one
   scanned image PDF reserved for the OCR contract.
 
+**Delivered.** Merged as `c537805`, `feat: local document extraction, index, retrieval and sourced chat
+UI`. What exists now: `discovery.rs` (extension allow-list, symlinks refused), `extraction.rs` (native
+PDF, DOCX, TXT, MD), `chunking.rs` (file, page, section preserved), `index_store.rs` (SQLite, FTS5 plus
+stored vectors in `%LOCALAPPDATA%`), `retrieval.rs` (lexical plus cosine, capped at 6 chunks and 6000
+characters), `ask_with_sources` refusing on insufficient evidence, and `POST /v1/embeddings` on the
+gateway. `tests/end_to_end_retrieval.rs` is the milestone A acceptance, automated.
+
+Inherited by Sprint 2.5: emptiness is decided per document rather than per page, so a mixed
+born-digital-plus-scan PDF loses its scanned pages silently; and the scanned-PDF fixture contains no
+image, so it cannot exercise OCR. Both are detailed in `docs/SPRINT-2.5-ASSESSMENT.md`.
+
 **Milestone A acceptance, 30 September:** on a folder of fictional files, three questions give three
-sourced answers, a fourth off-topic question gets the refusal, and the isolation tests pass.
+sourced answers, a fourth off-topic question gets the refusal, and the isolation tests pass. **Already
+met** by `tests/end_to_end_retrieval.rs`, which automates exactly that. Sprint 2.5 adds a fourth sourced
+answer, from a scanned letter; if OCR slips, milestone A still stands on the chain above.
+
+## Sprint 2.5 — local OCR (20 → 30 September)
+
+Deliverable: a scanned document is as usable as a born-digital one. Direction:
+`docs/BRIEF-SPRINT-2.5-OCR.md`. How it is built, and why each choice: `docs/SPRINT-2.5-ASSESSMENT.md`.
+
+It takes the window Sprint 2a vacated. `docs/PILOT-GP.md` records about 10 paper letters and 10 to 20
+scans per week, plus organised-screening second readings that arrive on paper. Without OCR those
+documents reach the GP workflows as an empty extraction and a refusal, and Sprint 3 cannot summarise,
+classify or name a document the pipeline cannot read.
+
+The core is four days of work; the window is eleven. The slack goes to the two things this sprint is
+most likely to underestimate — generating fixtures that genuinely exercise OCR, and proving the engine
+bundles into a Windows build — and to milestone A hardening.
+
+- **OCR is ingestion, not a GP workflow.** It sits beside extraction on the workstation. No Sprint 3
+  workflow may contain OCR code; they consume the normalised document the pipeline produces.
+- **One port, `OcrProvider`, one implementation.** Business code names no engine. The first is Tesseract 5
+  as a bundled sidecar with pdfium for rasterisation, confirmed 19 September; swapping it touches one
+  constructor and one file, and changes nothing in retrieval, chunking, the index, the gateway or the
+  webview.
+- **Windows and macOS, from the same source.** Both are mandatory, which is what chose Tesseract over the
+  platform OCR engines: those are two engines with two accuracies and two failure modes. No
+  `#[cfg(windows)]` in `src/ocr/`; the only platform-specific part is which prebuilt binary the bundler
+  picks up. A CI job that builds and tests on both comes **before** the OCR code, because nothing in this
+  repository has ever been compiled on macOS.
+- **Local only, in memory.** No cloud OCR, no external document service, no Internet requirement, and no
+  recognised text written to any file outside the index — which rules out the OCR engine's default
+  "write the result next to the input" behaviour. A test asserts no new file appears.
+- **Cheapest path first, per page.** A page whose text layer is usable is never rasterised and never
+  OCR'd. A mixed document costs one OCR call per scanned page, not one per page.
+- **Inputs:** image-only PDF, JPEG, PNG. `.tif` is one string in the allow-list when a scanner needs it.
+- **Provenance:** a fifth `derivation` variant, `Recognised { engine, confidence }`, distinct from
+  `Extracted`. What a machine read is not what a file states, and the interface says so on the citation.
+- **Uncertainty is resolved at ingestion.** Low-confidence pages do not enter the index, so they cannot
+  be retrieved and cannot become a confident sentence. Confidence is kept internally; no score on screen.
+- **No new cache.** The existing SHA-256 skip in `indexing.rs` already prevents re-reading an unchanged
+  scan. Two columns, `ocr_engine` and `ocr_engine_version`, make an engine change invalidate only the
+  documents that engine produced.
+- **Degradation is a feature.** A missing or broken engine reports `ocr_unavailable` and the product
+  falls back to Sprint 2a behaviour. It never fails to launch, and it never guesses.
+- **Deployment is a selection criterion, not an afterthought.** The bundle is verified to build on
+  Windows during this sprint, not discovered in Sprint 4. Signing the sidecar is a Sprint 4 task.
+- **Tests:** a native PDF invokes OCR zero times; a scanned PDF answers with file and page; JPEG and PNG
+  reach retrieval; an unreadable image produces a refusal and no fabricated text; nothing is written
+  outside the index; the gateway register holds no recognised text; Sprint 1 and 2a stay green.
+- **Fixtures:** a genuine image-only PDF, a mixed PDF, a JPEG, a PNG and an unreadable image. The current
+  `2026-03-20_radiographie-scan.pdf` has no image in it at all and stays as the "nothing to read" case.
+  Hand-made scans are welcome and more realistic than generated ones, **fictional content only**: print
+  an invented letter and scan the paper. `fixtures/` is committed and permanent, and the legal gate is
+  not passed.
+
+**Out of this sprint, deliberately:** DOCX to PDF and any other document conversion, layout-aware OCR,
+tables detected from images, handwriting, GPU acceleration, camera capture, a second engine.
+
+**Acceptance, 30 September:** a fictional scanned letter answers a question with a citation naming its
+file and page; a born-digital PDF indexes with zero OCR calls; an unreadable image produces the refusal;
+no file is written outside the index; the measured empty-page rate on the fixtures is written down.
 
 ## Sprint 3 — GP workflows (1 → 7 October)
 
 Deliverable: the actions that cost her 1.5 to 2 hours a day. Three flows, not five.
+
+The three consume the **normalised document** the ingestion pipeline produces, and none of them knows how
+it was produced. A workflow that asked whether its input was a born-digital PDF or a scan would be a
+workflow that has to change again for the next format. Do not start this sprint until Sprint 2.5 has
+landed a reliable OCR path.
 
 1. **Report summary** — reuse `prompts/gp-letter-summary.md`, in a "retrieved context" form rather than a
    "pasted text" one. Visit date, treatment changes and lab targets **according to the letter**, with citations.
@@ -136,6 +254,13 @@ Deliverable: the software installs and runs at her practice.
 
 Deliverable: `.csv` and `.xlsx` as first-class sources, with **deterministic** factual lookup that works
 with the model switched off.
+
+**Confirmed on 19 September 2026, and it is not optional.** Scheduling it late is a statement about the
+pilot, not about the feature. The pilot GP has no spreadsheets, so this earns nothing for milestone B; but
+hospital staff who build schedules from exactly these files are a named user group, and the capability is
+the reason `docs/ARCHITECTURE.md` keeps a second pipeline rather than flattening a workbook into text.
+A later sprint may not quietly drop it, defer it indefinitely, or reduce it to "spreadsheets as chunks".
+It ships to the standard in `docs/SPRINT-2-ASSESSMENT.md`, or it does not ship.
 
 Scheduled here, and not before, for one reason: `docs/PILOT-GP.md` records about twenty specialist and
 imaging reports a day plus ten to twenty lab results, almost all PDF, and accounting left the scope in
@@ -197,7 +322,9 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | --- | --- |
 | Mac mini delivered after 8 October | Sprints 1 to 3 on the development PC; installer tested on an equivalent Windows machine |
 | No DPIA draft by 8 October | Sprint 4 deploys on fictional files; real documents wait |
-| Scanned PDFs (OCR) | **Out** of v0: report empty extraction and refuse to classify rather than guess |
+| OCR quality on her real scans is worse than on the fixtures | Measure the empty-page rate at the end of sprint 2.5. The engine is a port: a poor result is an engine change, not a redesign |
+| The OCR sidecar breaks the Windows installer | The bundle is built and run on Windows during sprint 2.5, not in sprint 4. A missing engine degrades to sprint 2a behaviour rather than failing to launch |
+| macOS portability is assumed rather than proved | Nothing here has ever been compiled on macOS and there is no CI. Add a `windows-latest` plus `macos-latest` job before the OCR code, and parameterise the work-folder test paths, which today would fail on macOS for a fixture reason rather than a design one (`docs/SPRINT-2.5-ASSESSMENT.md` section O) |
 | The 2019 PC cannot keep up with indexing | Batch cap, index per work folder rather than per disk, timing measured at first run |
 | French output quality | The model alias is a setting; change the alias, not the code |
 | Drift onto Open WebUI, voice, certificates | Frozen by `.cursor/rules/v0-sprint.mdc` |
@@ -213,7 +340,7 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | 2 Prompts and sandbox | Done; the `prompts/` bodies are reused in sprint 3 |
 | 3 Native shell | Sprint 1 |
 | 4 File action plans | Sprint 3 |
-| 5 Document extraction | Sprint 2a, without scan OCR |
+| 5 Document extraction | Sprint 2a (native text), then sprint 2.5 (scan OCR) |
 | 6 Connect the window to the gateway | Sprint 1 |
 | 7 Retrieval on the client | Sprint 2a — **moved up**, it carries milestone A |
 | — (new) Tabular data | Sprint 2b, after milestone B |
@@ -223,8 +350,12 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 
 ## After 14 October, not before
 
-Sprint 2b (tabular data) comes first, then voice, vision, scan OCR, mobile, app stores, a second
-profession, autonomous agents, fine-tuning, an accounting module, the Ameli account, automatic
-transmission, RBAC, billing, analytics.
+Sprint 2b (tabular data) comes first, then voice, vision, mobile, app stores, a second profession,
+autonomous agents, fine-tuning, an accounting module, the Ameli account, automatic transmission, RBAC,
+billing, analytics.
+
+Scan OCR left this list on 19 September 2026 and became sprint 2.5. What stays out of v0 is everything
+*around* it: layout-aware OCR, tables read from images, handwriting, GPU acceleration, camera capture,
+batch OCR tooling and a second engine.
 
 Where that ordering is heading, without dates: `docs/PLATFORM-VISION.md`.

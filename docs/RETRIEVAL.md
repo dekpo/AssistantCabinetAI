@@ -23,7 +23,7 @@ base, encrypted swap, process memory only. After the answer, the server forgets.
 ```text
 Workstation
   ├─ Files (local disk, or an already-authorised share)
-  ├─ Extractor, and OCR later
+  ├─ Extractor, including local OCR for scans and images
   ├─ Full-text index plus vectors (SQLite)
   ├─ Workbook inventory and the deterministic tabular engine (SQLite)
   ├─ Conversation history (local, encrypted)
@@ -42,7 +42,7 @@ history. To resume a thread, the client resends the context it holds.
 ## Pipeline
 
 ```text
-work folder → parsing (PDF / DOCX / TXT) → chunking → embeddings
+work folder → parsing (PDF / DOCX / TXT / MD, plus OCR for scans, JPEG, PNG) → chunking → embeddings
 → local index → retrieval → relevant context → gateway → LLM → answer + sources
 ```
 
@@ -73,6 +73,17 @@ per input in the order they were sent. Three rules matter more than the wire sha
 
 The register records the alias, how many passages, how many characters, how many vectors, the dimensions
 and one SHA-256 over the batch. Not a passage.
+
+**OCR is part of parsing, and it stays on the workstation.** A page whose text layer is usable is read
+natively and never rasterised; a page without one is rendered to a bitmap in memory and handed to a
+local engine behind the `OcrProvider` port. The detection is per page, so a letter that mixes a
+born-digital covering page with a scanned appendix keeps both. Nothing about this reaches the gateway:
+the server receives excerpts, exactly as it does for a native PDF, and has no way to tell the two apart.
+Cloud OCR is forbidden on the same grounds as cloud inference, and recognised text is never written
+outside the local index — which rules out the usual OCR command-line habit of writing the result into a
+file beside the input. Recognised text carries `derivation: Recognised { engine, confidence }` rather
+than `Extracted`, and a page the engine could not read produces no chunk at all, so a failed recognition
+has no path to a citation. Design and engine choice: `docs/SPRINT-2.5-ASSESSMENT.md`.
 
 ## Tabular data is a second pipeline, not a special case of the first
 
@@ -133,6 +144,11 @@ read. No new repository is created.
 The product prefers saying it did not find enough information over generating an unsupported answer. Answers
 cite filename, page, section and the relevant passage. Amounts, dates and identifiers are copied from the
 source, never reformulated from memory. If extraction fails, classification is blocked rather than guessed.
+
+OCR does not weaken that rule; it is resolved one stage earlier. A page the engine read with too little
+confidence does not enter the index, so it cannot be retrieved and cannot become a confident sentence.
+Uncertainty is handled at ingestion, where it is still a measurable number, rather than at generation,
+where it is not.
 
 Tests that keep this true: retrieval quality, source attribution, refusal beyond the sources, and an
 isolation test proving the server retains nothing after a request.

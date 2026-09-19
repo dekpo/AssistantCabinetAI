@@ -15,7 +15,8 @@ One goal: an **installable** prototype on her workstation, with a Mac mini **at 
 server. Given a choice between one more impressive feature and making the existing flow more reliable,
 private, testable and replaceable, choose the latter. Do not rewrite what works.
 
-The chain to make hold: workstation (Tauri) → local index → FastAPI gateway → Ollama → answer **with sources**.
+The chain to make hold: workstation (Tauri) → ingestion, including local OCR → local index → FastAPI
+gateway → Ollama → answer **with sources**.
 
 # Layout
 
@@ -42,8 +43,14 @@ server URL, the model alias, the work folder and the locale are settings.
 
 # Frozen until 14 October 2026
 
-Open WebUI development, voice, vision, scan OCR (contract only), certificates, referral letters, Ameli,
-accounting, mobile, app stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
+Open WebUI development, voice, vision, certificates, referral letters, Ameli, accounting, mobile, app
+stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
+
+**Scan OCR left this list on 19 September 2026** and became sprint 2.5, 20–30 September. It is local,
+behind the `OcrProvider` port, and it is ingestion rather than a GP workflow: no workflow contains OCR
+code. Direction `docs/BRIEF-SPRINT-2.5-OCR.md`, design `docs/SPRINT-2.5-ASSESSMENT.md`. What stays
+frozen is everything around it: layout-aware OCR, tables read from images, handwriting, GPU
+acceleration, camera capture, batch OCR, a second engine, and DOCX-to-PDF or any other conversion.
 
 # Tests weekly, not at the end
 

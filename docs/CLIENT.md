@@ -107,8 +107,12 @@ drawing our own window, and its licence does not allow rebadging it as our produ
 | Already-text PDFs (simple extraction) | Local indexing if the machine keeps up | Open WebUI Computer |
 | Showing the plan, approving, renaming inside the work folder | — | Any cloud upload |
 
-A real text PDF needs no OCR; scans are the expensive case, and scan OCR is out of v0. If extraction returns
-nothing, report it and refuse to classify rather than guess.
+A real text PDF needs no OCR, and the pipeline decides that per page so a born-digital page is never
+rasterised. Scans are the expensive case: roughly 0.5 to 2 seconds per page on her 2019 CPU, against a
+measured volume of 10 to 20 scans a week, and an unchanged file is never read twice. OCR runs **on the
+workstation**, in memory, behind `OcrProvider` (`docs/SPRINT-2.5-ASSESSMENT.md`). If OCR cannot read a
+page, report it and refuse to classify rather than guess — the rule that applied when scan OCR was out
+of v0 still applies now that it is in.
 
 At first launch, measure extraction time on a **fictional** page shipped with the software, never a patient
 scan, and record a local / delegated / automatic preference. Delegated mode would have the Mac mini return

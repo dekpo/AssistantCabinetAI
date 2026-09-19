@@ -43,7 +43,7 @@ that were spread across the earlier French notes. If a decision changes, change 
 | Environment | Docker Compose, the same file on Windows and on the Mac mini |
 | Retrieval | On the workstation: SQLite full-text plus vectors, behind a replaceable interface |
 | Embeddings | No-store call to the gateway first; local ONNX possible later behind the same interface |
-| Scan OCR | Out of v0. Report empty extraction and refuse to classify rather than guess |
+| Scan OCR | **In v0 as sprint 2.5**, reversed 19 September 2026 (was "out of v0"). Local only, behind the `OcrProvider` port. When OCR cannot read a page the old rule still applies: report it and refuse to classify, never guess |
 | Model choice | Alias allow-list only, licence record mandatory, no clinical-care weights |
 | Language | One `locale` variable owned by the client. English prompts in, user's language out |
 | Documentation language | English, as of 16 September 2026 |
@@ -81,6 +81,32 @@ Full reasoning, and the inspection of `LocalGridMind` that produced it: `docs/SP
 | Embedding weights | Their own alias (`cabinet-embed`) out of the **same** allow-list, with `DEFAULT_EMBEDDING_ALIAS` naming it. Changing it forces a re-index: vectors from two models cannot be compared |
 | A batch that comes back the wrong shape | **Refused**, not stored. A short or ragged batch would bind each chunk to the wrong vector, and the index would cite the wrong passage for as long as it lives |
 | What `/v1/embeddings` records | Alias, counts, characters, dimensions and one SHA-256 over the batch, in an entry type of its own. Widening the chat entry instead would have loosened a closed field list |
+
+## Settled by the sprint 2.5 OCR reframe (19 September 2026)
+
+Recorded direction: `docs/BRIEF-SPRINT-2.5-OCR.md`. Full reasoning and the repository inspection that
+produced it: `docs/SPRINT-2.5-ASSESSMENT.md`.
+
+| Subject | Decision |
+| --- | --- |
+| Scan OCR in v0 | **Yes**, as sprint 2.5, 20–30 September, in the window sprint 2a vacated by finishing early. Sprint 3 cannot summarise, classify or name a document the pipeline cannot read, and she receives 10 to 20 scans a week |
+| Where OCR lives | **Beside extraction, on the workstation**, behind `OcrProvider`. The same rule as the tabular engine: the server must never receive a document, so the code that reads one cannot live there |
+| OCR is a workflow feature | **No.** It is an ingestion capability. A GP workflow consumes the normalised document and contains no OCR code, so it never has to change for a new input format |
+| Cloud OCR of any kind | **Forbidden**, permanently, on the same grounds as cloud inference and cloud speech. No external document-processing service, no mandatory Internet access |
+| Recognised text on disk | **Only in the local index.** The OCR engine must be driven through stdin and stdout, never its default "write the result next to the input" mode. A test asserts no file appears outside the index |
+| `Extracted` versus OCR | A **fifth `derivation` variant, `Recognised { engine, confidence }`**. What a machine read is not what a file states, and the difference is a field rather than a choice of words |
+| Low-confidence OCR | **Does not enter the index**, so it cannot be retrieved and cannot become a confident model sentence. Uncertainty is resolved at ingestion, where it is still measurable. Confidence is kept internally; no score on screen |
+| Text-layer detection | **Per page, not per document.** A born-digital page is never rasterised. A mixed document costs one OCR call per scanned page. The character floor is empirical and measured against the fixtures |
+| OCR caching | **No new cache.** The existing SHA-256 skip already prevents re-reading an unchanged scan. Two columns, `ocr_engine` and `ocr_engine_version`, invalidate only what an engine change affects |
+| A missing OCR engine | **Degrades to sprint 2a behaviour** and reports `ocr_unavailable`. It never fails the launch and never guesses |
+| Deployment as a selection criterion | **Yes.** An engine that makes the Windows installer unmaintainable is rejected however good it is, and the bundle is verified on Windows during sprint 2.5 rather than in sprint 4 |
+| DOCX to PDF, and document conversion generally | **Out.** A separate future capability. It must not expand sprint 2.5 |
+| The first OCR engine | **Tesseract 5 as a bundled sidecar**, with `pdfium-render` for rasterisation and `fra.traineddata` shipped as a resource. Confirmed 19 September 2026 |
+| **Windows and macOS are both mandatory** | Confirmed 19 September 2026, and it now outranks convenience in every technology choice. An engine, library or runtime that exists on only one of them is disqualified however good it is. This is what rejected `Windows.Media.Ocr`: it is two engines with two accuracies and two failure modes, not one |
+| Platform differences in OCR code | **None.** No `#[cfg(windows)]` anywhere in `src/ocr/`. A platform difference belongs in the bundler configuration or in sidecar discovery, never in the recognition path, or the two clients drift apart and only one is ever tested |
+| Cross-platform CI | **Required, and before the OCR code.** Nothing in this repository has ever been compiled or tested on macOS: there is no CI at all. Until a job builds and tests on `windows-latest` and `macos-latest`, portability is an opinion. `docs/SPRINT-2.5-ASSESSMENT.md` section O |
+| Hand-supplied scan fixtures | **Welcome, and better than generated ones**, because a real scanner produces the skew and noise that decide whether recognition is usable. **Fictional content only** — `fixtures/` is committed and permanent, the legal gate is not passed, and a redacted real report is still a real report. Print an invented letter and scan the paper. A genuine practice scan, if ever needed to diagnose a problem, stays in the gitignored `fixtures/gp-sandbox/real/` tree |
+| Tabular data (`.csv`, `.xlsx`) | **Confirmed as sprint 2b, after sprint 4, and not optional.** The pilot GP has no spreadsheets, so it earns nothing for milestone B and stays out of the pilot window. It is not speculative either: hospital staff who schedule from these files are a named user group. A later sprint may not quietly drop it, nor reduce it to "spreadsheets flattened into text chunks" — it ships to the standard in `docs/SPRINT-2-ASSESSMENT.md` |
 
 ## Known blind spots to keep in mind
 

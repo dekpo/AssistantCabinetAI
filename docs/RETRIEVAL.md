@@ -25,6 +25,7 @@ Workstation
   ├─ Files (local disk, or an already-authorised share)
   ├─ Extractor, and OCR later
   ├─ Full-text index plus vectors (SQLite)
+  ├─ Workbook inventory and the deterministic tabular engine (SQLite)
   ├─ Conversation history (local, encrypted)
   └─ Sends to the gateway: question + top-k excerpts + hashes
 
@@ -57,6 +58,52 @@ dependency for the prototype. Chunks keep file, page and section so that a citat
 discards them, storing nothing. A local ONNX computation with a small model can replace it later behind the
 same interface, which would also make indexing work with the server switched off. Since the Mac mini sits at
 the practice, excerpts sent for embedding never leave the practice network.
+
+`POST /v1/embeddings` is OpenAI-compatible: `input` is one text or a batch, and the answer is one vector
+per input in the order they were sent. Three rules matter more than the wire shape.
+
+- The embedding weights are reached through their own alias out of the same allow-list, so which model
+  builds the vectors is configuration. Changing it means **re-indexing**: vectors from two models cannot
+  be compared, and mixing them silently degrades every result.
+- The batch is capped on count and on total characters, in the gateway as well as in the client, because
+  the gateway does not trust a caller.
+- A batch that comes back with the wrong number of vectors, or with vectors of different lengths, is
+  refused rather than stored. Accepting a short batch would bind chunk 2 to the vector of chunk 3, and
+  the index would then cite the wrong passage for as long as it lives.
+
+The register records the alias, how many passages, how many characters, how many vectors, the dimensions
+and one SHA-256 over the batch. Not a passage.
+
+## Tabular data is a second pipeline, not a special case of the first
+
+Spreadsheets are **not** flattened into text chunks so that they resemble PDFs. Chunking a schedule
+destroys exactly the structure that makes it answerable, and embedding it invites the model to guess a
+total it cannot count. They get their own path:
+
+```text
+work folder → parsing (CSV / XLSX) → workbook inventory → deterministic lookup
+→ verified answer                                    (no model, no embedding)
+→ or structured evidence → gateway → LLM → answer + sources   (only when necessary)
+```
+
+The inventory is built once per file version, keyed by relative path and SHA-256, and persisted locally.
+It holds structure — sheets, dimensions, columns, inferred types, row counts, header row, date and
+numeric and categorical columns, formula presence — and the aggregate facts computed in a **full pass
+over every row**, never a sample. A group total computed from the first two thousand rows of a large
+export is wrong in a way nobody notices. No copy of the source file is kept.
+
+Deterministic questions are answered from that inventory with no inference at all: row counts, column
+names, distinct values, sums, minima and maxima, group totals, the largest single row, filters and
+sorts. A group **total** and the largest **single row** are different facts and are always labelled as
+such. When the engine cannot establish an answer it returns `NOT_DETERMINISTICALLY_ANSWERABLE` together
+with what it does hold — the available columns — rather than a guess.
+
+Formula workbooks are treated conservatively. A formula-heavy file is inventoried and disclosed, and
+refused for factual answers; a cached formula result is never reported as a verified fact. v0 builds no
+Excel calculation engine.
+
+Escalation to the model carries the compact aggregate card, never rows, and the model's citations are
+verified against that evidence afterwards.
 
 ## Partitioning
 

@@ -28,6 +28,11 @@ scanner.
 Anything downloaded or scanned lands in **My Documents**, at the root, not in a dedicated subfolder. Ameli
 paperwork lands there too.
 
+**To check on her machine:** whether OneDrive Backup is enabled for Documents. If it is, those reports are
+already being copied to Microsoft, independently of this software, and the DPIA draft has to say so. It is
+also why our work folder is `~/AssistantCabinetAI` and not a subfolder of Documents
+(`docs/PRIVACY-AND-SECURITY.md`).
+
 ## Volumes and formats
 
 - About **20** specialist and imaging reports **per day** through MSSanté.

@@ -32,8 +32,11 @@
   },
   "workFolder": {
     "title": "Dossier de travail",
-    "description": "Le seul dossier dans lequel ce logiciel peut écrire. Choisissez un sous-dossier dédié, pas la totalité de vos documents.",
+    "description": "Le seul dossier dans lequel ce logiciel peut écrire. Choisissez un dossier dédié, pas la totalité de vos documents, et jamais un dossier recopié vers un service en ligne.",
     "none": "Aucun dossier choisi pour le moment",
+    "suggestionLabel": "Suggestion :",
+    "suggestionWhy": "Il est volontairement placé en dehors de vos Documents, pour que rien ne soit recopié vers OneDrive ou iCloud.",
+    "createSuggested": "Créer et utiliser ce dossier",
     "choose": "Choisir un dossier...",
     "change": "Changer de dossier..."
   },
@@ -57,6 +60,7 @@
     "title": "Cela n'a pas fonctionné"
   },
   "errors": {
+    "batch_too_large": "Trop de passages ont été envoyés en une fois ({count} pour une limite de {limit}). Le dossier est indexé par lots plus petits.",
     "context_too_large": "Cette question est trop longue pour une seule demande ({chars} caractères pour une limite de {limit}). Raccourcissez-la.",
     "internal_error": "Le serveur a rencontré un problème inattendu. Réessayez ; si cela persiste, notez l'heure et signalez-le.",
     "invalid_request": "Le serveur a refusé la demande car elle était mal formée. Merci de le signaler.",
@@ -73,11 +77,13 @@
     "settings_read_failed": "Vos réglages n'ont pas pu être lus, ce sont donc les réglages par défaut qui s'appliquent.",
     "settings_write_failed": "Vos réglages n'ont pas pu être enregistrés.",
     "unknown_error": "Un problème inattendu s'est produit.",
+    "work_folder_is_cloud_synced": "Ce dossier est recopié vers {service} ({path}). Les documents professionnels ne doivent pas sortir du cabinet : choisissez un dossier en dehors, par exemple directement dans votre dossier utilisateur.",
     "work_folder_is_drive_root": "Un disque entier ne peut pas être le dossier de travail ({path}). Choisissez un dossier à l'intérieur.",
     "work_folder_is_protected": "Ce dossier est protégé, ou il contient l'ensemble de vos fichiers personnels ({path}). Choisissez un sous-dossier dédié.",
     "work_folder_is_symlink": "Ce dossier est un raccourci vers un autre emplacement ({path}). Choisissez le dossier réel.",
     "work_folder_not_a_directory": "Ceci est un fichier, pas un dossier ({path}).",
     "work_folder_not_found": "Ce dossier n'existe plus ({path}).",
+    "work_folder_no_longer_allowed": "Votre dossier de travail ne respecte plus les règles de sécurité, le plus souvent parce qu'un service en ligne le recopie désormais. Choisissez-le à nouveau.",
     "work_folder_not_writable": "Ce logiciel ne peut pas écrire dans ce dossier ({path}).",
     "work_folder_path_not_absolute": "Le chemin de ce dossier est incomplet ({path}).",
     "work_folder_selection_cancelled": "Aucun dossier n'a été choisi.",

@@ -62,6 +62,7 @@ export default function App() {
           <aside className="app__side">
             <WorkFolderCard
               workFolder={snapshot.settings.workFolder}
+              suggestedWorkFolder={snapshot.suggestedWorkFolder}
               onChosen={(path) => void update({ workFolder: path })}
             />
             {snapshot.warnings.map((code) => (
@@ -75,6 +76,7 @@ export default function App() {
           <SettingsDialog
             settings={snapshot.settings}
             settingsPath={snapshot.settingsPath}
+            suggestedWorkFolder={snapshot.suggestedWorkFolder}
             aliases={health?.aliases ?? []}
             saveError={saveError}
             onUpdate={(patch) => void update(patch)}

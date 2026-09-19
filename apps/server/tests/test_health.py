@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from assistant_cabinet_server.main import create_app
 
-from .conftest import CHAT_ALIAS, FAST_ALIAS, FakeProvider, build_settings
+from .conftest import CONFIGURED_ALIASES, FakeProvider, build_settings
 
 
 def test_health_is_green_when_the_runtime_answers(client: TestClient) -> None:
@@ -15,7 +15,7 @@ def test_health_is_green_when_the_runtime_answers(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["issues"] == []
     assert body["provider"]["reachable"] is True
-    assert body["aliases"] == [CHAT_ALIAS, FAST_ALIAS]
+    assert body["aliases"] == CONFIGURED_ALIASES
     assert body["default_output_locale"] == "fr-FR"
     assert "fr-FR" in body["output_locales"]
 

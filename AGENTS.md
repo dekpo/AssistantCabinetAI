@@ -24,7 +24,7 @@ Weekly, not at the end: tests for retrieval, source attribution, refusal to answ
 
 ## Before any change
 
-1. Read `CONTRIBUTING.md`, `docs/BRIEF-V0-PROTOTYPE.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/LANGUAGE-AND-LOCALE.md`, `docs/PRIVACY-AND-SECURITY.md`. Then, as relevant: `docs/RETRIEVAL.md`, `docs/CLIENT.md`, `docs/PILOT-GP.md`, `docs/MODELS.md`, `docs/OPERATIONS.md`, `docs/HARDWARE.md`. Check `docs/DECISIONS.md` before proposing something that may already be settled. Versioned prompt bodies: `prompts/`. Local stack data lives in `data/` (not git).
+1. Read `CONTRIBUTING.md`, `docs/BRIEF-V0-PROTOTYPE.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/LANGUAGE-AND-LOCALE.md`, `docs/PRIVACY-AND-SECURITY.md`. Then, as relevant: `docs/RETRIEVAL.md`, `docs/CLIENT.md`, `docs/PILOT-GP.md`, `docs/MODELS.md`, `docs/OPERATIONS.md`, `docs/HARDWARE.md`. Long-term direction, which must not leak into the current sprint: `docs/PLATFORM-VISION.md`. Check `docs/DECISIONS.md` before proposing something that may already be settled. Versioned prompt bodies: `prompts/`. Local stack data lives in `data/` (not git).
 2. No cloud LLM, no telemetry, no real patient files, no Open WebUI Knowledge for medical documents.
 3. File actions = plan + human approve. No destructive writes. Never transmit, delete, move or modify a professional document without explicit confirmation. "Export" means producing a validated artefact in the work folder or on the clipboard; the GP sends it herself from her own software.
 4. Do not install Open WebUI Computer (`cptr`) on a practice machine.

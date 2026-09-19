@@ -159,6 +159,16 @@ body {
   font-family: inherit;
 }
 
+.work-folder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card .banner {
+  margin-top: 12px;
+}
+
 .chat {
   display: flex;
   flex-direction: column;

@@ -41,6 +41,16 @@ pub enum AppError {
     #[error("work_folder_is_protected")]
     WorkFolderIsProtected { path: String },
 
+    /// A folder a sync client mirrors. `service` carries the product name, which is a trademark
+    /// rather than prose, so it travels as data and is not translated.
+    #[error("work_folder_is_cloud_synced")]
+    WorkFolderIsCloudSynced { path: String, service: String },
+
+    /// A folder that passed the rules when it was chosen and no longer does - most often because
+    /// OneDrive was switched on afterwards. Reported at startup, not while writing.
+    #[error("work_folder_no_longer_allowed")]
+    WorkFolderNoLongerAllowed,
+
     #[error("work_folder_is_symlink")]
     WorkFolderIsSymlink { path: String },
 
@@ -84,6 +94,8 @@ impl AppError {
             Self::WorkFolderPathNotAbsolute { .. } => "work_folder_path_not_absolute",
             Self::WorkFolderIsDriveRoot { .. } => "work_folder_is_drive_root",
             Self::WorkFolderIsProtected { .. } => "work_folder_is_protected",
+            Self::WorkFolderIsCloudSynced { .. } => "work_folder_is_cloud_synced",
+            Self::WorkFolderNoLongerAllowed => "work_folder_no_longer_allowed",
             Self::WorkFolderIsSymlink { .. } => "work_folder_is_symlink",
             Self::WorkFolderUncNotSupported { .. } => "work_folder_unc_not_supported",
             Self::WorkFolderNotWritable { .. } => "work_folder_not_writable",
@@ -103,7 +115,11 @@ impl AppError {
             | Self::SettingsReadFailed
             | Self::SettingsWriteFailed
             | Self::WorkFolderSelectionCancelled
+            | Self::WorkFolderNoLongerAllowed
             | Self::ServerResponseInvalid => json!({}),
+            Self::WorkFolderIsCloudSynced { path, service } => {
+                json!({ "path": path, "service": service })
+            }
             Self::ServerUrlInvalid { url }
             | Self::ServerUnreachable { url }
             | Self::ServerTimeout { url } => json!({ "url": url }),
@@ -158,6 +174,19 @@ mod tests {
 
         assert_eq!(payload["code"], "model_alias_not_allowed");
         assert_eq!(payload["data"]["requested"], "gpt-4o");
+    }
+
+    #[test]
+    fn a_refused_sync_folder_names_the_product_without_translating_it() {
+        let error = AppError::WorkFolderIsCloudSynced {
+            path: "C:\\Users\\practice\\OneDrive\\work".into(),
+            service: "OneDrive".into(),
+        };
+
+        let payload = serde_json::to_value(&error).expect("serialises");
+
+        assert_eq!(payload["code"], "work_folder_is_cloud_synced");
+        assert_eq!(payload["data"]["service"], "OneDrive");
     }
 
     #[test]

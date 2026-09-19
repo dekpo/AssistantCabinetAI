@@ -18,6 +18,7 @@ class ErrorCode(StrEnum):
     model_alias_not_allowed = "model_alias_not_allowed"
     output_locale_not_supported = "output_locale_not_supported"
     context_too_large = "context_too_large"
+    batch_too_large = "batch_too_large"
     provider_unreachable = "provider_unreachable"
     provider_error = "provider_error"
     provider_capability_unsupported = "provider_capability_unsupported"

@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from .api import chat, health, models
+from .api import chat, embeddings, health, models
 from .core.config import Settings, get_settings
 from .core.errors import ErrorCode, GatewayError
 from .core.locales import LocaleCatalogue
@@ -54,6 +54,7 @@ def create_app(*, settings: Settings | None = None, provider: AIProvider | None 
     app.include_router(health.router)
     app.include_router(models.router)
     app.include_router(chat.router)
+    app.include_router(embeddings.router)
 
     @app.exception_handler(GatewayError)
     async def handle_gateway_error(_: Request, error: GatewayError) -> JSONResponse:

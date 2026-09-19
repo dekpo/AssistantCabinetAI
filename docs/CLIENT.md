@@ -40,24 +40,39 @@ trademark constraints, which also forbid rebadging Open WebUI as our product.
 Disk writes happen only inside one chosen folder, an allow-list, like a project root.
 
 ```text
-Documents\AssistantCabinet\travail\        (Windows)
-Documents/AssistantCabinet/travail/        (macOS)
+C:\Users\<user>\AssistantCabinetAI\        (Windows)
+/Users/<user>/AssistantCabinetAI/          (macOS)
   ├─ a-traiter\      she drops PDFs and scans here
   ├─ a-valider\      proposed names, awaiting her approval
   └─ corbeille\      after filing into the practice software; no permanent delete in v1
 ```
 
 Folder names shown to the user follow her language, like everything else she reads
-(`docs/LANGUAGE-AND-LOCALE.md`).
+(`docs/LANGUAGE-AND-LOCALE.md`). The root folder keeps the product name, which is not translated.
+
+**Not under Documents, on purpose.** This was corrected on 18 September 2026. Windows Known Folder Move
+redirects `Documents` into `C:\Users\<user>\OneDrive\Documents`, and macOS does the same through iCloud's
+"Desktop & Documents Folders". Either one turns the work folder into a folder Microsoft or Apple copies
+off the machine, silently, for a corpus of medical letters. A folder directly in the home is reached by
+neither: OneDrive Backup only ever covers Desktop, Documents, Pictures, Music and Videos, and iCloud only
+Desktop and Documents. Detail and the checks in code: `docs/PRIVACY-AND-SECURITY.md`.
 
 Rules:
 
-- Default to that folder; **Browse...** opens the system dialog.
-- Refuse the drive root, system folders, the practice software's own store, and the whole of Documents as an
-  allow-list. Today the pilot's downloads and scans land directly in My Documents; the work folder is a
-  dedicated subfolder she **copies into**, not all of Documents.
+- The suggested folder is `~/AssistantCabinetAI`, shown before anything is chosen. A primary
+  button **creates it if needed and uses it**; **Choose a folder...** still opens the system dialog.
+  Nothing is created until she asks.
+- Refuse the drive root, system folders, the practice software's own store, and the whole of Documents as
+  an allow-list. Today the pilot's downloads and scans land directly in My Documents; the work folder is a
+  dedicated folder she **copies into**, not all of Documents.
+- Refuse any folder a cloud client mirrors, with a message naming the product. The rule is re-applied at
+  every launch, because OneDrive can be switched on after the folder was chosen; a folder that no longer
+  passes is dropped rather than written into.
 - Exactly one folder is writable.
 - `apply` refuses paths outside the allow-list, symbolic links, and unexpected UNC paths.
+
+Because the folder is not in Explorer's sidebar, the window needs an **Open the work folder** button. That
+is cheaper than the alternative, which is putting patient letters back in a synchronised tree.
 
 Product flow: she designates the folder; the client lists and extracts locally; the server receives excerpts,
 never the disk; the output is a plan (rename and move **inside** the folder, plus a summary to paste into the

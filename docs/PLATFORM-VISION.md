@@ -18,8 +18,9 @@ Clients        Desktop (Windows, macOS)  ·  Mobile (later)  ·  Web (later)
                                    │
                             Private API
                                    │
-Capabilities   Documents · Tabular data · Retrieval · Deterministic analysis
+Capabilities   Documents · OCR · Tabular data · Retrieval · Deterministic analysis
                AI orchestration · Models · Workflows · Devices · Policies
+               Provenance · Audit
                                    │
 Runtimes       Ollama today  ·  MLX / llama.cpp / vLLM / another private runtime later
 ```
@@ -40,10 +41,10 @@ performance optimisation.
 
 | | Stage | Capabilities added |
 | --- | --- | --- |
-| **V0** | Current pilot, September–October 2026 | Tauri desktop, private FastAPI gateway, workstation retrieval over PDF/DOCX/TXT/MD and CSV/XLSX, deterministic tabular lookup, sourced answers, refusal when evidence is insufficient, privacy isolation, Windows deployment, one GP pilot. No mobile |
+| **V0** | Current pilot, September–October 2026 | Tauri desktop, private FastAPI gateway, workstation retrieval over PDF/DOCX/TXT/MD, **local OCR for scanned PDF, JPEG and PNG**, CSV/XLSX and deterministic tabular lookup, sourced answers, refusal when evidence is insufficient, privacy isolation, Windows deployment, one GP pilot. No mobile |
 | **V1** | Platform foundation, after pilot validation | Stronger authentication, workspace and practice isolation, device identity, policy boundaries, richer audit metadata, a model registry, AI orchestration, improved retrieval, more formats, a mobile API surface, a first mobile client |
 | **V1.5** | Multi-device | Mobile query with sourced answers, camera document capture, upload, notifications, secure device pairing, workstation actions under explicit authorisation |
-| **V2** | Professional workflows | OCR, voice, a workflow engine, structured extraction, controlled automation, approval workflows, richer tabular analysis, additional professional domains |
+| **V2** | Professional workflows | Voice, a workflow engine, controlled automation, approval workflows, richer tabular analysis, additional professional domains. OCR beyond v0: layout-aware recognition, tables read from images, handwriting, GPU acceleration, batch OCR, quality evaluation |
 | **V2.5** | Hybrid intelligence | Multiple AI runtimes, capability-aware model selection, on-device inference where appropriate, more sophisticated deterministic tools, an evaluation and benchmark pipeline |
 | **V3** | Ecosystem | Windows, macOS, iOS, Android and web clients; multiple private AI nodes; multiple engines and models; an advanced policy engine; workflow orchestration; further verticals |
 
@@ -61,6 +62,8 @@ Each row is something we do today at no extra cost, which prevents a rewrite lat
 | A second index or vector store | `IndexStore` and `InventoryStore` traits. SQLite is an implementation, not a schema the application knows |
 | Local ONNX embeddings instead of gateway embeddings | The `Embedder` port. Retrieval does not know where a vector came from |
 | A new file format, or a database or API data source | `TextExtractor` and `TabularDataSource` adapters behind one `Source` model |
+| A better OCR engine, GPU OCR, or layout-aware OCR | The `OcrProvider` port. The application names no engine, and `derivation: Recognised` already carries which one read the page |
+| Camera capture from a phone | An image reaching the workstation is already an ingestion input. OCR does not care where the bytes came from |
 | A new profession | File discovery is extension-driven and contains no domain assumption. Column and naming hints are locale and profession **data**, never code |
 | A new language | Interface catalogues, plus the locale-keyed question pattern pack. `docs/LANGUAGE-AND-LOCALE.md` |
 | The LLM being unavailable | Deterministic tabular answers still work. This is a test, not an aspiration |

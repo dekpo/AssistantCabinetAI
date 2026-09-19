@@ -18,7 +18,9 @@ apps/server/             Python + FastAPI + Pydantic. OpenAI-compatible /v1 plus
 
 Tooling: `pnpm` (client), `uv` (server). Tests: `vitest`, `cargo test`, `pytest`. The server URL, the model and the work folder are configuration, never constants.
 
-Boundaries: the webview never calls the server directly, it goes through Tauri commands, so the path allow-list, the context cap and no-store live in code rather than in a prompt. Business code imports no Ollama or Open WebUI client: `AIProvider` (`generate`, `embed`, `rerank`), the index and the embedder sit behind replaceable interfaces. The server writes no document text anywhere: no file, no database, no log, no debug trace.
+**Windows and macOS are both mandatory** for the client (decided 19 September 2026). A library, runtime or engine available on only one of them is disqualified however good it is. Directories come from `app.path()`, never a literal; a platform difference lives in a paired `#[cfg]` block in the module that owns the platform concept, never inside a capability such as extraction, OCR or retrieval; and a test whose fixture is a Windows path literal proves nothing on macOS. See `docs/ARCHITECTURE.md` and `docs/SPRINT-2.5-ASSESSMENT.md` section O.
+
+Boundaries: the webview never calls the server directly, it goes through Tauri commands, so the path allow-list, the context cap and no-store live in code rather than in a prompt. Business code imports no Ollama, Open WebUI or OCR-engine client: `AIProvider` (`generate`, `embed`, `rerank`), `OcrProvider`, the index and the embedder sit behind replaceable interfaces. The server writes no document text anywhere: no file, no database, no log, no debug trace — and OCR runs on the workstation, never in the cloud and never on the server.
 
 Weekly, not at the end: tests for retrieval, source attribution, refusal to answer beyond the sources, and server data isolation. When the documents do not carry the answer, the product says so instead of generating one.
 
@@ -54,4 +56,5 @@ Full design: `docs/LANGUAGE-AND-LOCALE.md`. In short:
 - Ameli professional account (sick leave, occupational disease, work accident).
 - Accounting module (e-invoicing and the accountant’s software stay theirs).
 - Native mobile app, cloud speech.
-- Frozen for the v0 sprint: Open WebUI development, voice, vision, scan OCR (contract only), certificates, referral letters, mobile, app stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
+- Frozen for the v0 sprint: Open WebUI development, voice, vision, certificates, referral letters, mobile, app stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
+- Scan OCR is **no longer frozen**. It became sprint 2.5 on 19 September 2026: local only, behind the `OcrProvider` port, part of ingestion rather than of any GP workflow. See `docs/BRIEF-SPRINT-2.5-OCR.md` and `docs/SPRINT-2.5-ASSESSMENT.md`. Still out: layout-aware OCR, tables from images, handwriting, GPU acceleration, camera capture, a second engine, and DOCX-to-PDF or any other document conversion.

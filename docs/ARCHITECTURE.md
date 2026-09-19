@@ -39,7 +39,8 @@ See `docs/OPERATIONS.md`, `docs/RETRIEVAL.md`, `docs/CLIENT.md`.
 | Practice client | Chat, local index, plans, history | `apps/desktop`: Tauri 2, React, TypeScript |
 | Retrieval | Full-text index plus vectors **on the client** | SQLite in the Rust core (`docs/RETRIEVAL.md`) |
 | Tabular analysis | Workbook inventory plus deterministic lookup, **on the client**, working with the model off | `calamine` and `csv` in the Rust core (`docs/RETRIEVAL.md`) |
-| Extraction / OCR | Native PDF on the workstation; scans local **or** as an ephemeral job | Out of v0 for scans; `/v1/jobs` contract |
+| Extraction | Native PDF, DOCX, TXT, MD on the workstation | `pdf-extract` and `quick-xml` in the Rust core |
+| OCR | Scanned PDF, JPEG, PNG read **locally**, never in the cloud and never on the server | One local engine behind `OcrProvider` (`docs/SPRINT-2.5-ASSESSMENT.md`) |
 | File tools | list / extract / propose / apply | JSON catalogue plus an MCP façade |
 | Security | VLAN, TLS, scopes, disk encryption | `docs/PRIVACY-AND-SECURITY.md` |
 
@@ -71,7 +72,8 @@ the Tauri commands are a thin adapter over them, which is what keeps a second cl
 
 ```text
 DocumentSource      discover(work_folder) -> DiscoveredFile[]     extension-driven, allow-list only
-TextExtractor       extract(path) -> ExtractedDocument            pdf / docx / txt / md
+TextExtractor       extract(path) -> ExtractedDocument            pdf / docx / txt / md, plus OCR
+OcrProvider         recognise(page image) -> OcrPage              one local engine, replaceable
 Chunker             chunk(document) -> Chunk[]                    keeps file, page, section
 Embedder            embed(text[]) -> Vector[]                     gateway today, local ONNX later
 IndexStore          upsert / search_lexical / search_vector       SQLite today
@@ -83,12 +85,37 @@ InventoryStore      put / get_by_hash / invalidate                SQLite today
 TabularAnalysis     analyze(query, scope) -> TabularOutcome       deterministic, no model
 ```
 
-File discovery is generic. It recognises `.pdf`, `.docx`, `.txt`, `.md`, `.csv` and `.xlsx` by extension
-and contains no assumption about what a folder holds, because the same mechanism must serve a legal,
-accounting or notarial practice unchanged.
+File discovery is generic. It recognises `.pdf`, `.docx`, `.txt`, `.md`, `.jpg`, `.png`, `.csv` and
+`.xlsx` by extension and contains no assumption about what a folder holds, because the same mechanism
+must serve a legal, accounting or notarial practice unchanged.
 
 Spreadsheets are **not** flattened into text chunks to resemble PDFs. They get their own pipeline, their
 own inventory and their own deterministic operations.
+
+## OCR is an extraction path, not a second pipeline
+
+A scanned page is a document whose text has to be recovered before anything else can happen to it. That
+recovery is an ingestion capability, so it sits inside `TextExtractor` and produces the same
+`ExtractedPage` as a text layer does. Nothing downstream — chunking, the index, retrieval, citations, the
+GP workflows — learns that OCR exists.
+
+```text
+page of a PDF
+  ├─ usable text layer   -> ExtractedPage { origin: TextLayer }
+  └─ no usable text      -> rasterise in memory -> OcrProvider -> ExtractedPage { origin: Ocr }
+
+JPEG / PNG               -> OcrProvider -> a one-page ExtractedDocument
+```
+
+Four boundaries hold, and each is a test rather than an intention. Detection is **per page**, so a
+born-digital page is never rasterised and a mixed document costs one OCR call per scanned page. The
+engine runs **locally**, in memory: no cloud OCR service, no external document processor, no Internet
+requirement, and no recognised text written anywhere but the local index. `OcrProvider` is the only OCR
+symbol the application knows, so a better engine is one new file. And a page the engine could not read
+produces **no chunk**, so there is no path from a failed recognition to a citation.
+
+A workflow that asked whether its input was born-digital or scanned would be a workflow that has to
+change again for the next input format. None of them asks.
 
 ## The common source model
 
@@ -99,7 +126,8 @@ Source {
   origin:     { relative_path, sha256, modified_at }
   locator:    Document { page, section, chunk_id, char_range }
        |      Tabular  { sheet, header_row, column, row_range }
-  derivation: Extracted                                    copied from the file
+  derivation: Extracted                                    copied from the file's own text
+       |      Recognised { engine, confidence }             a machine read a picture of it
        |      Computed { operation, operands, row_count }   we calculated it
        |      FormulaStored { expression }                  the file says so; we did not verify it
        |      ModelAsserted                                 the model said it
@@ -110,6 +138,11 @@ Source {
 render a computed total differently from a model sentence, and it lets a test assert that nothing
 labelled `Computed` ever passed through an LLM. A citation is never invented: an answer may only cite a
 `Source` that the retrieval or analysis step actually returned.
+
+`Recognised` is not a flavour of `Extracted`. "The letter says 6.8" and "a machine thinks the letter says
+6.8" are different claims, and collapsing them would let OCR uncertainty arrive at the user as model
+certainty. Keeping it as a field rather than as wording means the interface can mark an OCR-sourced
+citation, and the confidence that came with it can gate what enters the index in the first place.
 
 ## Deterministic before generative
 
@@ -203,3 +236,15 @@ the plan is approved, deletions go to a dedicated trash folder. See `docs/CLIENT
 
 `LLM_BASE_URL`, aliases and paths are configuration. Development uses the PC with a small model; production
 is the Mac mini's URL with more capable models. Sizing: `docs/HARDWARE.md`.
+
+**Windows and macOS are both mandatory targets for the client**, decided 19 September 2026. That outranks
+convenience in every technology choice: a library, runtime or engine that exists on only one of them is
+disqualified however good it is on that one. It is what rejected the platform OCR engines, which would
+have been two implementations with two accuracies and two failure modes rather than one capability.
+
+Three rules keep it true rather than hoped for. Directories come from `app.path()`, never from a literal.
+A platform difference lives in a paired `#[cfg]` block in the module that owns the platform concept — the
+work-folder policy, the bundler configuration — and never inside a capability such as extraction, OCR or
+retrieval. And a test must assert the same rule on both systems: a test whose fixture is a Windows path
+literal proves nothing on macOS, where a backslash is an ordinary filename character. Current state,
+including the gaps: `docs/SPRINT-2.5-ASSESSMENT.md` section O.

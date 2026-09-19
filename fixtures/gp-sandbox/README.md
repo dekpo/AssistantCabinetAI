@@ -30,3 +30,21 @@ Success for this prototype: a specialist-letter summary in **French** with citat
 
 Regenerate with `python scripts/gen-sandbox-fixtures.py` from the repository root if these files are
 ever lost or need to change; do not hand-edit the binaries.
+
+## Hand-supplied scans (Sprint 2.5, OCR)
+
+A real scan is a better OCR fixture than a generated one: a scanner adds skew, speckle, JPEG artefacts
+and a header band that a clean synthetic bitmap never will, and those are the conditions that decide
+whether recognition is usable. Adding one is encouraged, under two rules.
+
+**Fictional content only.** This tree is committed to Git, so anything placed here is permanent and
+copied to every clone. No patient name, no real correspondent, no genuine report, and not a redacted one
+either — a redacted real report is still a real report. The safe recipe: type an invented letter in Word,
+print it, scan the paper. That gives a genuine scan of a fake document.
+
+**Check before committing.** Strip metadata, and confirm whether the scanner added its own OCR text
+layer — that changes which case the file exercises, so either remove it or name the file for what it
+actually tests. List every new fixture in the table above.
+
+A genuine practice scan needed to diagnose a recognition problem goes in `real/`, which is gitignored and
+must stay empty in the repository.

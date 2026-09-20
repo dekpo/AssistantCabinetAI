@@ -1,0 +1,19 @@
+---
+description: Record non-obvious bugs and environment gotchas in docs/TROUBLESHOOTING.md
+alwaysApply: true
+---
+
+# Troubleshooting log
+
+`docs/TROUBLESHOOTING.md` is the project's shared memory for bugs that cost real time to diagnose - a
+config that breaks a build in a non-obvious way, a platform quirk, a footgun in a dependency. Not every
+error belongs there, only the ones a future agent (in this chat or another one) would otherwise
+rediscover from scratch.
+
+When you hit one of these and find the fix, **append an entry before ending your turn** — newest entry
+at the top, dated, English, with the exact error text or command where it helps. State what broke, why,
+and the fix; link to the file with the real fix rather than duplicating code. Read the file's own "How to
+use this file" section for the exact shape.
+
+This is versioned documentation (`docs/`), like the rest of the English specification — it follows the
+same git rule as everything else in `docs/`: propose the change, Elise commits it.

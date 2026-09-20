@@ -11,7 +11,9 @@ stage in that same message), nor amend, rebase, reset, force-push, or `--no-veri
 Remote: `github.com/dekpo/AssistantCabinetAI`, **private**. Default branch `main`.
 
 After a useful change, **propose in English** and **paste the full commands**, ready to run, one per line,
-not just a branch name. Template:
+not just a branch name or a description of what to do. Every command Elise needs — `git`, and `gh` for
+opening or updating a pull request — goes in the copy-paste block, in order, with real branch names and
+real file paths already filled in. Never "add the changed files" in prose; name them. Template:
 
 ```text
 git status
@@ -19,6 +21,8 @@ git checkout -b feat/example-topic
 git add path/file1 path/file2
 git commit -m "feat: short subject in english"
 git status
+git push -u origin feat/example-topic
+gh pr create --title "feat: short subject in english" --body "What changed and why, in English." --base main
 ```
 
 One branch per change: `feat|fix|docs|chore/<short-topic>`. Conventional Commit subject, 72 characters or

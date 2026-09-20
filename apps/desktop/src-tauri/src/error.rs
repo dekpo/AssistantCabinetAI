@@ -98,6 +98,24 @@ pub enum AppError {
     /// says so instead of generating an unsupported answer (`docs/ARCHITECTURE.md`).
     #[error("insufficient_evidence")]
     InsufficientEvidence,
+
+    /// The OCR engine is not installed, or its startup probe failed. The product degrades to
+    /// Sprint 2a behaviour: a page with no usable text layer is reported empty, not guessed at.
+    #[error("ocr_unavailable")]
+    OcrUnavailable,
+
+    /// The engine has no model for this locale. `locale` is BCP 47, not translated.
+    #[error("ocr_language_unavailable")]
+    OcrLanguageUnavailable { locale: String },
+
+    /// The engine ran on this page and failed: an unreadable image, or the per-page timeout.
+    #[error("ocr_failed")]
+    OcrFailed { path: String, page: u32 },
+
+    /// The engine read the page but found nothing worth keeping - no text, or text below the
+    /// confidence floor. The page is reported empty, exactly like a page with no text layer.
+    #[error("ocr_page_unreadable")]
+    OcrPageUnreadable { path: String, page: u32 },
 }
 
 impl AppError {
@@ -129,6 +147,10 @@ impl AppError {
             Self::ExtractionEmpty { .. } => "extraction_empty",
             Self::ExtractionFailed { .. } => "extraction_failed",
             Self::InsufficientEvidence => "insufficient_evidence",
+            Self::OcrUnavailable => "ocr_unavailable",
+            Self::OcrLanguageUnavailable { .. } => "ocr_language_unavailable",
+            Self::OcrFailed { .. } => "ocr_failed",
+            Self::OcrPageUnreadable { .. } => "ocr_page_unreadable",
         }
     }
 
@@ -143,9 +165,14 @@ impl AppError {
             | Self::ServerResponseInvalid
             | Self::NoWorkFolderSet
             | Self::IndexUnavailable
-            | Self::InsufficientEvidence => json!({}),
+            | Self::InsufficientEvidence
+            | Self::OcrUnavailable => json!({}),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
                 json!({ "path": path })
+            }
+            Self::OcrLanguageUnavailable { locale } => json!({ "locale": locale }),
+            Self::OcrFailed { path, page } | Self::OcrPageUnreadable { path, page } => {
+                json!({ "path": path, "page": page })
             }
             Self::WorkFolderIsCloudSynced { path, service } => {
                 json!({ "path": path, "service": service })

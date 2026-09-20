@@ -12,6 +12,7 @@ pub mod extraction;
 pub mod gateway;
 pub mod index_store;
 pub mod indexing;
+pub mod ocr;
 pub mod retrieval;
 mod settings;
 mod work_folder;

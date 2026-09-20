@@ -34,3 +34,6 @@ apps/desktop/src-tauri/binaries/*.exe
 apps/desktop/src-tauri/resources/tesseract/
 apps/desktop/src-tauri/resources/tessdata/
 apps/desktop/src-tauri/resources/pdfium/
+
+apps/desktop/src-tauri/tesseract*.exe
+apps/desktop/src-tauri/*.dll

@@ -16,6 +16,9 @@ use crate::error::AppError;
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexSummary};
+use crate::ocr::tesseract::TesseractProvider;
+use crate::ocr::OcrProvider;
+use crate::raster::{PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence};
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
@@ -205,16 +208,24 @@ pub async fn index_work_folder(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<IndexSummary, AppError> {
-    let (work_folder, server_url, embedding_alias) = state.read(|settings| {
+    let (work_folder, server_url, embedding_alias, locale) = state.read(|settings| {
         (
             settings.work_folder.clone(),
             settings.server_url.clone(),
             settings.embedding_alias.clone(),
+            settings.locale.clone(),
         )
     })?;
     let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
     };
+
+    let tesseract = try_tesseract(&app);
+    let rasterizer = try_rasterizer(&app);
+    let ocr: Option<&dyn OcrProvider> = tesseract.as_ref().map(|provider| provider as &dyn OcrProvider);
+    let raster: Option<&dyn PageRasterizer> =
+        rasterizer.as_ref().map(|provider| provider as &dyn PageRasterizer);
+    let locale = locale.as_deref().unwrap_or("fr-FR");
 
     let mut index = open_index(&app)?;
     indexing::run(
@@ -223,6 +234,9 @@ pub async fn index_work_folder(
         &server_url,
         &embedding_alias,
         Path::new(&work_folder),
+        ocr,
+        raster,
+        locale,
     )
     .await
 }
@@ -312,4 +326,61 @@ pub async fn ask_with_sources(
         answer,
         sources: evidence,
     })
+}
+
+/// Sidecar discovery: look next to the executable and under the resource directory, never a
+/// hardcoded install path. A missing engine is `None`, and indexing degrades to Sprint 2a.
+fn search_roots(app: &AppHandle) -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(dir) = app.path().resource_dir() {
+        roots.push(dir);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            roots.push(parent.to_path_buf());
+        }
+    }
+    roots
+}
+
+fn first_existing(candidates: impl IntoIterator<Item = std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    candidates.into_iter().find(|path| path.exists())
+}
+
+fn try_tesseract(app: &AppHandle) -> Option<TesseractProvider> {
+    let roots = search_roots(app);
+    let binary_names = [
+        "tesseract.exe",
+        "tesseract",
+        "tesseract-x86_64-pc-windows-msvc.exe",
+        "tesseract-aarch64-apple-darwin",
+        "tesseract-x86_64-apple-darwin",
+    ];
+    let mut binaries = Vec::new();
+    let mut tessdata_dirs = Vec::new();
+    for root in &roots {
+        for name in binary_names {
+            binaries.push(root.join(name));
+        }
+        tessdata_dirs.push(root.join("resources").join("tessdata"));
+        tessdata_dirs.push(root.join("tessdata"));
+    }
+    let binary = first_existing(binaries)?;
+    let tessdata = first_existing(tessdata_dirs)?;
+    TesseractProvider::new(binary, tessdata).ok()
+}
+
+fn try_rasterizer(app: &AppHandle) -> Option<Rasterizer> {
+    let roots = search_roots(app);
+    let library_names = ["pdfium.dll", "libpdfium.dylib", "libpdfium.so", "pdfium"];
+    let mut candidates = Vec::new();
+    for root in &roots {
+        for name in library_names {
+            candidates.push(root.join("resources").join("pdfium").join(name));
+            candidates.push(root.join("pdfium").join(name));
+            candidates.push(root.join(name));
+        }
+    }
+    let library = first_existing(candidates)?;
+    Rasterizer::new(&library).ok()
 }

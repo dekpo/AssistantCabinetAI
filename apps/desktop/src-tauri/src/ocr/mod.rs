@@ -89,6 +89,7 @@ pub enum OcrError {
     Timeout,
 }
 
-#[cfg(test)]
+/// Test double. Public so integration tests (`tests/end_to_end_retrieval.rs`) can inject it
+/// beside the fake gateway; `#[cfg(test)]` would hide it from that crate.
 pub mod fake;
 pub mod tesseract;

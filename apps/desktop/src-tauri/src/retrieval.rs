@@ -4,6 +4,7 @@
 
 use serde::Serialize;
 
+use crate::extraction::PageOrigin;
 use crate::index_store::{cosine_similarity, IndexStore};
 
 /// How many excerpts an answer may cite at most.
@@ -22,6 +23,8 @@ pub struct Evidence {
     pub section: u32,
     pub text: String,
     pub score: f32,
+    pub origin: PageOrigin,
+    pub confidence: Option<f32>,
 }
 
 /// Rank stored chunks against a query embedding plus its lexical text, merge the two rankings,
@@ -56,6 +59,8 @@ pub fn search(
             section: chunk.section,
             text: chunk.text.clone(),
             score,
+            origin: chunk.origin,
+            confidence: chunk.confidence,
         });
     }
 
@@ -117,9 +122,11 @@ mod tests {
                 page_number: 1,
                 section: 1,
                 text: text.to_string(),
+                origin: crate::extraction::PageOrigin::TextLayer,
+                confidence: None,
             };
             store
-                .replace_document(path, "hash", false, &[chunk], &[embedding])
+                .replace_document(path, "hash", false, &[chunk], &[embedding], None, None)
                 .unwrap();
         }
         store
@@ -141,6 +148,7 @@ mod tests {
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].chunk_id, "a#p1#s1");
+        assert_eq!(hits[0].origin, PageOrigin::TextLayer);
     }
 
     #[test]
@@ -166,6 +174,8 @@ mod tests {
             section: 1,
             text: "HbA1c a 6.8 pourcent".into(),
             score: 0.9,
+            origin: PageOrigin::TextLayer,
+            confidence: None,
         }];
 
         let turn = build_context_turn(&evidence);

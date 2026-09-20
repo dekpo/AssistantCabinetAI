@@ -43,6 +43,8 @@ export interface ChatTurn {
   content: string;
 }
 
+export type PageOrigin = "textLayer" | "ocr";
+
 export interface Evidence {
   chunkId: string;
   relativePath: string;
@@ -50,6 +52,8 @@ export interface Evidence {
   section: number;
   text: string;
   score: number;
+  origin: PageOrigin;
+  confidence: number | null;
 }
 
 export type ChatStreamEvent =
@@ -62,6 +66,8 @@ export interface IndexSummary {
   indexedFiles: number;
   unchangedFiles: number;
   emptyFiles: string[];
+  ocrFiles: string[];
+  lowConfidenceFiles: string[];
   chunkCount: number;
 }
 

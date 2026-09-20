@@ -83,3 +83,101 @@ impl Rasterizer {
             .map_err(|_| OcrError::UnreadableImage)
     }
 }
+
+/// The only rasterisation surface `extraction.rs` depends on, so tests can inject a fake
+/// without loading pdfium (`docs/SPRINT-2.5-ASSESSMENT.md` section M).
+pub trait PageRasterizer: Send + Sync {
+    fn page_count(&self, pdf_path: &Path) -> Result<u32, OcrError>;
+    fn rasterize_page(&self, pdf_path: &Path, page_number: u32) -> Result<Vec<u8>, OcrError>;
+}
+
+impl PageRasterizer for Rasterizer {
+    fn page_count(&self, pdf_path: &Path) -> Result<u32, OcrError> {
+        Rasterizer::page_count(self, pdf_path)
+    }
+
+    fn rasterize_page(&self, pdf_path: &Path, page_number: u32) -> Result<Vec<u8>, OcrError> {
+        Rasterizer::rasterize_page(self, pdf_path, page_number)
+    }
+}
+
+/// Returns placeholder PNG bytes and a configurable page count. Extraction tests use this so a
+/// scanned page still reaches `OcrProvider` without the bundled pdfium library.
+pub struct FakeRasterizer {
+    default_page_count: u32,
+    page_counts: std::sync::Mutex<std::collections::HashMap<String, u32>>,
+    rasterize_calls: std::sync::Mutex<Vec<(String, u32)>>,
+}
+
+impl FakeRasterizer {
+    pub fn new() -> Self {
+        Self {
+            default_page_count: 1,
+            page_counts: std::sync::Mutex::new(std::collections::HashMap::new()),
+            rasterize_calls: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    pub fn with_page_count(page_count: u32) -> Self {
+        Self {
+            default_page_count: page_count,
+            ..Self::new()
+        }
+    }
+
+    /// Override `page_count` for a path or a file name, used when the parse-failure path has
+    /// to invent the right number of pages without opening pdfium.
+    pub fn set_page_count(&self, path_or_name: &str, page_count: u32) {
+        self.page_counts
+            .lock()
+            .expect("fake rasterizer lock")
+            .insert(path_or_name.to_string(), page_count);
+    }
+
+    pub fn rasterize_calls(&self) -> Vec<(String, u32)> {
+        self.rasterize_calls
+            .lock()
+            .expect("fake rasterizer lock")
+            .clone()
+    }
+}
+
+impl Default for FakeRasterizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PageRasterizer for FakeRasterizer {
+    fn page_count(&self, pdf_path: &Path) -> Result<u32, OcrError> {
+        let counts = self.page_counts.lock().expect("fake rasterizer lock");
+        let full = pdf_path.to_string_lossy();
+        if let Some(&count) = counts.get(full.as_ref()) {
+            return Ok(count);
+        }
+        if let Some(name) = pdf_path.file_name().and_then(|name| name.to_str()) {
+            if let Some(&count) = counts.get(name) {
+                return Ok(count);
+            }
+        }
+        Ok(self.default_page_count)
+    }
+
+    fn rasterize_page(&self, pdf_path: &Path, page_number: u32) -> Result<Vec<u8>, OcrError> {
+        self.rasterize_calls
+            .lock()
+            .expect("fake rasterizer lock")
+            .push((pdf_path.to_string_lossy().to_string(), page_number));
+        Ok(PLACEHOLDER_PNG.to_vec())
+    }
+}
+
+/// 1x1 white PNG. Never decoded by the fake provider; present so a caller that does inspect
+/// bytes still sees a well-formed image rather than an empty buffer.
+const PLACEHOLDER_PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+    0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xFF, 0xFF, 0x3F,
+    0x00, 0x05, 0xFE, 0x02, 0xFE, 0xDC, 0xCC, 0x59, 0xE7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+    0x44, 0xAE, 0x42, 0x60, 0x82,
+];

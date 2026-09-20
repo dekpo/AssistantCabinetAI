@@ -28,6 +28,7 @@
     "authorAssistant": "Assistant",
     "pending": "Rédaction de la réponse...",
     "sourceLabel": "Source : {path}, page {page}",
+    "sourceOcrMarker": " (lu par reconnaissance de texte)",
     "generatedBy": "Généré par {model} en {duration}",
     "keyboardHint": "Entrée envoie. Maj et Entrée vont à la ligne.",
     "disclaimer": "Aide administrative. Vérifiez toujours la réponse : la médecin reste seule décideuse. Aucun envoi automatique."
@@ -44,7 +45,9 @@
     "indexAction": "Indexer mes documents",
     "indexing": "Indexation...",
     "indexSummary": "{indexed} fichier(s) indexé(s), {unchanged} inchangé(s).",
-    "indexSummaryWithEmpty": "{indexed} fichier(s) indexé(s), {unchanged} inchangé(s), {empty} illisible(s) (aucun texte trouvé)."
+    "indexSummaryWithEmpty": "{indexed} fichier(s) indexé(s), {unchanged} inchangé(s), {empty} illisible(s) (aucun texte trouvé).",
+    "indexSummaryOcr": "{count} fichier(s) lu(s) par reconnaissance de texte.",
+    "indexSummaryLowConfidence": "{count} fichier(s) trop peu lisible(s) pour être indexé(s)."
   },
   "settings": {
     "title": "Réglages",
@@ -68,7 +71,7 @@
   "errors": {
     "batch_too_large": "Trop de passages ont été envoyés en une fois ({count} pour une limite de {limit}). Le dossier est indexé par lots plus petits.",
     "context_too_large": "Cette question est trop longue pour une seule demande ({chars} caractères pour une limite de {limit}). Raccourcissez-la.",
-    "extraction_empty": "Ce fichier ne contient pas de texte lisible ({path}). Un document scanné ne peut pas encore être lu.",
+    "extraction_empty": "Ce fichier ne contient pas de texte lisible ({path}).",
     "extraction_failed": "Ce fichier n'a pas pu être lu ({path}).",
     "index_unavailable": "L'index local n'a pas pu être ouvert. Réessayez ; si cela persiste, redémarrez l'application.",
     "insufficient_evidence": "Aucune information de vos documents ne répond à cette question.",

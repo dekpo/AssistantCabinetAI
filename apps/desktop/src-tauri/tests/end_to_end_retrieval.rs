@@ -12,6 +12,9 @@ use std::sync::Arc;
 
 use assistant_cabinet_ai_lib::gateway::GatewayClient;
 use assistant_cabinet_ai_lib::index_store::IndexStore;
+use assistant_cabinet_ai_lib::ocr::fake::FakeOcrProvider;
+use assistant_cabinet_ai_lib::ocr::{OcrError, OcrStatus};
+use assistant_cabinet_ai_lib::raster::FakeRasterizer;
 use assistant_cabinet_ai_lib::{indexing, retrieval};
 use serde_json::{json, Value};
 
@@ -135,15 +138,74 @@ async fn three_questions_get_sourced_answers_and_an_off_topic_one_is_refused() {
     let index_dir = tempfile::tempdir().expect("temp index dir");
     let mut index = IndexStore::open_at(&index_dir.path().join("index.sqlite3")).expect("opens");
 
+    let ocr = FakeOcrProvider::new();
+    ocr.set_fallback_status(OcrStatus::NoTextFound);
+    ocr.set_response(
+        "inbox/2026-03-22_courrier-rhumatologie-scan.pdf",
+        1,
+        Ok(FakeOcrProvider::recognised_page(
+            "inbox/2026-03-22_courrier-rhumatologie-scan.pdf",
+            1,
+            "Cabinet de rhumatologie. Douleurs articulaires bilaterales des mains. \
+             Bilan: CRP, facteur rhumatoide, anticorps anti-CCP.",
+        )),
+    );
+    ocr.set_response(
+        "inbox/2026-03-24_compte-rendu-mixte.pdf",
+        2,
+        Ok(FakeOcrProvider::recognised_page(
+            "inbox/2026-03-24_compte-rendu-mixte.pdf",
+            2,
+            "Annexe scannee. Glycemie a jeun : 6.2 mmol/L. Patiente Camille Exemple.",
+        )),
+    );
+    ocr.set_response(
+        "inbox/2026-03-26_ordonnance-scan.jpg",
+        1,
+        Ok(FakeOcrProvider::recognised_page(
+            "inbox/2026-03-26_ordonnance-scan.jpg",
+            1,
+            "Ordonnance. Paracetamol 1000 mg, une prise si douleur.",
+        )),
+    );
+    ocr.set_response(
+        "inbox/2026-03-26_ordonnance-scan.png",
+        1,
+        Ok(FakeOcrProvider::recognised_page(
+            "inbox/2026-03-26_ordonnance-scan.png",
+            1,
+            "Ordonnance. Paracetamol 1000 mg, une prise si douleur.",
+        )),
+    );
+    ocr.set_response(
+        "inbox/2026-03-28_illisible.png",
+        1,
+        Err(OcrError::UnreadableImage),
+    );
+    let rasterizer = FakeRasterizer::with_page_count(1);
+    rasterizer.set_page_count("2026-03-24_compte-rendu-mixte.pdf", 2);
+
+    let scan_path = sandbox_dir().join("inbox").join("2026-03-22_courrier-rhumatologie-scan.pdf");
+    let bytes_before = std::fs::read(&scan_path).expect("reads the scan fixture");
+
     let summary = indexing::run(
         &mut index,
         &gateway,
         &server_url,
         "cabinet-embed",
         &sandbox_dir(),
+        Some(&ocr),
+        Some(&rasterizer),
+        "fr-FR",
     )
     .await
     .expect("indexes the sandbox");
+
+    assert_eq!(
+        bytes_before,
+        std::fs::read(&scan_path).expect("reads the scan fixture after indexing"),
+        "indexing must not modify the source scan"
+    );
 
     assert!(summary.indexed_files > 0, "at least one file was indexed");
     assert!(
@@ -151,8 +213,42 @@ async fn three_questions_get_sourced_answers_and_an_off_topic_one_is_refused() {
             .empty_files
             .iter()
             .any(|path| path.contains("radiographie-scan")),
-        "the scanned PDF is reported empty, not silently dropped"
+        "the scanned PDF with no image is reported empty, not silently dropped"
     );
+    assert!(
+        summary
+            .ocr_files
+            .iter()
+            .any(|path| path.contains("rhumatologie-scan")),
+        "the fictional scanned letter is listed as read by OCR"
+    );
+    assert!(
+        summary
+            .empty_files
+            .iter()
+            .any(|path| path.contains("illisible")),
+        "the unreadable image is reported empty"
+    );
+
+    // A question answerable only from the scanned letter cites that file and page.
+    let rheumatology = ask(
+        &index,
+        &gateway,
+        &server_url,
+        "Quels anticorps ont ete demandes pour les douleurs articulaires ?",
+    )
+    .await;
+    assert!(
+        !rheumatology.is_empty(),
+        "expected sourced evidence for the scanned rheumatology letter"
+    );
+    assert!(rheumatology
+        .iter()
+        .any(|item| item.relative_path.contains("rhumatologie-scan") && item.page_number == 1));
+    assert!(rheumatology.iter().any(|item| {
+        item.relative_path.contains("rhumatologie-scan")
+            && item.origin == assistant_cabinet_ai_lib::extraction::PageOrigin::Ocr
+    }));
 
     // Three on-topic questions, each answerable from a distinct fictional document.
     let biology = ask(

@@ -45,6 +45,7 @@ export function MessageList({ entries, pending }: { entries: ChatEntry[]; pendin
                     path: source.relativePath,
                     page: source.pageNumber,
                   })}
+                  {source.origin === "ocr" ? t("chat.sourceOcrMarker") : null}
                 </li>
               ))}
             </ul>

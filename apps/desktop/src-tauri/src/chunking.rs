@@ -6,7 +6,7 @@
 
 use serde::Serialize;
 
-use crate::extraction::ExtractedDocument;
+use crate::extraction::{ExtractedDocument, PageOrigin};
 
 /// Kept small so retrieval sends only a few chunks per answer, never the whole file.
 const MAX_CHUNK_CHARS: usize = 1_200;
@@ -22,6 +22,8 @@ pub struct Chunk {
     /// page remain distinguishable in a citation.
     pub section: u32,
     pub text: String,
+    pub origin: PageOrigin,
+    pub confidence: Option<f32>,
 }
 
 /// Split each page into paragraphs, then group consecutive paragraphs up to `MAX_CHUNK_CHARS`
@@ -43,7 +45,7 @@ pub fn chunk(document: &ExtractedDocument) -> Vec<Chunk> {
         for paragraph in paragraphs {
             if !current.is_empty() && current.len() + paragraph.len() + 1 > MAX_CHUNK_CHARS {
                 section += 1;
-                chunks.push(new_chunk(document, page.page_number, section, &current));
+                chunks.push(new_chunk(document, page, section, &current));
                 current.clear();
             }
             if !current.is_empty() {
@@ -52,13 +54,13 @@ pub fn chunk(document: &ExtractedDocument) -> Vec<Chunk> {
             current.push_str(paragraph);
             if current.len() >= MAX_CHUNK_CHARS {
                 section += 1;
-                chunks.push(new_chunk(document, page.page_number, section, &current));
+                chunks.push(new_chunk(document, page, section, &current));
                 current.clear();
             }
         }
         if !current.is_empty() {
             section += 1;
-            chunks.push(new_chunk(document, page.page_number, section, &current));
+            chunks.push(new_chunk(document, page, section, &current));
         }
     }
 
@@ -67,13 +69,20 @@ pub fn chunk(document: &ExtractedDocument) -> Vec<Chunk> {
     merge_short_trailing_chunks(chunks)
 }
 
-fn new_chunk(document: &ExtractedDocument, page_number: u32, section: u32, text: &str) -> Chunk {
+fn new_chunk(
+    document: &ExtractedDocument,
+    page: &crate::extraction::ExtractedPage,
+    section: u32,
+    text: &str,
+) -> Chunk {
     Chunk {
-        chunk_id: format!("{}#p{}#s{}", document.relative_path, page_number, section),
+        chunk_id: format!("{}#p{}#s{}", document.relative_path, page.page_number, section),
         relative_path: document.relative_path.clone(),
-        page_number,
+        page_number: page.page_number,
         section,
         text: text.to_string(),
+        origin: page.origin,
+        confidence: page.confidence,
     }
 }
 
@@ -97,7 +106,7 @@ fn merge_short_trailing_chunks(chunks: Vec<Chunk>) -> Vec<Chunk> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extraction::ExtractedPage;
+    use crate::extraction::{ExtractedPage, PageOrigin};
 
     fn document(pages: Vec<(u32, &str)>) -> ExtractedDocument {
         ExtractedDocument {
@@ -107,9 +116,13 @@ mod tests {
                 .map(|(page_number, text)| ExtractedPage {
                     page_number,
                     text: text.to_string(),
+                    origin: PageOrigin::TextLayer,
+                    confidence: None,
                 })
                 .collect(),
             empty: false,
+            used_ocr: false,
+            low_confidence: false,
         }
     }
 
@@ -125,6 +138,8 @@ mod tests {
         assert_eq!(chunks[0].chunk_id, "inbox/letter.pdf#p1#s1");
         assert!(chunks[0].text.contains("Bonjour Camille"));
         assert!(chunks[0].text.contains("12/03/2026"));
+        assert_eq!(chunks[0].origin, PageOrigin::TextLayer);
+        assert_eq!(chunks[0].confidence, None);
     }
 
     #[test]
@@ -160,6 +175,46 @@ mod tests {
     #[test]
     fn an_empty_document_produces_no_chunks() {
         let document = document(vec![(1, "")]);
+
+        assert!(chunk(&document).is_empty());
+    }
+
+    #[test]
+    fn an_ocr_page_carries_origin_and_confidence_onto_its_chunks() {
+        let document = ExtractedDocument {
+            relative_path: "inbox/scan.pdf".into(),
+            pages: vec![ExtractedPage {
+                page_number: 1,
+                text: "Recognised letter body with enough words to become a chunk.".into(),
+                origin: PageOrigin::Ocr,
+                confidence: Some(0.81),
+            }],
+            empty: false,
+            used_ocr: true,
+            low_confidence: false,
+        };
+
+        let chunks = chunk(&document);
+
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].origin, PageOrigin::Ocr);
+        assert_eq!(chunks[0].confidence, Some(0.81));
+    }
+
+    #[test]
+    fn a_below_threshold_page_with_no_text_produces_no_chunk() {
+        let document = ExtractedDocument {
+            relative_path: "inbox/scan.pdf".into(),
+            pages: vec![ExtractedPage {
+                page_number: 1,
+                text: String::new(),
+                origin: PageOrigin::Ocr,
+                confidence: Some(0.2),
+            }],
+            empty: true,
+            used_ocr: true,
+            low_confidence: true,
+        };
 
         assert!(chunk(&document).is_empty());
     }

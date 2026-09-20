@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 
 /// Extensions this session's extractor understands. `.csv` and `.xlsx` are a later pipeline
 /// (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
-const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx", "txt", "md"];
+const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx", "txt", "md", "jpg", "jpeg", "png"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,6 +104,7 @@ mod tests {
         std::fs::write(root.path().join("readme.txt"), b"txt").unwrap();
         std::fs::write(root.path().join("summary.md"), b"md").unwrap();
         std::fs::write(root.path().join("image.png"), b"png").unwrap();
+        std::fs::write(root.path().join("photo.jpg"), b"jpg").unwrap();
         std::fs::write(root.path().join("data.csv"), b"csv").unwrap();
 
         let files = discover(root.path());
@@ -111,7 +112,14 @@ mod tests {
 
         assert_eq!(
             names,
-            vec!["letter.pdf", "notes.docx", "readme.txt", "summary.md"]
+            vec![
+                "image.png",
+                "letter.pdf",
+                "notes.docx",
+                "photo.jpg",
+                "readme.txt",
+                "summary.md"
+            ]
         );
     }
 

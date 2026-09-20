@@ -102,18 +102,32 @@ export function WorkFolderCard({
         ) : null}
       </div>
       {indexSummary === null ? null : (
-        <p className="card__description">
-          {indexSummary.emptyFiles.length > 0
-            ? t("workFolder.indexSummaryWithEmpty", {
-                indexed: indexSummary.indexedFiles,
-                unchanged: indexSummary.unchangedFiles,
-                empty: indexSummary.emptyFiles.length,
-              })
-            : t("workFolder.indexSummary", {
-                indexed: indexSummary.indexedFiles,
-                unchanged: indexSummary.unchangedFiles,
+        <>
+          <p className="card__description">
+            {indexSummary.emptyFiles.length > 0
+              ? t("workFolder.indexSummaryWithEmpty", {
+                  indexed: indexSummary.indexedFiles,
+                  unchanged: indexSummary.unchangedFiles,
+                  empty: indexSummary.emptyFiles.length,
+                })
+              : t("workFolder.indexSummary", {
+                  indexed: indexSummary.indexedFiles,
+                  unchanged: indexSummary.unchangedFiles,
+                })}
+          </p>
+          {indexSummary.ocrFiles.length > 0 ? (
+            <p className="card__description">
+              {t("workFolder.indexSummaryOcr", { count: indexSummary.ocrFiles.length })}
+            </p>
+          ) : null}
+          {indexSummary.lowConfidenceFiles.length > 0 ? (
+            <p className="card__description">
+              {t("workFolder.indexSummaryLowConfidence", {
+                count: indexSummary.lowConfidenceFiles.length,
               })}
-        </p>
+            </p>
+          ) : null}
+        </>
       )}
       {error === null ? null : <ErrorBanner error={error} />}
     </section>

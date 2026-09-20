@@ -5,15 +5,23 @@ Fictional content only, matching fixtures/gp-sandbox/README.md. Run once from th
     python scripts/gen-sandbox-fixtures.py
 
 Not part of the product; a one-off tool to produce test fixtures that a text editor cannot
-produce (PDF, DOCX). Uses only the standard library, deliberately, so nothing extra needs
-installing on the pilot workstation or in CI.
+produce (PDF, DOCX, and the rasterised images below). Most of it uses only the standard library,
+deliberately, so nothing extra needs installing on the pilot workstation or in CI.
+
+The OCR fixtures (image-only PDF, mixed PDF, JPEG, PNG, noise image) take a dependency on
+Pillow, guarded to this generator only: it is a development tool, not product code, and the
+outputs are committed as binaries like the other fixtures. See fixtures/gp-sandbox/README.md.
+Install with: pip install pillow
 """
 
 from __future__ import annotations
 
-import textwrap
+import io
+import random
 import zipfile
 from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 INBOX = ROOT / "fixtures" / "gp-sandbox" / "inbox"
@@ -139,6 +147,107 @@ def write_pdf(path: Path, objects: list[bytes], catalog_num: int) -> None:
     path.write_bytes(bytes(out))
 
 
+def render_text_page(lines: list[str], size: tuple[int, int] = (1275, 1650)) -> Image.Image:
+    """A page of French text rendered to a bitmap, standing in for a flatbed scan.
+
+    Deliberately imperfect: a real scanner adds skew and speckle, but a clean synthetic page is
+    still enough to exercise OCR end to end and to prove the text layer detector chose the OCR
+    path rather than the native one.
+    """
+    image = Image.new("L", size, color=255)
+    draw = ImageDraw.Draw(image)
+    try:
+        font = ImageFont.truetype("arial.ttf", 28)
+    except OSError:
+        font = ImageFont.load_default()
+
+    y = 80
+    for line in lines:
+        draw.text((90, y), line, fill=0, font=font)
+        y += 44
+    return image
+
+
+def render_noise_page(size: tuple[int, int] = (400, 520), seed: int = 42) -> Image.Image:
+    """Uniform random noise: no recoverable text, the "illegible scan" case.
+
+    Kept small on purpose: noise does not compress, and the fixture only needs to exist, not to
+    look like a full page.
+    """
+    rng = random.Random(seed)
+    image = Image.new("L", size)
+    image.putdata([rng.randint(0, 255) for _ in range(size[0] * size[1])])
+    return image
+
+
+def jpeg_bytes(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.convert("L").save(buffer, format="JPEG", quality=85)
+    return buffer.getvalue()
+
+
+def make_image_pdf(path: Path, pages: list[Image.Image | None]) -> None:
+    """A PDF whose pages carry an image XObject instead of text operators.
+
+    `None` in `pages` produces a born-digital placeholder page reusing `make_text_pdf`'s content
+    stream shape, so a single call can build the mixed born-digital/scanned document.
+    """
+    objects: list[bytes] = []
+
+    def add(content: bytes) -> int:
+        objects.append(content)
+        return len(objects)
+
+    font_num = add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+    page_nums: list[int] = []
+    for index, page in enumerate(pages):
+        if page is None:
+            stream = (
+                f"BT /F1 11 Tf 72 760 Td (Page {index + 1} - texte natif, sandbox fictif) Tj ET"
+            ).encode("latin-1")
+            content_num = add(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
+            page_num = add(
+                (
+                    "<< /Type /Page /Parent 0 0 R /MediaBox [0 0 612 792] "
+                    f"/Resources << /Font << /F1 {font_num} 0 R >> >> "
+                    f"/Contents {content_num} 0 R >>"
+                ).encode("latin-1")
+            )
+        else:
+            data = jpeg_bytes(page)
+            image_num = add(
+                (
+                    "<< /Type /XObject /Subtype /Image "
+                    f"/Width {page.width} /Height {page.height} "
+                    "/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /DCTDecode "
+                    f"/Length {len(data)} >>\nstream\n"
+                ).encode("latin-1")
+                + data
+                + b"\nendstream"
+            )
+            stream = b"q 612 0 0 792 0 0 cm /Im0 Do Q"
+            content_num = add(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
+            page_num = add(
+                (
+                    "<< /Type /Page /Parent 0 0 R /MediaBox [0 0 612 792] "
+                    f"/Resources << /XObject << /Im0 {image_num} 0 R >> >> "
+                    f"/Contents {content_num} 0 R >>"
+                ).encode("latin-1")
+            )
+        page_nums.append(page_num)
+
+    kids = " ".join(f"{n} 0 R" for n in page_nums)
+    pages_num = add(f"<< /Type /Pages /Kids [{kids}] /Count {len(page_nums)} >>".encode("latin-1"))
+    catalog_num = add(f"<< /Type /Catalog /Pages {pages_num} 0 R >>".encode("latin-1"))
+
+    for page_num in page_nums:
+        index = page_num - 1
+        objects[index] = objects[index].replace(b"/Parent 0 0 R", f"/Parent {pages_num} 0 R".encode())
+
+    write_pdf(path, objects, catalog_num)
+
+
 def make_docx(path: Path, title: str, paragraphs: list[str]) -> None:
     """A minimal Word Open XML document: only the parts a reader needs."""
     content_types = (
@@ -179,10 +288,19 @@ def make_docx(path: Path, title: str, paragraphs: list[str]) -> None:
         "</w:document>"
     )
 
+    # A fixed date, so re-running the generator produces byte-identical output: zipfile stamps
+    # each entry with the current time by default, which would otherwise dirty the fixture on
+    # every regeneration even when nothing about its content changed.
+    fixed_date = (2026, 1, 1, 0, 0, 0)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", content_types)
-        archive.writestr("_rels/.rels", rels)
-        archive.writestr("word/document.xml", document_xml)
+        for name, content in (
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", rels),
+            ("word/document.xml", document_xml),
+        ):
+            info = zipfile.ZipInfo(name, date_time=fixed_date)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, content)
 
 
 def main() -> None:
@@ -229,6 +347,51 @@ def main() -> None:
     )
 
     make_blank_pdf(INBOX / "2026-03-20_radiographie-scan.pdf")
+
+    # Sprint 2.5 (local OCR): fictional bitmaps, so a real image-only PDF, a mixed document and
+    # standalone image files exist for the port to be exercised against.
+    rheumatology_page = render_text_page(
+        [
+            "Cabinet de Rhumatologie Sandbox",
+            "Compte-rendu de consultation",
+            "Patient : Hugo Bacasable",
+            "Date de consultation : 22/03/2026",
+            "",
+            "Douleurs articulaires bilaterales des mains depuis trois mois.",
+            "Bilan biologique demande : CRP, facteur rhumatoide, anticorps anti-CCP.",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ]
+    )
+    make_image_pdf(INBOX / "2026-03-22_courrier-rhumatologie-scan.pdf", [rheumatology_page])
+
+    mixed_appendix_page = render_text_page(
+        [
+            "Annexe scannee - resultats joints",
+            "Patiente : Camille Exemple",
+            "",
+            "Glycemie a jeun : 6.2 mmol/L",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ]
+    )
+    make_image_pdf(
+        INBOX / "2026-03-24_compte-rendu-mixte.pdf",
+        [None, mixed_appendix_page],
+    )
+
+    prescription_page = render_text_page(
+        [
+            "Ordonnance Sandbox",
+            "Patient : Hugo Bacasable",
+            "Date : 26/03/2026",
+            "",
+            "Paracetamol 1000 mg, une prise si douleur, 3 fois par jour au maximum.",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ]
+    )
+    prescription_page.convert("L").save(INBOX / "2026-03-26_ordonnance-scan.jpg", quality=85)
+    prescription_page.convert("L").save(INBOX / "2026-03-26_ordonnance-scan.png")
+
+    render_noise_page().save(INBOX / "2026-03-28_illisible.png")
 
     print("Fixtures written under", INBOX)
 

@@ -26,3 +26,11 @@ fixtures/gp-sandbox/real/
 *.log
 /data/
 /backups/
+
+# The Tesseract sidecar, its runtime DLLs, the fra.traineddata model weight, and the pdfium
+# library are fetched by scripts/fetch-ocr-resources.ps1, never committed - the same rule that
+# keeps Ollama's weights (.ollama/, models/*.gguf) out of git applies here.
+apps/desktop/src-tauri/binaries/*.exe
+apps/desktop/src-tauri/resources/tesseract/
+apps/desktop/src-tauri/resources/tessdata/
+apps/desktop/src-tauri/resources/pdfium/

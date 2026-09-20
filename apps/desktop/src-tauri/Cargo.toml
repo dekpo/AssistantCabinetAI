@@ -37,6 +37,16 @@ quick-xml = "0.41.0"
 walkdir = "2.5.0"
 sha2 = "0.10.9"
 
+# Rasterises a PDF page to a bitmap in memory, feeding the OCR port (docs/SPRINT-2.5-ASSESSMENT.md
+# section E). No `#[cfg(windows)]`: the platform difference is which prebuilt pdfium library is
+# bundled as a resource, resolved at runtime, never in this crate's code.
+pdfium-render = { version = "0.9.4", default-features = false, features = [
+    "image_025",
+    "pdfium_7881",
+    "thread_safe",
+] }
+image = { version = "0.25.6", default-features = false, features = ["png"] }
+
 [dev-dependencies]
 tempfile = "3"
 tiny_http = "0.12.0"

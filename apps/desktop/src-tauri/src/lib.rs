@@ -13,6 +13,7 @@ pub mod gateway;
 pub mod index_store;
 pub mod indexing;
 pub mod ocr;
+pub mod raster;
 pub mod retrieval;
 mod settings;
 mod work_folder;

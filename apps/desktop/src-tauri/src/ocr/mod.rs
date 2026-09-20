@@ -91,3 +91,4 @@ pub enum OcrError {
 
 #[cfg(test)]
 pub mod fake;
+pub mod tesseract;

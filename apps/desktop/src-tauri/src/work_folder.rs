@@ -392,17 +392,41 @@ fn cloud_trees(home: Option<&Path>) -> Vec<PathBuf> {
 mod tests {
     use super::*;
 
-    fn windows_policy() -> WorkFolderPolicy {
+    /// A platform-appropriate home, so the paths below are real absolute paths on the platform
+    /// the suite actually runs on, rather than Windows literals that are merely relative,
+    /// single-component names on Unix (`Path::is_absolute` would reject them before any
+    /// allow-list rule runs, and every assertion below would report the wrong reason).
+    fn home_path() -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from("C:\\Users\\practice")
+        } else {
+            PathBuf::from("/Users/practice")
+        }
+    }
+
+    /// A system tree neither the pilot's home nor `test_policy`'s cloud tree.
+    fn system_tree_path() -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from("C:\\Windows")
+        } else {
+            PathBuf::from("/System")
+        }
+    }
+
+    fn appdata_path() -> PathBuf {
+        if cfg!(windows) {
+            home_path().join("AppData")
+        } else {
+            home_path().join("Library")
+        }
+    }
+
+    fn test_policy() -> WorkFolderPolicy {
+        let home = home_path();
         WorkFolderPolicy::new(
-            vec![
-                PathBuf::from("C:\\Windows"),
-                PathBuf::from("C:\\Users\\practice\\AppData"),
-            ],
-            vec![
-                PathBuf::from("C:\\Users\\practice"),
-                PathBuf::from("C:\\Users\\practice\\Documents"),
-            ],
-            vec![PathBuf::from("C:\\Users\\practice\\OneDrive")],
+            vec![system_tree_path(), appdata_path()],
+            vec![home.clone(), home.join("Documents")],
+            vec![home.join("OneDrive")],
         )
     }
 
@@ -422,8 +446,8 @@ mod tests {
 
     #[test]
     fn the_suggested_folder_sits_in_the_home_and_is_accepted() {
-        let policy = windows_policy();
-        let home = PathBuf::from("C:\\Users\\practice");
+        let policy = test_policy();
+        let home = home_path();
 
         let suggested = suggested_work_folder(Some(&home)).expect("a home was given");
 
@@ -433,51 +457,51 @@ mod tests {
 
     #[test]
     fn a_dedicated_subfolder_is_accepted() {
-        let policy = windows_policy();
-        let chosen = Path::new("C:\\Users\\practice\\Documents\\AssistantCabinet\\work");
+        let policy = test_policy();
+        let chosen = home_path().join("Documents").join("AssistantCabinet").join("work");
 
-        assert!(policy.check_path(chosen).is_ok());
+        assert!(policy.check_path(&chosen).is_ok());
     }
 
     #[test]
     fn the_whole_of_documents_is_refused() {
-        let policy = windows_policy();
+        let policy = test_policy();
 
         assert_eq!(
-            code_of(policy.check_path(Path::new("C:\\Users\\practice\\Documents"))),
+            code_of(policy.check_path(&home_path().join("Documents"))),
             "work_folder_is_protected"
         );
     }
 
     #[test]
     fn the_home_folder_itself_is_refused() {
-        let policy = windows_policy();
+        let policy = test_policy();
 
         assert_eq!(
-            code_of(policy.check_path(Path::new("C:\\Users\\practice"))),
+            code_of(policy.check_path(&home_path())),
             "work_folder_is_protected"
         );
     }
 
     #[test]
     fn a_system_tree_is_refused_including_what_is_inside_it() {
-        let policy = windows_policy();
+        let policy = test_policy();
 
         assert_eq!(
-            code_of(policy.check_path(Path::new("C:\\Windows\\System32\\drivers"))),
+            code_of(policy.check_path(&system_tree_path().join("nested").join("deeper"))),
             "work_folder_is_protected"
         );
         assert_eq!(
-            code_of(policy.check_path(Path::new("C:\\Users\\practice\\AppData\\Local\\Temp"))),
+            code_of(policy.check_path(&appdata_path().join("Local").join("Temp"))),
             "work_folder_is_protected"
         );
     }
 
     #[test]
     fn the_reported_sync_root_is_refused_with_everything_inside_it() {
-        let policy = windows_policy();
+        let policy = test_policy();
 
-        let error = policy.check_path(Path::new("C:\\Users\\practice\\OneDrive\\work"));
+        let error = policy.check_path(&home_path().join("OneDrive").join("work"));
 
         assert_eq!(code_of(error), "work_folder_is_cloud_synced");
     }
@@ -486,11 +510,14 @@ mod tests {
     fn the_redirected_documents_folder_is_refused_as_synchronised() {
         // Known Folder Move puts Documents inside OneDrive. The old rules refused that folder
         // exactly and accepted a subfolder of it, which is how a patient file reaches Microsoft.
-        let policy = windows_policy();
-        let redirected =
-            Path::new("C:\\Users\\practice\\OneDrive\\Documents\\AssistantCabinet\\work");
+        let policy = test_policy();
+        let redirected = home_path()
+            .join("OneDrive")
+            .join("Documents")
+            .join("AssistantCabinet")
+            .join("work");
 
-        let (code, service) = refusal(policy.check_path(redirected));
+        let (code, service) = refusal(policy.check_path(&redirected));
 
         assert_eq!(code, "work_folder_is_cloud_synced");
         assert_eq!(service, "OneDrive");
@@ -499,18 +526,20 @@ mod tests {
     #[test]
     fn a_sync_folder_is_refused_by_name_even_when_the_platform_reported_nothing() {
         let policy = WorkFolderPolicy::new(Vec::new(), Vec::new(), Vec::new());
+        let root = home_path();
 
-        for (path, expected) in [
-            ("D:\\Dropbox\\cabinet", "Dropbox"),
-            ("C:\\Users\\p\\OneDrive - Contoso\\cabinet", "OneDrive"),
-            ("C:\\Users\\p\\Google Drive\\cabinet", "Google Drive"),
-            ("C:\\Users\\p\\iCloudDrive\\cabinet", "iCloud Drive"),
-            ("C:\\Users\\p\\Box\\cabinet", "Box"),
+        for (folder, expected) in [
+            ("Dropbox", "Dropbox"),
+            ("OneDrive - Contoso", "OneDrive"),
+            ("Google Drive", "Google Drive"),
+            ("iCloudDrive", "iCloud Drive"),
+            ("Box", "Box"),
         ] {
-            let (code, service) = refusal(policy.check_path(Path::new(path)));
+            let path = root.join(folder).join("cabinet");
+            let (code, service) = refusal(policy.check_path(&path));
 
-            assert_eq!(code, "work_folder_is_cloud_synced", "{path}");
-            assert_eq!(service, expected, "{path}");
+            assert_eq!(code, "work_folder_is_cloud_synced", "{}", path.display());
+            assert_eq!(service, expected, "{}", path.display());
         }
     }
 
@@ -518,36 +547,37 @@ mod tests {
     fn a_folder_that_merely_looks_like_a_sync_name_is_accepted() {
         // `Box` is matched exactly, so ordinary folders keep working.
         let policy = WorkFolderPolicy::new(Vec::new(), Vec::new(), Vec::new());
+        let root = home_path();
 
+        assert!(policy.check_path(&root.join("Boxes").join("cabinet")).is_ok());
         assert!(policy
-            .check_path(Path::new("C:\\Users\\practice\\Boxes\\cabinet"))
-            .is_ok());
-        assert!(policy
-            .check_path(Path::new("C:\\Users\\practice\\Cabinet\\courriers"))
+            .check_path(&root.join("Cabinet").join("courriers"))
             .is_ok());
     }
 
     #[test]
     fn case_does_not_open_a_way_around_the_list() {
-        let policy = windows_policy();
-        let same_folder_other_case = Path::new("c:\\users\\PRACTICE\\documents");
+        let policy = test_policy();
+        let home = home_path();
+        let documents = home.join("Documents");
+        let same_folder_other_case = PathBuf::from(documents.to_string_lossy().to_uppercase());
 
         // Only meaningful where the file system ignores case, which is where the risk is.
         if cfg!(windows) {
             assert_eq!(
-                code_of(policy.check_path(same_folder_other_case)),
+                code_of(policy.check_path(&same_folder_other_case)),
                 "work_folder_is_protected"
             );
         }
         assert_eq!(
-            code_of(policy.check_path(Path::new("C:\\Users\\practice\\onedrive\\work"))),
+            code_of(policy.check_path(&home.join("onedrive").join("work"))),
             "work_folder_is_cloud_synced"
         );
     }
 
     #[test]
     fn a_drive_root_is_refused() {
-        let policy = windows_policy();
+        let policy = test_policy();
         let root = if cfg!(windows) { "C:\\" } else { "/" };
 
         assert_eq!(
@@ -558,7 +588,7 @@ mod tests {
 
     #[test]
     fn a_relative_path_is_refused() {
-        let policy = windows_policy();
+        let policy = test_policy();
 
         assert_eq!(
             code_of(policy.check_path(Path::new("work"))),
@@ -568,7 +598,7 @@ mod tests {
 
     #[test]
     fn a_network_folder_is_refused_for_now() {
-        let policy = windows_policy();
+        let policy = test_policy();
 
         assert_eq!(
             code_of(policy.check_path(Path::new("\\\\server\\share\\work"))),

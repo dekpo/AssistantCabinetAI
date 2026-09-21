@@ -241,6 +241,15 @@ pub async fn index_work_folder(
     .await
 }
 
+/// Whether the local index has anything to search yet. The chat panel checks this before
+/// spending a round trip on a question the retrieval path is guaranteed to refuse
+/// (`AppError::InsufficientEvidence`) - a document has been chosen but never analysed.
+#[tauri::command]
+pub async fn has_indexed_documents(app: AppHandle) -> Result<bool, AppError> {
+    let index = open_index(&app)?;
+    Ok(index.chunk_count()? > 0)
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AskAnswer {
@@ -328,17 +337,47 @@ pub async fn ask_with_sources(
     })
 }
 
-/// Sidecar discovery: look next to the executable and under the resource directory, never a
-/// hardcoded install path. A missing engine is `None`, and indexing degrades to Sprint 2a.
+/// Sidecar discovery: look next to the executable, a few ancestors up (so `tauri dev` can see
+/// copies left in `src-tauri/`), and under the resource directory. Never a hardcoded install
+/// path. A missing engine is `None`, and indexing degrades to Sprint 2a.
 fn search_roots(app: &AppHandle) -> Vec<std::path::PathBuf> {
+    sidecar_search_roots(
+        app.path().resource_dir().ok(),
+        std::env::current_exe().ok(),
+        std::env::current_dir().ok(),
+    )
+}
+
+fn sidecar_search_roots(
+    resource_dir: Option<std::path::PathBuf>,
+    exe: Option<std::path::PathBuf>,
+    cwd: Option<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
     let mut roots = Vec::new();
-    if let Ok(dir) = app.path().resource_dir() {
-        roots.push(dir);
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            roots.push(parent.to_path_buf());
+    let mut push = |path: std::path::PathBuf| {
+        if path.as_os_str().is_empty() {
+            return;
         }
+        if !roots.iter().any(|existing| existing == &path) {
+            roots.push(path);
+        }
+    };
+    if let Some(dir) = resource_dir {
+        push(dir);
+    }
+    if let Some(exe_path) = exe {
+        if let Some(parent) = exe_path.parent() {
+            for ancestor in parent.ancestors().take(6) {
+                push(ancestor.to_path_buf());
+                push(ancestor.join("binaries"));
+                push(ancestor.join("resources"));
+            }
+        }
+    }
+    if let Some(cwd_path) = cwd {
+        push(cwd_path.clone());
+        push(cwd_path.join("binaries"));
+        push(cwd_path.join("resources"));
     }
     roots
 }
@@ -383,4 +422,25 @@ fn try_rasterizer(app: &AppHandle) -> Option<Rasterizer> {
     }
     let library = first_existing(candidates)?;
     Rasterizer::new(&library).ok()
+}
+
+#[cfg(test)]
+mod sidecar_discovery_tests {
+    use super::sidecar_search_roots;
+    use std::path::PathBuf;
+
+    #[test]
+    fn tauri_dev_walks_up_from_the_debug_executable_to_the_crate_root() {
+        let exe = PathBuf::from("repo/apps/desktop/src-tauri/target/debug/app");
+        let roots = sidecar_search_roots(None, Some(exe), None);
+
+        assert!(
+            roots.iter().any(|path| path.ends_with("src-tauri")),
+            "expected a src-tauri ancestor among {roots:?}"
+        );
+        assert!(
+            roots.iter().any(|path| path.ends_with("binaries")),
+            "expected a binaries folder among {roots:?}"
+        );
+    }
 }

@@ -12,7 +12,7 @@
 //!   and sidecar-discovery concern; the invocation is identical on both platforms.
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -50,7 +50,9 @@ impl TesseractProvider {
     /// directory - never a literal here. Fails with `OcrError::EngineUnavailable` if the sidecar
     /// does not start; the caller degrades to Sprint 2a behaviour rather than failing launch.
     pub fn new(binary_path: PathBuf, tessdata_dir: PathBuf) -> Result<Self, OcrError> {
-        let output = Command::new(&binary_path)
+        let mut command = Command::new(&binary_path);
+        apply_dll_search_path(&mut command, &binary_path, &tessdata_dir);
+        let output = command
             .arg("--version")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -92,14 +94,22 @@ impl OcrProvider for TesseractProvider {
     fn recognise(&self, input: &OcrInput<'_>) -> Result<OcrPage, OcrError> {
         let language = engine_locale(input.locale)?;
 
-        let mut child = Command::new(&self.binary_path)
+        let mut child_cmd = Command::new(&self.binary_path);
+        apply_dll_search_path(&mut child_cmd, &self.binary_path, &self.tessdata_dir);
+        let mut child = child_cmd
             .arg("-")
             .arg("-")
             .arg("-l")
             .arg(language)
             .arg("--tessdata-dir")
             .arg(&self.tessdata_dir)
-            .arg("tsv")
+            // A bare "tsv" argument asks Tesseract to load the *config file* named "tsv" from
+            // `<tessdata-dir>/configs/tsv` (or `TESSDATA_PREFIX/configs`), which we do not bundle
+            // - only `fra.traineddata` ships in `resources/tessdata` (`resources/README.md`). The
+            // config file's entire content is one variable assignment, so setting it directly with
+            // `-c` produces the same TSV stdout without needing that extra bundled resource.
+            .arg("-c")
+            .arg("tessedit_create_tsv=1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -137,6 +147,31 @@ impl OcrProvider for TesseractProvider {
             engine_version: self.version.clone(),
             status,
         })
+    }
+}
+
+/// Windows loads Tesseract's DLLs from PATH and from the directory of the executable.
+/// Sidecar discovery may find `tesseract.exe` a few folders away from those DLLs during
+/// `tauri dev`, so each invocation prepends the binary directory and `resources/tesseract`.
+/// `std::env::join_paths` keeps this platform-agnostic: no `cfg` in this module.
+fn apply_dll_search_path(command: &mut Command, binary_path: &Path, tessdata_dir: &Path) {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(parent) = binary_path.parent() {
+        dirs.push(parent.to_path_buf());
+        if let Some(crate_root) = parent.parent() {
+            dirs.push(crate_root.join("resources").join("tesseract"));
+        }
+    }
+    if let Some(tess_parent) = tessdata_dir.parent() {
+        dirs.push(tess_parent.join("tesseract"));
+        dirs.push(tess_parent.to_path_buf());
+    }
+    let mut parts: Vec<PathBuf> = dirs.into_iter().filter(|dir| dir.is_dir()).collect();
+    if let Some(existing) = std::env::var_os("PATH") {
+        parts.extend(std::env::split_paths(&existing));
+    }
+    if let Ok(joined) = std::env::join_paths(parts) {
+        command.env("PATH", joined);
     }
 }
 
@@ -271,6 +306,48 @@ mod tests {
 
         assert_eq!(text, "Bonjour");
         assert_eq!(confidence, Some(0.95));
+    }
+
+    /// Exercises the real bundled sidecar rather than `FakeOcrProvider`. Ignored by default
+    /// because `resources/tessdata/fra.traineddata` and `binaries/tesseract-*` are gitignored
+    /// (`resources/README.md`, `binaries/README.md`) and only exist once
+    /// `scripts/fetch-ocr-resources.ps1` has run - never on CI. Run it by hand after that script
+    /// with `cargo test --lib -- --ignored recognises_a_real_bundled_prescription_scan`.
+    #[test]
+    #[ignore]
+    fn recognises_a_real_bundled_prescription_scan() {
+        let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let binary = crate_root
+            .join("binaries")
+            .join("tesseract-x86_64-pc-windows-msvc.exe");
+        let tessdata = crate_root.join("resources").join("tessdata");
+        let image_path = crate_root
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("gp-sandbox")
+            .join("inbox")
+            .join("2026-03-26_ordonnance-scan.png");
+        if !binary.exists() || !tessdata.join("fra.traineddata").exists() {
+            eprintln!("skipping: OCR resources not staged, run scripts/fetch-ocr-resources.ps1");
+            return;
+        }
+
+        let provider = TesseractProvider::new(binary, tessdata).expect("sidecar starts");
+        let image = std::fs::read(&image_path).expect("fixture readable");
+        let page = provider
+            .recognise(&OcrInput {
+                image: &image,
+                relative_path: "inbox/2026-03-26_ordonnance-scan.png",
+                page_number: 1,
+                format: ImageFormat::Png,
+                locale: "fr-FR",
+            })
+            .expect("the bundled sidecar recognises the fixture");
+
+        assert_eq!(page.status, OcrStatus::Recognised);
+        assert!(page.text.contains("Paracetamol"), "text was: {}", page.text);
     }
 
     #[test]

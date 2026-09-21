@@ -8,6 +8,139 @@ with the exact command or code where it matters.
 
 ---
 
+## A `MODEL_ALIASES` entry without the exact Ollama tag fails as a generic "the model did not answer correctly"
+
+**Found:** 21 September 2026, adding a `cabinet-turbo` profile for faster local testing.
+
+`.env`'s `MODEL_ALIASES=...,cabinet-turbo=qwen3` pointed at the bare name `qwen3`, which Ollama treats
+as an implicit `qwen3:latest`. The pulled weight was actually tagged `qwen3:8b` (`ollama pull qwen3:8b`,
+confirmed in `docker compose exec ollama ollama list`). `resolve_model_alias`
+(`apps/server/src/assistant_cabinet_server/core/aliases.py`) does not check that the runtime name it
+returns actually exists in Ollama — it only checks that the *alias* is in the allow-list — so the
+mismatch is invisible at the gateway and only surfaces when Ollama itself can't find the model, which
+the client renders as the generic `chat.answerFailed` banner.
+
+**Fix:** the alias's right-hand side must be the **exact** tag from `ollama list` (`qwen3:8b`, not
+`qwen3`). After editing `.env`, restart only the server container to pick it up —
+`docker compose up -d server`; Ollama and its pulled weights are untouched.
+
+**Same mistake, same fix, 21 September 2026:** `cabinet-super=smollm2` after `ollama pull
+smollm2:1.7b` — the pulled tag is `smollm2:1.7b`, not bare `smollm2`. Whenever a new alias is added
+to `MODEL_ALIASES`, copy the tag **character-for-character** from `docker compose exec ollama ollama
+list`, including the size suffix, and restart only `server` afterwards.
+
+## A renamed alias used to brick the client until someone edited `settings.json` by hand
+
+**Found:** 21 September 2026, renaming every alias from `cabinet-*` to `assistant-*`.
+
+Two names are **hardcoded** — but only as the very first value a fresh install ever sees, not as
+something a rename affects: `DEFAULT_MODEL_ALIAS` / `DEFAULT_EMBEDDING_ALIAS` constants in
+`apps/desktop/src-tauri/src/settings.rs` seed `settings.json` on the very first launch. After that,
+the client only ever reads its **own persisted `modelAlias`/`embeddingAlias`**
+(`%APPDATA%\com.assistantcabinetai.desktop\settings.json`) — never `.env`'s `DEFAULT_MODEL_ALIAS`,
+which only matters server-side when a request arrives with no alias at all, which the desktop client
+never does. So:
+
+- Renaming `cabinet-chat` → `assistant-chat` in `MODEL_ALIASES` left every existing installation
+  with a `modelAlias`/`embeddingAlias` that no longer resolves. `embeddingAlias` has **no Settings
+  UI** at all, so indexing failed with `model_alias_not_allowed` and the error told the user to "choose
+  another one in Settings" — advice with no way to follow it.
+- Editing `.env`'s `DEFAULT_MODEL_ALIAS` after the fact changed nothing visible, because the
+  client's own stale, already-persisted value took priority over it — the Settings dropdown
+  displaying the alphabetically-first option was a rendering artefact of a `<select>` whose `value`
+  matched none of its `<option>`s, not a real change of state.
+
+**Fix:** `/health` now also reports `default_model_alias` and `embedding_alias`
+(`apps/server/src/assistant_cabinet_server/api/{schemas,health}.py`), and `App.tsx` self-heals: on
+every health check, if the persisted `modelAlias` is not in the current `aliases` list, or
+`embeddingAlias` no longer matches the server's current one, the client silently adopts the
+server's current value and saves it. A future alias rename now fixes itself on the next health
+check instead of requiring a manual `settings.json` edit — and it means the embedding model behind
+`assistant-embed` (e.g. swapping in `bge-m3` to bench it) can change freely as long as the **alias
+name** stays the same; only renaming the alias itself needs this self-heal.
+
+## Renaming the `MODEL_ALIASES` prefix leaves `DEFAULT_MODEL_ALIAS` / `DEFAULT_EMBEDDING_ALIAS` stale
+
+**Found:** 21 September 2026, after renaming every alias from `cabinet-*` to `assistant-*` in
+`.env`'s `MODEL_ALIASES`.
+
+`DEFAULT_MODEL_ALIAS` and `DEFAULT_EMBEDDING_ALIAS` (`apps/server/src/assistant_cabinet_server/core/config.py`)
+are **separate** settings, read independently of `MODEL_ALIASES`; renaming the aliases inside the map
+does not rename the two defaults that point at them by name. `DEFAULT_EMBEDDING_ALIAS` was not even
+set in `.env`, so it silently used the code default `cabinet-embed`, which then matched nothing.
+Symptom: `/health`'s `aliases` list kept showing the embedding alias (see the entry below for why it
+should not), because `Settings.chat_aliases` excludes whatever `default_embedding_alias` says, and
+that no longer matched any real alias.
+
+**Fix:** whenever the alias prefix or names change, update `DEFAULT_MODEL_ALIAS` **and**
+`DEFAULT_EMBEDDING_ALIAS` in `.env` to match, then `docker compose up -d server`. There is no
+validation today that catches a default pointing at a non-existent alias — it just quietly fails to
+resolve (`model_alias_not_allowed`) the first time something relies on the default.
+
+## "Généré par cabinet-chat" shown after switching to cabinet-rapide in Settings
+
+**Found:** 20 September 2026, human test after the model-alias `passage_noun` rebuild: switching the
+active profile in Settings and re-asking the same question still labelled the answer with the
+*previous* alias.
+
+`useChat`'s `send` callback (`apps/desktop/src/state/useChat.ts`) stamps every answer with the
+`modelAlias` prop it closes over, but that prop was missing from the `useCallback` dependency array.
+React kept the memoised closure from an earlier render — the one capturing the old alias — until some
+*other* dependency (`hasWorkFolder`, `pending`, …) changed and forced a new closure to be built. The
+actual request sent to the gateway was unaffected (Rust reads the current alias fresh from settings at
+call time), so only the on-screen "Généré par …" credit line was wrong, not the model actually used.
+
+**Fix:** add `modelAlias` to the dependency array of the `send` `useCallback`. One line.
+
+## Tesseract's bare `tsv` argument is a config *file* we never bundled, not an output-format flag
+
+**Found:** 20 September 2026, after fixing sidecar discovery, OCR still recognised nothing.
+
+Sidecar discovery (previous entry) was fixed, and the process started, but every real page still
+came back as unreadable. Running the exact command by hand showed the actual error, which never
+reaches the calling process's stdout/stderr in a way the Rust code surfaces (only a non-zero exit
+status):
+
+```text
+tesseract - - -l fra --tessdata-dir resources\tessdata tsv
+read_params_file: Can't open tsv
+```
+
+The trailing `tsv` on a Tesseract command line is not an output-format switch - it is the *name of
+a config file* Tesseract looks up at `<tessdata-dir>/configs/tsv` (or `TESSDATA_PREFIX/configs`).
+We only bundle `resources/tessdata/fra.traineddata` (`resources/README.md`), never the `configs/`
+tree that ships with a full Tesseract install, so the lookup fails and Tesseract exits non-zero
+before producing any output - which the caller cannot distinguish from a genuinely unreadable
+image.
+
+**Fix:** the config file's entire content is one line, `tessedit_create_tsv 1`. Set that variable
+directly on the command line with `-c tessedit_create_tsv=1` instead of the bare `tsv` argument
+(`apps/desktop/src-tauri/src/ocr/tesseract.rs`) - same TSV stdout, no extra bundled resource
+needed. Verified against the real bundled sidecar with
+`cargo test --lib -- --ignored recognises_a_real_bundled_prescription_scan` (same file), which
+`scripts/fetch-ocr-resources.ps1` must have staged first.
+
+**Confirmed fixed:** 20 September 2026, human re-test on `fixtures/gp-sandbox/` — scanned files are
+recognised, the OCR-sourced answers cite the right page, and the index summary shows 0 unreadable
+files where it previously showed 5.
+
+## `tauri dev` does not see Tesseract copies left in `src-tauri/`
+
+**Found:** 20 September 2026, human test of OCR wiring (Sprint 2.5 Day 3).
+
+Indexing reported scanned files as unreadable (`5 illisible(s)`) with no OCR summary line. The
+engine had been copied into `apps/desktop/src-tauri/` (`tesseract.exe` plus its DLLs), which is
+the crate root, but `tauri dev` runs `target/debug/<app>.exe`. Sidecar discovery only looked at
+`resource_dir` and the executable's parent, so the copies were invisible. This is not a Windows
+execute-bit / `chmod` problem.
+
+**Fix:** `sidecar_search_roots` in `apps/desktop/src-tauri/src/commands.rs` walks a few ancestors
+of the executable (and the current directory) so a copy in `src-tauri/` or `src-tauri/binaries/`
+is found during `tauri dev`. `TesseractProvider` also prepends the binary directory and
+`resources/tesseract` to `PATH` for that process, because Windows still will not load DLLs from a
+folder that is merely nearby. After a rebuild, delete the work folder's `index.sqlite3` and
+index again — unchanged files are skipped and would keep the empty extraction.
+
 ## `tauri-build`'s build script validates `externalBin`/`resources` on *every* `cargo build`, not only `cargo tauri build`
 
 **Found:** 20 September 2026, wiring the Tesseract sidecar (Sprint 2.5).

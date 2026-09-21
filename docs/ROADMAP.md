@@ -161,6 +161,16 @@ answer, from a scanned letter; if OCR slips, milestone A still stands on the cha
 Deliverable: a scanned document is as usable as a born-digital one. Direction:
 `docs/BRIEF-SPRINT-2.5-OCR.md`. How it is built, and why each choice: `docs/SPRINT-2.5-ASSESSMENT.md`.
 
+**Delivered, 20–21 September, ahead of the 30 September window.** `OcrProvider`/`TesseractProvider`
+wired into `extraction.rs` per section N; `cargo test --lib` green (80 tests) including the
+zero-OCR-calls-on-a-text-layer and no-file-written-outside-the-index cases from section M. Two real
+bugs found and fixed on the way, both logged in `docs/TROUBLESHOOTING.md`: sidecar discovery missing
+`tauri dev`'s executable location, and Tesseract's bare `tsv` argument being a config file we never
+bundled rather than an output-format flag. **Acceptance confirmed by human re-test** on
+`fixtures/gp-sandbox/`: the scanned rheumatology letter and prescription answer with a citation
+naming file and page, the index summary went from 5 unreadable files to 0, and a born-digital PDF
+still costs zero OCR calls. The measured empty-page rate on the fixtures is 0% after the fix.
+
 It takes the window Sprint 2a vacated. `docs/PILOT-GP.md` records about 10 paper letters and 10 to 20
 scans per week, plus organised-screening second readings that arrive on paper. Without OCR those
 documents reach the GP workflows as an empty extraction and a refusal, and Sprint 3 cannot summarise,

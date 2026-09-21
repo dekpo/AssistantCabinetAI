@@ -189,6 +189,16 @@ body {
   gap: 12px;
 }
 
+/* Wraps the scroll container so the scroll-to-bottom button can sit over the last message
+   without joining the conversation and shifting it. */
+.messages-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .messages {
   display: flex;
   flex-direction: column;
@@ -196,6 +206,23 @@ body {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+}
+
+/* Written against `.button` as well, since the shared button rule sits further down the file. */
+.button.messages-pane__to-bottom {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px;
+  border-radius: 50%;
+  color: var(--text-quiet);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+}
+
+.glyph {
+  width: 16px;
+  height: 16px;
 }
 
 .messages--empty {
@@ -226,9 +253,17 @@ body {
   padding-left: 10px;
 }
 
+/* The bubble stays on the right of the column, but its text reads from the left: at 78% of the
+   width with `overflow-wrap: anywhere`, right-aligned prose is harder to read line to line. */
 .message--user {
   align-self: flex-end;
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.message__bubble {
+  max-width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -248,27 +283,43 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Four lines and a toggle, so a three-paragraph question does not push the answer off screen.
+   `-webkit-line-clamp` is honoured by WebView2 and by WKWebView, so both platforms clamp. */
+.message__body--clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
 .message__sources {
   margin: 6px 0 0;
   font-size: 0.85em;
   color: var(--muted, #666);
 }
 
-.message__sources-toggle {
+/* One triangle for the two things that open: the `<summary>` of the sources, and the button that
+   unfolds a long question. `<details>` cannot serve the second one, which must stay readable
+   while closed, so the shared part is the appearance rather than the element. */
+.disclosure {
   cursor: pointer;
   list-style: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
   color: var(--text-quiet);
   user-select: none;
 }
 
-.message__sources-toggle::-webkit-details-marker {
+.disclosure::-webkit-details-marker {
   display: none;
 }
 
-.message__sources-toggle::after {
+.disclosure::after {
   content: "";
   width: 0;
   height: 0;
@@ -277,9 +328,15 @@ body {
   border-top: 5px solid currentColor;
 }
 
-.message__sources[open] .message__sources-toggle::after {
+.message__sources[open] > .disclosure::after,
+.disclosure[aria-expanded="true"]::after {
   border-top: none;
   border-bottom: 5px solid currentColor;
+}
+
+.message__collapse {
+  margin: 4px 0 0;
+  font-size: 0.85em;
 }
 
 .message__sources-list {
@@ -297,6 +354,11 @@ body {
   font-size: 0.8em;
   color: var(--muted, #888);
   font-style: italic;
+}
+
+/* The same discreet line as under an answer, but it sits above its bubble instead of below. */
+.message__timing--asked {
+  margin: 0 0 4px;
 }
 
 .message__pending {

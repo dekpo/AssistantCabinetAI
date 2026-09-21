@@ -11,6 +11,9 @@ import {
 
 export interface ChatEntry extends ChatTurn {
   id: string;
+  /** When the turn was written, by the workstation clock. Shown above a question so a long
+   * conversation can be read back in order; it never leaves the webview. */
+  createdAt: number;
   /** Present on an assistant answer that came from the local index, so it can cite file and page. */
   sources?: Evidence[];
   /** How long the answer took to write, and which profile wrote it - shown so a slow machine is
@@ -51,12 +54,13 @@ export function useChat(
         return;
       }
       const answerId = crypto.randomUUID();
+      const createdAt = Date.now();
       setError(null);
       setPending(true);
       setEntries((current) => [
         ...current,
-        { id: crypto.randomUUID(), role: "user", content: text },
-        { id: answerId, role: "assistant", content: "" },
+        { id: crypto.randomUUID(), role: "user", content: text, createdAt },
+        { id: answerId, role: "assistant", content: "", createdAt },
       ]);
 
       const onDelta = (delta: string) => {

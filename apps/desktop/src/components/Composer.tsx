@@ -1,12 +1,14 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 
 export function Composer({
   pending,
   onSend,
+  hint,
 }: {
   pending: boolean;
   onSend: (question: string) => void;
+  hint: ReactNode;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -38,10 +40,10 @@ export function Composer({
         onKeyDown={onKeyDown}
       />
       <div className="composer__footer">
-        <span className="composer__hint">{t("chat.keyboardHint")}</span>
+        <div className="composer__footnotes">{hint}</div>
         <button
           type="button"
-          className="button button--primary"
+          className="button button--primary composer__send"
           onClick={submit}
           disabled={pending || draft.trim().length === 0}
         >

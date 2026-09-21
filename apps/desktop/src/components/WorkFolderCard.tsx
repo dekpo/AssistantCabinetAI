@@ -7,6 +7,7 @@ import {
   indexWorkFolder,
   type IndexSummary,
 } from "../lib/ipc";
+import { counted } from "../lib/plural";
 import { ErrorBanner } from "./ErrorBanner";
 
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
@@ -82,49 +83,75 @@ export function WorkFolderCard({
             {t("workFolder.createSuggested")}
           </button>
         ) : null}
-        <button
-          type="button"
-          className="button"
-          disabled={busy}
-          onClick={() => void run(chooseWorkFolder)}
-        >
-          {workFolder === null ? t("workFolder.choose") : t("workFolder.change")}
-        </button>
-        {workFolder !== null ? (
+        <div className="work-folder__row">
           <button
             type="button"
             className="button"
-            disabled={indexing}
-            onClick={() => void runIndexing()}
+            disabled={busy}
+            onClick={() => void run(chooseWorkFolder)}
           >
-            {indexing ? t("workFolder.indexing") : t("workFolder.indexAction")}
+            {workFolder === null ? t("workFolder.choose") : t("workFolder.change")}
           </button>
-        ) : null}
+          {workFolder !== null ? (
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={indexing}
+              onClick={() => void runIndexing()}
+            >
+              {indexing ? (
+                <span className="message__pending">
+                  <span className="spinner" aria-hidden="true" />
+                  {t("workFolder.indexing")}
+                </span>
+              ) : (
+                t("workFolder.indexAction")
+              )}
+            </button>
+          ) : null}
+        </div>
       </div>
       {indexSummary === null ? null : (
         <>
           <p className="card__description">
-            {indexSummary.emptyFiles.length > 0
-              ? t("workFolder.indexSummaryWithEmpty", {
-                  indexed: indexSummary.indexedFiles,
-                  unchanged: indexSummary.unchangedFiles,
-                  empty: indexSummary.emptyFiles.length,
-                })
-              : t("workFolder.indexSummary", {
-                  indexed: indexSummary.indexedFiles,
-                  unchanged: indexSummary.unchangedFiles,
-                })}
+            {`${[
+              counted(
+                indexSummary.indexedFiles,
+                t("workFolder.indexedOne"),
+                t("workFolder.indexedMany"),
+              ),
+              counted(
+                indexSummary.unchangedFiles,
+                t("workFolder.unchangedOne"),
+                t("workFolder.unchangedMany"),
+              ),
+              ...(indexSummary.emptyFiles.length > 0
+                ? [
+                    counted(
+                      indexSummary.emptyFiles.length,
+                      t("workFolder.unreadableOne"),
+                      t("workFolder.unreadableMany"),
+                    ),
+                  ]
+                : []),
+            ].join(", ")}.`}
           </p>
           {indexSummary.ocrFiles.length > 0 ? (
             <p className="card__description">
-              {t("workFolder.indexSummaryOcr", { count: indexSummary.ocrFiles.length })}
+              {`${counted(
+                indexSummary.ocrFiles.length,
+                t("workFolder.ocrOne"),
+                t("workFolder.ocrMany"),
+              )}.`}
             </p>
           ) : null}
           {indexSummary.lowConfidenceFiles.length > 0 ? (
             <p className="card__description">
-              {t("workFolder.indexSummaryLowConfidence", {
-                count: indexSummary.lowConfidenceFiles.length,
-              })}
+              {`${counted(
+                indexSummary.lowConfidenceFiles.length,
+                t("workFolder.lowConfidenceOne"),
+                t("workFolder.lowConfidenceMany"),
+              )}.`}
             </p>
           ) : null}
         </>

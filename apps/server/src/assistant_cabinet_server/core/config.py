@@ -80,6 +80,17 @@ class Settings(BaseSettings):
     def allowed_aliases(self) -> list[str]:
         return sorted(self.model_aliases)
 
+    @property
+    def chat_aliases(self) -> list[str]:
+        """`allowed_aliases` minus the embedding alias.
+
+        Embeddings are a different job from chat (`docs/RETRIEVAL.md`): the alias exists so
+        indexing can go through the same allow-list, never so a human picks it as a chat
+        profile. Excluded here rather than filtered client-side, so a client never has to know
+        which alias is "the odd one out".
+        """
+        return [alias for alias in self.allowed_aliases if alias != self.default_embedding_alias]
+
 
 @lru_cache
 def get_settings() -> Settings:

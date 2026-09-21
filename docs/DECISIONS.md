@@ -162,6 +162,15 @@ needing visual approval; audio counts as one inference slot; a phone is a remote
 device, never a second document store; the mobile surface is a LAN progressive web app, never an app store
 release in v1. Handlers return `501` until a dedicated phase.
 
+## Client UI — noted, not scheduled
+
+| Subject | Decision |
+| --- | --- |
+| Primary accent colour (green → blue) | Not changed. `--accent` in `apps/desktop/src/styles.css` and `BACKGROUND` in `apps/desktop/src-tauri/icons/generate-icons.py` are the same RGB (`#1f5d54` / `(31, 93, 84)`), so a colour change is a two-file edit plus regenerating the PNG/ICO set — easy, but it touches the app icon too, so it waits for an explicit go-ahead rather than sneaking in with an unrelated change |
+| Per-answer action row (copy to clipboard, resubmit, read the answer aloud) | Not on the roadmap yet, and not implemented now. These are standard on public chat UIs and are worth adding once OCR (Sprint 2.5) is done, before the sprint-3 workflows. Copy sits closest to the existing "export" concept (`docs/ROADMAP.md`); read-aloud would need `docs/DECISIONS.md`'s voice rules (local TTS only, `docs/DECISIONS.md`'s "Reserved contracts" table) revisited for text already on screen rather than a live conversation |
+| Edit-and-repost a past question (ChatGPT/Gemini style) | Feasible, small: `entries` already holds every user turn in `apps/desktop/src/state/useChat.ts`, so a per-turn "edit" affordance in `MessageList` would populate the composer and truncate `entries` from that turn on resend — no new IPC, no server change. Not implemented now, tracked alongside the action row above |
+| Incremental indexing (add one file to the Work Folder without re-analysing the whole folder) | Feasible, larger: `IndexStore` already keys chunks by file path plus a content hash and skips unchanged files on a full `indexWorkFolder()` pass (`workFolder.unchangedOne/Many` in the summary), so the incremental *engine* exists. What is missing is (1) a Tauri command that indexes one dropped/copied file instead of walking the whole folder, and (2) a drop target or file picker in `WorkFolderCard` that copies the file into the Work Folder first — the allow-list only covers what is already inside it (`docs/PRIVACY-AND-SECURITY.md`). Worth scheduling once the OCR chain (Sprint 2.5) and the retrieval tests hold, not before |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

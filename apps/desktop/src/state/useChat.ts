@@ -1,7 +1,9 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "../i18n/I18nProvider";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
   askWithSources,
+  hasIndexedDocuments,
   sendChatMessage,
   type ChatTurn,
   type Evidence,
@@ -37,6 +39,7 @@ export function useChat(
   hasWorkFolder = false,
   modelAlias?: string,
 ): ChatState {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -58,15 +61,35 @@ export function useChat(
 
       const onDelta = (delta: string) => {
         setEntries((current) =>
-          current.map((entry) =>
-            entry.id === answerId ? { ...entry, content: entry.content + delta } : entry,
-          ),
+          current.map((entry) => {
+            if (entry.id !== answerId) {
+              return entry;
+            }
+            // Ollama's chat template often opens an answer with a leading space token; strip
+            // one only from the very first piece of a fresh answer, never mid-stream, so a
+            // legitimate space inside the text is never touched.
+            const piece = entry.content.length === 0 ? delta.replace(/^ /, "") : delta;
+            return { ...entry, content: entry.content + piece };
+          }),
         );
       };
       const startedAt = performance.now();
 
       try {
         if (hasWorkFolder) {
+          // A work folder can be chosen but never analysed yet: retrieval would refuse anyway
+          // (`insufficient_evidence`), so say why instantly, from code, rather than spend a
+          // round trip on a question the index cannot possibly answer. A failed check itself
+          // fails open, so a transient index error surfaces through the real request instead.
+          const indexed = await hasIndexedDocuments().catch(() => true);
+          if (!indexed) {
+            setEntries((current) =>
+              current.map((entry) =>
+                entry.id === answerId ? { ...entry, content: t("chat.notIndexedYet") } : entry,
+              ),
+            );
+            return;
+          }
           const { sources } = await askWithSources(text, onDelta);
           const durationMs = performance.now() - startedAt;
           setEntries((current) =>
@@ -96,7 +119,7 @@ export function useChat(
         setPending(false);
       }
     },
-    [entries, pending, onFailure, hasWorkFolder],
+    [entries, pending, onFailure, hasWorkFolder, modelAlias, t],
   );
 
   return { entries, pending, error, send };

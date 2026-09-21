@@ -16,6 +16,9 @@ use crate::error::AppError;
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexSummary};
+use crate::ocr::tesseract::TesseractProvider;
+use crate::ocr::OcrProvider;
+use crate::raster::{PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence};
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
@@ -205,16 +208,24 @@ pub async fn index_work_folder(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<IndexSummary, AppError> {
-    let (work_folder, server_url, embedding_alias) = state.read(|settings| {
+    let (work_folder, server_url, embedding_alias, locale) = state.read(|settings| {
         (
             settings.work_folder.clone(),
             settings.server_url.clone(),
             settings.embedding_alias.clone(),
+            settings.locale.clone(),
         )
     })?;
     let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
     };
+
+    let tesseract = try_tesseract(&app);
+    let rasterizer = try_rasterizer(&app);
+    let ocr: Option<&dyn OcrProvider> = tesseract.as_ref().map(|provider| provider as &dyn OcrProvider);
+    let raster: Option<&dyn PageRasterizer> =
+        rasterizer.as_ref().map(|provider| provider as &dyn PageRasterizer);
+    let locale = locale.as_deref().unwrap_or("fr-FR");
 
     let mut index = open_index(&app)?;
     indexing::run(
@@ -223,8 +234,20 @@ pub async fn index_work_folder(
         &server_url,
         &embedding_alias,
         Path::new(&work_folder),
+        ocr,
+        raster,
+        locale,
     )
     .await
+}
+
+/// Whether the local index has anything to search yet. The chat panel checks this before
+/// spending a round trip on a question the retrieval path is guaranteed to refuse
+/// (`AppError::InsufficientEvidence`) - a document has been chosen but never analysed.
+#[tauri::command]
+pub async fn has_indexed_documents(app: AppHandle) -> Result<bool, AppError> {
+    let index = open_index(&app)?;
+    Ok(index.chunk_count()? > 0)
 }
 
 #[derive(Debug, Serialize)]
@@ -312,4 +335,112 @@ pub async fn ask_with_sources(
         answer,
         sources: evidence,
     })
+}
+
+/// Sidecar discovery: look next to the executable, a few ancestors up (so `tauri dev` can see
+/// copies left in `src-tauri/`), and under the resource directory. Never a hardcoded install
+/// path. A missing engine is `None`, and indexing degrades to Sprint 2a.
+fn search_roots(app: &AppHandle) -> Vec<std::path::PathBuf> {
+    sidecar_search_roots(
+        app.path().resource_dir().ok(),
+        std::env::current_exe().ok(),
+        std::env::current_dir().ok(),
+    )
+}
+
+fn sidecar_search_roots(
+    resource_dir: Option<std::path::PathBuf>,
+    exe: Option<std::path::PathBuf>,
+    cwd: Option<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    let mut push = |path: std::path::PathBuf| {
+        if path.as_os_str().is_empty() {
+            return;
+        }
+        if !roots.iter().any(|existing| existing == &path) {
+            roots.push(path);
+        }
+    };
+    if let Some(dir) = resource_dir {
+        push(dir);
+    }
+    if let Some(exe_path) = exe {
+        if let Some(parent) = exe_path.parent() {
+            for ancestor in parent.ancestors().take(6) {
+                push(ancestor.to_path_buf());
+                push(ancestor.join("binaries"));
+                push(ancestor.join("resources"));
+            }
+        }
+    }
+    if let Some(cwd_path) = cwd {
+        push(cwd_path.clone());
+        push(cwd_path.join("binaries"));
+        push(cwd_path.join("resources"));
+    }
+    roots
+}
+
+fn first_existing(candidates: impl IntoIterator<Item = std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    candidates.into_iter().find(|path| path.exists())
+}
+
+fn try_tesseract(app: &AppHandle) -> Option<TesseractProvider> {
+    let roots = search_roots(app);
+    let binary_names = [
+        "tesseract.exe",
+        "tesseract",
+        "tesseract-x86_64-pc-windows-msvc.exe",
+        "tesseract-aarch64-apple-darwin",
+        "tesseract-x86_64-apple-darwin",
+    ];
+    let mut binaries = Vec::new();
+    let mut tessdata_dirs = Vec::new();
+    for root in &roots {
+        for name in binary_names {
+            binaries.push(root.join(name));
+        }
+        tessdata_dirs.push(root.join("resources").join("tessdata"));
+        tessdata_dirs.push(root.join("tessdata"));
+    }
+    let binary = first_existing(binaries)?;
+    let tessdata = first_existing(tessdata_dirs)?;
+    TesseractProvider::new(binary, tessdata).ok()
+}
+
+fn try_rasterizer(app: &AppHandle) -> Option<Rasterizer> {
+    let roots = search_roots(app);
+    let library_names = ["pdfium.dll", "libpdfium.dylib", "libpdfium.so", "pdfium"];
+    let mut candidates = Vec::new();
+    for root in &roots {
+        for name in library_names {
+            candidates.push(root.join("resources").join("pdfium").join(name));
+            candidates.push(root.join("pdfium").join(name));
+            candidates.push(root.join(name));
+        }
+    }
+    let library = first_existing(candidates)?;
+    Rasterizer::new(&library).ok()
+}
+
+#[cfg(test)]
+mod sidecar_discovery_tests {
+    use super::sidecar_search_roots;
+    use std::path::PathBuf;
+
+    #[test]
+    fn tauri_dev_walks_up_from_the_debug_executable_to_the_crate_root() {
+        let exe = PathBuf::from("repo/apps/desktop/src-tauri/target/debug/app");
+        let roots = sidecar_search_roots(None, Some(exe), None);
+
+        assert!(
+            roots.iter().any(|path| path.ends_with("src-tauri")),
+            "expected a src-tauri ancestor among {roots:?}"
+        );
+        assert!(
+            roots.iter().any(|path| path.ends_with("binaries")),
+            "expected a binaries folder among {roots:?}"
+        );
+    }
 }

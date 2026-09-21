@@ -48,6 +48,22 @@ describe("catalogue parity", () => {
       expect(text(catalogue, key).trim(), key).not.toBe("");
     }
   });
+
+  it("does not call the AI a server in the French catalogue", () => {
+    const french = CATALOGUES["fr-FR"] as Catalogue;
+
+    for (const key of referenceKeys) {
+      expect(text(french, key).toLowerCase(), key).not.toMatch(/\bserveur\b/);
+    }
+  });
+
+  it("does not call the AI a server in the English catalogue", () => {
+    const english = CATALOGUES["en-US"] as Catalogue;
+
+    for (const key of referenceKeys) {
+      expect(text(english, key).toLowerCase(), key).not.toMatch(/\bserver\b/);
+    }
+  });
 });
 
 describe("resolveLocale", () => {

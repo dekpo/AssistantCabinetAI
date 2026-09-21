@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from assistant_cabinet_server.main import create_app
 
-from .conftest import CONFIGURED_ALIASES, FakeProvider, build_settings
+from .conftest import CHAT_ALIAS, CONFIGURED_CHAT_ALIASES, EMBED_ALIAS, FakeProvider, build_settings
 
 
 def test_health_is_green_when_the_runtime_answers(client: TestClient) -> None:
@@ -15,7 +15,13 @@ def test_health_is_green_when_the_runtime_answers(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["issues"] == []
     assert body["provider"]["reachable"] is True
-    assert body["aliases"] == CONFIGURED_ALIASES
+    # The embedding alias is a backend-only concern (docs/RETRIEVAL.md): it never appears in
+    # the list a client offers as a chat profile.
+    assert body["aliases"] == CONFIGURED_CHAT_ALIASES
+    # A client self-heals a renamed alias against these two rather than staying stuck on a name
+    # that no longer resolves (docs/TROUBLESHOOTING.md).
+    assert body["default_model_alias"] == CHAT_ALIAS
+    assert body["embedding_alias"] == EMBED_ALIAS
     assert body["default_output_locale"] == "fr-FR"
     assert "fr-FR" in body["output_locales"]
 

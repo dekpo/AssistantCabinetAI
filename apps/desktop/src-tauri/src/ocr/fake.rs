@@ -9,9 +9,9 @@ use super::{ImageFormat, OcrError, OcrInput, OcrPage, OcrProvider, OcrStatus};
 pub struct FakeOcrProvider {
     calls: Mutex<Vec<(String, u32)>>,
     /// What `recognise` returns for a given `(relative_path, page_number)`. Falls back to
-    /// `default_response` when the page was not configured.
+    /// `fallback` when the page was not configured.
     responses: Mutex<std::collections::HashMap<(String, u32), Result<OcrPage, OcrError>>>,
-    default_status: OcrStatus,
+    fallback: Mutex<Result<OcrStatus, OcrError>>,
 }
 
 impl FakeOcrProvider {
@@ -19,7 +19,7 @@ impl FakeOcrProvider {
         Self {
             calls: Mutex::new(Vec::new()),
             responses: Mutex::new(std::collections::HashMap::new()),
-            default_status: OcrStatus::Recognised,
+            fallback: Mutex::new(Ok(OcrStatus::Recognised)),
         }
     }
 
@@ -30,6 +30,29 @@ impl FakeOcrProvider {
             .lock()
             .expect("fake ocr lock")
             .insert((relative_path.to_string(), page_number), response);
+    }
+
+    /// Unconfigured pages return this status (with placeholder text for `Recognised`).
+    pub fn set_fallback_status(&self, status: OcrStatus) {
+        *self.fallback.lock().expect("fake ocr lock") = Ok(status);
+    }
+
+    /// Unconfigured pages return this error. `EngineUnavailable` is the degrade path.
+    pub fn set_fallback_error(&self, error: OcrError) {
+        *self.fallback.lock().expect("fake ocr lock") = Err(error);
+    }
+
+    /// A recognised page with the given text, for `set_response`.
+    pub fn recognised_page(relative_path: &str, page_number: u32, text: &str) -> OcrPage {
+        OcrPage {
+            relative_path: relative_path.to_string(),
+            page_number,
+            text: text.to_string(),
+            confidence: Some(0.9),
+            engine: "fake".to_string(),
+            engine_version: "0.0.0-test".to_string(),
+            status: OcrStatus::Recognised,
+        }
     }
 
     /// Every page ever passed to `recognise`, in call order. This is the count the "zero OCR
@@ -73,15 +96,29 @@ impl OcrProvider for FakeOcrProvider {
             return configured.clone();
         }
 
-        Ok(OcrPage {
-            relative_path: input.relative_path.to_string(),
-            page_number: input.page_number,
-            text: format!("recognised text for {} page {}", input.relative_path, input.page_number),
-            confidence: Some(0.9),
-            engine: self.id().to_string(),
-            engine_version: self.version().to_string(),
-            status: self.default_status,
-        })
+        match self.fallback.lock().expect("fake ocr lock").clone() {
+            Err(error) => Err(error),
+            Ok(status) => Ok(OcrPage {
+                relative_path: input.relative_path.to_string(),
+                page_number: input.page_number,
+                text: match status {
+                    OcrStatus::Recognised => format!(
+                        "recognised text for {} page {}",
+                        input.relative_path, input.page_number
+                    ),
+                    OcrStatus::BelowThreshold => "low confidence text".to_string(),
+                    OcrStatus::NoTextFound => String::new(),
+                },
+                confidence: match status {
+                    OcrStatus::Recognised => Some(0.9),
+                    OcrStatus::BelowThreshold => Some(0.2),
+                    OcrStatus::NoTextFound => None,
+                },
+                engine: self.id().to_string(),
+                engine_version: self.version().to_string(),
+                status,
+            }),
+        }
     }
 }
 

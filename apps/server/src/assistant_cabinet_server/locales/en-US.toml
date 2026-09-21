@@ -3,6 +3,7 @@
 
 language_name = "English"
 disclaimer = "Reading aid only. The practitioner remains the sole decision maker. Nothing is sent automatically."
+passage_noun = "excerpt"
 
 [filename_stems]
 specialist_letter = "specialist-letter"

@@ -3,6 +3,7 @@
 
 language_name = "French"
 disclaimer = "Synthèse d'aide à la lecture. La médecin reste seule décideuse. Pas d'envoi automatique."
+passage_noun = "extrait"
 
 # Vocabulary the naming plan may propose (sprint 3). Never a free-form invention.
 [filename_stems]

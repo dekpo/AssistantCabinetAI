@@ -19,7 +19,6 @@ export function ServerStatus({
       aria-label={t("status.recheck")}
     >
       <span className={`status__dot status__dot--${connection}`} aria-hidden="true" />
-      <span className="status__label">{t("status.label")}</span>
       <span className="status__value">{t(`status.${connection}`)}</span>
     </button>
   );

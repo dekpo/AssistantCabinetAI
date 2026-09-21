@@ -103,6 +103,7 @@ The directive is generated from a **server locale pack**, so adding a language n
 ```text
 apps/server/src/assistant_cabinet_server/locales/fr-FR.toml
   language_name  = "French"
+  passage_noun   = "extrait"
   filename_stems = { specialist_letter = "lettre-specialiste", imaging = "imagerie",
                      labs = "bio", letter = "courrier", certificate = "certificat", other = "autre" }
   disclaimer     = "Synthèse d'aide à la lecture. La médecin reste seule décideuse. Pas d'envoi automatique."
@@ -112,6 +113,7 @@ Rendered and appended to the English prompt:
 
 ```text
 Write every part of your answer in French (fr-FR). Do not answer in English.
+When naming a retrieved passage, write extrait.
 Proposed file name stems must come from this vocabulary: lettre-specialiste, imagerie, bio, ...
 ```
 

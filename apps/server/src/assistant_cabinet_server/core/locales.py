@@ -29,6 +29,8 @@ class LocalePack(BaseModel):
     #: Assistance notice. The client appends it from its own catalogue; the model is never
     #: asked to reproduce it. Kept here so a second client gets the same wording.
     disclaimer: str
+    #: How the model names a retrieved passage in this language ("excerpt" / "extrait").
+    passage_noun: str
 
 
 class LocaleCatalogue:

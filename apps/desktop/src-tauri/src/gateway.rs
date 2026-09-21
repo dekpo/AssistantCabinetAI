@@ -38,6 +38,12 @@ pub struct HealthSnapshot {
     pub status: String,
     pub provider_reachable: bool,
     pub aliases: Vec<String>,
+    /// The chat alias to fall back to when the client's own choice is no longer valid, e.g.
+    /// after a rename in `MODEL_ALIASES` (`docs/TROUBLESHOOTING.md`).
+    pub default_model_alias: String,
+    /// The embedding alias indexing must use right now. A client never chooses this - it only
+    /// needs to notice when it changed, so a rename self-heals instead of failing indexing.
+    pub embedding_alias: String,
     pub issues: Vec<String>,
     pub default_output_locale: String,
     pub output_locales: Vec<String>,
@@ -49,6 +55,8 @@ struct HealthBody {
     status: String,
     provider: HealthProviderBody,
     aliases: Vec<String>,
+    default_model_alias: String,
+    embedding_alias: String,
     issues: Vec<String>,
     default_output_locale: String,
     output_locales: Vec<String>,
@@ -95,6 +103,8 @@ impl GatewayClient {
             status: body.status,
             provider_reachable: body.provider.reachable,
             aliases: body.aliases,
+            default_model_alias: body.default_model_alias,
+            embedding_alias: body.embedding_alias,
             issues: body.issues,
             default_output_locale: body.default_output_locale,
             output_locales: body.output_locales,

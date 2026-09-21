@@ -36,6 +36,7 @@ pub fn run() {
             commands::send_chat_message,
             commands::index_work_folder,
             commands::ask_with_sources,
+            commands::has_indexed_documents,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

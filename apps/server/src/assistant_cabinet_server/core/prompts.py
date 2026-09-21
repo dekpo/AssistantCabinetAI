@@ -29,11 +29,16 @@ OUTPUT_LANGUAGE_DIRECTIVE = """\
 Output language: write every part of your answer in {language_name} ({locale}).
 Do not answer in any other language, even if the request or the documents use one.
 Do not append any disclaimer or notice: the application adds its own.
+When naming a retrieved passage, write {passage_noun}.
 """
 
 
 def render_output_language_directive(pack: LocalePack) -> str:
-    return OUTPUT_LANGUAGE_DIRECTIVE.format(language_name=pack.language_name, locale=pack.locale)
+    return OUTPUT_LANGUAGE_DIRECTIVE.format(
+        language_name=pack.language_name,
+        locale=pack.locale,
+        passage_noun=pack.passage_noun,
+    )
 
 
 def build_system_prompt(pack: LocalePack) -> str:

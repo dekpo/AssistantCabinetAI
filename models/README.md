@@ -59,6 +59,36 @@ docker compose exec ollama ollama list
 
 After `create` succeeds, Ollama has its own blobs. You may delete the LM Studio copy. You may keep `import\*.gguf` as this project’s originals, or delete them later to free disk; chat still works from `data/ollama/models/`.
 
+## Switching the embedding model (e.g. testing `bge-m3` against `nomic-embed-text`)
+
+Only after a `LICENSES.md` row for the new weight. From the repository root, in **cmd**:
+
+```text
+docker compose exec ollama ollama pull bge-m3
+```
+
+Edit `.env`: change what `assistant-embed` (or whatever your `DEFAULT_EMBEDDING_ALIAS` is) points
+to — **keep the alias name itself unchanged**, only the value after `=`:
+
+```text
+MODEL_ALIASES=assistant-chat=llama3.1-8b-instruct,assistant-rapide=mistral,assistant-embed=bge-m3,assistant-turbo=qwen2.5:1.5b
+```
+
+Restart only the server container so it re-reads `.env`:
+
+```text
+docker compose up -d server
+```
+
+Then **re-index every Work Folder**: vectors from two embedding models are not comparable
+(`docs/RETRIEVAL.md`), so click "Analyser" again in the client after the switch. Reverting to
+`nomic-embed-text` follows the same three steps, in reverse.
+
+Renaming the alias itself (not just what it points to) is also safe — the desktop client self-heals
+a renamed `modelAlias`/`embeddingAlias` on its next health check (`docs/MODELS.md`, "The embedding
+alias is never a chat choice"; `docs/TROUBLESHOOTING.md`) — but changing only the value, as above, is
+simpler and needs no client restart at all.
+
 ## What requires Compose recreate
 
 Changing `compose.yaml` (ports, images, volumes). Not adding or removing models.

@@ -34,16 +34,24 @@ written decision first. Item 7 is a sprint of its own, comparable in size to Spr
 
 ---
 
-## Already cut into a session — chat readability
+## Chat readability — cut into its own session, **delivered 21 September 2026**
 
 Three things were separated out because they are view-only, carry no decision and take a few hours: the
 user's bubble reads right-aligned and should read left; a long question cannot be collapsed and needs a
 four-line clamp with an "Afficher plus" toggle; and there is no scroll-to-bottom control on a long
-conversation. That last one also fixes a live bug — `MessageList.tsx:10-12` scrolls to the bottom on every
-`entries` change, and streaming replaces that array on every delta, so scrolling up during an answer snaps
-the reader back many times a second.
+conversation. That last one also fixed a live bug — `MessageList.tsx` scrolled to the bottom on every
+`entries` change, and streaming replaces that array on every delta, so scrolling up during an answer
+snapped the reader back many times a second.
 
-The handoff lives in the local (ungit) `docs/SESSION-CHAT-READABILITY.md`.
+All three shipped the same day, in `apps/desktop` only and with no new dependency: the clamp and its
+toggle in `src/components/CollapsibleText.tsx` over `overflowsClamp` in `src/lib/clamp.ts`; the date and
+time above each question from `src/lib/timestamp.ts`, ordered by `chat.askedAt` in each catalogue rather
+than by `Intl.DateTimeFormat`; and the scroll gate in `src/components/MessageList.tsx` over `isNearBottom`
+in `src/lib/scroll.ts`. A streaming answer now follows the view only while the reader is at the end of the
+conversation, measured as she scrolls rather than after the text grew — an observer notified a frame later
+is too late, because a delta landing inside that frame drags her back down.
+
+The handoff lived in the local (ungit) `docs/SESSION-CHAT-READABILITY.md`.
 
 ---
 

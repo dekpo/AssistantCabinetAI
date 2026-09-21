@@ -23,6 +23,7 @@ def test_the_directive_names_the_requested_language(
     prompt = provider.last_system_prompt
     assert prompt.startswith(BASE_SYSTEM_PROMPT)
     assert "write every part of your answer in French (fr-FR)" in prompt
+    assert "write extrait" in prompt
 
 
 def test_the_same_body_serves_another_language(client: TestClient, provider: FakeProvider) -> None:
@@ -31,6 +32,7 @@ def test_the_same_body_serves_another_language(client: TestClient, provider: Fak
     prompt = provider.last_system_prompt
     assert prompt.startswith(BASE_SYSTEM_PROMPT)
     assert "write every part of your answer in English (en-US)" in prompt
+    assert "write excerpt" in prompt
 
 
 def test_a_missing_locale_falls_back_to_the_default_and_never_to_english(

@@ -50,3 +50,4 @@ def test_every_pack_carries_a_language_name_and_a_notice() -> None:
         assert pack.language_name.isascii(), "the language name is read by the model, in English"
         assert pack.disclaimer.strip(), "the client needs a notice to append to every summary"
         assert pack.filename_stems, "the naming plan proposes stems from the pack, not free text"
+        assert pack.passage_noun.strip(), "the model needs the local word for a retrieved passage"

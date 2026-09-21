@@ -18,6 +18,21 @@ def test_aliases_are_read_from_the_pair_form_compose_uses(
     assert settings.allowed_aliases == ["cabinet-chat", "cabinet-rapide"]
 
 
+def test_chat_aliases_excludes_the_embedding_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "MODEL_ALIASES",
+        "cabinet-chat=mistral,cabinet-rapide=qwen3:8b,cabinet-embed=nomic-embed-text",
+    )
+    monkeypatch.setenv("DEFAULT_EMBEDDING_ALIAS", "cabinet-embed")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.allowed_aliases == ["cabinet-chat", "cabinet-embed", "cabinet-rapide"]
+    # A human picks a chat profile in Settings; the embedding alias is a backend-only
+    # concern (docs/RETRIEVAL.md) and must never show up as a choice there.
+    assert settings.chat_aliases == ["cabinet-chat", "cabinet-rapide"]
+
+
 def test_aliases_are_also_accepted_as_json(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODEL_ALIASES", '{"cabinet-chat": "mistral"}')
 

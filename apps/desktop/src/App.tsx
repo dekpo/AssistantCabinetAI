@@ -42,6 +42,27 @@ export default function App() {
     }
   }, [snapshot, localeIsStored, locale, update]);
 
+  useEffect(() => {
+    // A renamed or removed alias in MODEL_ALIASES (`docs/TROUBLESHOOTING.md`) must not brick a
+    // machine that saved the old name: self-heal to whatever the gateway reports as current the
+    // moment health confirms the saved choice no longer exists, rather than silently mismatching
+    // in the Settings dropdown or failing every chat/index call until a human edits settings.json
+    // by hand.
+    if (snapshot === null || health === null) {
+      return;
+    }
+    const patch: { modelAlias?: string; embeddingAlias?: string } = {};
+    if (health.aliases.length > 0 && !health.aliases.includes(snapshot.settings.modelAlias)) {
+      patch.modelAlias = health.defaultModelAlias;
+    }
+    if (snapshot.settings.embeddingAlias !== health.embeddingAlias) {
+      patch.embeddingAlias = health.embeddingAlias;
+    }
+    if (Object.keys(patch).length > 0) {
+      void update(patch);
+    }
+  }, [snapshot, health, update]);
+
   if (snapshot === null) {
     return (
       <I18nProvider locale={locale}>

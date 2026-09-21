@@ -35,6 +35,36 @@ Hugging Face catalogue. **Allow-list only**, licence row mandatory. For the beta
 Open WebUI, at the owner's home, serves that bench **before** the practice window exists. At the practice,
 later: the short list **inside** Assistant Cabinet AI, not Open WebUI.
 
+### The embedding alias is never a chat choice
+
+`MODEL_ALIASES` also carries one **embedding** alias (`DEFAULT_EMBEDDING_ALIAS`, e.g.
+`assistant-embed`) alongside the chat ones. It goes through the same allow-list so indexing can
+resolve it like any other alias, but a human must never be able to pick it as a chat profile — an
+embedding weight (`nomic-embed-text`, `bge-m3`) does not answer questions, it only turns a chunk of
+text into a vector for retrieval (`docs/RETRIEVAL.md`).
+
+Two things keep it out of sight:
+
+- **Hidden from the picker.** `GET /health` reports two different lists: `Settings.allowed_aliases`
+  (every alias, used by `GET /v1/models` for OpenAI-compatible clients such as Open WebUI, which may
+  legitimately want to see it) and `Settings.chat_aliases` (`allowed_aliases` minus
+  `default_embedding_alias`, `apps/server/src/assistant_cabinet_server/core/config.py`). The desktop
+  Settings dialog's model-profile dropdown is fed by `chat_aliases` only
+  (`apps/server/src/assistant_cabinet_server/api/health.py`), so the embedding alias structurally
+  cannot appear there.
+- **Self-healing, not hardcoded.** The desktop client persists `modelAlias` and `embeddingAlias` in
+  its own `settings.json` and never re-derives them from `.env`. Renaming an alias used to strand a
+  client on the old name with no way to fix it from the UI (`docs/TROUBLESHOOTING.md`). `/health` now
+  also reports `default_model_alias` and `embedding_alias` — the gateway's current truth — and
+  `apps/desktop/src/App.tsx` compares the client's saved values against them on every health check,
+  silently adopting the server's current value when they diverge. A rename in `MODEL_ALIASES` fixes
+  every client on its next health check; nothing to edit by hand.
+
+Swapping which **weight** an alias points to (e.g. `assistant-embed=bge-m3` instead of
+`assistant-embed=nomic-embed-text`) needs none of this — the alias name is unchanged, so no client
+sees anything different except (after a re-index) better retrieval. Only renaming the alias itself
+relies on self-heal.
+
 ## EU AI Act and medical-device avoidance
 
 [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32024R1689) classifies

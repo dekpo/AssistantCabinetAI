@@ -33,6 +33,9 @@ EMBED_ALIAS = "cabinet-embed"
 #: What the gateway publishes, sorted the way it sorts its allow-list. One place to change when
 #: a test configuration gains an alias, rather than three assertions in three files.
 CONFIGURED_ALIASES = sorted([CHAT_ALIAS, FAST_ALIAS, EMBED_ALIAS])
+#: What `/health` publishes for the client's chat-profile picker: `CONFIGURED_ALIASES` minus the
+#: embedding alias, which is a backend-only concern (`docs/RETRIEVAL.md`).
+CONFIGURED_CHAT_ALIASES = sorted([CHAT_ALIAS, FAST_ALIAS])
 #: Every fake vector has this many values, so a test can assert the reported dimensions.
 EMBEDDING_DIMENSIONS = 4
 

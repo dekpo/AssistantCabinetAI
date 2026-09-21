@@ -14,6 +14,7 @@ export interface AppSettings {
   theme: ThemeChoice;
   serverUrl: string;
   modelAlias: string;
+  embeddingAlias: string;
   workFolder: string | null;
 }
 
@@ -33,6 +34,8 @@ export interface HealthSnapshot {
   status: "ok" | "degraded";
   providerReachable: boolean;
   aliases: string[];
+  defaultModelAlias: string;
+  embeddingAlias: string;
   issues: string[];
   defaultOutputLocale: string;
   outputLocales: string[];
@@ -118,6 +121,13 @@ export function sendChatMessage(
 /** One pass of discovery, extraction, chunking and embedding over the work folder. */
 export function indexWorkFolder(): Promise<IndexSummary> {
   return invoke<IndexSummary>("index_work_folder");
+}
+
+/** Whether the local index has anything to search yet - a work folder can be chosen but never
+ * analysed. Used to say so instantly, before spending a round trip on a question retrieval is
+ * certain to refuse. */
+export function hasIndexedDocuments(): Promise<boolean> {
+  return invoke<boolean>("has_indexed_documents");
 }
 
 /**

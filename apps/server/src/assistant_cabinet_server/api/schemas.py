@@ -129,6 +129,12 @@ class HealthResponse(BaseModel):
     provider: ProviderStatus
     #: Aliases this gateway will serve. The catalogue a client may choose from.
     aliases: list[str]
+    #: The chat alias a client should fall back to when its own choice is no longer valid (an
+    #: alias renamed or removed server-side). Always a member of `aliases`.
+    default_model_alias: str
+    #: The embedding alias indexing must use. Never in `aliases` (docs/RETRIEVAL.md): a client
+    #: does not choose it, it just needs to know the current name to stay in sync with a rename.
+    embedding_alias: str
     default_output_locale: str
     output_locales: list[str]
     #: Machine codes describing why the status is degraded. Empty when everything answers.

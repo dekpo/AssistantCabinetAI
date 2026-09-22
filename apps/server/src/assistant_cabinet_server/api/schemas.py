@@ -30,6 +30,8 @@ class ChatCompletionRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
     stream: bool = False
     temperature: float | None = None
+    #: A ceiling on the answer, clamped to the gateway's own cap. Absent means the cap itself: an
+    #: unbounded answer is not something a caller can ask for.
     max_tokens: int | None = None
 
     #: BCP 47 tag of the language the answer must be written in. Owned by the client.

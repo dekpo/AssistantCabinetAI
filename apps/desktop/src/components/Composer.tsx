@@ -1,6 +1,6 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
-import { canStop, type GenerationPhase } from "../lib/generation";
+import { canDiscard, type GenerationPhase } from "../lib/generation";
 
 /**
  * The draft is held by the chat panel rather than here, because stopping a question offers its
@@ -40,8 +40,10 @@ export function Composer({
 
   /* One button in one place, so the eye does not have to move and the keyboard does not lose it:
      it offers the stop only while the answer has not started, and goes back to sending - disabled,
-     since the box is empty again - the moment the first words arrive. */
-  const stopping = canStop(phase);
+     since the box is empty again - the moment the first words arrive. Stopping an answer that is
+     already being written belongs under that answer, not here: it is a different act, because it
+     keeps the text. */
+  const stopping = canDiscard(phase);
 
   return (
     <div className="composer">

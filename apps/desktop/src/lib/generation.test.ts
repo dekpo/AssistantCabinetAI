@@ -1,24 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
-  canStop,
+  canDiscard,
+  canInterrupt,
   phaseAfterFirstText,
+  stopOutcome,
   STOPPED_CODE,
   wasStopped,
   type GenerationPhase,
 } from "./generation";
 
-describe("canStop", () => {
-  it("offers the stop while the question is still being thought about", () => {
-    expect(canStop("thinking")).toBe(true);
+const PHASES: GenerationPhase[] = ["idle", "thinking", "writing"];
+
+describe("what a stop leaves behind", () => {
+  it("abandons the turn while nothing has been written", () => {
+    expect(stopOutcome("thinking")).toBe("discardTurn");
   });
 
-  // The decision this whole module exists for: a half-read answer is never taken away from her.
-  it("does not offer it once the answer is being written", () => {
-    expect(canStop("writing")).toBe(false);
+  // The decision that makes the second stop safe: a half-written answer is never taken away from
+  // her, it is only stopped growing.
+  it("keeps the words already on screen once the answer is being written", () => {
+    expect(stopOutcome("writing")).toBe("keepPartialAnswer");
   });
 
-  it("does not offer it when nothing is running", () => {
-    expect(canStop("idle")).toBe(false);
+  it("has nothing to stop when nothing is running", () => {
+    expect(stopOutcome("idle")).toBeNull();
+  });
+});
+
+describe("the two stops never appear at the same time", () => {
+  it("offers exactly one of them per phase, and none when idle", () => {
+    expect(PHASES.filter(canDiscard)).toStrictEqual(["thinking"]);
+    expect(PHASES.filter(canInterrupt)).toStrictEqual(["writing"]);
+  });
+
+  it.each(PHASES)("%s never offers both", (phase) => {
+    expect(canDiscard(phase) && canInterrupt(phase)).toBe(false);
   });
 });
 
@@ -45,13 +61,5 @@ describe("wasStopped", () => {
   it("treats a real failure as a failure", () => {
     expect(wasStopped("server_unreachable")).toBe(false);
     expect(wasStopped("insufficient_evidence")).toBe(false);
-  });
-});
-
-describe("the phases are exhaustive", () => {
-  it("has a stop rule for every phase", () => {
-    const phases: GenerationPhase[] = ["idle", "thinking", "writing"];
-
-    expect(phases.filter(canStop)).toStrictEqual(["thinking"]);
   });
 });

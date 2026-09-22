@@ -31,6 +31,7 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "pending": "Thinking",
+    "interrupted": "Answer stopped: incomplete.",
     "notIndexedYet": "Please analyze your documents before asking a question.",
     "sourcesToggle": "Sources",
     "sourceItem": "[{n}] {path}, page {page}",

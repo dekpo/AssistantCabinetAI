@@ -146,11 +146,16 @@ export function hasIndexedDocuments(): Promise<boolean> {
 export function askWithSources(
   question: string,
   onDelta: (text: string) => void,
+  onSources: (sources: Evidence[]) => void,
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
     if (message.event === "delta") {
       onDelta(message.text);
+    } else if (message.event === "sources") {
+      // Read from the event rather than from the resolved answer, because a stopped answer never
+      // resolves and still has to show where its text came from.
+      onSources(message.sources);
     }
   };
   return invoke<AskAnswer>("ask_with_sources", { question, onEvent: channel });

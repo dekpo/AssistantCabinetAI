@@ -31,6 +31,7 @@
     "showMore": "Afficher plus",
     "showLess": "Afficher moins",
     "pending": "Recherche",
+    "interrupted": "Réponse arrêtée : incomplète.",
     "notIndexedYet": "Veuillez analyser vos documents avant de poser une question.",
     "sourcesToggle": "Sources",
     "sourceItem": "[{n}] {path}, page {page}",

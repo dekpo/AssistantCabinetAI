@@ -2,10 +2,11 @@ import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
-  canStop,
   phaseAfterFirstText,
+  stopOutcome,
   wasStopped,
   type GenerationPhase,
+  type StopOutcome,
 } from "../lib/generation";
 import {
   askWithSources,
@@ -23,6 +24,10 @@ export interface ChatEntry extends ChatTurn {
   createdAt: number;
   /** Present on an assistant answer that came from the local index, so it can cite file and page. */
   sources?: Evidence[];
+  /** She stopped this answer while it was being written, so it is whatever had arrived by then.
+   * Shown as such: an incomplete summary that looks finished is the risk the disclaimer exists
+   * for. */
+  interrupted?: boolean;
   /** How long the answer took to write, and which profile wrote it - shown so a slow machine is
    * visible rather than silently endured (`docs/HARDWARE.md`). */
   durationMs?: number;
@@ -31,14 +36,18 @@ export interface ChatEntry extends ChatTurn {
 
 export interface ChatState {
   entries: ChatEntry[];
-  /** "thinking" until the first words of the answer arrive, "writing" afterwards. Both the
-   * spinner and the stop affordance read this, so they cannot disagree about what is happening. */
+  /** "thinking" until the first words of the answer arrive, "writing" afterwards. Every stop
+   * affordance and the spinner read this, so they cannot disagree about what is happening. */
   phase: GenerationPhase;
+  /** The answer being written right now, so the spinner and the stop under it appear on that one
+   * answer rather than under every answer already in the conversation. */
+  streamingId: string | null;
   error: AppError | null;
   send: (question: string) => Promise<void>;
-  /** Stops the question being worked on and hands its text back, so the composer can offer it
-   * again: a stop is a question to rephrase far more often than one to forget. Returns null when
-   * there is nothing to stop. */
+  /** Stops the question being worked on. Returns the question's text when stopping abandoned it
+   * altogether, so the composer can offer it again - a stop before any answer is a question to
+   * rephrase far more often than one to forget. Returns null when an answer was already being
+   * written, since that text stays on screen and the composer is left as she had it. */
   stop: () => string | null;
 }
 
@@ -58,13 +67,14 @@ export function useChat(
   const { t } = useTranslation();
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [phase, setPhase] = useState<GenerationPhase>("idle");
+  const [streamingId, setStreamingId] = useState<string | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   /** The question in flight, so stopping it can offer it back without reading it out of the list
    * that is about to lose it. */
   const asked = useRef("");
-  /** Whether she has asked for the question in flight to stop. Rust decides for the request it is
-   * running; this covers the one step that happens before that request exists. */
-  const stopping = useRef(false);
+  /** What she asked a stop to leave behind, recorded when she clicked rather than worked out again
+   * once the request has ended - by then the phase has moved on. Null means no stop was asked for. */
+  const stopRequest = useRef<StopOutcome | null>(null);
 
   const send = useCallback(
     async (question: string) => {
@@ -76,9 +86,10 @@ export function useChat(
       const answerId = crypto.randomUUID();
       const createdAt = Date.now();
       asked.current = text;
-      stopping.current = false;
+      stopRequest.current = null;
       setError(null);
       setPhase("thinking");
+      setStreamingId(answerId);
       setEntries((current) => [
         ...current,
         { id: questionId, role: "user", content: text, createdAt },
@@ -100,9 +111,16 @@ export function useChat(
           }),
         );
       };
-      /* A stop keeps nothing of the turn, question included, so the conversation returns to
-         exactly what it was. There is never a half-written answer to decide about: the interface
-         offers no stop once the first words are on screen. */
+      /* Sources arrive on their own event, before the first word of the answer, because retrieval
+         has already finished by then. An answer she interrupts therefore still cites the documents
+         it was written from, which an answer left on screen has to do. */
+      const onSources = (sources: Evidence[]) => {
+        setEntries((current) =>
+          current.map((entry) => (entry.id === answerId ? { ...entry, sources } : entry)),
+        );
+      };
+      /* What a stop before any answer leaves behind: nothing at all, question included, so the
+         conversation returns to exactly what it was. */
       const discardTurn = () =>
         setEntries((current) =>
           current.filter((entry) => entry.id !== questionId && entry.id !== answerId),
@@ -118,7 +136,7 @@ export function useChat(
           const indexed = await hasIndexedDocuments().catch(() => true);
           // The only moment a stop has nothing to cancel on the other side: this check is its own
           // command, and the request that carries the question has not been made yet.
-          if (stopping.current) {
+          if (stopRequest.current !== null) {
             discardTurn();
             return;
           }
@@ -130,11 +148,11 @@ export function useChat(
             );
             return;
           }
-          const { sources } = await askWithSources(text, onDelta);
+          await askWithSources(text, onDelta, onSources);
           const durationMs = performance.now() - startedAt;
           setEntries((current) =>
             current.map((entry) =>
-              entry.id === answerId ? { ...entry, sources, durationMs, modelAlias } : entry,
+              entry.id === answerId ? { ...entry, durationMs, modelAlias } : entry,
             ),
           );
         } else {
@@ -153,8 +171,17 @@ export function useChat(
       } catch (raw: unknown) {
         const failure = normaliseError(raw);
         if (wasStopped(failure.code)) {
-          // Her own stop. No banner and no health re-check: nothing went wrong.
-          discardTurn();
+          // Her own stop, so no banner and no health re-check: nothing went wrong. What stays
+          // depends on what she asked for, decided when she clicked.
+          if (stopRequest.current === "keepPartialAnswer") {
+            setEntries((current) =>
+              current.map((entry) =>
+                entry.id === answerId ? { ...entry, interrupted: true, modelAlias } : entry,
+              ),
+            );
+          } else {
+            discardTurn();
+          }
         } else {
           setError(failure);
           // Drop the half-written answer: an incomplete summary is worse than none.
@@ -163,22 +190,24 @@ export function useChat(
         }
       } finally {
         setPhase("idle");
+        setStreamingId(null);
       }
     },
     [entries, phase, onFailure, hasWorkFolder, modelAlias, t],
   );
 
-  const stop = useCallback(() => {
-    if (!canStop(phase)) {
+  const stop = useCallback((): string | null => {
+    const outcome = stopOutcome(phase);
+    if (outcome === null) {
       return null;
     }
-    stopping.current = true;
-    // Rust ends the run with `chat_cancelled`, and the `catch` above clears the turn. The
-    // interface does not decide it is over on its own: that is how the request really stops,
-    // rather than being hidden while the practice machine keeps generating.
+    stopRequest.current = outcome;
+    // Rust ends the run with `chat_cancelled`, and the `catch` above applies the outcome. The
+    // interface does not decide it is over on its own: that is how the request really stops, rather
+    // than being hidden while the practice machine keeps writing into nothing.
     void cancelChat();
-    return asked.current;
+    return outcome === "discardTurn" ? asked.current : null;
   }, [phase]);
 
-  return { entries, phase, error, send, stop };
+  return { entries, phase, streamingId, error, send, stop };
 }

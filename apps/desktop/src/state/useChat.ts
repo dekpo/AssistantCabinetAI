@@ -16,6 +16,7 @@ import {
   type ChatTurn,
   type Evidence,
 } from "../lib/ipc";
+import { truncateForRegenerate, truncateForResend } from "../lib/turns";
 
 export interface ChatEntry extends ChatTurn {
   id: string;
@@ -44,6 +45,14 @@ export interface ChatState {
   streamingId: string | null;
   error: AppError | null;
   send: (question: string) => Promise<void>;
+  /** Edited-and-reposted question (docs/CHAT-UX-ASSESSMENT.md item 3). Truncates `entries` to
+   * before `questionEntryId` and asks the edited text as a fresh turn - not a rewrite of the old
+   * one. No version history is kept: truncate and replace, per the recorded decision. */
+  resend: (questionEntryId: string, text: string) => Promise<void>;
+  /** Regenerate (item 4). Drops the answer at `answerEntryId` and the question right before it,
+   * then asks that same question again. Retrieval, embedding and the model all run afresh, so the
+   * sources shown are this run's own rather than the previous run's. */
+  regenerate: (answerEntryId: string) => Promise<void>;
   /** Stops the question being worked on. Returns the question's text when stopping abandoned it
    * altogether, so the composer can offer it again - a stop before any answer is a question to
    * rephrase far more often than one to forget. Returns null when an answer was already being
@@ -76,10 +85,17 @@ export function useChat(
    * once the request has ended - by then the phase has moved on. Null means no stop was asked for. */
   const stopRequest = useRef<StopOutcome | null>(null);
 
-  const send = useCallback(
-    async (question: string) => {
-      const text = question.trim();
-      if (text.length === 0 || phase !== "idle") {
+  /**
+   * The turn itself, shared by a fresh question, an edited repost and a regenerate: all three are
+   * "append this question and its answer onto some prefix of the conversation", differing only in
+   * what that prefix is. `baseEntries` is taken as a parameter rather than read from state so a
+   * repost or regenerate can truncate first and send against the truncated list in the same tick -
+   * the non-retrieval path below rebuilds its turns from it, and a stale `entries` closure would
+   * resend the tail that was just cut.
+   */
+  const runTurn = useCallback(
+    async (baseEntries: ChatEntry[], text: string) => {
+      if (phase !== "idle") {
         return;
       }
       const questionId = crypto.randomUUID();
@@ -90,8 +106,8 @@ export function useChat(
       setError(null);
       setPhase("thinking");
       setStreamingId(answerId);
-      setEntries((current) => [
-        ...current,
+      setEntries([
+        ...baseEntries,
         { id: questionId, role: "user", content: text, createdAt },
         { id: answerId, role: "assistant", content: "", createdAt },
       ]);
@@ -157,7 +173,7 @@ export function useChat(
           );
         } else {
           const turns: ChatTurn[] = [
-            ...entries.map(({ role, content }) => ({ role, content })),
+            ...baseEntries.map(({ role, content }) => ({ role, content })),
             { role: "user", content: text },
           ];
           await sendChatMessage(turns, onDelta);
@@ -193,7 +209,41 @@ export function useChat(
         setStreamingId(null);
       }
     },
-    [entries, phase, onFailure, hasWorkFolder, modelAlias, t],
+    [phase, onFailure, hasWorkFolder, modelAlias, t],
+  );
+
+  const send = useCallback(
+    (question: string) => {
+      const text = question.trim();
+      if (text.length === 0) {
+        return Promise.resolve();
+      }
+      return runTurn(entries, text);
+    },
+    [runTurn, entries],
+  );
+
+  const resend = useCallback(
+    (questionEntryId: string, text: string) => {
+      const trimmed = text.trim();
+      const base = truncateForResend(entries, questionEntryId);
+      if (trimmed.length === 0 || base === null) {
+        return Promise.resolve();
+      }
+      return runTurn(base, trimmed);
+    },
+    [runTurn, entries],
+  );
+
+  const regenerate = useCallback(
+    (answerEntryId: string) => {
+      const truncated = truncateForRegenerate(entries, answerEntryId);
+      if (truncated === null) {
+        return Promise.resolve();
+      }
+      return runTurn(truncated.base, truncated.question);
+    },
+    [runTurn, entries],
   );
 
   const stop = useCallback((): string | null => {
@@ -209,5 +259,5 @@ export function useChat(
     return outcome === "discardTurn" ? asked.current : null;
   }, [phase]);
 
-  return { entries, phase, streamingId, error, send, stop };
+  return { entries, phase, streamingId, error, send, resend, regenerate, stop };
 }

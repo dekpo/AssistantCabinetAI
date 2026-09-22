@@ -7,7 +7,11 @@
   "actions": {
     "cancel": "Annuler",
     "close": "Fermer",
+    "copy": "Copier",
+    "copyConversation": "Copier la conversation",
+    "edit": "Modifier",
     "openSettings": "Réglages",
+    "regenerate": "Régénérer",
     "retry": "Réessayer",
     "save": "Enregistrer",
     "send": "Envoyer",
@@ -41,7 +45,7 @@
     "scrollToBottom": "Aller au dernier message",
     "keyboardHintSend": "Entrée envoie",
     "keyboardHintBreak": "Maj Entrée retour à la ligne",
-    "disclaimer": "Aide administrative. Vérifiez toujours la réponse : la médecin reste seule décideuse. Aucun envoi automatique."
+    "disclaimer": "Aide administrative. Vérifiez toujours la réponse : la médecin reste seule décideuse."
   },
   "workFolder": {
     "title": "Dossier de travail",

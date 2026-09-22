@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
+import { copyToClipboard } from "../lib/clipboard";
+import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
 import { useChat } from "../state/useChat";
 import { Composer } from "./Composer";
 import { ErrorBanner } from "./ErrorBanner";
@@ -21,7 +23,7 @@ export function ChatPanel({
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
-  const { entries, phase, streamingId, error, send, stop } = useChat(
+  const { entries, phase, streamingId, error, send, resend, regenerate, stop } = useChat(
     onFailure,
     hasWorkFolder,
     modelAlias,
@@ -32,6 +34,13 @@ export function ChatPanel({
     if (stopped !== null) {
       setDraft(stopped);
     }
+  };
+
+  const copyAll = () => {
+    const text = formatConversation(entries, streamingId, (role) =>
+      t(role === "user" ? "chat.authorUser" : "chat.authorAssistant"),
+    );
+    void copyToClipboard(text);
   };
 
   const hint = (
@@ -55,8 +64,17 @@ export function ChatPanel({
         phase={phase}
         streamingId={streamingId}
         onStop={onStop}
+        onResend={(questionEntryId, text) => void resend(questionEntryId, text)}
+        onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
       />
       {error === null ? null : <ErrorBanner error={error} />}
+      {hasCopyableConversation(entries, streamingId) ? (
+        <p className="message__actions chat__copy-all">
+          <button type="button" className="button button--compact" onClick={copyAll}>
+            {t("actions.copyConversation")}
+          </button>
+        </p>
+      ) : null}
       <Composer
         draft={draft}
         onDraftChange={setDraft}

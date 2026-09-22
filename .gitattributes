@@ -3,3 +3,5 @@
 *.jpg binary
 *.jpeg binary
 *.png binary
+
+*.toml text eol=lf

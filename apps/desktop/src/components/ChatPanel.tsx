@@ -10,10 +10,14 @@ export function ChatPanel({
   onFailure,
   hasWorkFolder,
   modelAlias,
+  aliases,
+  onModelAliasChange,
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
   modelAlias: string;
+  aliases: string[];
+  onModelAliasChange: (alias: string) => void;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -60,6 +64,9 @@ export function ChatPanel({
         onSend={(question) => void send(question)}
         onStop={onStop}
         hint={hint}
+        modelAlias={modelAlias}
+        aliases={aliases}
+        onModelAliasChange={onModelAliasChange}
       />
     </section>
   );

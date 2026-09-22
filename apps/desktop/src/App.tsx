@@ -95,6 +95,8 @@ export default function App() {
             onFailure={refresh}
             hasWorkFolder={snapshot.settings.workFolder !== null}
             modelAlias={snapshot.settings.modelAlias}
+            aliases={health?.aliases ?? []}
+            onModelAliasChange={(alias) => void update({ modelAlias: alias })}
           />
         </main>
         {settingsOpen ? (

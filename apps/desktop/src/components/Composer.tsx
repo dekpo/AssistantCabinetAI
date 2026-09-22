@@ -13,6 +13,9 @@ export function Composer({
   onSend,
   onStop,
   hint,
+  modelAlias,
+  aliases,
+  onModelAliasChange,
 }: {
   draft: string;
   onDraftChange: (draft: string) => void;
@@ -20,6 +23,9 @@ export function Composer({
   onSend: (question: string) => void;
   onStop: () => void;
   hint: ReactNode;
+  modelAlias: string;
+  aliases: string[];
+  onModelAliasChange: (alias: string) => void;
 }) {
   const { t } = useTranslation();
 
@@ -58,14 +64,30 @@ export function Composer({
       />
       <div className="composer__footer">
         <div className="composer__footnotes">{hint}</div>
-        <button
-          type="button"
-          className="button button--primary composer__send"
-          onClick={stopping ? onStop : submit}
-          disabled={!stopping && (phase !== "idle" || draft.trim().length === 0)}
-        >
-          {t(stopping ? "actions.stop" : "actions.send")}
-        </button>
+        <div className="composer__actions">
+          {aliases.length === 0 ? null : (
+            <select
+              className="field__control composer__model-select"
+              aria-label={t("chat.modelLabel")}
+              value={modelAlias}
+              onChange={(event) => onModelAliasChange(event.target.value)}
+            >
+              {aliases.map((alias) => (
+                <option key={alias} value={alias}>
+                  {alias}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            className="button button--primary composer__send"
+            onClick={stopping ? onStop : submit}
+            disabled={!stopping && (phase !== "idle" || draft.trim().length === 0)}
+          >
+            {t(stopping ? "actions.stop" : "actions.send")}
+          </button>
+        </div>
       </div>
     </div>
   );

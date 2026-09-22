@@ -25,6 +25,7 @@
     "emptyBody": "What you write stays on your computer.",
     "emptyBodyNetwork": "Nothing is sent on the network, let alone on the Internet.",
     "placeholder": "Write your question...",
+    "modelLabel": "Assistant",
     "authorUser": "You",
     "authorAssistant": "Assistant",
     "askedAt": "{year}-{month}-{day} {hour}:{minute}:{second}",

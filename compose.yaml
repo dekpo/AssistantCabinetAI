@@ -66,6 +66,9 @@ services:
       # Safety net for a request that arrives without an output locale. Never silently English.
       DEFAULT_OUTPUT_LOCALE: ${DEFAULT_OUTPUT_LOCALE:-fr-FR}
       MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-48000}
+      # The counterpart: how long an answer may be. Not a tuning knob - without it a model that
+      # falls into a repetition loop writes until a client gives up (docs/TROUBLESHOOTING.md).
+      MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-2048}
       # Indexing sends batches of chunks, so it is capped on both count and size.
       MAX_EMBEDDING_INPUTS: ${MAX_EMBEDDING_INPUTS:-256}
       MAX_EMBEDDING_CHARS: ${MAX_EMBEDDING_CHARS:-200000}

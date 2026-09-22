@@ -474,12 +474,19 @@ body {
   gap: 8px;
 }
 
-/* The stop offered where she is already looking. The `gap` above spaces it from the word exactly as
-   it spaces the spinner, so nothing here touches margins. Written against `.button` as well, since
-   the shared button rule sits further down the file and would otherwise win on padding. */
+/* The stop offered where she is already looking, on the spinner line and again under an answer
+   being written. On the spinner line the `gap` above spaces it exactly as it spaces the spinner, so
+   nothing here touches margins. Written against `.button` as well, since the shared button rule
+   sits further down the file and would otherwise win on padding. */
 .button.message__stop {
   padding: 0 8px;
   font-size: 0.85em;
+}
+
+/* Its own line under the text, so a growing answer pushes the button down instead of wrapping
+   around it. */
+.message__actions {
+  margin: 6px 0 0;
 }
 
 .spinner {

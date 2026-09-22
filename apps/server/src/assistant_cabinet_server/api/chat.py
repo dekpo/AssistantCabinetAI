@@ -67,6 +67,23 @@ def enforce_context_cap(messages: list[Message], limit: int) -> str:
     return prompt_text
 
 
+def capped_output_tokens(requested: int | None, limit: int) -> int:
+    """The ceiling actually applied to one answer.
+
+    A caller may ask for less, never for more, and a caller that asks for nothing gets the cap
+    rather than no limit at all - that last case is the one that matters, since no client of ours
+    sends `max_tokens`. Anything outside the range, including the `-1` that means "unbounded" to
+    several runtimes, is read as no request at all: the gateway does not trust the caller here any
+    more than it does on the context cap.
+
+    Unlike an oversized context this is not refused with an error. A request for a longer answer
+    than the practice allows is still a reasonable request; it simply gets a shorter answer.
+    """
+    if requested is None or not 1 <= requested <= limit:
+        return limit
+    return requested
+
+
 async def _chunks(
     first: GenerationChunk | None, rest: AsyncIterator[GenerationChunk]
 ) -> AsyncIterator[GenerationChunk]:
@@ -120,7 +137,7 @@ async def create_chat_completion(
             model=runtime_model,
             messages=messages,
             temperature=payload.temperature,
-            max_output_tokens=payload.max_tokens,
+            max_output_tokens=capped_output_tokens(payload.max_tokens, settings.max_output_tokens),
         )
     )
 

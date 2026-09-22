@@ -17,7 +17,11 @@ export function ChatPanel({
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
-  const { entries, phase, error, send, stop } = useChat(onFailure, hasWorkFolder, modelAlias);
+  const { entries, phase, streamingId, error, send, stop } = useChat(
+    onFailure,
+    hasWorkFolder,
+    modelAlias,
+  );
 
   const onStop = () => {
     const stopped = stop();
@@ -42,7 +46,12 @@ export function ChatPanel({
 
   return (
     <section className="chat">
-      <MessageList entries={entries} phase={phase} onStop={onStop} />
+      <MessageList
+        entries={entries}
+        phase={phase}
+        streamingId={streamingId}
+        onStop={onStop}
+      />
       {error === null ? null : <ErrorBanner error={error} />}
       <Composer
         draft={draft}

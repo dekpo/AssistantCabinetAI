@@ -341,6 +341,13 @@ async fn sourced_answer(
         return Err(AppError::InsufficientEvidence);
     }
 
+    // Sent before the answer rather than after it. Retrieval has already finished at this point, so
+    // there is nothing to wait for - and an answer she stops halfway still shows which documents it
+    // was being written from, which an answer left on screen has to do.
+    let _ = on_event.send(ChatStreamEvent::Sources {
+        sources: evidence.clone(),
+    });
+
     let context_turn = retrieval::build_context_turn(&evidence);
     let turns = vec![
         ChatTurn {
@@ -368,9 +375,6 @@ async fn sourced_answer(
         )
         .await?;
 
-    let _ = on_event.send(ChatStreamEvent::Sources {
-        sources: evidence.clone(),
-    });
     let _ = on_event.send(ChatStreamEvent::Completed {
         text: answer.clone(),
     });

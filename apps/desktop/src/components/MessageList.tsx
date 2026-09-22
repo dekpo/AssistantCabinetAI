@@ -12,10 +12,12 @@ import { Markdown } from "./Markdown";
 export function MessageList({
   entries,
   phase,
+  streamingId,
   onStop,
 }: {
   entries: ChatEntry[];
   phase: GenerationPhase;
+  streamingId: string | null;
   onStop: () => void;
 }) {
   const { t } = useTranslation();
@@ -75,9 +77,11 @@ export function MessageList({
               </article>
             );
           }
-          // The same phase the stop button reads, so the spinner and that button can never
-          // disagree about whether the answer has started.
-          const showPending = entry.content.length === 0 && phase === "thinking";
+          // Both read the phase of the one answer being written, so a spinner, a stop and an
+          // answer already finished further up can never be confused for one another.
+          const streaming = entry.id === streamingId;
+          const showPending = streaming && phase === "thinking";
+          const showStop = streaming && phase === "writing";
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
@@ -103,6 +107,20 @@ export function MessageList({
                   <Markdown text={entry.content} />
                 )}
               </div>
+              {/* Under the text, following its end as it grows, and gone the moment it stops
+                  growing. Nothing caps how long an answer may be, so a model that falls into a
+                  repetition loop has to be stoppable from where she is reading it. */}
+              {showStop ? (
+                <p className="message__actions">
+                  <button
+                    type="button"
+                    className="button button--primary message__stop"
+                    onClick={onStop}
+                  >
+                    {t("actions.stop")}
+                  </button>
+                </p>
+              ) : null}
               {entry.sources !== undefined && entry.sources.length > 0 ? (
                 <details className="message__sources">
                   <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
@@ -119,6 +137,11 @@ export function MessageList({
                     ))}
                   </ul>
                 </details>
+              ) : null}
+              {/* An answer she stopped has no duration to report, so this line takes the place of
+                  the one below rather than joining it: what matters is that it is incomplete. */}
+              {entry.interrupted === true ? (
+                <p className="message__timing">{t("chat.interrupted")}</p>
               ) : null}
               {entry.durationMs !== undefined && entry.modelAlias !== undefined ? (
                 <p className="message__timing">

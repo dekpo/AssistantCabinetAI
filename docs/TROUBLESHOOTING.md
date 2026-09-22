@@ -8,6 +8,57 @@ with the exact command or code where it matters.
 
 ---
 
+## A small model wrote the same block for three and a half minutes and no timeout stopped it
+
+**Found:** 22 September 2026, trying `qwen2.5:0.5b` (alias `qwen-nano`) as a chat profile fast enough for the
+Windows workstation. The answer began in French, then drifted into a loop: a bullet reading
+`Document fictif : Fictif - Dossier de spécialistes`, eight sub-bullets reading
+`Détails de l'adjudication : N/A - N/A - N/A`, a heading `[Dokumentation] [Début]`, and the same block
+again, indefinitely. Nothing on screen could stop it.
+
+The register (metadata only, so this is all it holds) is precise about the scale:
+
+```text
+model_alias "qwen-nano"  completion_chars 10836  completion_tokens null  duration_ms 210369  outcome "completed"
+model_alias "assistant-turbo"  completion_chars 4178  completion_tokens 1310  duration_ms 110392  outcome "completed"
+```
+
+Same question, same prompt hash. Three things combined, and only the third is about the model:
+
+1. **Nothing in the chain caps the length of an answer.** `max_tokens` is optional in
+   `apps/server/.../api/schemas.py`, the desktop client never sends it, so `num_predict` is never set in
+   `providers/ollama.py` and the runtime generates without a ceiling. The **input** is capped in three
+   places — 24 000 chars in `gateway.rs`, 48 000 in the gateway, 6 000 of evidence in `retrieval.rs`. The
+   **output** is capped nowhere. Filling the context window does not end it either: Ollama starts
+   `llama-server` with `--context-shift`, so the window slides and generation continues.
+2. **A read timeout cannot catch a loop.** `LLM_REQUEST_TIMEOUT_SECONDS` becomes
+   `httpx.Timeout(180, connect=10)`, which is the longest allowed gap **between chunks**, not a total. A
+   model emitting a token every second forever never trips it: the run above lasted 210 s, longer than the
+   180 s "timeout", and was recorded as completed. Only `CHAT_TIMEOUT` (300 s, a total, in `gateway.rs`)
+   eventually ends it — five minutes of watching garbage accumulate.
+3. **0.5B is below the floor for this job.** With 1 400 tokens of French context the model lost the thread,
+   lost the language (`Dokumentation` is German), and invented vocabulary absent from every document
+   (`adjudication` is procurement). Ollama's defaults (`repeat_penalty` 1.1 over `repeat_last_n` 64) cannot
+   break a loop whose period is a ten-line block, far wider than that window. The system prompt already
+   says *"You keep answers short and plain"*; a model this size cannot follow it, and no prompt wording
+   fixes that.
+
+**Fixed, in two parts.** A stop under the answer being written, which keeps the text as written, so she is
+never again watching something she cannot end (`docs/CHAT-UX-ASSESSMENT.md` item 2). And the missing bound:
+`MAX_OUTPUT_TOKENS`, default 2048, applied in `capped_output_tokens` in `api/chat.py` whether or not the
+caller asked for a limit — a caller may ask for less, never for more, and `-1` (which means "unbounded" to
+llama.cpp and to Ollama) is read as asking for nothing. So an unbounded answer is no longer something the
+gateway can be talked into. Tests: `apps/server/tests/test_output_cap.py`.
+
+**Still open, smaller:** the register calls this a success. `_chunks` in `api/chat.py` initialises
+`outcome = "completed"` and only overwrites it on a `GatewayError`, so an answer cut off by a disconnect —
+including every use of the new stop — is logged as completed with `completion_tokens: null`. A capped answer
+is also reported with `finish_reason: "stop"` rather than `"length"`, since `GenerationChunk` does not carry
+the runtime's reason for stopping. Both are honesty in metadata, neither changes what she sees.
+
+**And keep sub-1B weights out of `MODEL_ALIASES`:** an alias offered in the settings is a promise that it
+works.
+
 ## `cargo` is "not found" in a Cursor terminal although it is installed and on the PATH
 
 **Found:** 22 September 2026, running `pnpm tauri dev` after a session that had used `cargo test` fine.

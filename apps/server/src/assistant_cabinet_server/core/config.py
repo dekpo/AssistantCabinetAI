@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # Context cap. The client caps too, in Rust; the gateway does not trust the caller.
     max_context_chars: int = Field(default=48_000, alias="MAX_CONTEXT_CHARS")
 
+    # Output cap, the counterpart of the one above. Nothing else in the chain bounds how long an
+    # answer may be: `max_tokens` is optional in the request, no client of ours sends it, and a
+    # read timeout cannot catch a model that loops steadily rather than stalling - a small model
+    # once wrote the same invented block for three and a half minutes (`docs/TROUBLESHOOTING.md`,
+    # 22 September 2026). Generous for a summary of a specialist report, which measures around
+    # 1 300 tokens, and short enough that a repetition loop ends in about a minute.
+    max_output_tokens: int = Field(default=2_048, alias="MAX_OUTPUT_TOKENS")
+
     # Indexing sends batches of chunks rather than one conversation, so embeddings get their own
     # caps. They exist to stop a client sending a whole folder, not to tune throughput.
     max_embedding_chars: int = Field(default=200_000, alias="MAX_EMBEDDING_CHARS")

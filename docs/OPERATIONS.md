@@ -51,6 +51,14 @@ It is served under its own alias, `cabinet-embed`, from the same `MODEL_ALIASES`
 Replacing it is one edit and a restart, **plus a re-index of every work folder**: vectors built by two
 different models cannot be compared. `MAX_EMBEDDING_INPUTS` and `MAX_EMBEDDING_CHARS` bound one batch.
 
+`MAX_OUTPUT_TOKENS` (default 2048, about 6 500 French characters) bounds the other direction: how long
+an answer may be, whether or not the caller asked for a limit. It is a safety property rather than a
+tuning knob — `LLM_REQUEST_TIMEOUT_SECONDS` is the longest allowed gap **between** chunks, so it cannot
+end a model that loops steadily, and before this cap existed one wrote the same block for three and a
+half minutes (`docs/TROUBLESHOOTING.md`, 22 September 2026). A related piece of hygiene: an alias in
+`MODEL_ALIASES` is a promise that the model works, so weights under about 1B do not belong there
+however fast they are.
+
 Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.

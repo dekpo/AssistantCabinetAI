@@ -23,7 +23,7 @@ architectural decision at all.
 | --- | --- | --- | --- | --- |
 | 1 | Render markdown in an answer | **Delivered 21 September 2026** | ~half a day | — |
 | 1b | Download / source links **inside** markdown | **Refused as asked** — wrong carrier | — | Use structured events instead |
-| 2 | Stop button during generation | **Delivered 21 September 2026** | ~1 day | — |
+| 2 | Stop button during generation | **Delivered 21 September 2026**, widened 22 September | ~1 day | — |
 | 3 | Copy and edit/repost a question | Feasible | ~1 day | Nothing |
 | 4 | Copy and regenerate an answer | Feasible | ~half a day **if built with 3** | Nothing |
 | 5 | Upload a file into the Work Folder | Feasible, largest | ~2–3 days | Three policy decisions (below) |
@@ -123,19 +123,40 @@ action travels on the structured channel beside the text, and Rust re-validates 
 
 ---
 
-## 2. Stop button during generation — delivered 21 September 2026
+## 2. Stop button during generation — delivered 21 September 2026, widened 22 September
 
-**The decisions taken, which narrowed the feature rather than widened it.**
+**The decisions taken on 21 September, which narrowed the feature rather than widened it.**
 
-- **The stop exists only while the answer has not started.** One button in one place: it reads `Stop` while
-  the spinner shows, and the moment the first words arrive it is `Envoyer` again — disabled, because the box
-  is empty. So a half-read answer is never taken away from her, and the question below about keeping a
-  partial answer stops being a question: there is never a partial answer to keep.
+- **The stop below the composer exists only while the answer has not started.** One button in one place: it
+  reads `Stop` while the spinner shows, and the moment the first words arrive it is `Envoyer` again —
+  disabled, because the box is empty. So a half-read answer is never taken away from her.
 - **`Stop` is the word in French too.** Shorter than `Arrêter` and understood by every French user, so both
   catalogues carry the same string.
-- **A stop keeps nothing, on either side.** The question goes with the answer and the conversation returns
-  to exactly what it was; no "interrupted" marker, because there is nothing to mark. Her text is put back in
-  the composer, since a stop is a question to rephrase far more often than one to forget.
+- **That stop keeps nothing, on either side.** The question goes with the answer and the conversation
+  returns to exactly what it was; no "interrupted" marker, because there is nothing to mark. Her text is put
+  back in the composer, since a stop is a question to rephrase far more often than one to forget.
+
+**Then reality argued, on 22 September.** Testing `qwen2.5:0.5b` as a profile fast enough for the
+workstation, a model fell into a repetition loop and wrote the same block of invented bullets for three and
+a half minutes with no way to stop it — 10 836 characters against 4 178 for the same question on a usable
+model. Nothing in the chain caps how long an answer may be, and the gateway's 180 s is a gap-between-chunks
+timeout that a steady stream never trips, so the only end was the client's 300 s total. Measurements and
+causes: `docs/TROUBLESHOOTING.md`, 22 September 2026.
+
+**A second stop, therefore, which is a different act rather than the same button moved.** It sits under the
+answer being written, in the same small primary style as the one on the spinner line, follows the end of the
+text as it grows, and goes the instant the text stops growing. It ends the writing and **keeps what is
+already there**, marked `chat.interrupted` — which is the recommendation from the open decision below,
+arrived at from the other direction. She was never going to want the looping block *and* her question taken
+away; she wanted it to stop. Nothing is kept from a stop before the first word, and everything is kept from
+a stop after it: the difference is that in the second case the words are already hers to read.
+
+Two consequences worth naming. `stopOutcome` in `src/lib/generation.ts` now holds what a stop *leaves
+behind* rather than merely whether one is offered, decided once and recorded at the click, because by the
+time the run ends the phase has moved on. And the retrieval command sends its `Sources` event **before** the
+answer instead of after — retrieval has finished by then anyway, and an answer left on screen has to show
+which documents it came from. An interrupted answer that cited nothing would be the worse half of both
+worlds.
 
 **What shipped.** `apps/desktop/src-tauri/src/cancellation.rs` owns the signal: a `tokio::sync::watch`,
 `begin()` per run, and `until_stopped`, which drops the run's future rather than asking it to wind down —
@@ -143,9 +164,8 @@ dropping the request is what closes the connection, and closing the connection i
 wraps the **whole** of `ask_with_sources`, so embedding the question is cancellable too; that leg is what
 runs during the spinner, which is precisely the moment she wants the button to answer. A stop wins even when
 it lands in the same instant as the answer, so the outcome never depends on which branch `select!` picked.
-The gateway needed no change, as predicted. `GenerationPhase` in `src/lib/generation.ts` holds the one
-product rule (`canStop`), and both the spinner and the button read it, so they cannot disagree about whether
-the answer has started. `tests/chat_cancellation.rs` proves the stream really ends: it asserts that no
+The gateway needed no change, as predicted. `GenerationPhase` in `src/lib/generation.ts` holds the product
+rule, and the spinner and both buttons read it, so they cannot disagree about whether the answer has started. `tests/chat_cancellation.rs` proves the stream really ends: it asserts that no
 further piece of text arrives after the stop, which a view-only version could not pass.
 
 **The original finding, which is why it was built this way.** Swapping the "Envoyer" button while pending is
@@ -174,9 +194,10 @@ The real version is four small pieces:
   comment *"an incomplete summary is worse than none."* A user-initiated stop is not a failure, so keeping
   it is defensible — but it then needs a visible "interrupted" marker. A half-written summary of a
   specialist letter that *looks* complete is exactly the risk `chat.disclaimer` exists for. **Recommend:
-  keep it, marked, with its own catalogue string.** — *Settled otherwise, and the recommendation became
-  moot: restricting the stop to the thinking phase means no answer is ever partial, so nothing is kept and
-  no marker is needed. Narrowing the affordance removed the decision instead of answering it.*
+  keep it, marked, with its own catalogue string.** — *Settled on 21 September by removing the question:
+  restricting the stop to the thinking phase meant no answer could ever be partial. Reopened on
+  22 September by a looping model, and settled as recommended — the stop under an answer keeps the text and
+  marks it `chat.interrupted`. Narrowing an affordance postponed the decision rather than answering it.*
 - **Stop must also cancel the embedding leg.** `ask_with_sources` calls `gateway.embed()` before the chat
   call, and that is what runs during the "Recherche" spinner. Cancelling only the chat leg leaves the
   button unresponsive for the first seconds, which is precisely the moment she wants it.

@@ -7,7 +7,11 @@
   "actions": {
     "cancel": "Cancel",
     "close": "Close",
+    "copy": "Copy",
+    "copyConversation": "Copy the conversation",
+    "edit": "Edit",
     "openSettings": "Settings",
+    "regenerate": "Regenerate",
     "retry": "Try again",
     "save": "Save",
     "send": "Send",
@@ -41,7 +45,7 @@
     "scrollToBottom": "Go to the latest message",
     "keyboardHintSend": "Enter sends",
     "keyboardHintBreak": "Shift Enter new line",
-    "disclaimer": "Administrative assistance. Always check the answer: the practitioner remains the sole decision maker. Nothing is sent automatically."
+    "disclaimer": "Administrative assistance. Always check the answer: the practitioner remains the sole decision maker."
   },
   "workFolder": {
     "title": "Work folder",

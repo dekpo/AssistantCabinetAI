@@ -44,6 +44,11 @@ Also name:
 - Conventional Commit subject, 72 characters or fewer
 - PR title and test plan when a branch is ready
 
+No AI attribution anywhere git-facing: no mention of Claude, Claude Code, an agent, a model name, or a
+co-author/generated-by trailer or link, in a commit subject or body, a branch name, or a PR title or
+description. A commit message is the Conventional Commit subject line alone unless the owner asks for a
+body.
+
 If the only edits are in `docs/private/` or a `docs/SESSION-*.md` handoff, **do not** propose a commit. Say that those notes stay local.
 
 ## Branch names

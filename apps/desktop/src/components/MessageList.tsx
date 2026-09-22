@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
+import { copyToClipboard } from "../lib/clipboard";
 import { formatDuration } from "../lib/duration";
 import type { GenerationPhase } from "../lib/generation";
 import { isNearBottom, prefersReducedMotion, scrollBehaviour } from "../lib/scroll";
@@ -14,11 +15,17 @@ export function MessageList({
   phase,
   streamingId,
   onStop,
+  onResend,
+  onRegenerate,
 }: {
   entries: ChatEntry[];
   phase: GenerationPhase;
   streamingId: string | null;
   onStop: () => void;
+  /** Edit-and-repost a past question (docs/CHAT-UX-ASSESSMENT.md item 3). */
+  onResend: (questionEntryId: string, text: string) => void;
+  /** Regenerate a past answer (item 4). */
+  onRegenerate: (answerEntryId: string) => void;
 }) {
   const { t } = useTranslation();
   const messages = useRef<HTMLDivElement>(null);
@@ -29,6 +36,32 @@ export function MessageList({
      having scrolled away. */
   const following = useRef(true);
   const [endVisible, setEndVisible] = useState(true);
+  /* The one question being edited in place, or null. Editing is exclusive - only one turn's
+     textarea exists at a time - so this is a single id rather than a set. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  /* Copy and edit change nothing about the conversation itself, so a generating turn does not
+     block them; but resend and regenerate start a new request, which the existing "one question
+     at a time" rule already enforces in `useChat` - here they are simply hidden while busy, since
+     an answer already being written cannot be edited or regenerated. */
+  const idle = phase === "idle";
+
+  const startEdit = (entry: ChatEntry) => {
+    setEditingId(entry.id);
+    setEditDraft(entry.content);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+  const submitEdit = (questionEntryId: string) => {
+    const text = editDraft.trim();
+    if (text.length === 0) {
+      return;
+    }
+    onResend(questionEntryId, text);
+    cancelEdit();
+  };
 
   const onScroll = () => {
     const root = messages.current;
@@ -66,14 +99,63 @@ export function MessageList({
       <div className="messages" ref={messages} onScroll={onScroll}>
         {entries.map((entry) => {
           if (entry.role === "user") {
+            const editing = editingId === entry.id;
             return (
-              <article key={entry.id} className="message message--user">
+              <article
+                key={entry.id}
+                className={editing ? "message message--user message--editing" : "message message--user"}
+              >
                 <p className="message__timing message__timing--asked">
                   {t("chat.askedAt", timestampParts(entry.createdAt))}
                 </p>
-                <div className="message__bubble">
-                  <CollapsibleText text={entry.content} />
-                </div>
+                {editing ? (
+                  <div className="message__edit">
+                    <textarea
+                      className="message__edit-input"
+                      value={editDraft}
+                      rows={3}
+                      autoFocus
+                      onChange={(event) => setEditDraft(event.target.value)}
+                    />
+                    <p className="message__actions">
+                      <button type="button" className="button" onClick={cancelEdit}>
+                        {t("actions.cancel")}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => submitEdit(entry.id)}
+                        disabled={editDraft.trim().length === 0}
+                      >
+                        {t("actions.send")}
+                      </button>
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="message__bubble">
+                      <CollapsibleText text={entry.content} />
+                    </div>
+                    {idle ? (
+                      <p className="message__actions message__actions--turn">
+                        <button
+                          type="button"
+                          className="button button--compact"
+                          onClick={() => void copyToClipboard(entry.content)}
+                        >
+                          {t("actions.copy")}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--compact"
+                          onClick={() => startEdit(entry)}
+                        >
+                          {t("actions.edit")}
+                        </button>
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </article>
             );
           }
@@ -112,9 +194,12 @@ export function MessageList({
                   repetition loop has to be stoppable from where she is reading it. */}
               {showStop ? (
                 <p className="message__actions">
+                  {/* Discreet on purpose, styled like the copy/edit/regenerate row rather than
+                      `button--primary`: a filled accent button reads as "the thing to do next",
+                      which is wrong for a stop that most answers never need. */}
                   <button
                     type="button"
-                    className="button button--primary message__stop"
+                    className="button button--compact message__stop"
                     onClick={onStop}
                   >
                     {t("actions.stop")}
@@ -149,6 +234,28 @@ export function MessageList({
                     model: entry.modelAlias,
                     duration: formatDuration(entry.durationMs),
                   })}
+                </p>
+              ) : null}
+              {idle && entry.content.length > 0 ? (
+                <p className="message__actions message__actions--turn">
+                  <button
+                    type="button"
+                    className="button button--compact"
+                    onClick={() => void copyToClipboard(entry.content)}
+                  >
+                    {t("actions.copy")}
+                  </button>
+                  {/* Regenerating drops this answer and reruns retrieval, embedding and the model
+                      from the question that produced it, so a new answer never keeps an old
+                      answer's sources - a citation from the previous run would be worse than
+                      none. */}
+                  <button
+                    type="button"
+                    className="button button--compact"
+                    onClick={() => onRegenerate(entry.id)}
+                  >
+                    {t("actions.regenerate")}
+                  </button>
                 </p>
               ) : null}
             </article>

@@ -2,8 +2,10 @@
 
 **Written 21 September 2026, after inspecting the repository with Sprint 2.5 (local OCR) delivered and the
 chain holding end to end.** It recorded feasibility only, with no code changed. **Items 1 and 2 were then
-built the same day**, and their sections say what shipped and which decisions were taken. Everything else
-here is still feasibility: nothing in it is scheduled, and nothing in it may displace a milestone.
+built the same day, and items 3 and 4 on 22 September 2026**, and their sections say what shipped and which
+decisions were taken. **Item 4b — copying the whole conversation — was added on 22 September 2026 too, at
+the owner's request after items 3-4 shipped; it was never one of the nine original questions.** Everything
+else here is still feasibility: nothing in it is scheduled, and nothing in it may displace a milestone.
 
 Read with `docs/ROADMAP.md` (dates and what each sprint owns), `docs/DECISIONS.md` (the "Client UI —
 noted, not scheduled" table, which this document expands), `docs/ARCHITECTURE.md` (the boundary between
@@ -24,8 +26,9 @@ architectural decision at all.
 | 1 | Render markdown in an answer | **Delivered 21 September 2026** | ~half a day | — |
 | 1b | Download / source links **inside** markdown | **Refused as asked** — wrong carrier | — | Use structured events instead |
 | 2 | Stop button during generation | **Delivered 21 September 2026**, widened 22 September | ~1 day | — |
-| 3 | Copy and edit/repost a question | Feasible | ~1 day | Nothing |
-| 4 | Copy and regenerate an answer | Feasible | ~half a day **if built with 3** | Nothing |
+| 3 | Copy and edit/repost a question | **Delivered 22 September 2026** | ~1 day | — |
+| 4 | Copy and regenerate an answer | **Delivered 22 September 2026** | ~half a day **if built with 3** | — |
+| 4b | Copy the whole conversation | **Delivered 22 September 2026** — not one of the original nine | ~1 hour, reusing 3-4 | — |
 | 5 | Upload a file into the Work Folder | Feasible, largest | ~2–3 days | Three policy decisions (below) |
 | 6 | Read an answer aloud (local TTS) | Feasible | ~1 day | A `docs/DECISIONS.md` amendment |
 | 7 | Dictate a question (speech to text) | **Not now** | A sprint | Frozen until after 14 October |
@@ -144,12 +147,25 @@ timeout that a steady stream never trips, so the only end was the client's 300 s
 causes: `docs/TROUBLESHOOTING.md`, 22 September 2026.
 
 **A second stop, therefore, which is a different act rather than the same button moved.** It sits under the
-answer being written, in the same small primary style as the one on the spinner line, follows the end of the
-text as it grows, and goes the instant the text stops growing. It ends the writing and **keeps what is
-already there**, marked `chat.interrupted` — which is the recommendation from the open decision below,
-arrived at from the other direction. She was never going to want the looping block *and* her question taken
-away; she wanted it to stop. Nothing is kept from a stop before the first word, and everything is kept from
-a stop after it: the difference is that in the second case the words are already hers to read.
+answer being written, follows the end of the text as it grows, and goes the instant the text stops growing.
+It ends the writing and **keeps what is already there**, marked `chat.interrupted` — which is the
+recommendation from the open decision below, arrived at from the other direction. She was never going to
+want the looping block *and* her question taken away; she wanted it to stop. Nothing is kept from a stop
+before the first word, and everything is kept from a stop after it: the difference is that in the second
+case the words are already hers to read.
+
+**Restyled discreet on 22 September 2026, once items 3, 4 and 4b existed to restyle it against.** It first
+shipped in the same filled `button--primary` style as the one on the spinner line, because at the time it
+was the only stop affordance under the text and nothing else on a turn had a small button to match. Once
+copy, edit and regenerate gave every finished turn a row of small bordered buttons, a filled accent button
+under a *live* answer read as "the thing to do next" — wrong for an action most answers never need. It now
+carries `button--compact`, the same class as those three: bordered and quiet by default, the accent border
+on hover and the accent fill on click that `.button:active:enabled` already gives every button in the app.
+Nothing about when it appears, what it keeps, or its size changed — `.button.message__stop`'s padding rule
+still wins on specificity over `.button--compact`'s, so the button is not one pixel bigger or smaller than
+before. The spinner-line stop (offered before any word exists, discarding the turn rather than keeping it)
+was deliberately left in `button--primary`: it is a different act with a different consequence, and the
+owner's request was specifically about the one shown while the answer is being written.
 
 Two consequences worth naming. `stopOutcome` in `src/lib/generation.ts` now holds what a stop *leaves
 behind* rather than merely whether one is offered, decided once and recorded at the click, because by the
@@ -207,11 +223,29 @@ dependency, proving the stream loop exits on the token.
 
 ---
 
-## 3. Copy and edit/repost a question
+## 3. Copy and edit/repost a question — delivered 22 September 2026
 
-Already assessed in `docs/DECISIONS.md` as *"Feasible, small: `entries` already holds every user turn… a
-per-turn 'edit' affordance in `MessageList` would populate the composer and truncate `entries` from that
-turn on resend — no new IPC, no server change."* Confirmed, with two wrinkles that entry does not mention:
+**What shipped.** An inline edit form on each user bubble (the ChatGPT shape asked for, not a reused
+composer): a "Copy" and an "Edit" button appear under the bubble while nothing is generating, `Edit` swaps
+the bubble for a textarea with `Send`/`Cancel`, and `Send` truncates the conversation from that question
+onward and asks the edited text as a fresh turn. No version history — truncate and replace, per the
+recorded decision; `< 1/2 >` arrows over superseded questions were deliberately not built.
+
+`useChat.send`'s body became `runTurn(baseEntries, text)`, taking the prefix of the conversation to append
+onto as a parameter instead of reading `entries` from the closure — `resend` and `regenerate` (item 4) both
+call it, differing only in what prefix they pass. Which prefix that is lives in
+`src/lib/turns.ts` (`truncateForResend`, `truncateForRegenerate`), pure and covered by
+`src/lib/turns.test.ts`, separate from `useChat` so the slicing rule is tested without a running gateway —
+the same split `src/lib/generation.ts` already uses for the stop rule.
+
+**Clipboard goes through `@tauri-apps/plugin-clipboard-manager`, not `navigator.clipboard`**, exactly as
+flagged below. `src/lib/clipboard.ts` wraps `writeText` so both call sites (item 3's question, item 4's
+answer) share one place that explains why.
+
+**The original finding, which is why it was built this way.** Already assessed in `docs/DECISIONS.md` as
+*"Feasible, small: `entries` already holds every user turn… a per-turn 'edit' affordance in `MessageList`
+would populate the composer and truncate `entries` from that turn on resend — no new IPC, no server
+change."* Confirmed, with two wrinkles that entry does not mention:
 
 - The non-retrieval path rebuilds the conversation from `entries` **inside** `send` (`useChat.ts:101-104`),
   so truncation must happen *before* the send or the edited question goes out with the stale tail
@@ -233,10 +267,16 @@ granted capability rather than an ambient browser API, which is how that file is
 
 ---
 
-## 4. Copy and regenerate an answer
+## 4. Copy and regenerate an answer — delivered 22 September 2026
 
-`docs/DECISIONS.md` already parks this as the "per-answer action row", with the timing the owner is now
-proposing: *"worth adding once OCR (Sprint 2.5) is done, before the sprint-3 workflows"*, and notes that
+**What shipped.** "Copy" and "Regenerate" under each finished answer, shown only while nothing is
+generating. Regenerate calls `useChat.regenerate(answerEntryId)`, which truncates the conversation to
+before the question that produced that answer and runs it again through `runTurn` — a fresh
+`answerId`, so the old answer's `Evidence[]` is discarded with it rather than lingering under a new answer
+it does not describe; there is no separate "clear sources" step to forget.
+
+`docs/DECISIONS.md` already parked this as the "per-answer action row", with the timing the owner then
+proposed: *"worth adding once OCR (Sprint 2.5) is done, before the sprint-3 workflows"*, and noted that
 copy *"sits closest to the existing export concept."*
 
 - **Copy** — the same clipboard plugin as item 3. Trivial once that is wired.
@@ -248,6 +288,28 @@ copy *"sits closest to the existing export concept."*
 
 The ChatGPT "share" button has no equivalent here and is not wanted: nothing is transmitted from this
 product (`AGENTS.md`, rule 3).
+
+### 4b. Copy the whole conversation — delivered 22 September 2026, not in the original nine
+
+Raised by the owner after items 3 and 4 shipped, not one of the nine questions from 21 September. Feasible
+immediately and built the same day: it needed nothing that items 3-4 had not already put in place.
+
+**What shipped.** A button between the message list and the composer, in the same `button--compact` style
+as every per-turn copy button, labelled `chat.copyConversation`. It copies every settled turn as
+`{author}: {content}`, one blank line apart, author labels reused from `chat.authorUser` /
+`chat.authorAssistant` so the pasted text reads in her language exactly as the panel does. It is visible
+only once the conversation has at least one settled question and one settled answer, and an answer she
+stopped counts as settled — it stays on screen marked `chat.interrupted`, so it belongs in a copy of what
+she is looking at.
+
+**"Settled" excludes only the one answer being written right now**, not the phase: the rule is "not
+`streamingId`", so an earlier finished exchange stays copyable while a new question is being asked, rather
+than the button disappearing for the whole panel every time she asks something else. That rule and the text
+it produces live in `src/lib/conversationText.ts` (`hasCopyableConversation`, `formatConversation`), pure
+and covered by `src/lib/conversationText.test.ts`, the same split as `src/lib/turns.ts` for items 3-4 and
+`src/lib/generation.ts` for item 2.
+
+No new permission, dependency or IPC command: `copyToClipboard` from item 3 is called again, unchanged.
 
 ---
 

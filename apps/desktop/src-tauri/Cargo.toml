@@ -16,6 +16,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+# Copy/edit/regenerate (docs/CHAT-UX-ASSESSMENT.md items 3-4): `navigator.clipboard.writeText`
+# needs a secure context, which the webview only guarantees on Windows, not on macOS
+# (AGENTS.md: both platforms are mandatory), so clipboard access goes through this plugin instead.
+tauri-plugin-clipboard-manager = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

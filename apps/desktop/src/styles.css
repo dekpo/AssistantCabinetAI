@@ -592,6 +592,15 @@ body {
   border-color: var(--accent);
 }
 
+/* The pressed moment, on every button in the app: same look as `.button--primary` rather than a
+   one-off colour, so a later change to `--accent` still keeps every button's click feedback and
+   its "this is the primary action" colour in agreement. */
+.button:active:enabled {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
 .button:disabled {
   opacity: 0.55;
   cursor: default;
@@ -606,6 +615,64 @@ body {
 .button--primary .spinner {
   border-color: color-mix(in srgb, var(--accent-text) 35%, transparent);
   border-top-color: var(--accent-text);
+}
+
+/* Copy, edit and regenerate: same border, hover and pressed behaviour as every other button
+   (`.button`) - only smaller, since they sit under every finished turn rather than marking one
+   moment out like the stop button does. */
+.button--compact {
+  padding: 2px 8px;
+  font-size: 0.85em;
+}
+
+.message__actions--turn {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 0;
+}
+
+/* Between the conversation and the composer, right-aligned like the send button below it rather
+   than left like a per-turn action - it acts on the whole panel, not on one bubble. */
+.chat__copy-all {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+/* Editing breaks out of the 78% bubble width: she is rewriting the question, not reading it back,
+   and the composer she is used to typing into is the full width of the column.
+   `.message--user` shrink-wraps the article itself to its content via `align-self: flex-end` -
+   that, not `align-items`, is what keeps a short bubble narrow, so it is what has to be undone
+   here for the textarea to actually reach full width rather than only being allowed to. */
+.message--editing {
+  max-width: 100%;
+  align-self: stretch;
+  align-items: stretch;
+}
+
+.message__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.message__edit-input {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.message__edit .message__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
 }
 
 .button--quiet {

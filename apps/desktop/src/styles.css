@@ -283,6 +283,113 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* A rendered answer. `pre-wrap` has to go: markdown already carries the paragraphs, and keeping it
+   would double every blank line. The question keeps it - her own text is never markdown. */
+.message__body--markdown {
+  white-space: normal;
+}
+
+.message__body--markdown > :first-child {
+  margin-top: 0;
+}
+
+.message__body--markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.message__body--markdown p,
+.message__body--markdown ul,
+.message__body--markdown ol,
+.message__body--markdown blockquote,
+.message__body--markdown pre,
+.message__body--markdown table {
+  margin: 0 0 8px;
+}
+
+/* A model writes `#` freely. In a conversation a heading is a firmer line, not a banner, so all
+   six levels stay the size of the surrounding text and are told apart by weight. */
+.message__body--markdown h1,
+.message__body--markdown h2,
+.message__body--markdown h3,
+.message__body--markdown h4,
+.message__body--markdown h5,
+.message__body--markdown h6 {
+  margin: 12px 0 4px;
+  font-size: 1em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.message__body--markdown ul,
+.message__body--markdown ol {
+  padding-left: 20px;
+}
+
+.message__body--markdown li {
+  margin: 2px 0;
+}
+
+.message__body--markdown li > p {
+  margin: 0;
+}
+
+.message__body--markdown blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--text-quiet);
+}
+
+.message__body--markdown code {
+  padding: 0 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 0.9em;
+}
+
+.message__body--markdown pre {
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.message__body--markdown pre code {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+/* A table of results is wider than the column more often than not, so it scrolls on its own
+   rather than stretching the conversation. */
+.message__body--markdown table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+
+.message__body--markdown th,
+.message__body--markdown td {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.message__body--markdown th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.message__body--markdown hr {
+  margin: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
 /* Four lines and a toggle, so a three-paragraph question does not push the answer off screen.
    `-webkit-line-clamp` is honoured by WebView2 and by WKWebView, so both platforms clamp. */
 .message__body--clamped {
@@ -365,6 +472,14 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* The stop offered where she is already looking. The `gap` above spaces it from the word exactly as
+   it spaces the spinner, so nothing here touches margins. Written against `.button` as well, since
+   the shared button rule sits further down the file and would otherwise win on padding. */
+.button.message__stop {
+  padding: 0 8px;
+  font-size: 0.85em;
 }
 
 .spinner {

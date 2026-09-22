@@ -10,7 +10,8 @@
     "openSettings": "Settings",
     "retry": "Try again",
     "save": "Save",
-    "send": "Send"
+    "send": "Send",
+    "stop": "Stop"
   },
   "status": {
     "checking": "Checking",
@@ -83,6 +84,7 @@
   },
   "errors": {
     "batch_too_large": "Too many passages were sent at once ({count} for a limit of {limit}). The folder is indexed in smaller batches.",
+    "chat_cancelled": "The question was stopped before any answer.",
     "context_too_large": "This question is too long for one request ({chars} characters for a limit of {limit}). Shorten it.",
     "extraction_empty": "This file has no readable text ({path}).",
     "extraction_failed": "This file could not be read ({path}).",

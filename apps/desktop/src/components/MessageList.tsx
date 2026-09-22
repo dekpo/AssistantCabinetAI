@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { formatDuration } from "../lib/duration";
+import type { GenerationPhase } from "../lib/generation";
 import { isNearBottom, prefersReducedMotion, scrollBehaviour } from "../lib/scroll";
 import { timestampParts } from "../lib/timestamp";
 import type { ChatEntry } from "../state/useChat";
 import { ArrowDownGlyph } from "./ArrowDownGlyph";
 import { CollapsibleText } from "./CollapsibleText";
+import { Markdown } from "./Markdown";
 
-export function MessageList({ entries, pending }: { entries: ChatEntry[]; pending: boolean }) {
+export function MessageList({
+  entries,
+  phase,
+  onStop,
+}: {
+  entries: ChatEntry[];
+  phase: GenerationPhase;
+  onStop: () => void;
+}) {
   const { t } = useTranslation();
   const messages = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -65,19 +75,34 @@ export function MessageList({ entries, pending }: { entries: ChatEntry[]; pendin
               </article>
             );
           }
-          const showPending = entry.content.length === 0 && pending;
-          const body = showPending ? (
-            <span className="message__pending">
-              <span className="spinner" aria-hidden="true" />
-              {t("chat.pending")}
-            </span>
-          ) : (
-            entry.content
-          );
+          // The same phase the stop button reads, so the spinner and that button can never
+          // disagree about whether the answer has started.
+          const showPending = entry.content.length === 0 && phase === "thinking";
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
-              <p className="message__body">{body}</p>
+              {/* A div, not a paragraph: markdown emits lists and headings, which cannot legally
+                  nest inside a `<p>` and make the browser restructure the DOM silently. */}
+              <div className="message__body message__body--markdown">
+                {showPending ? (
+                  <span className="message__pending">
+                    <span className="spinner" aria-hidden="true" />
+                    {t("chat.pending")}
+                    {/* The second way to stop, where she is already looking. It lives inside the
+                        spinner line on purpose: it therefore exists exactly while the spinner
+                        does, which is the rule itself rather than a copy of it. */}
+                    <button
+                      type="button"
+                      className="button button--primary message__stop"
+                      onClick={onStop}
+                    >
+                      {t("actions.stop")}
+                    </button>
+                  </span>
+                ) : (
+                  <Markdown text={entry.content} />
+                )}
+              </div>
               {entry.sources !== undefined && entry.sources.length > 0 ? (
                 <details className="message__sources">
                   <summary className="disclosure">{t("chat.sourcesToggle")}</summary>

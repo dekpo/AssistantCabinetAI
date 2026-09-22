@@ -1,8 +1,9 @@
 # Chat UX assessment — the pilot's reading and writing surface
 
 **Written 21 September 2026, after inspecting the repository with Sprint 2.5 (local OCR) delivered and the
-chain holding end to end. No code has changed.** This document records feasibility only; nothing here is
-scheduled, and nothing here may displace a milestone.
+chain holding end to end.** It recorded feasibility only, with no code changed. **Items 1 and 2 were then
+built the same day**, and their sections say what shipped and which decisions were taken. Everything else
+here is still feasibility: nothing in it is scheduled, and nothing in it may displace a milestone.
 
 Read with `docs/ROADMAP.md` (dates and what each sprint owns), `docs/DECISIONS.md` (the "Client UI —
 noted, not scheduled" table, which this document expands), `docs/ARCHITECTURE.md` (the boundary between
@@ -20,16 +21,16 @@ architectural decision at all.
 
 | # | Item | Verdict | Rough effort | Blocked on |
 | --- | --- | --- | --- | --- |
-| 1 | Render markdown in an answer | Feasible | ~half a day | Nothing |
+| 1 | Render markdown in an answer | **Delivered 21 September 2026** | ~half a day | — |
 | 1b | Download / source links **inside** markdown | **Refused as asked** — wrong carrier | — | Use structured events instead |
-| 2 | Stop button during generation | Feasible, two layers | ~1 day | One product decision (below) |
+| 2 | Stop button during generation | **Delivered 21 September 2026** | ~1 day | — |
 | 3 | Copy and edit/repost a question | Feasible | ~1 day | Nothing |
 | 4 | Copy and regenerate an answer | Feasible | ~half a day **if built with 3** | Nothing |
 | 5 | Upload a file into the Work Folder | Feasible, largest | ~2–3 days | Three policy decisions (below) |
 | 6 | Read an answer aloud (local TTS) | Feasible | ~1 day | A `docs/DECISIONS.md` amendment |
 | 7 | Dictate a question (speech to text) | **Not now** | A sprint | Frozen until after 14 October |
 
-Items 1 to 5 fit between Sprint 2.5 and Sprint 3 without touching either milestone date. Item 6 needs a
+Items 3 to 5 fit between Sprint 2.5 and Sprint 3 without touching either milestone date. Item 6 needs a
 written decision first. Item 7 is a sprint of its own, comparable in size to Sprint 2.5.
 
 ---
@@ -55,9 +56,23 @@ The handoff lived in the local (ungit) `docs/SESSION-CHAT-READABILITY.md`.
 
 ---
 
-## 1. Markdown in an answer
+## 1. Markdown in an answer — delivered 21 September 2026
 
-**The observation is correct.** `MessageList.tsx:41` puts the answer straight into a paragraph, and
+**What shipped.** `react-markdown` with `remark-gfm`, behind `apps/desktop/src/components/Markdown.tsx`,
+memoised per answer. GFM was added for one reason: a summary of a specialist report comes back as a table
+often enough that pipe characters on screen would be a daily annoyance. The assistant body became a `<div>`
+carrying `.message__body--markdown`, which drops `white-space: pre-wrap`; the question keeps it, because her
+own text is never markdown. Headings are rendered but held at the surrounding text size — a model writes
+`#` freely, and in a conversation a heading is a firmer line, not a banner.
+
+**A link and an image are stripped to their own text**, which is the enforcement of 1b below rather than a
+detail. `src/components/markdown.test.ts` renders the component with `react-dom/server` — which needs no
+browser, so it runs in the existing Node test environment — and asserts on real output: a `file:///` link
+becomes plain words, a remote image is never fetched, and `<script>` the model wrote is shown rather than
+applied. `src/guards/markdown.test.ts` then holds the two structural rules in place: no component sets HTML
+itself, and `rehype-raw` is not installed.
+
+**The original finding, which the above acts on.** `MessageList.tsx:41` puts the answer straight into a paragraph, and
 `.message__body` (`styles.css:245-249`) carries `white-space: pre-wrap`, so `**Patient**` and `-` bullets
 reach the screen as literal characters. There is no markdown library anywhere: `apps/desktop/package.json`
 has exactly three runtime dependencies (`@tauri-apps/api`, `react`, `react-dom`).
@@ -108,10 +123,33 @@ action travels on the structured channel beside the text, and Rust re-validates 
 
 ---
 
-## 2. Stop button during generation
+## 2. Stop button during generation — delivered 21 September 2026
 
-Feasible. Swapping the "Envoyer" button to "Arrêter" while pending, and back on stop, is the right
-interaction. **But a frontend-only version would be a trap, and that is the finding that matters.**
+**The decisions taken, which narrowed the feature rather than widened it.**
+
+- **The stop exists only while the answer has not started.** One button in one place: it reads `Stop` while
+  the spinner shows, and the moment the first words arrive it is `Envoyer` again — disabled, because the box
+  is empty. So a half-read answer is never taken away from her, and the question below about keeping a
+  partial answer stops being a question: there is never a partial answer to keep.
+- **`Stop` is the word in French too.** Shorter than `Arrêter` and understood by every French user, so both
+  catalogues carry the same string.
+- **A stop keeps nothing, on either side.** The question goes with the answer and the conversation returns
+  to exactly what it was; no "interrupted" marker, because there is nothing to mark. Her text is put back in
+  the composer, since a stop is a question to rephrase far more often than one to forget.
+
+**What shipped.** `apps/desktop/src-tauri/src/cancellation.rs` owns the signal: a `tokio::sync::watch`,
+`begin()` per run, and `until_stopped`, which drops the run's future rather than asking it to wind down —
+dropping the request is what closes the connection, and closing the connection is what stops the model. It
+wraps the **whole** of `ask_with_sources`, so embedding the question is cancellable too; that leg is what
+runs during the spinner, which is precisely the moment she wants the button to answer. A stop wins even when
+it lands in the same instant as the answer, so the outcome never depends on which branch `select!` picked.
+The gateway needed no change, as predicted. `GenerationPhase` in `src/lib/generation.ts` holds the one
+product rule (`canStop`), and both the spinner and the button read it, so they cannot disagree about whether
+the answer has started. `tests/chat_cancellation.rs` proves the stream really ends: it asserts that no
+further piece of text arrives after the stop, which a view-only version could not pass.
+
+**The original finding, which is why it was built this way.** Swapping the "Envoyer" button while pending is
+the right interaction, **but a frontend-only version would be a trap.**
 
 `useChat.send` awaits `invoke(...)`, and Tauri v2's `invoke` returns a plain Promise with no abort —
 abandoning it does not stop the Rust future. `gateway.rs:160` streams with no cancellation check at all.
@@ -123,6 +161,9 @@ The real version is four small pieces:
 1. `Composer` gains `onStop`; `useChat` exposes `stop()`; two catalogue keys.
 2. A `cancel_chat` command flips a `CancellationToken` held in `AppState`.
 3. `gateway::chat` checks it each loop iteration and drops the `reqwest` response, closing the connection.
+   *Built one level up instead:* the signal wraps the whole command rather than reaching inside the gateway,
+   which closes the same connection, covers the embedding leg for free, and keeps the module that speaks to
+   the gateway free of any cancellation policy.
 4. Nothing changes on the server. It is already structured to cope: `api/chat.py`'s generator has a
    `finally: record(...)` so the metadata register stays honest on a disconnect, and `providers/ollama.py`
    streams inside an `async with`, so cancellation propagates down to Ollama. Confirm once by hand.
@@ -133,7 +174,9 @@ The real version is four small pieces:
   comment *"an incomplete summary is worse than none."* A user-initiated stop is not a failure, so keeping
   it is defensible — but it then needs a visible "interrupted" marker. A half-written summary of a
   specialist letter that *looks* complete is exactly the risk `chat.disclaimer` exists for. **Recommend:
-  keep it, marked, with its own catalogue string.**
+  keep it, marked, with its own catalogue string.** — *Settled otherwise, and the recommendation became
+  moot: restricting the stop to the thinking phase means no answer is ever partial, so nothing is kept and
+  no marker is needed. Narrowing the affordance removed the decision instead of answering it.*
 - **Stop must also cancel the embedding leg.** `ask_with_sources` calls `gateway.embed()` before the chat
   call, and that is what runs during the "Recherche" spinner. Cancelling only the chat leg leaves the
   button unresponsive for the first seconds, which is precisely the moment she wants it.
@@ -298,11 +341,12 @@ that. This is a sprint, not a feature.
 
 None of these is a coding question; each changes what gets built.
 
-1. **Item 2** — does a stopped answer stay on screen, marked as interrupted, or disappear like a failed one?
+1. **Item 2** — *answered 21 September 2026 and built:* nothing stays. The stop is offered only while the
+   answer has not started, so the whole turn goes and her text returns to the composer.
 2. **Item 5** — what happens when an uploaded file's name already exists in the Work Folder?
 3. **Item 6** — is `docs/DECISIONS.md`'s voice rule amended to permit local-voice-only read-aloud of text
    already rendered on screen? Without that, item 6 does not start.
-4. **Ordering** — items 1 to 5 fit before Sprint 3. Confirm that none of them is allowed to move the
+4. **Ordering** — items 3 to 5 fit before Sprint 3. Confirm that none of them is allowed to move the
    1 October start of the GP workflows.
 
 ## Cross-platform note

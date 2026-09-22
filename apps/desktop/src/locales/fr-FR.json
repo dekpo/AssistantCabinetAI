@@ -10,7 +10,8 @@
     "openSettings": "Réglages",
     "retry": "Réessayer",
     "save": "Enregistrer",
-    "send": "Envoyer"
+    "send": "Envoyer",
+    "stop": "Stop"
   },
   "status": {
     "checking": "Vérification",
@@ -83,6 +84,7 @@
   },
   "errors": {
     "batch_too_large": "Trop de passages ont été envoyés en une fois ({count} pour une limite de {limit}). Le dossier est indexé par lots plus petits.",
+    "chat_cancelled": "La question a été arrêtée avant toute réponse.",
     "context_too_large": "Cette question est trop longue pour une seule demande ({chars} caractères pour une limite de {limit}). Raccourcissez-la.",
     "extraction_empty": "Ce fichier ne contient pas de texte lisible ({path}).",
     "extraction_failed": "Ce fichier n'a pas pu être lu ({path}).",

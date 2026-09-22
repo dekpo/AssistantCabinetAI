@@ -12,6 +12,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::cancellation::{until_stopped, Cancellation};
 use crate::error::AppError;
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
@@ -26,6 +27,8 @@ use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy}
 pub struct AppState {
     pub settings: Mutex<Settings>,
     pub gateway: GatewayClient,
+    /// Lets `cancel_chat` reach the question being worked on. One at a time.
+    pub cancellation: Cancellation,
 }
 
 impl AppState {
@@ -33,6 +36,7 @@ impl AppState {
         Ok(Self {
             settings: Mutex::new(Settings::default()),
             gateway: GatewayClient::new()?,
+            cancellation: Cancellation::default(),
         })
     }
 
@@ -170,6 +174,29 @@ pub async fn send_chat_message(
     turns: Vec<ChatTurn>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<String, AppError> {
+    let mut stopped = state.cancellation.begin();
+    until_stopped(
+        &mut stopped,
+        conversation_answer(state.inner(), &turns, &on_event),
+    )
+    .await
+}
+
+/// Stop the question being worked on, and keep nothing of it.
+///
+/// The interface only offers this while the answer has not started, so there is never a
+/// half-written summary to decide about: a summary of a specialist letter that looks complete but
+/// stops mid-sentence is exactly the risk the disclaimer exists for.
+#[tauri::command]
+pub fn cancel_chat(state: State<'_, AppState>) {
+    state.cancellation.cancel();
+}
+
+async fn conversation_answer(
+    state: &AppState,
+    turns: &[ChatTurn],
+    on_event: &Channel<ChatStreamEvent>,
+) -> Result<String, AppError> {
     let (server_url, model_alias, locale) = state.read(|settings| {
         (
             settings.server_url.clone(),
@@ -184,7 +211,7 @@ pub async fn send_chat_message(
             &server_url,
             &model_alias,
             locale.as_deref(),
-            &turns,
+            turns,
             |delta| {
                 // A closed window is not a failure worth reporting.
                 let _ = on_event.send(ChatStreamEvent::Delta {
@@ -259,12 +286,29 @@ pub struct AskAnswer {
 
 /// Retrieval, then a sourced chat answer. Refuses rather than answers when the index does not
 /// carry enough evidence for the question (`docs/ARCHITECTURE.md`).
+///
+/// The whole chain is stoppable, not only the chat leg: embedding the question is what runs while
+/// the spinner shows, which is precisely the moment she wants the button to answer.
 #[tauri::command]
 pub async fn ask_with_sources(
     app: AppHandle,
     state: State<'_, AppState>,
     question: String,
     on_event: Channel<ChatStreamEvent>,
+) -> Result<AskAnswer, AppError> {
+    let mut stopped = state.cancellation.begin();
+    until_stopped(
+        &mut stopped,
+        sourced_answer(&app, state.inner(), question, &on_event),
+    )
+    .await
+}
+
+async fn sourced_answer(
+    app: &AppHandle,
+    state: &AppState,
+    question: String,
+    on_event: &Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let (work_folder, server_url, model_alias, embedding_alias, locale) =
         state.read(|settings| {
@@ -280,7 +324,7 @@ pub async fn ask_with_sources(
         return Err(AppError::NoWorkFolderSet);
     }
 
-    let index = open_index(&app)?;
+    let index = open_index(app)?;
 
     let query_vectors = state
         .gateway

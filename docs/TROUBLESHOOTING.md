@@ -8,6 +8,46 @@ with the exact command or code where it matters.
 
 ---
 
+## `cargo` is "not found" in a Cursor terminal although it is installed and on the PATH
+
+**Found:** 22 September 2026, running `pnpm tauri dev` after a session that had used `cargo test` fine.
+
+```text
+failed to run 'cargo metadata' command to get workspace directory:
+failed to run command cargo metadata --no-deps --format-version 1: program not found
+```
+
+Rust was installed and `C:\Users\<user>\.cargo\bin` was already on the **persisted user PATH**. The stale
+environment belongs to the **editor process**, not to the terminal: Cursor was started before rustup added
+that entry, so every terminal it spawns inherits the old PATH. Opening a new terminal in the same window
+changes nothing, which is what makes this look like a broken installation rather than a stale variable.
+
+**Do not reinstall Rust.** Check first, from any shell:
+`[Environment]::GetEnvironmentVariable("Path","User") -split ';' | Select-String cargo`. If the entry is
+there, **restart Cursor**. For the current session only, prepend it by hand — `cmd`:
+`set PATH=%USERPROFILE%\.cargo\bin;%PATH%`, PowerShell: `$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"`.
+Same trap for any tool installed while the editor was open (`uv`, `pnpm`, `rustup` itself).
+
+## A `tiny_http` streaming stand-in sends nothing for seconds, however often its reader is called
+
+**Found:** 21 September 2026, writing the test that proves a stopped question really stops
+(`apps/desktop/src-tauri/tests/chat_cancellation.rs`).
+
+The test streams an endless fake answer and asserts that no further delta arrives after the stop. The
+first version failed on the assertion *before* that one — `the stand-in gateway must have been streaming
+before the stop` — with zero deltas received, even though the reader had been called around ten times.
+
+`tiny_http::Response::new(..., data, None, None)` streams a reader chunked, but it copies through an
+8 KiB buffer and fills it before writing a chunk. A reader returning one 45-byte SSE line per call is
+therefore not slow, it is **silent**: about 180 calls, so nearly four seconds at 20 ms each, before the
+client sees a single byte. Nothing in the failure points at buffering, and raising the timeouts only makes
+the test slower.
+
+**Fix:** the reader fills the whole buffer it was handed, so one call becomes one chunk. It keeps an
+offset into the repeating line, because a buffer boundary must not cut an SSE line where the client cannot
+read it back. Same shape for any future streaming stand-in: think in chunks the size of the buffer, not in
+protocol lines.
+
 ## A `MODEL_ALIASES` entry without the exact Ollama tag fails as a generic "the model did not answer correctly"
 
 **Found:** 21 September 2026, adding a `cabinet-turbo` profile for faster local testing.

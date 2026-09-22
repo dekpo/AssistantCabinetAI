@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { useChat } from "../state/useChat";
 import { Composer } from "./Composer";
@@ -15,7 +16,15 @@ export function ChatPanel({
   modelAlias: string;
 }) {
   const { t } = useTranslation();
-  const { entries, pending, error, send } = useChat(onFailure, hasWorkFolder, modelAlias);
+  const [draft, setDraft] = useState("");
+  const { entries, phase, error, send, stop } = useChat(onFailure, hasWorkFolder, modelAlias);
+
+  const onStop = () => {
+    const stopped = stop();
+    if (stopped !== null) {
+      setDraft(stopped);
+    }
+  };
 
   const hint = (
     <>
@@ -33,9 +42,16 @@ export function ChatPanel({
 
   return (
     <section className="chat">
-      <MessageList entries={entries} pending={pending} />
+      <MessageList entries={entries} phase={phase} onStop={onStop} />
       {error === null ? null : <ErrorBanner error={error} />}
-      <Composer pending={pending} onSend={(question) => void send(question)} hint={hint} />
+      <Composer
+        draft={draft}
+        onDraftChange={setDraft}
+        phase={phase}
+        onSend={(question) => void send(question)}
+        onStop={onStop}
+        hint={hint}
+      />
     </section>
   );
 }

@@ -118,6 +118,15 @@ export function sendChatMessage(
   return invoke<string>("send_chat_message", { turns, onEvent: channel });
 }
 
+/**
+ * Stop the question being worked on, wherever it has got to: embedding it, searching the index, or
+ * streaming the answer. The command returns at once; the stopped request then rejects with
+ * `chat_cancelled`, which is how the interface learns it really ended.
+ */
+export function cancelChat(): Promise<void> {
+  return invoke<void>("cancel_chat");
+}
+
 /** One pass of discovery, extraction, chunking and embedding over the work folder. */
 export function indexWorkFolder(): Promise<IndexSummary> {
   return invoke<IndexSummary>("index_work_folder");

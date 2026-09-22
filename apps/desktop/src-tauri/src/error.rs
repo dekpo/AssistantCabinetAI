@@ -99,6 +99,11 @@ pub enum AppError {
     #[error("insufficient_evidence")]
     InsufficientEvidence,
 
+    /// She stopped the question herself, while it was still being worked on. Not a failure: the
+    /// interface keeps no banner and nothing of the abandoned run (`docs/CHAT-UX-ASSESSMENT.md`).
+    #[error("chat_cancelled")]
+    ChatCancelled,
+
     /// The OCR engine is not installed, or its startup probe failed. The product degrades to
     /// Sprint 2a behaviour: a page with no usable text layer is reported empty, not guessed at.
     #[error("ocr_unavailable")]
@@ -147,6 +152,7 @@ impl AppError {
             Self::ExtractionEmpty { .. } => "extraction_empty",
             Self::ExtractionFailed { .. } => "extraction_failed",
             Self::InsufficientEvidence => "insufficient_evidence",
+            Self::ChatCancelled => "chat_cancelled",
             Self::OcrUnavailable => "ocr_unavailable",
             Self::OcrLanguageUnavailable { .. } => "ocr_language_unavailable",
             Self::OcrFailed { .. } => "ocr_failed",
@@ -166,6 +172,7 @@ impl AppError {
             | Self::NoWorkFolderSet
             | Self::IndexUnavailable
             | Self::InsufficientEvidence
+            | Self::ChatCancelled
             | Self::OcrUnavailable => json!({}),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
                 json!({ "path": path })

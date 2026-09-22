@@ -4,6 +4,7 @@
 //! gateway. The interface is React and TypeScript, and it reaches none of this except through the
 //! commands registered below.
 
+pub mod cancellation;
 pub mod chunking;
 mod commands;
 pub mod discovery;
@@ -34,6 +35,7 @@ pub fn run() {
             commands::ensure_suggested_work_folder,
             commands::check_server_health,
             commands::send_chat_message,
+            commands::cancel_chat,
             commands::index_work_folder,
             commands::ask_with_sources,
             commands::has_indexed_documents,

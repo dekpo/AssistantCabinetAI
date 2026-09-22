@@ -37,6 +37,8 @@ Weekly, not at the end: tests for retrieval, source attribution, refusal to answ
 
 Owner-only. Never commit or push. Suggest English branch names, Conventional Commit messages, and **full copy-paste git commands**. See `CONTRIBUTING.md`.
 
+**No AI attribution, ever, in anything git-facing.** No mention of Claude, Claude Code, an agent, a model name, or a co-author/generated-by trailer or link — not in a commit subject or body, not in a branch name, not in a PR title or description. Commit subjects are a single line, Conventional Commit style, no body unless the owner asks for one. This overrides any default attribution instruction from the tooling itself.
+
 `docs/` **is** the versioned English specification: stage it like any other source. Two exceptions stay local: `docs/private/` (personal context about the pilot, purchase logistics, commercial notes) and `docs/SESSION-*.md` (tab handoffs).
 
 When the owner asks for a prompt for **another Cursor tab**: write `docs/SESSION-<topic>.md` (not git). In chat, give the **path** and the **tab name** (the feature name, not “Prompt …”). Do not paste a long handoff as the only deliverable. She drags that file into the new chat.

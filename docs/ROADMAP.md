@@ -266,6 +266,34 @@ claiming to be a PDF could change what the product said its extension was.
 reasoning, semantic file resolution, background folder watching, and any file-management interface beyond
 showing the counts.
 
+**Delivered, 23 September 2026.** Merged as `6c78371`, `feat: make the work folder an authoritative source
+of filesystem facts` (pull request #11). What exists now: `file_record.rs` (`FileRecord`, `FileKind`,
+`Readability`, `ProcessingStatus`), `inventory.rs` (`WorkFolderInventory`, deterministic ordering, joined
+onto the local index), `file_reference.rs` (`FileReferenceResolver`, exact/ambiguous/no-match resolution),
+`folder_questions.rs` (deterministic routing) and `work_folder_context.rs` (the compact context block sent
+to the model). 152 `cargo test --lib`, 36 further integration tests across five files, 184 `vitest`, `tsc`
+and `cargo clippy` clean.
+
+Testing the same day against the pilot's own workstation folder surfaced three problems the design had not
+anticipated, fixed in the same pull request rather than deferred. A total request timeout that discarded a
+slow model's answer mid-stream, replaced by an inactivity bound (a setting, not a constant) that keeps a
+partial answer exactly as a stop already did. A routing rule that required every word of a question to be
+in the pattern pack, which failed on ordinary polite phrasing ("could you give me a list of the available
+documents") and sent the question to a model that then mistranscribed the file list by hand; replaced by
+intent plus subject, no content word ("summary", "mention"), and no unknown word that the indexed documents
+themselves contain, checked against the existing FTS index through a `CorpusWords` port rather than a
+maintained dictionary. And a resolver that matched only a whole file name, which failed on a shortened
+reference such as a date dropped from a file name; fixed with suffix matching under the same ambiguity
+guarantee. The interface also now tells a *file* (anything on disk) apart from a *document* (something that
+could be read), labels a deterministic answer as such, and lets the existing regenerate control ask the
+model instead of recomputing an answer a model never wrote in the first place — no new control added.
+
+**Not independently verified:** model independence (`docs/ARCHITECTURE.md`) is proved structurally —
+`route()` takes no model alias and no gateway — rather than by running two live aliases against a live
+gateway on the same folder. And every test above ran on Windows only; there is still no macOS CI job, so
+cross-platform behaviour rests on there being no `#[cfg]` in the new code, per `docs/SPRINT-2.5-ASSESSMENT.md`
+section O.
+
 ## Sprint 3 — GP workflows (1 → 7 October)
 
 Deliverable: the actions that cost her 1.5 to 2 hours a day. Three flows, not five.

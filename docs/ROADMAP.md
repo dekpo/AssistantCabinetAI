@@ -13,6 +13,12 @@ Canonical direction: `docs/BRIEF-V0-PROTOTYPE.md`. Sprint rule: `.cursor/rules/v
 `docs/BRIEF-SPRINT-2.5-OCR.md`. Engineering assessment: `docs/SPRINT-2.5-ASSESSMENT.md`. The decision it
 reverses ("scan OCR out of v0") is updated in `docs/DECISIONS.md`.
 
+**Amended 23 September 2026.** **Sprint 2a.5** is inserted as hardening between sprint 2.5 and sprint 2b.
+It adds no ingestion format and no user-facing feature: it makes the work folder a deterministic,
+authoritative source of filesystem facts, so that a file count, a file name or an extension can no longer
+be inferred by a model from retrieved passages. Design: `docs/WORK-FOLDER-INVENTORY.md`. Nothing else moves;
+sprint 2b keeps its date.
+
 One goal: an **installable** prototype the pilot GP can use, which answers **with its sources** on her own
 documents. Given a choice between one more feature and a more reliable, private, testable and replaceable
 flow, take the second.
@@ -51,6 +57,8 @@ Sprint 2a  documents      PDF / DOCX / TXT / MD
    ↓
 Sprint 2.5 local OCR      image-only PDF / JPEG / PNG
    ↓
+Sprint 2a.5 work folder   inventory, file identity, reference resolution (no new format)
+   ↓
 Sprint 2b  tabular data   CSV / XLSX
    ↓
 Sprint 3   GP workflows   summary, naming with duplicates, structured extraction
@@ -60,9 +68,9 @@ Sprint 4   deployment     Windows installer, the practice
 
 Calendar order, which differs in one place on purpose:
 
-| Sprint | 1 | 2a | 2.5 | 3 | 4 | 2b |
-| --- | --- | --- | --- | --- | --- | --- |
-| Dates | delivered 17 Sep | delivered 19 Sep | 20–30 Sep | 1–7 Oct | 8–14 Oct | from 15 Oct |
+| Sprint | 1 | 2a | 2.5 | 2a.5 | 3 | 4 | 2b |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Dates | delivered 17 Sep | delivered 19 Sep | delivered 21 Sep | 23 Sep | 1–7 Oct | 8–14 Oct | from 15 Oct |
 
 Sprint 2b is numbered before Sprint 3 and dated after Sprint 4. The reason was recorded on 18 September
 and has not changed: `docs/PILOT-GP.md` finds no spreadsheet anywhere in her measured workflow, so tabular
@@ -223,6 +231,40 @@ tables detected from images, handwriting, GPU acceleration, camera capture, a se
 **Acceptance, 30 September:** a fictional scanned letter answers a question with a citation naming its
 file and page; a born-digital PDF indexes with zero OCR calls; an unreadable image produces the refusal;
 no file is written outside the index; the measured empty-page rate on the fixtures is written down.
+
+## Sprint 2a.5 - work folder intelligence (23 September)
+
+Deliverable: the application knows exactly what is in the work folder, and says so without asking a model.
+Design and non-goals: `docs/WORK-FOLDER-INVENTORY.md`.
+
+Hardening, not a feature. It was added because the chain had no authoritative answer to "what is in my
+folder?": the only thing that knew about files was retrieval, which returns passages, so a folder of
+fifteen files could be reported as six, an ambiguous file name could be resolved silently, and a document
+claiming to be a PDF could change what the product said its extension was.
+
+- Three contracts, deliberately generic so sprint 2b reuses them rather than redesigning them:
+  `FileRecord` (which file is this), `WorkFolderInventory` (what is in the folder), and
+  `FileReferenceResolver` (which file did she mean). Identity is the existing content SHA-256, so
+  `Source.origin.sha256` keeps its meaning and no second hashing model appears.
+- Filesystem facts are answered from `std::fs` plus the local index, never from a retrieved chunk and never
+  by a model. Counting, listing, listing by extension and showing the folder structure make **zero** gateway
+  calls, and still answer with the server stopped.
+- The question vocabulary is a locale pattern pack loaded as data, as sprint 2b's will be
+  (`docs/DECISIONS.md`). Rust returns machine codes; the React catalogues write the sentence.
+- An ambiguous reference is a result, not a tie to break. Two files named `neurologie.pdf` produce a
+  question, never a choice.
+- An explicitly named file constrains retrieval to that file, which removes cross-document contamination
+  from the most common kind of question she asks.
+- A question about **every** document ("summarise each document") is answered from every indexed file rather
+  than from the six that ranked highest, because the inventory supplies the list instead of the ranker. The
+  answer states how much of the folder it rests on, computed in Rust so the model cannot omit it. Found on
+  the pilot workstation on 23 September, when a folder of 15 files with 10 indexed was summarised from 6.
+- **Tests:** `tests/work_folder_inventory.rs`, including adversarial fixtures whose content contradicts the
+  filesystem, and a gateway double that fails the test if a deterministic question reaches it.
+
+**Out of this sprint, deliberately:** any CSV or XLSX processing, workbook inventory, cross-domain
+reasoning, semantic file resolution, background folder watching, and any file-management interface beyond
+showing the counts.
 
 ## Sprint 3 — GP workflows (1 → 7 October)
 

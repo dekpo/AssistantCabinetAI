@@ -11,7 +11,12 @@ use walkdir::WalkDir;
 
 /// Extensions this session's extractor understands. `.csv` and `.xlsx` are a later pipeline
 /// (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
-const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx", "txt", "md", "jpg", "jpeg", "png"];
+pub const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx", "txt", "md", "jpg", "jpeg", "png"];
+
+/// Whether the document pipeline can extract this extension. Lowercase, without the dot.
+pub fn is_supported(extension: &str) -> bool {
+    SUPPORTED_EXTENSIONS.contains(&extension)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +34,17 @@ pub struct DiscoveredFile {
 /// links (files and directories both) and anything unreadable rather than failing the whole
 /// discovery over one bad entry.
 pub fn discover(work_folder: &Path) -> Vec<DiscoveredFile> {
+    let mut found = discover_all(work_folder);
+    found.retain(|file| is_supported(&file.extension));
+    found
+}
+
+/// Every regular file under `work_folder`, whatever its extension, in canonical relative-path
+/// order. This is what the Work Folder inventory counts: the filesystem holds files, and only
+/// some of them are documents this pipeline can read (`docs/WORK-FOLDER-INVENTORY.md`). The
+/// same walk, the same symbolic-link refusal and the same relative paths as `discover`, so the
+/// two can never disagree about what is in the folder.
+pub fn discover_all(work_folder: &Path) -> Vec<DiscoveredFile> {
     let mut found = Vec::new();
 
     let walker = WalkDir::new(work_folder)
@@ -41,12 +57,6 @@ pub fn discover(work_folder: &Path) -> Vec<DiscoveredFile> {
         if is_symlink(path) || !path.is_file() {
             continue;
         }
-        let Some(extension) = extension_of(path) else {
-            continue;
-        };
-        if !SUPPORTED_EXTENSIONS.contains(&extension.as_str()) {
-            continue;
-        }
         let Ok(metadata) = entry.metadata() else {
             continue;
         };
@@ -56,7 +66,7 @@ pub fn discover(work_folder: &Path) -> Vec<DiscoveredFile> {
         found.push(DiscoveredFile {
             relative_path: relative,
             absolute_path: path.display().to_string(),
-            extension,
+            extension: extension_of(path).unwrap_or_default(),
             size_bytes: metadata.len(),
             modified_at: metadata
                 .modified()
@@ -148,6 +158,21 @@ mod tests {
         let names: Vec<_> = files.iter().map(|f| f.relative_path.clone()).collect();
 
         assert_eq!(names, vec!["real.txt"]);
+    }
+
+    #[test]
+    fn discover_all_keeps_every_file_including_the_ones_the_pipeline_cannot_read() {
+        let root = tempfile::tempdir().expect("temp dir");
+        std::fs::write(root.path().join("letter.pdf"), b"pdf").unwrap();
+        std::fs::write(root.path().join("planning.csv"), b"csv").unwrap();
+        std::fs::write(root.path().join("archive.zip"), b"zip").unwrap();
+        std::fs::write(root.path().join("NOTICE"), b"no extension").unwrap();
+
+        let every = discover_all(root.path());
+        let names: Vec<_> = every.iter().map(|f| f.relative_path.clone()).collect();
+
+        assert_eq!(names, vec!["NOTICE", "archive.zip", "letter.pdf", "planning.csv"]);
+        assert_eq!(discover(root.path()).len(), 1);
     }
 
     #[test]

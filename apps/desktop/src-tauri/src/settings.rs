@@ -28,6 +28,24 @@ const DEFAULT_MODEL_ALIAS: &str = "cabinet-chat";
 /// (`docs/ARCHITECTURE.md`).
 const DEFAULT_EMBEDDING_ALIAS: &str = "cabinet-embed";
 
+/// What to assume when no language has been chosen yet. The pilot practice is French
+/// (`docs/LANGUAGE-AND-LOCALE.md`); the interface still resolves the system locale first, and
+/// this only covers the moment before it has.
+pub const DEFAULT_LOCALE: &str = "fr-FR";
+
+/// How long an answer may go **silent** before the client gives up on it, in seconds.
+///
+/// Silence, not duration: an answer that keeps arriving never expires, however long it takes.
+/// The value has to cover the slowest part, which is not the writing but the reading - a large
+/// model on the practice's 2019 workstation spends minutes on a long prompt before the first
+/// word appears (`docs/HARDWARE.md`).
+pub const DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 300;
+
+/// Low enough that a genuinely stuck model is still reported in a reasonable time, high enough
+/// that nobody can set a value that cuts off a working answer on a slow machine.
+pub const MIN_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 30;
+pub const MAX_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 3_600;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
@@ -47,6 +65,10 @@ pub struct Settings {
     pub model_alias: String,
     pub embedding_alias: String,
     pub work_folder: Option<String>,
+    /// Seconds of silence before an answer is abandoned. A setting rather than a constant,
+    /// because how long a model stays quiet depends on the model and on the machine, and neither
+    /// is knowable from here (`.cursor/rules/v0-sprint.mdc`: nothing hardcoded).
+    pub answer_idle_timeout_seconds: u64,
 }
 
 impl Default for Settings {
@@ -59,7 +81,19 @@ impl Default for Settings {
             model_alias: DEFAULT_MODEL_ALIAS.to_string(),
             embedding_alias: DEFAULT_EMBEDDING_ALIAS.to_string(),
             work_folder: None,
+            answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
         }
+    }
+}
+
+impl Settings {
+    /// The stored value as a `Duration`, clamped on the way out as well as on the way in: a
+    /// `settings.json` edited by hand never reaches the gateway client unbounded.
+    pub fn answer_idle_timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.answer_idle_timeout_seconds.clamp(
+            MIN_ANSWER_IDLE_TIMEOUT_SECONDS,
+            MAX_ANSWER_IDLE_TIMEOUT_SECONDS,
+        ))
     }
 }
 
@@ -104,6 +138,12 @@ pub fn save(
     check_server_url(&checked.server_url)?;
     checked.model_alias = checked.model_alias.trim().to_string();
     checked.embedding_alias = checked.embedding_alias.trim().to_string();
+    // Clamped rather than refused: a value typed into the interface, or left behind by a
+    // hand-edited file, must not be able to make every answer die early or hang for ever.
+    checked.answer_idle_timeout_seconds = checked.answer_idle_timeout_seconds.clamp(
+        MIN_ANSWER_IDLE_TIMEOUT_SECONDS,
+        MAX_ANSWER_IDLE_TIMEOUT_SECONDS,
+    );
     checked.work_folder = match checked.work_folder.as_deref() {
         None => None,
         Some(chosen) if chosen.trim().is_empty() => None,
@@ -149,6 +189,7 @@ mod tests {
             model_alias: "cabinet-chat".into(),
             embedding_alias: "cabinet-embed".into(),
             work_folder: Some("D:\\work".into()),
+            answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
@@ -158,6 +199,47 @@ mod tests {
         assert_eq!(json["serverUrl"], "http://mac-mini.local:8080");
         assert_eq!(json["modelAlias"], "cabinet-chat");
         assert_eq!(json["workFolder"], "D:\\work");
+        assert_eq!(
+            json["answerIdleTimeoutSeconds"],
+            DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
+        );
+    }
+
+    #[test]
+    fn an_idle_timeout_is_clamped_rather_than_trusted() {
+        let mut settings = Settings {
+            answer_idle_timeout_seconds: 0,
+            ..Settings::default()
+        };
+        assert_eq!(
+            settings.answer_idle_timeout(),
+            std::time::Duration::from_secs(MIN_ANSWER_IDLE_TIMEOUT_SECONDS)
+        );
+
+        settings.answer_idle_timeout_seconds = u64::MAX;
+        assert_eq!(
+            settings.answer_idle_timeout(),
+            std::time::Duration::from_secs(MAX_ANSWER_IDLE_TIMEOUT_SECONDS)
+        );
+
+        settings.answer_idle_timeout_seconds = 120;
+        assert_eq!(
+            settings.answer_idle_timeout(),
+            std::time::Duration::from_secs(120)
+        );
+    }
+
+    #[test]
+    fn a_file_written_before_the_setting_existed_still_loads() {
+        // `serde(default)` on the struct: an older `settings.json` carries no idle timeout, and
+        // must open with the default rather than refuse to load.
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+
+        assert_eq!(
+            settings.answer_idle_timeout_seconds,
+            DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
+        );
     }
 
     #[test]

@@ -16,6 +16,9 @@ export interface AppSettings {
   modelAlias: string;
   embeddingAlias: string;
   workFolder: string | null;
+  /** Seconds of silence before an answer is abandoned. Silence, not duration: an answer that
+   * keeps arriving is never cut off, however long it takes. Rust clamps whatever is sent. */
+  answerIdleTimeoutSeconds: number;
 }
 
 export interface AppSnapshot {
@@ -59,10 +62,117 @@ export interface Evidence {
   confidence: number | null;
 }
 
+/** What the document pipeline makes of a filesystem object. Machine codes: the catalogue writes
+ * the word, in the practice's language. */
+export type FileKind =
+  | "document_text"
+  | "document_pdf"
+  | "document_office"
+  | "image"
+  | "tabular_candidate"
+  | "unsupported"
+  | "other";
+
+export type Readability = "readable" | "unreadable" | "not_assessed";
+
+export type ProcessingStatus = "discovered" | "pending" | "processing" | "indexed" | "failed";
+
+/** `recognised_ocr` is not a flavour of `native_text`: what a machine read from a picture is not
+ * what the file itself carries, and the interface says so. */
+export type ExtractionMethod = "native_text" | "recognised_ocr" | "none";
+
+export interface IndexMetadata {
+  indexedSha256: string;
+  chunkCount: number;
+  ocrEngine: string | null;
+  ocrEngineVersion: string | null;
+}
+
+/**
+ * One physical file in the work folder. Filesystem truth, joined with what the local index made
+ * of it (`docs/WORK-FOLDER-INVENTORY.md`). Never carries document text.
+ */
+export interface FileRecord {
+  id: string;
+  relativePath: string;
+  name: string;
+  stem: string;
+  /** Lowercase, without the dot. Read from the filesystem, never inferred from content. */
+  extension: string;
+  kind: FileKind;
+  mimeType: string;
+  sizeBytes: number;
+  modifiedAt: number | null;
+  sha256: string | null;
+  readability: Readability;
+  processingStatus: ProcessingStatus;
+  extractionMethod: ExtractionMethod;
+  indexed: boolean;
+  indexMetadata: IndexMetadata | null;
+}
+
+export interface FolderNode {
+  name: string;
+  relativePath: string;
+  folders: FolderNode[];
+  files: string[];
+}
+
+export interface InventorySummary {
+  totalFiles: number;
+  indexedFiles: number;
+  unreadableFiles: number;
+  notAssessedFiles: number;
+  folderCount: number;
+  byExtension: Record<string, number>;
+  byKind: Record<string, number>;
+}
+
+export interface InventoryReport {
+  rootIdentifier: string;
+  summary: InventorySummary;
+  files: FileRecord[];
+  hierarchy: FolderNode;
+}
+
+/**
+ * A question the work folder answered by itself, with no gateway call. Rust sends the facts and
+ * a machine code; this side writes the sentence (`docs/LANGUAGE-AND-LOCALE.md`).
+ */
+export type FolderAnswer =
+  | { kind: "file_count"; total: number }
+  | { kind: "file_list"; files: FileRecord[] }
+  | { kind: "extension_count"; extension: string; count: number }
+  | { kind: "extension_list"; extension: string; files: FileRecord[] }
+  | { kind: "image_list"; files: FileRecord[] }
+  | { kind: "unreadable_count"; count: number }
+  | { kind: "unreadable_list"; files: FileRecord[] }
+  | { kind: "indexed_count"; count: number }
+  | { kind: "indexed_list"; files: FileRecord[] }
+  | { kind: "folder_list"; folders: string[] }
+  | { kind: "folder_tree"; root: string; lines: string[] }
+  | { kind: "file_details"; file: FileRecord }
+  | { kind: "ambiguous_reference"; query: string; candidates: FileRecord[] }
+  | { kind: "no_matching_file"; query: string }
+  | { kind: "file_unreadable"; file: FileRecord };
+
+/**
+ * How much of the work folder an answer really rests on. Computed in Rust from the evidence it
+ * assembled and the inventory's own counts, never asked of the model - which only knows what it
+ * was sent (`docs/WORK-FOLDER-INVENTORY.md`). Present only for a question that asked about every
+ * document, because that is the only shape that claims completeness.
+ */
+export interface EvidenceCoverage {
+  filesCovered: number;
+  indexedFiles: number;
+  unreadableFiles: number;
+}
+
 export type ChatStreamEvent =
   | { event: "delta"; text: string }
   | { event: "completed"; text: string }
-  | { event: "sources"; sources: Evidence[] };
+  | { event: "sources"; sources: Evidence[]; coverage: EvidenceCoverage | null }
+  | { event: "folder_answer"; answer: FolderAnswer };
 
 export interface IndexSummary {
   scannedFiles: number;
@@ -77,6 +187,10 @@ export interface IndexSummary {
 export interface AskAnswer {
   answer: string;
   sources: Evidence[];
+  /** Set when the work folder answered the question itself. `answer` is then empty. */
+  folderAnswer: FolderAnswer | null;
+  /** Set when the question asked about every document. */
+  coverage: EvidenceCoverage | null;
 }
 
 export function loadAppSnapshot(): Promise<AppSnapshot> {
@@ -146,7 +260,11 @@ export function hasIndexedDocuments(): Promise<boolean> {
 export function askWithSources(
   question: string,
   onDelta: (text: string) => void,
-  onSources: (sources: Evidence[]) => void,
+  onSources: (sources: Evidence[], coverage: EvidenceCoverage | null) => void,
+  onFolderAnswer?: (answer: FolderAnswer) => void,
+  /** Ask the model even when the work folder could answer on its own. Her choice, made on an
+   * answer she has already seen. */
+  skipDeterministic = false,
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
@@ -155,8 +273,23 @@ export function askWithSources(
     } else if (message.event === "sources") {
       // Read from the event rather than from the resolved answer, because a stopped answer never
       // resolves and still has to show where its text came from.
-      onSources(message.sources);
+      onSources(message.sources, message.coverage);
+    } else if (message.event === "folder_answer") {
+      onFolderAnswer?.(message.answer);
     }
   };
-  return invoke<AskAnswer>("ask_with_sources", { question, onEvent: channel });
+  return invoke<AskAnswer>("ask_with_sources", {
+    question,
+    skipDeterministic,
+    onEvent: channel,
+  });
+}
+
+/**
+ * What is in the work folder right now: counts, files and the folder hierarchy, read from the
+ * disk and from the local index. Never from the model, so the panel and an answer about the
+ * folder cannot disagree (`docs/WORK-FOLDER-INVENTORY.md`).
+ */
+export function workFolderInventory(): Promise<InventoryReport> {
+  return invoke<InventoryReport>("work_folder_inventory");
 }

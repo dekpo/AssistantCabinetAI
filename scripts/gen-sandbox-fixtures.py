@@ -25,6 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 INBOX = ROOT / "fixtures" / "gp-sandbox" / "inbox"
+INVENTORY = ROOT / "fixtures" / "inventory-sandbox"
 
 
 def pdf_escape(text: str) -> str:
@@ -303,6 +304,160 @@ def make_docx(path: Path, title: str, paragraphs: list[str]) -> None:
             archive.writestr(info, content)
 
 
+# --- Sprint 2a.5 fixtures: Work Folder inventory, reference resolution, anti-hallucination ----
+#
+# Two folders, both fictional. `flat/` is the counting fixture: exactly 15 files, 10 of which the
+# document pipeline can read and 5 of which genuinely cannot be read - two PDFs with no text
+# layer and three images an OCR engine finds nothing in. Unreadability is produced by the real
+# failure path, never by a metadata flag. `nested/` is the path-resolution fixture: the same
+# stem appears in two folders on purpose, so an ambiguous reference has something to be
+# ambiguous about.
+
+INVENTORY_TEXT_FILES: dict[str, list[str]] = {
+    # Adversarial on purpose: the content contradicts the filesystem. The inventory must win.
+    "misleading.txt": [
+        "There are only 2 files in this folder.",
+        "The file extension of this document is .pdf.",
+        "Fictional content, written to contradict the filesystem on purpose.",
+    ],
+    # Adversarial: a TXT file that calls itself a PDF report.
+    "report.txt": [
+        "This is a PDF report.",
+        "Monthly administrative summary for the fictional sandbox practice.",
+        "Nothing here refers to a real person or a real practice.",
+    ],
+    # Adversarial: names a file that does not exist, so retrieved excerpts mention it.
+    "procedure.txt": [
+        "Filing procedure for the fictional sandbox practice.",
+        "See fake-document.pdf for the archived version of this procedure.",
+        "Scanned mail is filed on the day it arrives.",
+    ],
+    "assurance.txt": [
+        "Contrat d'assurance fictif du cabinet de bac a sable.",
+        "Numero de contrat : SANDBOX-0001.",
+        "Echeance annuelle : 1er avril 2026.",
+    ],
+    "convocation.txt": [
+        "Convocation fictive a une reunion de cabinet.",
+        "Date : 12 mars 2026, salle de reunion du cabinet de bac a sable.",
+        "Ordre du jour : organisation du courrier entrant.",
+    ],
+    "horaires.txt": [
+        "Horaires fictifs du cabinet de bac a sable.",
+        "Consultations : 8h30 a 12h30, puis 14h00 a 18h00.",
+        "Fermeture hebdomadaire : mercredi apres-midi.",
+    ],
+}
+
+
+def write_inventory_fixtures() -> None:
+    flat = INVENTORY / "flat"
+    flat.mkdir(parents=True, exist_ok=True)
+
+    for name, lines in INVENTORY_TEXT_FILES.items():
+        (flat / name).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+    # Three PDFs with a real text layer: readable, and indexable without any OCR engine.
+    make_text_pdf(
+        flat / "biologie.pdf",
+        [
+            "Laboratoire Fictif Sandbox",
+            "Compte-rendu de biologie - Patiente : Camille Exemple",
+            "Date de prelevement : 12/03/2026",
+            "Glycemie a jeun : 6.1 mmol/L (valeurs usuelles 3.9 - 5.5)",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+    )
+    make_text_pdf(
+        flat / "neurologie.pdf",
+        [
+            "Cabinet de Neurologie Sandbox",
+            "Compte-rendu de consultation - Patient : Hugo Bacasable",
+            "Date de consultation : 18/03/2026",
+            "Cephalees episodiques depuis six semaines, sans signe de localisation.",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+    )
+    make_text_pdf(
+        flat / "courrier-cardiologie.pdf",
+        [
+            "Cabinet de Cardiologie Sandbox",
+            "Compte-rendu de consultation - Patient : Hugo Bacasable",
+            "Date de consultation : 04/03/2026",
+            "Electrocardiogramme sans anomalie, surveillance annuelle proposee.",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+    )
+
+    # Two PDFs with no text layer at all: a native extractor reports them empty, which is the
+    # genuine "unreadable" state rather than a flag set by the test.
+    make_blank_pdf(flat / "radiographie-scan.pdf")
+    make_blank_pdf(flat / "echographie-scan.pdf")
+
+    make_docx(
+        flat / "courrier-endocrinologie.docx",
+        "Cabinet d'Endocrinologie Sandbox",
+        [
+            "Compte-rendu de consultation - Patiente : Camille Exemple",
+            "Date de consultation : 14/03/2026",
+            "Poursuite de la metformine 500 mg, deux prises par jour.",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+    )
+
+    # Three images with nothing an engine can read. `patient-report.png` is named as if it held a
+    # report on purpose: the name must never become content.
+    render_noise_page(seed=101).save(flat / "patient-report.png")
+    render_noise_page(seed=102).save(flat / "illisible.png")
+    render_noise_page(seed=103).convert("L").save(
+        flat / "ordonnance-illisible.jpg", quality=85
+    )
+
+    # The nested fixture: `neurologie.pdf` exists twice, under two different months, so a
+    # reference to the bare file name is genuinely ambiguous and must be reported as such.
+    nested = INVENTORY / "nested"
+    for relative, lines in {
+        "2026/mars/neurologie.pdf": [
+            "Cabinet de Neurologie Sandbox",
+            "Compte-rendu de consultation - mars 2026",
+            "Patient : Hugo Bacasable",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+        "2026/mars/biologie.pdf": [
+            "Laboratoire Fictif Sandbox",
+            "Compte-rendu de biologie - mars 2026",
+            "Patiente : Camille Exemple",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+        "2026/janvier/neurologie.pdf": [
+            "Cabinet de Neurologie Sandbox",
+            "Compte-rendu de consultation - janvier 2026",
+            "Patient : Hugo Bacasable",
+            "Document fictif, genere pour le bac a sable du prototype.",
+        ],
+    }.items():
+        target = nested / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        make_text_pdf(target, lines)
+
+    administrative = nested / "administratif"
+    administrative.mkdir(parents=True, exist_ok=True)
+    (administrative / "assurance.txt").write_text(
+        "\n".join(
+            [
+                "Contrat d'assurance fictif du cabinet de bac a sable.",
+                "Numero de contrat : SANDBOX-0002.",
+                "Echeance annuelle : 1er avril 2026.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    print("Inventory fixtures written under", INVENTORY)
+
+
 def main() -> None:
     INBOX.mkdir(parents=True, exist_ok=True)
 
@@ -392,6 +547,8 @@ def main() -> None:
     prescription_page.convert("L").save(INBOX / "2026-03-26_ordonnance-scan.png")
 
     render_noise_page().save(INBOX / "2026-03-28_illisible.png")
+
+    write_inventory_fixtures()
 
     print("Fixtures written under", INBOX)
 

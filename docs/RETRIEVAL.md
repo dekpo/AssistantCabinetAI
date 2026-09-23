@@ -85,6 +85,20 @@ file beside the input. Recognised text carries `derivation: Recognised { engine,
 than `Extracted`, and a page the engine could not read produces no chunk at all, so a failed recognition
 has no path to a citation. Design and engine choice: `docs/SPRINT-2.5-ASSESSMENT.md`.
 
+## The work folder inventory answers filesystem questions, retrieval does not
+
+Retrieval returns passages, so it can say what a document states and cannot say how many documents
+there are. Asking it anyway is how a folder of fifteen files gets described as a folder of six: the
+model counts the files its excerpts came from. Since sprint 2a.5 those questions are answered from a
+deterministic inventory of the work folder instead, with no gateway call at all - file counts, names,
+extensions, paths, the folder structure, and whether one named file was read and by which method.
+
+Two consequences for this pipeline. A question that names a file is resolved first, and retrieval is
+then **constrained to that file**, which removes the cross-document contamination that made "what does
+neurologie.pdf say?" answerable from a different letter of the same name. And when the model is needed,
+the system turn carries the filesystem context beside the excerpts, with a contract forbidding either to
+stand in for the other. Design: `docs/WORK-FOLDER-INVENTORY.md`.
+
 ## Tabular data is a second pipeline, not a special case of the first
 
 Spreadsheets are **not** flattened into text chunks so that they resemble PDFs. Chunking a schedule

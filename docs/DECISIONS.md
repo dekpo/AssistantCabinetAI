@@ -123,6 +123,52 @@ of these reverse a decision above; they are the operational detail that decision
 | Real OCR proven end to end, once | `tesseract.exe`, staged by the fetch script with its verified minimal DLL set, correctly read `fixtures/gp-sandbox/inbox/2026-03-26_ordonnance-scan.png`'s fictional French prescription text on this Windows machine. Encouraging, but one run on one machine, not the sprint's test suite (section M of `docs/SPRINT-2.5-ASSESSMENT.md`) |
 | macOS OCR resources | **Not started.** No fetch script, no verified dylib set, no build or test ever run on macOS for this repository at all (`docs/SPRINT-2.5-ASSESSMENT.md` section O still applies unchanged). Homebrew's `tesseract` formula and `pdfium-binaries`' `pdfium-mac-{x64,arm64}.tgz` are the two known sources; the dylib-set verification needs the same trial-removal method this session used on Windows, done with `otool -L` instead of deleting files and re-running |
 
+## Settled by sprint 2a.5, work folder intelligence (23 September 2026)
+
+Design and non-goals: `docs/WORK-FOLDER-INVENTORY.md`.
+
+| Subject | Decision |
+| --- | --- |
+| Who owns filesystem facts | The **work folder inventory**, built on the workstation from `std::fs` plus the local index. A file count, a file name, an extension, a path, a readable/unreadable state or an indexed state is **never** inferred from a retrieved chunk and never written by a model |
+| File identity | The existing content SHA-256, the value `Source.origin.sha256` already carries. No second hashing model. A renamed or moved file keeps its identity; two byte-identical copies share it, and the inventory reports both rather than choosing |
+| `FileRecord` versus `Source` | `FileRecord` answers "which file is this", `Source` answers "which evidence from it supports this answer". Neither replaces the other, and `Source` is unchanged |
+| What may live on `FileRecord` | Identity, filesystem metadata, a generic classification, processing state, and an optional domain summary. **Not** page counts, chunk counts, OCR confidence, sheet dimensions or column types: those belong to the domain layer that produced them, which is what lets sprint 2b reuse the record |
+| Spreadsheets in the inventory | Recognised as `FileKind::TabularCandidate` and **not** ingested. No CSV or XLSX parsing, and no fake document chunks for a spreadsheet, until sprint 2b |
+| An ambiguous file reference | A **result**, never a tie to break. Two files with the same name produce a question and no retrieval. Ordering is never used to pick one |
+| A reference outside the work folder | Refused on the string, before any lookup, so no path outside the folder is built, opened or stat-ed. A file name is data, never an instruction |
+| Filesystem questions and the gateway | Counting, listing, listing by extension and showing the folder structure make **zero** gateway calls and still answer with the server stopped. Proved by a provider double that counts every request |
+| Question vocabulary | A **locale pattern pack loaded as data**, one per catalogue, as sprint 2b's will be. A question takes the deterministic path only when every one of its words is in the pack, so an ordinary content question falls through to retrieval |
+| Wording of a deterministic answer | Rust returns a machine code plus facts; the React catalogues write the sentence. An answer no model wrote carries no model label |
+| An explicitly named file | Constrains retrieval to that file. A question naming no file keeps the existing whole-folder behaviour |
+| A question about **every** document | Routed to a per-document pass: the inventory supplies the list of indexed files and retrieval runs once inside each, so no indexed document is left out by a similarity ranking. Whole stored chunks only, deterministic order, and a file that ranks badly contributes its opening passage rather than being dropped |
+| Saying how much of the folder an answer covers | Computed in Rust from the evidence and the inventory, rendered by the interface **beside** the answer. A model cannot omit it. Shown only for a question that asked about every document, since a single-fact question is properly answered from one passage |
+| What the model is told about the folder | A generated, compact `WORK_FOLDER_CONTEXT` block plus a knowledge contract, appended to the existing system prompt rather than replacing it. No absolute path, no content hash, no file size and no document text; the view is the smallest one the question needs |
+
+## Settled while testing models on the workstation (23 September 2026)
+
+| Subject | Decision |
+| --- | --- |
+| What bounds an answer in the client | **Silence, not duration.** The 300 s total deadline in `gateway.rs` is replaced by an inactivity bound: an answer that keeps arriving is never cut off, however long it takes, and one where nothing arrives for the configured wait is abandoned. A total deadline killed a healthy `ministral-3:3b` answer mid-flow on the pilot workstation |
+| Why that is safe now and was not in September | The runaway-loop case the total deadline used to catch is bounded elsewhere: the gateway caps every answer at `MAX_OUTPUT_TOKENS` (2 048), and the interface has a stop under the answer being written (`docs/TROUBLESHOOTING.md`, 22 September). The client no longer needs to be the last resort |
+| Where the wait is set | A **setting**, `answerIdleTimeoutSeconds`, default 300, clamped to 30–3 600 in Rust on the way in and on the way out. How long a model stays quiet depends on the model and on the machine, neither of which is knowable from the code |
+| A partial answer when the AI goes quiet | **Kept**, marked incomplete, exactly as a stop keeps it. Deleting it was an asymmetry: the same half-written text survived her stop and was thrown away by a timeout. The two are told apart on screen - one was her decision, the other was not |
+| Dismissing an error | A banner reporting a moment that has passed can be closed. One reporting a state the software is still in, such as a work folder that no longer passes the rules, cannot: closing it would hide something still true |
+
+## Settled while testing models on the workstation, part two (23 September 2026)
+
+Measured causes and the reasoning: `docs/WORK-FOLDER-INVENTORY.md`.
+
+| Subject | Decision |
+| --- | --- |
+| When a question is answered from the folder | An **intent** and a **subject**, no **content word**, and no unknown word that the documents themselves contain. The earlier rule - every word must be in the pack - failed on four ordinary French words and sent a listing request to a model that then mistranscribed three of sixteen paths |
+| How a content question is told from a folder question | The **corpus**, through a `CorpusWords` port over the existing FTS index. `metformine` is a word in the documents, `disponibles` is not. No dictionary is maintained, and the routing stays testable without a database |
+| Words that mean "read this to me" | A short **denylist** in the pack (`summary`, `mention`, `resume`, `contient`, ...), disqualifying the deterministic path outright. A denylist because the ways of asking for content are few and the ways of asking politely are not |
+| File versus document, in the interface | A **file** is anything on disk; a **document** is a file something could be read from. "Tous mes documents" means the ones that were analysed. Both words live in the pattern pack and the panel uses them the same way |
+| A shortened file name | **Resolves.** People drop the date, not the subject: `12_compte-rendu-biologie.pdf` reaches `inbox/2026-03-12_compte-rendu-biologie.pdf`. A file actually called the reference wins over one that ends with it; fragments match names, never paths; an extension alone is not a reference; several tails matching is an ambiguity like any other |
+| Saying an answer was computed | A deterministic answer carries its own provenance line where a model answer says "generated by". Each listed file carries what happened to it, in the same words the panel uses |
+| Reaching the model anyway | The **existing** regenerate control, relabelled on deterministic answers: recomputing them would return the same bytes, so there the button asks the model instead. No new control - the window has no room for one |
+| What the model is sent for a per-document question | Counts, not the file listing. The excerpts already carry one header per file, and a second copy of every path pushed the first excerpts into the middle of a long prompt, which is where small models were observed losing them |
+
 ## Known blind spots to keep in mind
 
 - **File actions are the number one business risk.** A bad batch rename over hundreds of documents is far

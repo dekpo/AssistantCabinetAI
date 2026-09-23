@@ -177,6 +177,43 @@ body {
   flex: 0 0 auto;
 }
 
+/* Beside the conversation the listing is behind a disclosure, and smaller: the space belongs to
+   the answers. The settings panel shows the same list open, where there is room for it. */
+.inventory-detail {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+/* The work folder as it actually is: one line per file, path first, state second. Deliberately
+   plain - this is a way to check what the software sees, not a file manager. */
+.inventory {
+  max-height: 220px;
+  margin: 8px 0 10px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.inventory__file {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.inventory__path {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
+.inventory__state {
+  flex: 0 0 auto;
+  color: var(--text-quiet);
+}
+
 .card .banner {
   margin-top: 12px;
 }
@@ -732,10 +769,39 @@ body {
   padding: 10px 12px;
 }
 
+.banner__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .banner__title {
   margin: 0 0 2px;
   font-weight: 600;
   font-size: 12px;
+}
+
+/* A banner reporting something that has already happened must be closable: it sits in the
+   conversation, and one that cannot be dismissed keeps taking the space where the next answer
+   goes. */
+.banner__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.banner__close:hover {
+  border-color: var(--alert-border);
 }
 
 .banner__message {
@@ -791,6 +857,19 @@ body {
 .field__row {
   display: flex;
   gap: 8px;
+}
+
+/* A count of seconds needs a fraction of the width of an address, and a full-width number input
+   reads as though a long value were expected. */
+.field__control--number {
+  flex: 0 0 auto;
+  width: 7em;
+}
+
+.field__unit {
+  align-self: center;
+  color: var(--text-quiet);
+  font-size: 12px;
 }
 
 .field__control {

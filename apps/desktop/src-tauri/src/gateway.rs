@@ -17,7 +17,6 @@ pub const MAX_CONTEXT_CHARS: usize = 24_000;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(4);
-const CHAT_TIMEOUT: Duration = Duration::from_secs(300);
 const EMBEDDING_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Caps mirrored from the gateway (`docs/RETRIEVAL.md`): the client caps too, because indexing
@@ -73,9 +72,11 @@ pub struct GatewayClient {
 
 impl GatewayClient {
     pub fn new() -> Result<Self, AppError> {
+        // No client-wide request timeout: that would be a deadline on the whole answer, which is
+        // precisely what must not bound a streamed one. `health` and `embed` set their own, and
+        // `chat` bounds silence instead.
         let http = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
-            .timeout(CHAT_TIMEOUT)
             .build()
             .map_err(|_| AppError::Internal)?;
         Ok(Self { http })
@@ -112,12 +113,20 @@ impl GatewayClient {
     }
 
     /// Stream one answer, handing each piece of text to `on_delta`. Returns the whole answer.
+    ///
+    /// `idle_timeout` bounds **silence**, not duration. An answer that keeps arriving is never
+    /// cut off, however long the whole thing takes; one where nothing arrives for that long is
+    /// abandoned. A total deadline would be the wrong tool here: a large model on a slow
+    /// workstation legitimately spends minutes reading a long prompt before the first word, and
+    /// killing a healthy answer at an arbitrary clock time throws away work the practitioner was
+    /// reading (`docs/HARDWARE.md`).
     pub async fn chat(
         &self,
         server_url: &str,
         model_alias: &str,
         output_locale: Option<&str>,
         turns: &[ChatTurn],
+        idle_timeout: Duration,
         mut on_delta: impl FnMut(&str),
     ) -> Result<String, AppError> {
         let size: usize = turns.iter().map(|turn| turn.content.chars().count()).sum();
@@ -140,13 +149,15 @@ impl GatewayClient {
         }
 
         let url = endpoint(server_url, "/v1/chat/completions");
-        let response = self
-            .http
-            .post(&url)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| transport_error(error, server_url))?;
+        // The wait for the response head is silence too: the gateway answers once the model has
+        // been reached, and on a busy machine that queueing is exactly the case this bounds.
+        let response =
+            tokio::time::timeout(idle_timeout, self.http.post(&url).json(&payload).send())
+                .await
+                .map_err(|_| AppError::ServerTimeout {
+                    url: server_url.to_string(),
+                })?
+                .map_err(|error| transport_error(error, server_url))?;
         if !response.status().is_success() {
             let status = response.status().as_u16();
             let body = response.text().await.unwrap_or_default();
@@ -157,7 +168,14 @@ impl GatewayClient {
         let mut answer = String::new();
         let mut buffer = String::new();
         let mut stream = response.bytes_stream();
-        while let Some(piece) = stream.next().await {
+        // The clock restarts on every piece that arrives, which is what makes this an inactivity
+        // bound rather than a deadline.
+        while let Some(piece) = tokio::time::timeout(idle_timeout, stream.next())
+            .await
+            .map_err(|_| AppError::ServerTimeout {
+                url: server_url.to_string(),
+            })?
+        {
             let bytes = piece.map_err(|error| transport_error(error, server_url))?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
             while let Some(line_end) = buffer.find('\n') {

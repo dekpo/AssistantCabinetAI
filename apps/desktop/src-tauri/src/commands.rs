@@ -14,15 +14,19 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::error::AppError;
+use crate::file_record::FileRecord;
+use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexSummary};
+use crate::inventory::{FolderNode, InventorySummary, WorkFolderInventory};
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{PageRasterizer, Rasterizer};
-use crate::retrieval::{self, Evidence};
+use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
+use crate::work_folder_context::{self, ContextView};
 
 pub struct AppState {
     pub settings: Mutex<Settings>,
@@ -66,9 +70,35 @@ pub struct AppSnapshot {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum ChatStreamEvent {
-    Delta { text: String },
-    Completed { text: String },
-    Sources { sources: Vec<Evidence> },
+    Delta {
+        text: String,
+    },
+    Completed {
+        text: String,
+    },
+    Sources {
+        sources: Vec<Evidence>,
+        /// Present when the question asked about every document, so the interface can say how
+        /// much of the folder the answer really rests on.
+        coverage: Option<EvidenceCoverage>,
+    },
+    /// A question the Work Folder inventory answered on its own. Machine codes plus data: the
+    /// interface writes the sentence, in the practice's language, and no gateway call was made
+    /// (`docs/WORK-FOLDER-INVENTORY.md`).
+    FolderAnswer {
+        answer: FolderAnswer,
+    },
+}
+
+/// The Work Folder as it actually is, for the panel that shows it. Metadata only.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryReport {
+    /// The folder's own name, never the machine path, which the panel already shows separately.
+    root_identifier: String,
+    summary: InventorySummary,
+    files: Vec<FileRecord>,
+    hierarchy: FolderNode,
 }
 
 fn open_index(app: &AppHandle) -> Result<IndexStore, AppError> {
@@ -197,11 +227,12 @@ async fn conversation_answer(
     turns: &[ChatTurn],
     on_event: &Channel<ChatStreamEvent>,
 ) -> Result<String, AppError> {
-    let (server_url, model_alias, locale) = state.read(|settings| {
+    let (server_url, model_alias, locale, idle_timeout) = state.read(|settings| {
         (
             settings.server_url.clone(),
             settings.model_alias.clone(),
             settings.locale.clone(),
+            settings.answer_idle_timeout(),
         )
     })?;
 
@@ -212,6 +243,7 @@ async fn conversation_answer(
             &model_alias,
             locale.as_deref(),
             turns,
+            idle_timeout,
             |delta| {
                 // A closed window is not a failure worth reporting.
                 let _ = on_event.send(ChatStreamEvent::Delta {
@@ -249,10 +281,13 @@ pub async fn index_work_folder(
 
     let tesseract = try_tesseract(&app);
     let rasterizer = try_rasterizer(&app);
-    let ocr: Option<&dyn OcrProvider> = tesseract.as_ref().map(|provider| provider as &dyn OcrProvider);
-    let raster: Option<&dyn PageRasterizer> =
-        rasterizer.as_ref().map(|provider| provider as &dyn PageRasterizer);
-    let locale = locale.as_deref().unwrap_or("fr-FR");
+    let ocr: Option<&dyn OcrProvider> = tesseract
+        .as_ref()
+        .map(|provider| provider as &dyn OcrProvider);
+    let raster: Option<&dyn PageRasterizer> = rasterizer
+        .as_ref()
+        .map(|provider| provider as &dyn PageRasterizer);
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
 
     let mut index = open_index(&app)?;
     indexing::run(
@@ -277,11 +312,43 @@ pub async fn has_indexed_documents(app: AppHandle) -> Result<bool, AppError> {
     Ok(index.chunk_count()? > 0)
 }
 
+/// What is in the Work Folder right now: the filesystem, joined with what the index made of it.
+///
+/// Answered from `std::fs` and the local index, never from the model, so the counts the panel
+/// shows are the same ones a question about the folder gets (`docs/WORK-FOLDER-INVENTORY.md`).
+#[tauri::command]
+pub fn work_folder_inventory(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<InventoryReport, AppError> {
+    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    // A folder that has never been analysed still has an inventory; it simply has no index to
+    // join onto, which is exactly what "nothing has been read yet" should look like.
+    let index = open_index(&app).ok();
+    let inventory = WorkFolderInventory::discover(Path::new(&work_folder), index.as_ref())?;
+
+    Ok(InventoryReport {
+        root_identifier: inventory.root_identifier(),
+        summary: inventory.summary(),
+        files: inventory.all_files().to_vec(),
+        hierarchy: inventory.hierarchy(),
+    })
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AskAnswer {
     pub answer: String,
     pub sources: Vec<Evidence>,
+    /// Present when the question was about the Work Folder itself and was answered from the
+    /// inventory. `answer` is then empty: Rust does not write prose.
+    pub folder_answer: Option<FolderAnswer>,
+    /// Present when the question asked about every document, so the interface can say how much of
+    /// the folder the answer rests on rather than let it imply everything.
+    pub coverage: Option<EvidenceCoverage>,
 }
 
 /// Retrieval, then a sourced chat answer. Refuses rather than answers when the index does not
@@ -294,12 +361,22 @@ pub async fn ask_with_sources(
     app: AppHandle,
     state: State<'_, AppState>,
     question: String,
+    // Ask the model even when the Work Folder could answer on its own. Her choice, made on an
+    // answer she has already seen, so the deterministic path stays the default and the model
+    // stays reachable (`docs/WORK-FOLDER-INVENTORY.md`).
+    skip_deterministic: Option<bool>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let mut stopped = state.cancellation.begin();
     until_stopped(
         &mut stopped,
-        sourced_answer(&app, state.inner(), question, &on_event),
+        sourced_answer(
+            &app,
+            state.inner(),
+            question,
+            skip_deterministic.unwrap_or(false),
+            &on_event,
+        ),
     )
     .await
 }
@@ -308,23 +385,92 @@ async fn sourced_answer(
     app: &AppHandle,
     state: &AppState,
     question: String,
+    skip_deterministic: bool,
     on_event: &Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
-    let (work_folder, server_url, model_alias, embedding_alias, locale) =
-        state.read(|settings| {
+    let (work_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) = state
+        .read(|settings| {
             (
                 settings.work_folder.clone(),
                 settings.server_url.clone(),
                 settings.model_alias.clone(),
                 settings.embedding_alias.clone(),
                 settings.locale.clone(),
+                settings.answer_idle_timeout(),
             )
         })?;
-    if work_folder.is_none() {
+    let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
-    }
+    };
 
     let index = open_index(app)?;
+    let inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let locale = locale.as_deref();
+
+    // Deterministic before generative (`docs/ARCHITECTURE.md`). Routing happens before the
+    // question is embedded, so a question the folder itself answers costs no gateway call at
+    // all - not even the embedding one - and still answers with the server stopped.
+    /// What retrieval was asked to cover, decided before the question is embedded.
+    enum Plan {
+        /// One named file.
+        OneFile(String),
+        /// Every indexed file, because the question asked about every document.
+        EveryDocument(Vec<String>),
+        /// Whatever ranks best in the folder.
+        WholeFolder,
+    }
+
+    let plan = match folder_questions::route(
+        &inventory,
+        &index,
+        &question,
+        locale.unwrap_or(settings::DEFAULT_LOCALE),
+    ) {
+        // Asked for again, with the model this time. A question the folder answers is still a
+        // question about the folder, so the model gets every document rather than the handful
+        // that rank highest - the same treatment "summarise each document" gets.
+        _ if skip_deterministic => Plan::EveryDocument(
+            inventory
+                .indexed_files()
+                .into_iter()
+                .map(|file| file.relative_path.clone())
+                .collect(),
+        ),
+        QuestionRoute::Deterministic(answer) => {
+            let _ = on_event.send(ChatStreamEvent::FolderAnswer {
+                answer: answer.clone(),
+            });
+            return Ok(AskAnswer {
+                answer: String::new(),
+                sources: Vec::new(),
+                folder_answer: Some(answer),
+                coverage: None,
+            });
+        }
+        QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
+        QuestionRoute::PerDocumentRetrieval { files } => {
+            Plan::EveryDocument(files.into_iter().map(|file| file.relative_path).collect())
+        }
+        QuestionRoute::GlobalRetrieval => Plan::WholeFolder,
+    };
+
+    // A question about one named file gets that file's record; anything else gets counts only.
+    // A per-document question deliberately gets counts rather than the whole listing: the
+    // excerpts already carry one header per file, so a listing would repeat every path in a
+    // second format and push the first excerpts into the middle of a long prompt, which is where
+    // small models were observed losing them (`docs/WORK-FOLDER-INVENTORY.md`).
+    let view = match &plan {
+        Plan::OneFile(relative_path) => ContextView::Targeted {
+            relative_path: relative_path.clone(),
+        },
+        Plan::EveryDocument(_) | Plan::WholeFolder => ContextView::Summary,
+    };
+
+    // Nothing has been read yet: retrieval is certain to find nothing, so say so here rather
+    // than spend a round trip discovering it.
+    if index.chunk_count()? == 0 {
+        return Err(AppError::InsufficientEvidence);
+    }
 
     let query_vectors = state
         .gateway
@@ -336,19 +482,57 @@ async fn sourced_answer(
         .await?;
     let query_embedding = query_vectors.into_iter().next().unwrap_or_default();
 
-    let evidence = retrieval::search(&index, &question, &query_embedding)?;
+    let evidence = match &plan {
+        Plan::OneFile(relative_path) => retrieval::search_scoped(
+            &index,
+            &question,
+            &query_embedding,
+            RetrievalScope::File(relative_path.as_str()),
+        )?,
+        Plan::EveryDocument(relative_paths) => {
+            retrieval::search_per_document(&index, &question, &query_embedding, relative_paths)?
+        }
+        Plan::WholeFolder => retrieval::search_scoped(
+            &index,
+            &question,
+            &query_embedding,
+            RetrievalScope::WholeFolder,
+        )?,
+    };
     if evidence.is_empty() {
         return Err(AppError::InsufficientEvidence);
     }
+
+    // How much of the corpus this answer really rests on. Reported only when the question asked
+    // about every document, because that is the only shape that claims completeness: a question
+    // about one fact is properly answered from one passage, and saying "1 of 10" there would be
+    // noise. Computed from the evidence and the inventory, never from the model.
+    let coverage = match &plan {
+        Plan::EveryDocument(_) => Some(retrieval::EvidenceCoverage::of(
+            &evidence,
+            inventory.indexed_files().len(),
+            inventory.unreadable_files().len(),
+        )),
+        _ => None,
+    };
 
     // Sent before the answer rather than after it. Retrieval has already finished at this point, so
     // there is nothing to wait for - and an answer she stops halfway still shows which documents it
     // was being written from, which an answer left on screen has to do.
     let _ = on_event.send(ChatStreamEvent::Sources {
         sources: evidence.clone(),
+        coverage,
     });
 
-    let context_turn = retrieval::build_context_turn(&evidence);
+    // Two kinds of evidence in one turn, kept apart on purpose: the excerpts say what the
+    // documents state, the Work Folder context says which files exist and what was done to them,
+    // and the contract between them forbids using either as a substitute for the other.
+    let folder_context = work_folder_context::build(&inventory, &view);
+    let context_turn = format!(
+        "{}\n{}",
+        work_folder_context::build_system_turn(retrieval::RETRIEVAL_INSTRUCTION, &folder_context),
+        retrieval::format_evidence(&evidence)
+    );
     let turns = vec![
         ChatTurn {
             role: "system".to_string(),
@@ -365,8 +549,9 @@ async fn sourced_answer(
         .chat(
             &server_url,
             &model_alias,
-            locale.as_deref(),
+            locale,
             &turns,
+            idle_timeout,
             |delta| {
                 let _ = on_event.send(ChatStreamEvent::Delta {
                     text: delta.to_string(),
@@ -382,6 +567,8 @@ async fn sourced_answer(
     Ok(AskAnswer {
         answer,
         sources: evidence,
+        folder_answer: None,
+        coverage,
     })
 }
 
@@ -430,7 +617,9 @@ fn sidecar_search_roots(
     roots
 }
 
-fn first_existing(candidates: impl IntoIterator<Item = std::path::PathBuf>) -> Option<std::path::PathBuf> {
+fn first_existing(
+    candidates: impl IntoIterator<Item = std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
     candidates.into_iter().find(|path| path.exists())
 }
 

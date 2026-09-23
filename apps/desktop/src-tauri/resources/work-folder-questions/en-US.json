@@ -1,0 +1,243 @@
+{
+  "locale": "en-US",
+  "_comment": "Vocabulary for recognising a question the Work Folder inventory can answer on its own, with no gateway call. Data, never literals in Rust (docs/DECISIONS.md, docs/WORK-FOLDER-INVENTORY.md). A question is treated as a filesystem question only when every one of its words appears somewhere below, which is what keeps 'how many documents mention metformin' out of the deterministic path. Adding a phrasing means adding a word here.",
+  "filler": [
+    "a",
+    "able",
+    "again",
+    "all",
+    "also",
+    "an",
+    "and",
+    "any",
+    "are",
+    "ask",
+    "at",
+    "available",
+    "back",
+    "be",
+    "been",
+    "being",
+    "can",
+    "could",
+    "current",
+    "currently",
+    "did",
+    "do",
+    "does",
+    "each",
+    "every",
+    "exist",
+    "find",
+    "for",
+    "from",
+    "get",
+    "go",
+    "got",
+    "has",
+    "have",
+    "here",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "its",
+    "just",
+    "keep",
+    "know",
+    "let",
+    "like",
+    "make",
+    "many",
+    "may",
+    "me",
+    "mine",
+    "much",
+    "my",
+    "need",
+    "now",
+    "of",
+    "on",
+    "only",
+    "our",
+    "over",
+    "please",
+    "present",
+    "put",
+    "read",
+    "readable",
+    "really",
+    "right",
+    "s",
+    "see",
+    "should",
+    "so",
+    "some",
+    "stored",
+    "sure",
+    "take",
+    "that",
+    "the",
+    "their",
+    "them",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "to",
+    "total",
+    "up",
+    "us",
+    "use",
+    "want",
+    "was",
+    "we",
+    "were",
+    "will",
+    "with",
+    "within",
+    "work",
+    "working",
+    "would",
+    "you",
+    "your"
+  ],
+  "content": [
+    "about",
+    "analyse",
+    "analyze",
+    "compare",
+    "conclusion",
+    "conclusions",
+    "contain",
+    "containing",
+    "contains",
+    "content",
+    "contents",
+    "describe",
+    "describes",
+    "detail",
+    "details",
+    "explain",
+    "explains",
+    "extract",
+    "inside",
+    "mention",
+    "mentioning",
+    "mentions",
+    "recap",
+    "said",
+    "say",
+    "says",
+    "summaries",
+    "summarise",
+    "summarised",
+    "summarize",
+    "summarized",
+    "summary"
+  ],
+  "operations": {
+    "count": [
+      "count",
+      "number",
+      "many"
+    ],
+    "list": [
+      "display",
+      "enumerate",
+      "give",
+      "list",
+      "name",
+      "show",
+      "tell",
+      "what",
+      "which"
+    ],
+    "status": [
+      "state",
+      "status"
+    ]
+  },
+  "distributive": [
+    "all",
+    "each",
+    "every"
+  ],
+  "subjects": {
+    "structure": [
+      "arrangement",
+      "hierarchy",
+      "layout",
+      "organisation",
+      "organization",
+      "structure",
+      "tree"
+    ],
+    "unreadable": [
+      "illegible",
+      "unread",
+      "unreadable",
+      "unrecognised",
+      "unrecognized"
+    ],
+    "indexed": [
+      "analysed",
+      "analyzed",
+      "indexed"
+    ],
+    "images": [
+      "image",
+      "images",
+      "photo",
+      "photos",
+      "picture",
+      "pictures"
+    ],
+    "documents": [
+      "document",
+      "documents"
+    ],
+    "files": [
+      "file",
+      "files"
+    ],
+    "folders": [
+      "directories",
+      "directory",
+      "folder",
+      "folders",
+      "subfolder",
+      "subfolders"
+    ]
+  },
+  "extensions": {
+    "pdf": [
+      "pdf",
+      "pdfs"
+    ],
+    "txt": [
+      "txt",
+      "text"
+    ],
+    "md": [
+      "md",
+      "markdown"
+    ],
+    "docx": [
+      "docx",
+      "word"
+    ],
+    "png": [
+      "png",
+      "pngs"
+    ],
+    "jpg": [
+      "jpeg",
+      "jpegs",
+      "jpg",
+      "jpgs"
+    ]
+  }
+}

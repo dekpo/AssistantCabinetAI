@@ -72,6 +72,8 @@ the Tauri commands are a thin adapter over them, which is what keeps a second cl
 
 ```text
 DocumentSource      discover(work_folder) -> DiscoveredFile[]     extension-driven, allow-list only
+WorkFolderInventory discover(root, index) -> FileRecord[]         every file on disk, joined with the index
+FileReferenceResolver resolve(text) -> FileReferenceResolution    exact / ambiguous / no match, never a guess
 TextExtractor       extract(path) -> ExtractedDocument            pdf / docx / txt / md, plus OCR
 OcrProvider         recognise(page image) -> OcrPage              one local engine, replaceable
 Chunker             chunk(document) -> Chunk[]                    keeps file, page, section
@@ -88,6 +90,14 @@ TabularAnalysis     analyze(query, scope) -> TabularOutcome       deterministic,
 File discovery is generic. It recognises `.pdf`, `.docx`, `.txt`, `.md`, `.jpg`, `.png`, `.csv` and
 `.xlsx` by extension and contains no assumption about what a folder holds, because the same mechanism
 must serve a legal, accounting or notarial practice unchanged.
+
+The inventory sits above discovery and below both content pipelines. It is the single authority for
+**filesystem facts** - how many files there are, what they are called, which extension each carries,
+where it sits, whether it was read and by which method - and those facts are never inferred from a
+retrieved passage or written by a model. It holds metadata only: no document text enters a `FileRecord`.
+`FileRecord` answers "which file is this?"; `Source` below answers "which evidence from it supports this
+answer?". The same inventory and the same resolver will serve the tabular pipeline, which is why neither
+carries a document-specific field. See `docs/WORK-FOLDER-INVENTORY.md`.
 
 Spreadsheets are **not** flattened into text chunks to resemble PDFs. They get their own pipeline, their
 own inventory and their own deterministic operations.
@@ -150,6 +160,7 @@ For anything the workstation can retrieve or compute locally, deterministic comp
 
 ```text
 question
+  → resolve any file it names (exact / ambiguous / absent: an ambiguity is answered, never guessed)
   → classify (locale pattern pack: data, never literals in Rust)
       ├─ deterministic path answerable  → compute → answer. No gateway call.
       └─ not answerable                 → retrieval or the aggregate card

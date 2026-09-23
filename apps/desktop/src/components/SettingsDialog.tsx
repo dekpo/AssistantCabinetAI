@@ -8,6 +8,12 @@ import { WorkFolderCard } from "./WorkFolderCard";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
 
+/* The same bounds Rust clamps to, so the control offers only what will actually be stored. They
+   are duplicated rather than fetched because a number input needs them before anything is saved;
+   Rust remains the one that decides (`settings.rs`). */
+const MIN_IDLE_TIMEOUT_SECONDS = 30;
+const MAX_IDLE_TIMEOUT_SECONDS = 3600;
+
 /** Language names come from the system, in the language being shown. */
 function languageLabel(tag: string, locale: string): string {
   const names = new Intl.DisplayNames([locale], { type: "language" });
@@ -33,6 +39,9 @@ export function SettingsDialog({
 }) {
   const { t, locale } = useTranslation();
   const [serverUrlDraft, setServerUrlDraft] = useState(settings.serverUrl);
+  const [idleTimeoutDraft, setIdleTimeoutDraft] = useState(
+    String(settings.answerIdleTimeoutSeconds),
+  );
 
   const themeLabels: Record<ThemeChoice, string> = {
     light: t("settings.themeLight"),
@@ -130,6 +139,26 @@ export function SettingsDialog({
               ))}
             </select>
           )}
+        </label>
+
+        <label className="field">
+          <span className="field__label">{t("settings.idleTimeoutLabel")}</span>
+          <span className="field__description">{t("settings.idleTimeoutDescription")}</span>
+          <div className="field__row">
+            <input
+              type="number"
+              className="field__control field__control--number"
+              min={MIN_IDLE_TIMEOUT_SECONDS}
+              max={MAX_IDLE_TIMEOUT_SECONDS}
+              step={30}
+              value={idleTimeoutDraft}
+              onChange={(event) => setIdleTimeoutDraft(event.target.value)}
+              /* Committed on blur rather than on every keystroke: typing "300" would otherwise
+                 save 3, then 30, and Rust would clamp the first two up to the floor. */
+              onBlur={() => onUpdate({ answerIdleTimeoutSeconds: Number(idleTimeoutDraft) })}
+            />
+            <span className="field__unit">{t("settings.idleTimeoutUnit")}</span>
+          </div>
         </label>
 
         <WorkFolderCard

@@ -1,0 +1,3 @@
+Contrat d'assurance fictif du cabinet de bac a sable.
+Numero de contrat : SANDBOX-0001.
+Echeance annuelle : 1er avril 2026.

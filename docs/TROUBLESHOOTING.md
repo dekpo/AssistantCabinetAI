@@ -36,6 +36,10 @@ Same question, same prompt hash. Three things combined, and only the third is ab
    model emitting a token every second forever never trips it: the run above lasted 210 s, longer than the
    180 s "timeout", and was recorded as completed. Only `CHAT_TIMEOUT` (300 s, a total, in `gateway.rs`)
    eventually ends it — five minutes of watching garbage accumulate.
+
+   *Superseded 23 September 2026.* `CHAT_TIMEOUT` is gone: it was a total deadline, and it killed healthy
+   answers on the workstation as readily as looping ones. The loop is now bounded where it belongs, by the
+   gateway's `MAX_OUTPUT_TOKENS`, and the client bounds silence instead (`answerIdleTimeoutSeconds`).
 3. **0.5B is below the floor for this job.** With 1 400 tokens of French context the model lost the thread,
    lost the language (`Dokumentation` is German), and invented vocabulary absent from every document
    (`adjudication` is procurement). Ollama's defaults (`repeat_penalty` 1.1 over `repeat_last_n` 64) cannot

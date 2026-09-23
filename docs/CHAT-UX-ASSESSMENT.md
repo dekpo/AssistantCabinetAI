@@ -146,6 +146,13 @@ model. Nothing in the chain caps how long an answer may be, and the gateway's 18
 timeout that a steady stream never trips, so the only end was the client's 300 s total. Measurements and
 causes: `docs/TROUBLESHOOTING.md`, 22 September 2026.
 
+**And on 23 September that 300 s total was itself removed.** It was the wrong instrument twice over. It
+ended a `ministral-3:3b` answer that was arriving perfectly well on the pilot workstation, and it deleted
+the text already on screen - which a stop, for the same half-written answer, keeps. The client now bounds
+**silence** instead: an answer still arriving is never cut off, one that goes quiet for the configured wait
+is abandoned, and what it had written is kept and marked. The runaway loop this paragraph is about is
+caught by the gateway's own `MAX_OUTPUT_TOKENS` and by the stop, not by a clock in the client.
+
 **A second stop, therefore, which is a different act rather than the same button moved.** It sits under the
 answer being written, follows the end of the text as it grows, and goes the instant the text stops growing.
 It ends the writing and **keeps what is already there**, marked `chat.interrupted` — which is the

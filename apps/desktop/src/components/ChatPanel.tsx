@@ -23,7 +23,8 @@ export function ChatPanel({
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
-  const { entries, phase, streamingId, error, send, resend, regenerate, stop } = useChat(
+  const { entries, phase, streamingId, error, send, resend, regenerate, stop, dismissError } =
+    useChat(
     onFailure,
     hasWorkFolder,
     modelAlias,
@@ -67,7 +68,7 @@ export function ChatPanel({
         onResend={(questionEntryId, text) => void resend(questionEntryId, text)}
         onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
       />
-      {error === null ? null : <ErrorBanner error={error} />}
+      {error === null ? null : <ErrorBanner error={error} onDismiss={dismissError} />}
       {hasCopyableConversation(entries, streamingId) ? (
         <p className="message__actions chat__copy-all">
           <button type="button" className="button button--compact" onClick={copyAll}>

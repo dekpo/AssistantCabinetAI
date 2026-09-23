@@ -37,6 +37,23 @@ pub struct StoredDocument {
     pub ocr_engine_version: Option<String>,
 }
 
+/// What the index knows about one file, as one row. A read-only view for the Work Folder
+/// inventory (`docs/WORK-FOLDER-INVENTORY.md`): the index stays the owner of this data, and the
+/// inventory joins it onto what the filesystem reports rather than copying it into a second
+/// database.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DocumentIndexRow {
+    pub relative_path: String,
+    pub sha256: String,
+    pub empty: bool,
+    pub ocr_engine: Option<String>,
+    pub ocr_engine_version: Option<String>,
+    pub chunk_count: u64,
+    /// How many of those chunks a machine read rather than copied. Zero means native text
+    /// throughout.
+    pub ocr_chunk_count: u64,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexicalHit {
     pub chunk_id: String,
@@ -111,7 +128,10 @@ impl IndexStore {
             return Ok(());
         }
         connection
-            .execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"), [])
+            .execute(
+                &format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"),
+                [],
+            )
             .map_err(|_| AppError::IndexUnavailable)?;
         Ok(())
     }
@@ -140,7 +160,9 @@ impl IndexStore {
     }
 
     pub fn stored_hash(&self, relative_path: &str) -> Result<Option<String>, AppError> {
-        Ok(self.stored_document(relative_path)?.map(|document| document.sha256))
+        Ok(self
+            .stored_document(relative_path)?
+            .map(|document| document.sha256))
     }
 
     /// Replace everything stored for one file: its chunks, its FTS rows, and its document
@@ -231,6 +253,69 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)?;
         let rows = statement
             .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// Every file the index holds a record for, with its chunk counts, in relative-path order.
+    /// One query, no text: the inventory needs to know what happened to a file, never what it
+    /// says.
+    pub fn all_documents(&self) -> Result<Vec<DocumentIndexRow>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT d.relative_path, d.sha256, d.empty, d.ocr_engine, d.ocr_engine_version,
+                        COUNT(c.chunk_id),
+                        COALESCE(SUM(CASE WHEN c.origin = 'ocr' THEN 1 ELSE 0 END), 0)
+                 FROM documents d
+                 LEFT JOIN chunks c ON c.relative_path = d.relative_path
+                 GROUP BY d.relative_path
+                 ORDER BY d.relative_path",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(DocumentIndexRow {
+                    relative_path: row.get(0)?,
+                    sha256: row.get(1)?,
+                    empty: row.get::<_, i64>(2)? != 0,
+                    ocr_engine: row.get(3)?,
+                    ocr_engine_version: row.get(4)?,
+                    chunk_count: row.get::<_, i64>(5)? as u64,
+                    ocr_chunk_count: row.get::<_, i64>(6)? as u64,
+                })
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The stored chunks of one file, so retrieval can be constrained to a file the user named
+    /// instead of searching the whole corpus (`docs/WORK-FOLDER-INVENTORY.md`).
+    pub fn chunks_for_document(&self, relative_path: &str) -> Result<Vec<StoredChunk>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT chunk_id, relative_path, page_number, section, text, embedding, origin, confidence
+                 FROM chunks WHERE relative_path = ?1",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([relative_path], |row| {
+                let embedding_bytes: Vec<u8> = row.get(5)?;
+                let origin: String = row.get(6)?;
+                Ok(StoredChunk {
+                    chunk_id: row.get(0)?,
+                    relative_path: row.get(1)?,
+                    page_number: row.get::<_, i64>(2)? as u32,
+                    section: row.get::<_, i64>(3)? as u32,
+                    text: row.get(4)?,
+                    embedding: decode_vector(&embedding_bytes),
+                    origin: PageOrigin::from_db_str(&origin),
+                    confidence: row.get(7)?,
+                })
+            })
             .map_err(|_| AppError::IndexUnavailable)?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|_| AppError::IndexUnavailable)
@@ -328,6 +413,18 @@ impl IndexStore {
                 rusqlite::Error::QueryReturnedNoRows => Ok(None),
                 _ => Err(AppError::IndexUnavailable),
             })
+    }
+}
+
+/// The index already holds every word in the corpus, so answering "is this a word from the
+/// documents?" costs one lookup rather than a dictionary nobody maintains
+/// (`docs/WORK-FOLDER-INVENTORY.md`).
+impl crate::folder_questions::CorpusWords for IndexStore {
+    fn contains(&self, word: &str) -> bool {
+        !self
+            .search_lexical(word, 1)
+            .map(|hits| hits.is_empty())
+            .unwrap_or(true)
     }
 }
 

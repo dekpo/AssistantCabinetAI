@@ -91,9 +91,16 @@ async fn a_stop_ends_the_stream_and_no_further_text_arrives() {
     }];
     let outcome = until_stopped(
         &mut stopped,
-        gateway.chat(&server_url, "cabinet-chat", None, &turns, |_| {
-            counted.fetch_add(1, Ordering::SeqCst);
-        }),
+        gateway.chat(
+            &server_url,
+            "cabinet-chat",
+            None,
+            &turns,
+            Duration::from_secs(30),
+            |_| {
+                counted.fetch_add(1, Ordering::SeqCst);
+            },
+        ),
     )
     .await;
 

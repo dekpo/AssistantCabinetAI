@@ -10,14 +10,19 @@ mod commands;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
+pub mod file_record;
+pub mod file_reference;
+pub mod folder_questions;
 pub mod gateway;
 pub mod index_store;
 pub mod indexing;
+pub mod inventory;
 pub mod ocr;
 pub mod raster;
 pub mod retrieval;
 mod settings;
 mod work_folder;
+pub mod work_folder_context;
 
 use commands::AppState;
 
@@ -40,6 +45,7 @@ pub fn run() {
             commands::index_work_folder,
             commands::ask_with_sources,
             commands::has_indexed_documents,
+            commands::work_folder_inventory,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

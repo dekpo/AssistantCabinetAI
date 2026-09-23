@@ -85,6 +85,7 @@ export default function App() {
               workFolder={snapshot.settings.workFolder}
               suggestedWorkFolder={snapshot.suggestedWorkFolder}
               onChosen={(path) => void update({ workFolder: path })}
+              detail="collapsible"
             />
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />

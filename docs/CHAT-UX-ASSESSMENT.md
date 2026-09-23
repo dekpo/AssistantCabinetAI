@@ -154,18 +154,18 @@ want the looping block *and* her question taken away; she wanted it to stop. Not
 before the first word, and everything is kept from a stop after it: the difference is that in the second
 case the words are already hers to read.
 
-**Restyled discreet on 22 September 2026, once items 3, 4 and 4b existed to restyle it against.** It first
-shipped in the same filled `button--primary` style as the one on the spinner line, because at the time it
-was the only stop affordance under the text and nothing else on a turn had a small button to match. Once
-copy, edit and regenerate gave every finished turn a row of small bordered buttons, a filled accent button
-under a *live* answer read as "the thing to do next" — wrong for an action most answers never need. It now
-carries `button--compact`, the same class as those three: bordered and quiet by default, the accent border
-on hover and the accent fill on click that `.button:active:enabled` already gives every button in the app.
-Nothing about when it appears, what it keeps, or its size changed — `.button.message__stop`'s padding rule
-still wins on specificity over `.button--compact`'s, so the button is not one pixel bigger or smaller than
-before. The spinner-line stop (offered before any word exists, discarding the turn rather than keeping it)
-was deliberately left in `button--primary`: it is a different act with a different consequence, and the
-owner's request was specifically about the one shown while the answer is being written.
+**Restyled discreet on 22 and 23 September 2026, once items 3, 4 and 4b existed to restyle it against.** Both
+stops first shipped in the same filled `button--primary` style, because at the time each was the only stop
+affordance on screen and nothing else on a turn had a small button to match. Once copy, edit and regenerate
+gave every finished turn a row of small bordered buttons, a filled accent button next to "Recherche" or under
+a *live* answer read as "the thing to do next" — wrong for an action most answers never need. The
+under-the-answer stop moved to `button--compact` on 22 September; the spinner-line one, initially left in
+`button--primary` because the request that day was specifically about the one shown while writing, moved to
+the same class the next day once it was clear the two should look like each other rather than like the
+send button. Both now carry `button--compact`: bordered and quiet by default, the accent border on hover and
+the accent fill on click that `.button:active:enabled` already gives every button in the app. Nothing about
+when either appears, what it keeps, or its size changed — `.button.message__stop`'s padding rule still wins
+on specificity over `.button--compact`'s, so neither button is one pixel bigger or smaller than before.
 
 Two consequences worth naming. `stopOutcome` in `src/lib/generation.ts` now holds what a stop *leaves
 behind* rather than merely whether one is offered, decided once and recorded at the click, because by the

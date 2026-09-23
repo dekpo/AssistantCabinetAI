@@ -179,7 +179,7 @@ export function MessageList({
                         does, which is the rule itself rather than a copy of it. */}
                     <button
                       type="button"
-                      className="button button--primary message__stop"
+                      className="button button--compact message__stop"
                       onClick={onStop}
                     >
                       {t("actions.stop")}

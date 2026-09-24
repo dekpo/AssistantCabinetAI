@@ -8,6 +8,27 @@ with the exact command or code where it matters.
 
 ---
 
+## `explorer.exe` exits with status 1 when it worked
+
+**Found:** 24 September 2026, adding the "See" / "Voir" control that opens the work folder.
+
+Windows Explorer detaches from whatever started it. The process the caller spawned is a launcher that
+hands the path over and exits, so its status describes the launcher, not the window — and that status is
+`1` on a perfectly successful open. Code that does the obvious thing:
+
+```rust
+let status = Command::new("explorer.exe").arg(path).status()?;
+if !status.success() { return Err(...); }   // fires while the folder is on screen
+```
+
+reports a failure over a window the person is already looking at. The same shape as the Tesseract entry
+below: a spawned process whose exit status does not mean what it looks like.
+
+**Fix / rule:** spawn it and never wait on it (`apps/desktop/src-tauri/src/reveal.rs`). Handing a path to
+the desktop is fire-and-forget on both platforms — macOS `open` behaves itself, but waiting on it would
+still block the command for as long as the window stays open. The only failure worth reporting is the
+spawn itself failing, which is a real one: no file manager, or a path the OS refused.
+
 ## Only the first "Analyse" of a session could read a scanned PDF: pdfium refuses to be bound twice
 
 **Found:** 24 September 2026, after Elise dropped a real scanned prescription into the work folder and

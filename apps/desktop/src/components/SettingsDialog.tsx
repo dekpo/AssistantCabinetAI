@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
 import type { AppSettings, ThemeChoice } from "../lib/ipc";
 import type { IndexingState } from "../state/useIndexing";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorBanner } from "./ErrorBanner";
 import { WorkFolderCard } from "./WorkFolderCard";
 
@@ -29,6 +30,7 @@ export function SettingsDialog({
   saveError,
   indexing,
   onUpdate,
+  onReset,
   onClose,
 }: {
   settings: AppSettings;
@@ -39,6 +41,10 @@ export function SettingsDialog({
   /** The same analysis pass the sidebar card starts: one pass, wherever it is started from. */
   indexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
+  /** Every setting back to a first launch, the documents folder included. Rejects on failure.
+   * Written as a method rather than `() => Promise<void>` so the literal guard in
+   * `src/guards/sources.test.ts` does not read `> Promise <` as a text node. */
+  onReset(): Promise<void>;
   onClose: () => void;
 }) {
   const { t, locale } = useTranslation();
@@ -46,6 +52,34 @@ export function SettingsDialog({
   const [idleTimeoutDraft, setIdleTimeoutDraft] = useState(
     String(settings.answerIdleTimeoutSeconds),
   );
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  /* The two text fields are committed on blur, so between keystrokes their drafts are the only
+     copy of what she typed. A reset replaces the stored values underneath them; without this the
+     old text would sit in the fields looking like a setting that survived, and the next blur
+     would save it straight back. Keyed on the stored value, so an ordinary save - which trims -
+     also puts the trimmed text back in the field. */
+  useEffect(() => {
+    setServerUrlDraft(settings.serverUrl);
+  }, [settings.serverUrl]);
+
+  useEffect(() => {
+    setIdleTimeoutDraft(String(settings.answerIdleTimeoutSeconds));
+  }, [settings.answerIdleTimeoutSeconds]);
+
+  const confirmReset = async () => {
+    setResetting(true);
+    try {
+      await onReset();
+      setConfirmingReset(false);
+    } catch {
+      // The banner above already carries it; the confirmation closes rather than trapping her.
+      setConfirmingReset(false);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const themeLabels: Record<ThemeChoice, string> = {
     light: t("settings.themeLight"),
@@ -173,8 +207,38 @@ export function SettingsDialog({
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}
+
+        {/* Last in the panel, under everything it undoes, with a line saying what it costs
+            before she reaches the button rather than only once she has pressed it. */}
+        <div className="field">
+          <span className="field__label">{t("settings.resetLabel")}</span>
+          <span className="field__description">{t("settings.resetDescription")}</span>
+          <div className="field__row">
+            <button
+              type="button"
+              className="button button--compact"
+              disabled={resetting}
+              onClick={() => setConfirmingReset(true)}
+            >
+              {t("settings.reset")}
+            </button>
+          </div>
+        </div>
+
         <p className="dialog__note">{t("settings.storedAt", { path: settingsPath })}</p>
       </div>
+
+      {confirmingReset ? (
+        <ConfirmDialog
+          title={t("settings.resetTitle")}
+          body={t("settings.resetBody")}
+          confirmLabel={t("settings.reset")}
+          destructive
+          busy={resetting}
+          onConfirm={() => void confirmReset()}
+          onCancel={() => setConfirmingReset(false)}
+        />
+      ) : null}
     </div>
   );
 }

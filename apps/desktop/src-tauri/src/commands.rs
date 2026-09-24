@@ -19,10 +19,11 @@ use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexProgress, IndexSummary};
-use crate::inventory::{FolderNode, InventorySummary, WorkFolderInventory};
+use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderInventory};
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{self, PageRasterizer, Rasterizer};
+use crate::reveal;
 use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
@@ -33,6 +34,10 @@ pub struct AppState {
     pub gateway: GatewayClient,
     /// Lets `cancel_chat` reach the question being worked on. One at a time.
     pub cancellation: Cancellation,
+    /// What each file in the work folder last hashed to. Lives as long as the application so the
+    /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
+    /// scan in the folder (`inventory::FileHashCache`).
+    pub file_hashes: FileHashCache,
 }
 
 impl AppState {
@@ -41,6 +46,7 @@ impl AppState {
             settings: Mutex::new(Settings::default()),
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
+            file_hashes: FileHashCache::new(),
         })
     }
 
@@ -162,6 +168,25 @@ pub fn save_settings(
     settings: Settings,
 ) -> Result<Settings, AppError> {
     let stored = settings::save(&app, &work_folder_policy(&app), settings)?;
+    state.replace(stored.clone())?;
+    Ok(stored)
+}
+
+/// Put every setting back to what a first launch would have written, the documents folder
+/// included.
+///
+/// Deliberately whole rather than "the easy ones". A reset that leaves the folder behind is not a
+/// reset, and the folder is the setting most likely to be part of whatever went wrong - a path on
+/// a disk that is no longer there, or a folder a sync client has since taken over. The defaults
+/// come from Rust because Rust is what decides them: `DEFAULT_SERVER_URL` can be an environment
+/// variable, so a default is read, never assumed by the interface.
+///
+/// The local index is **not** touched. Documents stay analysed, and choosing the same folder
+/// again finds them exactly as they were - the index is keyed by path relative to the folder, not
+/// by the setting. Emptying it is the other button, in the folder card, on purpose.
+#[tauri::command]
+pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Result<Settings, AppError> {
+    let stored = settings::save(&app, &work_folder_policy(&app), Settings::default())?;
     state.replace(stored.clone())?;
     Ok(stored)
 }
@@ -332,7 +357,11 @@ pub fn work_folder_inventory(
     // A folder that has never been analysed still has an inventory; it simply has no index to
     // join onto, which is exactly what "nothing has been read yet" should look like.
     let index = open_index(&app).ok();
-    let inventory = WorkFolderInventory::discover(Path::new(&work_folder), index.as_ref())?;
+    let inventory = WorkFolderInventory::discover_with_cache(
+        Path::new(&work_folder),
+        index.as_ref(),
+        &state.file_hashes,
+    )?;
 
     Ok(InventoryReport {
         root_identifier: inventory.root_identifier(),
@@ -340,6 +369,38 @@ pub fn work_folder_inventory(
         files: inventory.all_files().to_vec(),
         hierarchy: inventory.hierarchy(),
     })
+}
+
+/// Show the work folder in the system's own file manager.
+///
+/// Takes no path. The folder comes from settings, on this side of the bridge, so the webview can
+/// ask for "the work folder" and never for a path of its own choosing - the allow-list holds
+/// because there is nothing to allow-list (`docs/PRIVACY-AND-SECURITY.md`). Which file manager
+/// opens is `reveal`'s business alone; nothing here knows the platform.
+#[tauri::command]
+pub fn reveal_work_folder(state: State<'_, AppState>) -> Result<(), AppError> {
+    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    reveal::folder(Path::new(&work_folder))
+}
+
+/// Forget everything the index holds, leaving every document in the work folder untouched.
+///
+/// This is the deliberate way back to "nothing has been analysed yet", and it exists because the
+/// alternative she was reduced to was deleting `%LOCALAPPDATA%` by hand
+/// (`docs/TROUBLESHOOTING.md`). It empties the index and the hash cache built from it; it never
+/// reads, moves or deletes a file in the folder. The interface confirms before calling it - Rust
+/// does not ask questions, it does what it was told.
+#[tauri::command]
+pub fn reset_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    let mut index = open_index(&app)?;
+    index.clear()?;
+    // Otherwise the next inventory would answer from hashes taken before the reset and show
+    // files as still indexed when nothing is.
+    state.file_hashes.forget_all();
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -353,6 +414,15 @@ pub struct AskAnswer {
     /// Present when the question asked about every document, so the interface can say how much of
     /// the folder the answer rests on rather than let it imply everything.
     pub coverage: Option<EvidenceCoverage>,
+    /// How many documents in the folder this answer could not have used: never analysed, or
+    /// changed since they were. Counted from the inventory the answer was planned against, so it
+    /// describes the same moment as the answer itself.
+    ///
+    /// The failure it guards against is the quiet one. She drops a document in, forgets to press
+    /// Analyse, asks about it, and gets a confident answer drawn from everything except the file
+    /// she had in mind. Retrieval refuses when it has too little evidence; this is the other half,
+    /// for when there is plenty of evidence and it is simply the wrong evidence.
+    pub unanalysed_files: usize,
 }
 
 /// Retrieval, then a sourced chat answer. Refuses rather than answers when the index does not
@@ -449,6 +519,9 @@ async fn sourced_answer(
                 sources: Vec::new(),
                 folder_answer: Some(answer),
                 coverage: None,
+                // A folder answer is read from the filesystem, not from the index, so it already
+                // accounts for every file there is. Nothing about it is waiting on a pass.
+                unanalysed_files: 0,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -573,6 +646,7 @@ async fn sourced_answer(
         sources: evidence,
         folder_answer: None,
         coverage,
+        unanalysed_files: inventory.unanalysed_documents(),
     })
 }
 

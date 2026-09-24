@@ -294,6 +294,82 @@ gateway on the same folder. And every test above ran on Windows only; there is s
 cross-platform behaviour rests on there being no `#[cfg]` in the new code, per `docs/SPRINT-2.5-ASSESSMENT.md`
 section O.
 
+## Sprint 2a.6 - a work folder she can trust between passes (24 September)
+
+Deliverable: adding, replacing and removing a document in the work folder is an ordinary gesture that the
+application notices and reports honestly, and OCR does not quietly stop working halfway through a session.
+
+Hardening again, and found the same way sprint 2a.5's three problems were: by the pilot using her own
+documents. She dropped a real scanned prescription into the work folder, analysed, and the file came back
+unreadable. The only thing that made it readable again was closing the application, deleting
+`%LOCALAPPDATA%\com.assistantcabinetai.desktop` and indexing the whole folder from scratch - which is not
+a workflow anyone can be asked to follow twice.
+
+- **Only the first analysis pass of a session could read a scanned PDF.** `pdfium-render` keeps its
+  library bindings in a process-global cell, so `Pdfium::bind_to_library` fails on every call after the
+  first; `index_work_folder` built a fresh `Rasterizer` per pass and `.ok()` swallowed the failure.
+  Measured directly against the bundled library: `first ok? true  second ok? false`. The document itself
+  was never at fault - driven by hand through the same bundled binaries it gave 292 words at 90.5 % mean
+  confidence in 2.9 s. Fixed with one rasteriser per process (`raster::shared`) and `Rasterizer::new` made
+  private so it cannot be rebuilt. Full account in `docs/TROUBLESHOOTING.md`.
+- **A missing capability now says so.** `ocr_engine = NULL` in the index meant both "born-digital PDF, OCR
+  not needed" and "OCR never ran", which is why nothing on screen could tell a missing engine from an
+  illegible scan. `IndexSummary.unavailable_capabilities` carries the machine codes `ocrEngine` and
+  `pageRasterizer`; the React catalogues write the sentence, as everywhere else.
+- **Tests:** `tests/repeated_indexing.rs` - a scan added after the first pass is read by the second, a
+  fourth pass still reads scans, a missing rasteriser is reported rather than blamed on the document, and a
+  scan stored empty before the engine existed is retried once the engine is back, so the index never has to
+  be deleted by hand. `the_shared_rasterizer_answers_every_pass_not_only_the_first` (`src/raster.rs`) asks
+  the real bundled pdfium three times; `#[ignore]`d like the Tesseract sidecar test because the library is
+  gitignored, and deliberately the only test in the process allowed to build a rasteriser.
+
+The same session then closed the gap the incident exposed: the index and the folder could disagree, and
+nothing in the interface said so.
+
+- **A document removed from the folder stops being citable.** `indexing::run` dropped rows for files that
+  no longer exist, and until it did, their rows outlived them - the panel stopped listing a deleted file,
+  because that reads the filesystem, while retrieval went on offering its passages as evidence. The pass
+  reports what it forgot, by name.
+- **The panel notices a document added behind the window.** The inventory is rebuilt when the window
+  regains focus, which is the moment she comes back from Explorer or Finder having dropped a file in. A
+  filesystem watcher was considered and refused for v0: a background thread, debouncing a scanner writing
+  a file in pieces, and a cloud-sync folder churning underneath it, for nothing more than the same answer
+  a few seconds sooner (`docs/DECISIONS.md`).
+- **Rebuilding the panel became cheap enough to do often.** It decides "indexed" against "changed since"
+  by comparing content hashes, which meant reading every byte in the folder each time. `FileHashCache`
+  reuses a hash while a file's size *and* modification time both hold. The pass itself still hashes and
+  remains the only thing that decides what is stored, so what this can get briefly wrong is a hint, never
+  an index.
+- **The Analyse button carries the count**, and an answer says how many documents it could not have used.
+  Retrieval already refuses when it has too little evidence; `AskAnswer.unanalysed_files` is the other
+  half, for when there was plenty of evidence and the file she had in mind was simply not among it.
+- **Reset**, beside the folder controls, empties the index behind a confirmation and leaves every document
+  where it is. It exists because the only way back to "nothing analysed" was deleting `%LOCALAPPDATA%` by
+  hand. The confirmation is built rather than taken from the operating system: a native one carries the
+  system's words in the system's language, which is not necessarily hers.
+- **See / Voir** opens the work folder in the file manager she already uses. No path crosses the bridge -
+  the command takes no argument and reads the folder from settings, so the allow-list holds because there
+  is nothing to allow-list.
+- **Réinitialiser**, in the settings panel, puts every setting back to a first launch, the documents
+  folder included, behind the same confirmation. The index is not touched, and the confirmation says so:
+  choosing the same folder again finds every document still analysed.
+- **Cross-platform by construction.** `reveal.rs` is the only file that names a file manager, with paired
+  `#[cfg]` arms for Windows and macOS side by side and a third that returns a machine code rather than
+  guessing. Nothing above it learns which platform it is on, and no capability - extraction, OCR,
+  retrieval - gained a `#[cfg]` because of it (`docs/SPRINT-2.5-ASSESSMENT.md` section O).
+
+**Out of this sprint, deliberately:** filesystem watching, automatic analysis (a pass sends chunk text to
+the gateway for embeddings and can take minutes on scans - it stays an explicit, visible act), undoing a
+reset, and any per-file control beyond opening the folder.
+
+**Delivered, 24 September 2026.** `fix(desktop): bind pdfium once per process so every analysis pass reads
+scanned PDFs`, then the work folder controls above. 170 `cargo test --lib`, 41 integration tests across
+six files, 201 `vitest`, `tsc` and `cargo clippy` clean.
+
+**Not independently verified:** every test ran on Windows. The macOS arm of `reveal.rs` compiles under
+`#[cfg]` review only - there is still no macOS CI job, so `open` opening Finder on the work folder is
+unproven until the Mac mini is on the desk.
+
 ## Sprint 3 — GP workflows (1 → 7 October)
 
 Deliverable: the actions that cost her 1.5 to 2 hours a day. Three flows, not five.

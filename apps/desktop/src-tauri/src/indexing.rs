@@ -37,6 +37,10 @@ pub struct IndexSummary {
     pub ocr_files: Vec<String>,
     /// Files where at least one page came back below the OCR confidence floor. No raw score.
     pub low_confidence_files: Vec<String>,
+    /// Documents dropped from the index because they are no longer in the work folder. Reported
+    /// by name: forgetting a document is as much a result of a pass as reading one, and she is
+    /// the only one who can tell a deliberate deletion from a folder that failed to mount.
+    pub removed_files: Vec<String>,
     /// Machine codes for an ingestion capability that did not start for this pass, in a stable
     /// order. Empty on a healthy installation. Reported so an unreadable scan can be explained
     /// by the interface instead of being blamed on the document: the engine being absent and the
@@ -75,6 +79,15 @@ pub async fn run(
 ) -> Result<IndexSummary, AppError> {
     let unavailable_capabilities = unavailable_capabilities(ocr, rasterizer);
     let files = discovery::discover(work_folder);
+    // Before reading anything: a document she deleted must stop being citable, and that is true
+    // whether or not the rest of the pass succeeds. Keyed on the same walk the pass itself uses,
+    // so the index and the folder panel cannot disagree about what is there.
+    let removed_files = index.retain_documents(
+        &files
+            .iter()
+            .map(|file| file.relative_path.clone())
+            .collect::<Vec<_>>(),
+    )?;
     let total_files = files.len();
     // Sent before any work, so the bar appears at zero rather than only once the first file is
     // done - on a folder of scans that first file can take a while on its own.
@@ -179,6 +192,7 @@ pub async fn run(
         empty_files,
         ocr_files,
         low_confidence_files,
+        removed_files,
         unavailable_capabilities,
         chunk_count: index.chunk_count()?,
     })

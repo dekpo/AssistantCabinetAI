@@ -2,8 +2,13 @@
 //!
 //! Lives in `%LOCALAPPDATA%` (`app_local_data_dir()`), never the roaming `%APPDATA%` that holds
 //! `settings.json` - the index holds document text, and a roaming profile would copy it off the
-//! machine (`docs/RETRIEVAL.md`). One file, one work folder: re-choosing the work folder starts a
-//! fresh index rather than mixing two corpora.
+//! machine (`docs/RETRIEVAL.md`).
+//!
+//! One index file, whichever work folder is configured. Choosing a different folder does **not**
+//! empty it - and until `retain_documents` existed, that meant the previous folder's passages
+//! stayed citable for ever. They are now dropped by the first pass over the new folder, because a
+//! pass forgets every document that is not in front of it. The consequence to keep in mind: after
+//! switching folders, the index still describes the old one until that pass has run.
 
 use rusqlite::Connection;
 
@@ -321,6 +326,75 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
+    /// Forget every document and every chunk, keeping the file and its schema.
+    ///
+    /// The index is emptied rather than deleted: the connection is open, and on Windows a file
+    /// held open cannot be removed underneath it. One transaction, so a failure halfway leaves a
+    /// whole index rather than a half-erased one. Nothing in the work folder is touched - this
+    /// forgets what was read, never what was read *from* (`docs/PRIVACY-AND-SECURITY.md`).
+    pub fn clear(&mut self) -> Result<(), AppError> {
+        let tx = self
+            .connection
+            .transaction()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        tx.execute_batch(
+            "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;",
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// Drop every document whose relative path is not in `present`, and its chunks with it.
+    ///
+    /// A file she deleted from the work folder must stop being citable. Until this existed, its
+    /// rows outlived it: the folder panel stopped showing it, because that reads the filesystem,
+    /// while retrieval went on offering its passages as evidence for an answer. Returns the paths
+    /// dropped, so the pass can report them by name rather than as a count.
+    pub fn retain_documents(&mut self, present: &[String]) -> Result<Vec<String>, AppError> {
+        let known: std::collections::BTreeSet<&str> =
+            present.iter().map(String::as_str).collect();
+        let stored: Vec<String> = {
+            let mut statement = self
+                .connection
+                .prepare("SELECT relative_path FROM documents")
+                .map_err(|_| AppError::IndexUnavailable)?;
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|_| AppError::IndexUnavailable)?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|_| AppError::IndexUnavailable)?
+        };
+        let gone: Vec<String> = stored
+            .into_iter()
+            .filter(|path| !known.contains(path.as_str()))
+            .collect();
+        if gone.is_empty() {
+            return Ok(gone);
+        }
+
+        let tx = self
+            .connection
+            .transaction()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        for path in &gone {
+            // The FTS table mirrors `chunks` by `chunk_id`, so it is cleared from the same list
+            // rather than from a second query that could disagree with it.
+            tx.execute(
+                "DELETE FROM chunks_fts WHERE chunk_id IN
+                     (SELECT chunk_id FROM chunks WHERE relative_path = ?1)",
+                [path],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+            tx.execute("DELETE FROM chunks WHERE relative_path = ?1", [path])
+                .map_err(|_| AppError::IndexUnavailable)?;
+            tx.execute("DELETE FROM documents WHERE relative_path = ?1", [path])
+                .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(gone)
+    }
+
     pub fn chunk_count(&self) -> Result<u64, AppError> {
         self.connection
             .query_row("SELECT COUNT(*) FROM chunks", [], |row| {
@@ -502,6 +576,91 @@ mod tests {
         let vector = vec![1.0_f32, 2.0, 3.0];
 
         assert!((cosine_similarity(&vector, &vector) - 1.0).abs() < 1e-6);
+    }
+
+    /// Stores one indexed document under `relative_path`, so a test about forgetting has
+    /// something to forget.
+    fn store_one(store: &mut IndexStore, relative_path: &str) {
+        let chunk = sample_chunk(
+            &format!("{relative_path}#p1#s1"),
+            relative_path,
+            "Bonjour Camille",
+        );
+        store
+            .replace_document(
+                relative_path,
+                "abc123",
+                false,
+                std::slice::from_ref(&chunk),
+                std::slice::from_ref(&vec![0.2_f32, 0.4, 0.6]),
+                None,
+                None,
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn clearing_forgets_every_document_and_chunk_but_keeps_the_index_usable() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store_one(&mut store, "inbox/letter.pdf");
+        store_one(&mut store, "inbox/scan.pdf");
+
+        store.clear().unwrap();
+
+        assert_eq!(store.chunk_count().unwrap(), 0);
+        assert!(store.all_documents().unwrap().is_empty());
+        assert!(store.all_chunks().unwrap().is_empty());
+        // Still writable afterwards: clearing empties the index, it does not close it.
+        store_one(&mut store, "inbox/letter.pdf");
+        assert_eq!(store.chunk_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn a_document_no_longer_in_the_folder_is_dropped_with_its_chunks() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store_one(&mut store, "inbox/kept.pdf");
+        store_one(&mut store, "inbox/deleted.pdf");
+
+        let gone = store
+            .retain_documents(&["inbox/kept.pdf".to_string()])
+            .unwrap();
+
+        assert_eq!(gone, vec!["inbox/deleted.pdf".to_string()]);
+        assert_eq!(store.all_documents().unwrap().len(), 1);
+        // The point of the whole thing: its passages can no longer be offered as evidence.
+        assert!(store
+            .search_lexical("Camille", 10)
+            .unwrap()
+            .iter()
+            .all(|hit| !hit.chunk_id.contains("deleted")));
+    }
+
+    #[test]
+    fn retaining_every_document_that_is_still_there_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store_one(&mut store, "inbox/kept.pdf");
+
+        let gone = store
+            .retain_documents(&["inbox/kept.pdf".to_string()])
+            .unwrap();
+
+        assert!(gone.is_empty());
+        assert_eq!(store.chunk_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn an_empty_folder_forgets_everything_rather_than_keeping_orphans() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store_one(&mut store, "inbox/letter.pdf");
+
+        let gone = store.retain_documents(&[]).unwrap();
+
+        assert_eq!(gone.len(), 1);
+        assert_eq!(store.chunk_count().unwrap(), 0);
     }
 
     #[test]

@@ -1,16 +1,19 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
-import { analysisFraction, analysisPending } from "../lib/analysis";
+import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
   chooseWorkFolder,
   ensureSuggestedWorkFolder,
+  resetIndex,
+  revealWorkFolder,
   workFolderInventory,
   type FileRecord,
   type InventoryReport,
 } from "../lib/ipc";
 import { counted } from "../lib/plural";
 import type { IndexingState } from "../state/useIndexing";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -50,11 +53,17 @@ export function WorkFolderCard({
      come from here rather than from the last indexing pass, so they stay true after a file is
      added or removed without re-analysing (`docs/WORK-FOLDER-INVENTORY.md`). */
   const [inventory, setInventory] = useState<InventoryReport | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const showSuggestion = workFolder === null && suggestedWorkFolder !== null;
   const { finishedPasses, reset: resetIndexing } = indexing;
   /* Filled while one more pass would still change what the software knows, plain once it would
      not: the button says "do this next" exactly while that is true, and no longer. */
   const pending = inventory !== null && analysisPending(inventory.files);
+  /* How many documents that pass would change. The button already said "there is something to
+     do"; the number says how much, which is the difference between a badge she learns to ignore
+     and one she acts on. */
+  const pendingCount = inventory === null ? 0 : countPending(inventory.files);
 
   const refreshInventory = useCallback(() => {
     if (workFolder === null) {
@@ -66,6 +75,22 @@ export function WorkFolderCard({
   }, [workFolder]);
 
   useEffect(refreshInventory, [refreshInventory]);
+
+  /* She adds a document the way anyone does: in Explorer or Finder, with this window behind the
+     other one. Coming back to the window is therefore the moment the panel is most likely to be
+     out of date, and the only moment we can catch without watching the filesystem - which would
+     mean a background watcher, debouncing a scanner writing a file in pieces, and a cloud-sync
+     folder churning underneath it, for no more than the same answer sooner.
+     `focus` rather than `visibilitychange`: alt-tabbing back to a window that was never hidden
+     fires only the first. Rust re-reads a file's bytes only when its size or time moved
+     (`inventory::FileHashCache`), so doing this often is cheap. */
+  useEffect(() => {
+    if (workFolder === null) {
+      return;
+    }
+    window.addEventListener("focus", refreshInventory);
+    return () => window.removeEventListener("focus", refreshInventory);
+  }, [workFolder, refreshInventory]);
   // A finished pass changes every file's state, including a pass started from the conversation
   // rather than from this card. Keyed on the count rather than on the summary so a pass that
   // failed halfway still re-reads what it did manage to do.
@@ -112,6 +137,15 @@ export function WorkFolderCard({
                 )}.`,
               ]
             : []),
+          ...(indexing.summary.removedFiles.length > 0
+            ? [
+                `${counted(
+                  indexing.summary.removedFiles.length,
+                  t("workFolder.removedOne"),
+                  t("workFolder.removedMany"),
+                )}.`,
+              ]
+            : []),
           ...(indexing.summary.lowConfidenceFiles.length > 0
             ? [
                 `${counted(
@@ -141,6 +175,36 @@ export function WorkFolderCard({
         ))}
       </p>
     );
+
+  /* Opening the folder is the one action here that changes nothing, so it reports a failure and
+     otherwise leaves the card exactly as it was - no busy state, no cleared error. */
+  const reveal = async () => {
+    setError(null);
+    try {
+      await revealWorkFolder();
+    } catch (raw: unknown) {
+      setError(normaliseError(raw));
+    }
+  };
+
+  const confirmReset = async () => {
+    setError(null);
+    setResetting(true);
+    try {
+      await resetIndex();
+      // The pass summary describes an index that no longer exists, so it goes with it. The
+      // inventory is then re-read, and every document comes back as never analysed, which lights
+      // the Analyse button by the same rule as any other unanalysed folder.
+      resetIndexing();
+      refreshInventory();
+      setConfirmingReset(false);
+    } catch (raw: unknown) {
+      setError(normaliseError(raw));
+      setConfirmingReset(false);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const run = async (action: typeof chooseWorkFolder) => {
     setError(null);
@@ -196,19 +260,54 @@ export function WorkFolderCard({
           </button>
         ) : null}
         <div className="work-folder__row">
+          {/* First, because it is the only one that changes nothing: it hands the folder to the
+              file manager she already uses. Which one that is, is Rust's business. */}
+          {workFolder !== null ? (
+            <button
+              type="button"
+              className="button button--compact"
+              title={t("workFolder.revealHint")}
+              onClick={() => void reveal()}
+            >
+              {t("workFolder.reveal")}
+            </button>
+          ) : null}
           <button
             type="button"
             className="button button--compact"
+            /* The row holds four controls in a sidebar column, so the label is one word and the
+               sentence it shortens lives on hover. The card's own heading already says which
+               folder this is. */
+            title={workFolder === null ? undefined : t("workFolder.changeHint")}
             disabled={busy}
             onClick={() => void run(chooseWorkFolder)}
           >
             {workFolder === null ? t("workFolder.choose") : t("workFolder.change")}
           </button>
+          {/* Between the two it sits between, because that is what it undoes: it returns the
+              folder to the state "chosen, never analysed" that the button on its left leaves it
+              in and the button on its right leaves. Plain styling like its neighbours - it is a
+              standing action, not the thing to do next; the warning belongs on the
+              confirmation. */}
           {workFolder !== null ? (
-            <AnalyseButton indexing={indexing} emphasised={pending} />
+            <button
+              type="button"
+              className="button button--compact"
+              disabled={busy || indexing.running || resetting}
+              onClick={() => setConfirmingReset(true)}
+            >
+              {t("workFolder.reset")}
+            </button>
+          ) : null}
+          {workFolder !== null ? (
+            <AnalyseButton
+              indexing={indexing}
+              emphasised={pending}
+              pendingCount={pendingCount}
+            />
           ) : null}
         </div>
-        {/* Under both buttons, for the length of the pass and no longer. A spinner says only
+        {/* Under the whole row, for the length of the pass and no longer. A spinner says only
             "still working"; on a folder of scans, which is minutes rather than seconds, what she
             needs is whether it is nearly done. */}
         {indexing.progress === null ? null : (
@@ -258,13 +357,25 @@ export function WorkFolderCard({
           ) : (
             <>
               {passSummary}
-              <FileList files={inventory.files} />
+              {/* The panel this card sits in is wide, so the listing gets its second column. */}
+              <FileList files={inventory.files} wide />
             </>
           )}
         </>
       )}
       {error === null ? null : <ErrorBanner error={error} />}
       {indexing.error === null ? null : <ErrorBanner error={indexing.error} />}
+      {confirmingReset ? (
+        <ConfirmDialog
+          title={t("workFolder.resetTitle")}
+          body={t("workFolder.resetBody")}
+          confirmLabel={t("workFolder.reset")}
+          destructive
+          busy={resetting}
+          onConfirm={() => void confirmReset()}
+          onCancel={() => setConfirmingReset(false)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -277,9 +388,12 @@ export function WorkFolderCard({
 function AnalyseButton({
   indexing,
   emphasised,
+  pendingCount,
 }: {
   indexing: IndexingState;
   emphasised: boolean;
+  /** How many documents the pass would still change. Shown only while it is worth acting on. */
+  pendingCount: number;
 }) {
   const { t } = useTranslation();
 
@@ -299,6 +413,11 @@ function AnalyseButton({
           <span className="spinner" aria-hidden="true" />
           {t("actions.analyzing")}
         </span>
+      ) : pendingCount > 0 ? (
+        /* "Analyser (3)". The count rides inside the label rather than in a separate badge: the
+           row already carries three controls, and a badge would be a fourth thing competing for
+           the same few pixels. */
+        `${t("actions.analyze")} (${pendingCount})`
       ) : (
         t("actions.analyze")
       )}
@@ -322,20 +441,24 @@ function AnalysisProgress({ fraction, label }: { fraction: number; label: string
   );
 }
 
-/** One file per row: what it is called on its own line, and what happened to it underneath. The
- * name is the thing she reads, so it gets the width; the state is a note about it, not a column
- * competing with it. The same two facts a deterministic answer prints, so the panel and an answer
- * can never disagree. */
-function FileList({ files }: { files: FileRecord[] }) {
+/** One file per row, and the same two facts a deterministic answer prints, so the panel and an
+ * answer can never disagree.
+ *
+ * Two shapes for one markup, chosen by where the card is rather than by a breakpoint - the card's
+ * width is decided by which of its two homes it is in, not by the size of the window. In the
+ * settings panel there is room to put the state beside the name and align the states down the
+ * right, which is how a listing is normally read. In the sidebar the same two columns would leave
+ * the name a few characters wide, so the state goes underneath it and the name keeps the width. */
+function FileList({ files, wide = false }: { files: FileRecord[]; wide?: boolean }) {
   const { t } = useTranslation();
 
   return (
-    <ul className="inventory">
+    <ul className={wide ? "inventory inventory--wide" : "inventory"}>
       {files.map((file) => (
         <li key={file.id + file.relativePath} className="inventory__file">
-          {/* One line, whatever the path costs: a name broken across two lines in a narrow
-              sidebar is harder to scan than one that ends in an ellipsis, and the full path is
-              on hover for the rare name long enough to need it. */}
+          {/* One line, whatever the path costs: a name broken across two lines is harder to scan
+              than one that ends in an ellipsis, and the full path is on hover for the rare name
+              long enough to need it. */}
           <span className="inventory__path" title={file.relativePath}>
             {file.relativePath}
           </span>

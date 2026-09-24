@@ -180,6 +180,28 @@ pub fn check_server_url(url: &str) -> Result<(), AppError> {
 mod tests {
     use super::*;
 
+    /// What `reset_settings` hands back. The folder is part of it on purpose: a reset that keeps
+    /// the folder is not a reset, and the folder is the setting most likely to be part of
+    /// whatever went wrong - a disk that is no longer there, or a folder a sync client has since
+    /// taken over.
+    #[test]
+    fn the_defaults_a_reset_restores_keep_no_work_folder_and_no_chosen_language() {
+        let defaults = Settings::default();
+
+        assert_eq!(defaults.work_folder, None);
+        // `None` means "follow the system", which is what a first launch does.
+        assert_eq!(defaults.locale, None);
+        assert_eq!(defaults.model_alias, DEFAULT_MODEL_ALIAS);
+        assert_eq!(defaults.embedding_alias, DEFAULT_EMBEDDING_ALIAS);
+        assert_eq!(
+            defaults.answer_idle_timeout_seconds,
+            DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
+        );
+        // The address is a default, not a constant: an installation can set it in the
+        // environment, and a reset must restore that rather than a literal typed here.
+        assert!(check_server_url(&defaults.server_url).is_ok());
+    }
+
     #[test]
     fn the_stored_shape_is_the_one_the_interface_expects() {
         let settings = Settings {

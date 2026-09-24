@@ -3,6 +3,7 @@ import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { coverageLine } from "../lib/coverage";
 import { formatDuration } from "../lib/duration";
+import { counted } from "../lib/plural";
 import type { GenerationPhase } from "../lib/generation";
 import { isNearBottom, prefersReducedMotion, scrollBehaviour } from "../lib/scroll";
 import { timestampParts } from "../lib/timestamp";
@@ -237,6 +238,20 @@ export function MessageList({
               {entry.coverage !== undefined ? (
                 <p className="message__timing">{coverageLine(t, entry.coverage)}</p>
               ) : null}
+              {/* Documents the answer could not have used. Retrieval refuses when it has too
+                  little evidence; this is the other half, for when it had plenty and the file she
+                  had in mind was simply not among it. */}
+              {entry.unanalysedFiles === undefined ? null : (
+                <p className="message__timing">
+                  {t("chat.unanalysed", {
+                    documents: counted(
+                      entry.unanalysedFiles,
+                      t("chat.unanalysedOne"),
+                      t("chat.unanalysedMany"),
+                    ),
+                  })}
+                </p>
+              )}
               {/* An answer she stopped has no duration to report, so this line takes the place of
                   the one below rather than joining it: what matters is that it is incomplete. */}
               {entry.interrupted === undefined ? null : (

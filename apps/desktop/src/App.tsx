@@ -25,7 +25,7 @@ function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boole
 }
 
 export default function App() {
-  const { snapshot, locale, loadError, saveError, reload, update } = useAppSettings();
+  const { snapshot, locale, loadError, saveError, reload, update, reset } = useAppSettings();
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
   );
@@ -115,6 +115,7 @@ export default function App() {
             saveError={saveError}
             indexing={indexing}
             onUpdate={(patch) => void update(patch)}
+            onReset={reset}
             onClose={() => setSettingsOpen(false)}
           />
         ) : null}

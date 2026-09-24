@@ -46,6 +46,11 @@ export interface ChatEntry extends ChatTurn {
    * of ten analysed files cannot read as though it had covered all ten
    * (`docs/WORK-FOLDER-INVENTORY.md`). */
   coverage?: EvidenceCoverage;
+  /** Documents in the folder this answer could not have used, because they were never analysed
+   * or have changed since. Present only when there were any: the quiet failure this guards
+   * against is a document dropped in the folder, never analysed, and an answer that reads as
+   * though it had been taken into account. */
+  unanalysedFiles?: number;
   /** This answer is not an answer: it is the software saying the documents have not been read
    * yet. Copying or regenerating it is meaningless, so the turn offers the one thing that would
    * change it instead. */
@@ -212,7 +217,19 @@ export function useChat(
           const durationMs = performance.now() - startedAt;
           setEntries((current) =>
             current.map((entry) =>
-              entry.id === answerId ? { ...entry, durationMs, modelAlias } : entry,
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    durationMs,
+                    modelAlias,
+                    /* Said on the answer itself, not only on the folder panel. By the time she
+                       reads this she is looking at the conversation, and "three documents were
+                       not part of this" is only useful next to the answer it qualifies. */
+                    ...(result.unanalysedFiles > 0
+                      ? { unanalysedFiles: result.unanalysedFiles }
+                      : {}),
+                  }
+                : entry,
             ),
           );
         } else {

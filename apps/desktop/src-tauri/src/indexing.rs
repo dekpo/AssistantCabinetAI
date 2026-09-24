@@ -15,6 +15,14 @@ use crate::index_store::IndexStore;
 use crate::ocr::OcrProvider;
 use crate::raster::PageRasterizer;
 
+/// The OCR engine did not start. Every scan reads as unreadable, however clear it is.
+pub const CAPABILITY_OCR_ENGINE: &str = "ocrEngine";
+
+/// The PDF page rasteriser did not start. A scanned PDF cannot reach OCR at all; a JPEG or PNG
+/// still can, which is what made the failure in `docs/TROUBLESHOOTING.md` look like a bad
+/// document rather than a missing capability.
+pub const CAPABILITY_PAGE_RASTERIZER: &str = "pageRasterizer";
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexSummary {
@@ -29,6 +37,13 @@ pub struct IndexSummary {
     pub ocr_files: Vec<String>,
     /// Files where at least one page came back below the OCR confidence floor. No raw score.
     pub low_confidence_files: Vec<String>,
+    /// Machine codes for an ingestion capability that did not start for this pass, in a stable
+    /// order. Empty on a healthy installation. Reported so an unreadable scan can be explained
+    /// by the interface instead of being blamed on the document: the engine being absent and the
+    /// document being illegible used to be the same silent outcome
+    /// (`docs/TROUBLESHOOTING.md`). English codes; the interface localises them
+    /// (`docs/LANGUAGE-AND-LOCALE.md`).
+    pub unavailable_capabilities: Vec<&'static str>,
     pub chunk_count: u64,
 }
 
@@ -58,6 +73,7 @@ pub async fn run(
     // than a plain closure so the future stays `Send` and can be awaited from a Tauri command.
     on_progress: &(dyn Fn(IndexProgress) + Sync),
 ) -> Result<IndexSummary, AppError> {
+    let unavailable_capabilities = unavailable_capabilities(ocr, rasterizer);
     let files = discovery::discover(work_folder);
     let total_files = files.len();
     // Sent before any work, so the bar appears at zero rather than only once the first file is
@@ -163,8 +179,26 @@ pub async fn run(
         empty_files,
         ocr_files,
         low_confidence_files,
+        unavailable_capabilities,
         chunk_count: index.chunk_count()?,
     })
+}
+
+/// Which ingestion capabilities are missing for this pass. Read from the ports themselves rather
+/// than from what the pass happened to encounter, so a folder that holds no scan today still
+/// reports an engine that will fail the first scan added tomorrow.
+fn unavailable_capabilities(
+    ocr: Option<&dyn OcrProvider>,
+    rasterizer: Option<&dyn PageRasterizer>,
+) -> Vec<&'static str> {
+    let mut missing = Vec::new();
+    if ocr.is_none() {
+        missing.push(CAPABILITY_OCR_ENGINE);
+    }
+    if rasterizer.is_none() {
+        missing.push(CAPABILITY_PAGE_RASTERIZER);
+    }
+    missing
 }
 
 fn ocr_identity<'a>(
@@ -281,6 +315,46 @@ async fn embed_chunks(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ocr::fake::FakeOcrProvider;
+    use crate::raster::FakeRasterizer;
+
+    #[test]
+    fn a_healthy_pass_reports_no_missing_capability() {
+        let ocr = FakeOcrProvider::new();
+        let rasterizer = FakeRasterizer::new();
+
+        let missing = unavailable_capabilities(Some(&ocr), Some(&rasterizer));
+
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn a_missing_rasterizer_is_named_even_though_images_still_work() {
+        let ocr = FakeOcrProvider::new();
+
+        let missing = unavailable_capabilities(Some(&ocr), None);
+
+        assert_eq!(missing, vec![CAPABILITY_PAGE_RASTERIZER]);
+    }
+
+    #[test]
+    fn a_missing_engine_is_named() {
+        let rasterizer = FakeRasterizer::new();
+
+        let missing = unavailable_capabilities(None, Some(&rasterizer));
+
+        assert_eq!(missing, vec![CAPABILITY_OCR_ENGINE]);
+    }
+
+    #[test]
+    fn both_missing_engines_are_named_in_a_stable_order() {
+        let missing = unavailable_capabilities(None, None);
+
+        assert_eq!(
+            missing,
+            vec![CAPABILITY_OCR_ENGINE, CAPABILITY_PAGE_RASTERIZER]
+        );
+    }
 
     #[test]
     fn hashing_the_same_bytes_twice_is_stable() {

@@ -6,8 +6,13 @@
 //! does that - and it never writes a bitmap to disk. No `#[cfg(windows)]`: the platform
 //! difference is which prebuilt `pdfium` library ships as a resource, resolved by path at
 //! construction, never here.
+//!
+//! There is exactly one rasteriser per process, reached through `shared`. pdfium binds itself
+//! globally and refuses to be bound twice, so building one per indexing pass silently disabled
+//! OCR for scanned PDFs from the second pass onwards (`docs/TROUBLESHOOTING.md`).
 
 use std::path::Path;
+use std::sync::OnceLock;
 
 use pdfium_render::prelude::*;
 
@@ -18,8 +23,32 @@ use crate::ocr::OcrError;
 /// to rasterise.
 pub const RASTER_DPI: f32 = 300.0;
 
+/// The one slot `shared` fills. Private, and the only place in the process that may call
+/// `Rasterizer::new`: see that function's own note on why a second call can never succeed.
+static SHARED: OnceLock<Option<Rasterizer>> = OnceLock::new();
+
+/// The process's rasteriser, built on first use and kept for the lifetime of the application.
+///
+/// `pdfium-render` binds its library into a **process-global** cell: `Pdfium::bind_to_library`
+/// returns `PdfiumLibraryBindingsAlreadyInitialized` on every call after the first, however
+/// healthy the library file is. A `Rasterizer` built per indexing pass therefore worked on the
+/// first pass after launch and silently vanished on every pass after it, taking OCR for every
+/// scanned PDF with it while JPEG and PNG - which need no rasteriser - kept working. That is the
+/// shape of the bug recorded in `docs/TROUBLESHOOTING.md`; callers must come through here.
+///
+/// `library_path` is read only on the first call that reaches the library. A later call with a
+/// different path returns the instance already bound, because the process cannot bind twice.
+/// `None` is not cached against the path either: a caller that cannot find the library yet
+/// simply does not call this, so staging the resource mid-session still works on the next pass.
+pub fn shared(library_path: &Path) -> Option<&'static Rasterizer> {
+    SHARED
+        .get_or_init(|| Rasterizer::new(library_path).ok())
+        .as_ref()
+}
+
 /// Loads the bundled `pdfium` library once and rasterises pages on demand. Constructed once,
-/// beside the OCR provider, and shared for the lifetime of the application.
+/// beside the OCR provider, and shared for the lifetime of the application: reach it through
+/// `shared`, never by building one.
 pub struct Rasterizer {
     pdfium: Pdfium,
 }
@@ -29,7 +58,12 @@ impl Rasterizer {
     /// from `app.path().resolve(...)` - never a literal here. Binding failure means the resource
     /// is missing or the wrong build for this platform, which degrades exactly like a missing
     /// Tesseract sidecar: `OcrError::EngineUnavailable`, never a panic.
-    pub fn new(library_path: &Path) -> Result<Self, OcrError> {
+    ///
+    /// Private on purpose. Exactly one call to this may ever happen in a process - the one
+    /// inside `shared` - because the binding it performs is global to the process and cannot be
+    /// repeated. A second caller anywhere, including a test, would consume the binding and leave
+    /// `shared` permanently empty.
+    fn new(library_path: &Path) -> Result<Self, OcrError> {
         let bindings = Pdfium::bind_to_library(library_path).map_err(|_| OcrError::EngineUnavailable)?;
         Ok(Self {
             pdfium: Pdfium::new(bindings),
@@ -181,3 +215,93 @@ const PLACEHOLDER_PNG: &[u8] = &[
     0x00, 0x05, 0xFE, 0x02, 0xFE, 0xDC, 0xCC, 0x59, 0xE7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
     0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn crate_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    fn sandbox_scan() -> PathBuf {
+        crate_root()
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("gp-sandbox")
+            .join("inbox")
+            .join("2026-03-22_courrier-rhumatologie-scan.pdf")
+    }
+
+    /// The regression test for the bug in `docs/TROUBLESHOOTING.md`: a rasteriser was built for
+    /// every indexing pass, and pdfium's process-global binding made every pass after the first
+    /// fail, so a scanned PDF added later in the session was reported unreadable. Asking three
+    /// times here stands for three passes; before the fix the second call was already `None`.
+    ///
+    /// Ignored by default because `resources/pdfium/pdfium.dll` is gitignored
+    /// (`resources/README.md`) and only exists once `scripts/fetch-ocr-resources.ps1` has run -
+    /// never on CI. Run it by hand after that script with
+    /// `cargo test --lib -- --ignored the_shared_rasterizer`.
+    ///
+    /// The only test allowed to touch `SHARED`: the binding it takes is global to the process,
+    /// so a second test that built its own rasteriser would leave this one permanently empty.
+    #[test]
+    #[ignore]
+    fn the_shared_rasterizer_answers_every_pass_not_only_the_first() {
+        let library = crate_root()
+            .join("resources")
+            .join("pdfium")
+            .join("pdfium.dll");
+        if !library.exists() {
+            eprintln!("skipping: pdfium not staged, run scripts/fetch-ocr-resources.ps1");
+            return;
+        }
+        let scan = sandbox_scan();
+        assert!(scan.exists(), "fixture missing: {}", scan.display());
+
+        for pass in 1..=3 {
+            let rasterizer = shared(&library)
+                .unwrap_or_else(|| panic!("pass {pass} must still have a rasteriser"));
+
+            assert_eq!(
+                rasterizer.page_count(&scan).expect("counts pages"),
+                1,
+                "pass {pass} must still read the scanned PDF"
+            );
+            assert!(
+                !rasterizer
+                    .rasterize_page(&scan, 1)
+                    .expect("rasterises page 1")
+                    .is_empty(),
+                "pass {pass} must still produce a bitmap for OCR"
+            );
+        }
+    }
+
+    #[test]
+    fn the_fake_rasterizer_reports_the_page_count_it_was_given() {
+        let rasterizer = FakeRasterizer::with_page_count(3);
+
+        assert_eq!(
+            rasterizer
+                .page_count(Path::new("scan.pdf"))
+                .expect("counts"),
+            3
+        );
+    }
+
+    #[test]
+    fn the_fake_rasterizer_records_which_page_was_asked_for() {
+        let rasterizer = FakeRasterizer::new();
+
+        let _ = rasterizer.rasterize_page(Path::new("scan.pdf"), 2);
+
+        assert_eq!(
+            rasterizer.rasterize_calls(),
+            vec![("scan.pdf".to_string(), 2)]
+        );
+    }
+}

@@ -17,6 +17,14 @@ import { ErrorBanner } from "./ErrorBanner";
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
 const CANCELLED = "work_folder_selection_cancelled";
 
+/** The machine codes a pass can report, and the sentence each one deserves. A code we do not
+    recognise is dropped rather than shown raw: Rust names capabilities, this file names them in
+    her language (`docs/LANGUAGE-AND-LOCALE.md`). */
+const CAPABILITY_KEYS: Record<string, string> = {
+  ocrEngine: "workFolder.ocrEngineUnavailable",
+  pageRasterizer: "workFolder.pageRasterizerUnavailable",
+};
+
 export function WorkFolderCard({
   workFolder,
   suggestedWorkFolder,
@@ -113,6 +121,13 @@ export function WorkFolderCard({
                 )}.`,
               ]
             : []),
+          /* Last, and only when something is actually missing: a scan reported unreadable
+             because an engine did not start is not the document's fault, and saying so is the
+             difference between a five-second diagnosis and an investigation. */
+          ...indexing.summary.unavailableCapabilities
+            .map((code) => CAPABILITY_KEYS[code])
+            .filter((key): key is string => key !== undefined)
+            .map((key) => t(key)),
         ];
 
   const passSummary =

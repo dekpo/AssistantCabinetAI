@@ -8,6 +8,71 @@ with the exact command or code where it matters.
 
 ---
 
+## Only the first "Analyse" of a session could read a scanned PDF: pdfium refuses to be bound twice
+
+**Found:** 24 September 2026, after Elise dropped a real scanned prescription into the work folder and
+indexed it. The file came back as unreadable. Deleting `%LOCALAPPDATA%\com.assistantcabinetai.desktop`
+and restarting made it work, which is not a workflow anyone can be asked to follow.
+
+The document was never the problem. Driven by hand with the application's own bundled binaries, it read
+perfectly: `resources/pdfium/pdfium.dll` opened it (1 page, A4), rendering at the code's own
+`RASTER_DPI = 300.0` produced a 2480 × 3508 bitmap, and
+`binaries/tesseract-x86_64-pc-windows-msvc.exe - - -l fra -c tessedit_create_tsv=1` returned **292 words
+at 90.5 % mean confidence in 2.9 s** — far above `CONFIDENCE_FLOOR`, far under `PER_PAGE_TIMEOUT`.
+
+`pdfium-render` binds its library into a **process-global** cell. From `Pdfium::bind_to_library`:
+
+```rust
+if BINDINGS.get().is_none() { /* load the library */ } else { Err(PdfiumLibraryBindingsAlreadyInitialized) }
+```
+
+and `Pdfium::new(bindings)` is what fills that cell. So the second binding in a process always fails,
+however healthy the `.dll` is. `index_work_folder` built a fresh `Rasterizer` on **every** pass, and
+`try_rasterizer` swallowed the failure with `.ok()`. Measured directly against the bundled library:
+
+```text
+first ok? true  second ok? false
+```
+
+So: the first pass after launch rasterised scanned PDFs; every pass after it had `rasterizer = None` and
+reported every scanned PDF unreadable, for the rest of the session.
+
+**The tell is in the index.** Every failing row was a PDF; every image was fine, because a JPEG or PNG
+goes straight to Tesseract and needs no rasteriser at all:
+
+```text
+Ordonnance pour Easie.pdf                  empty=1  ocr_engine=NULL
+2026-03-22_courrier-rhumatologie-scan.pdf  empty=1  ocr_engine=NULL
+2026-03-26_ordonnance-scan.png             190 chars, ocr_engine=tesseract
+```
+
+`ocr_engine = NULL` meant two different things — "born-digital PDF, OCR not needed" and "OCR never ran" —
+which is why nothing on screen could distinguish a missing engine from an illegible scan.
+
+**Fix:** one rasteriser per process, reached through `raster::shared`, with `Rasterizer::new` made
+private so no caller can rebuild one (`apps/desktop/src-tauri/src/raster.rs`). Sidecar *discovery* still
+runs per pass — a handful of `exists()` calls, so a library staged mid-session is still picked up — but
+the instance is the process's own. `IndexSummary` gained `unavailable_capabilities`, the machine codes
+`ocrEngine` and `pageRasterizer`, which the interface renders as a sentence: an engine that did not start
+must never again look like a bad document.
+
+**Rule this generalises to:** a third-party library with process-global state is a process-wide singleton,
+whatever its constructor's signature suggests. Building one per operation is the failure mode, and
+`.ok()` on its constructor turns that failure into silence. If a capability can be absent, the pass has
+to say so.
+
+**Tests:** `the_shared_rasterizer_answers_every_pass_not_only_the_first` in
+`apps/desktop/src-tauri/src/raster.rs` asks for the rasteriser three times against the real bundled
+library and reads the scanned fixture each time. It is `#[ignore]`d, like the Tesseract sidecar test,
+because `pdfium.dll` is gitignored — run it with
+`cargo test --lib -- --ignored the_shared_rasterizer` after `scripts/fetch-ocr-resources.ps1`. It is also
+the **only** test allowed to build a rasteriser: a second one anywhere in the process would consume the
+binding and leave `shared` permanently empty. `apps/desktop/src-tauri/tests/repeated_indexing.rs` covers
+the pass itself with the ports faked — a scan added after the first pass, a fourth pass still reading
+scans, a missing rasteriser reported rather than blamed on the document, and a scan stored empty before
+the engine existed being retried once the engine is back, so the local index never has to be deleted by
+hand.
+
 ## A small model wrote the same block for three and a half minutes and no timeout stopped it
 
 **Found:** 22 September 2026, trying `qwen2.5:0.5b` (alias `qwen-nano`) as a chat profile fast enough for the

@@ -10,9 +10,17 @@ import type { FileRecord, IndexProgress } from "./ipc";
  * actually resolves.
  */
 export function analysisPending(files: FileRecord[]): boolean {
-  return files.some(
+  return countPending(files) > 0;
+}
+
+/**
+ * How many files one more pass would still change, by the same rule `analysisPending` uses - so
+ * the button cannot be lit while the number beside it reads zero.
+ */
+export function countPending(files: FileRecord[]): number {
+  return files.filter(
     (file) => file.processingStatus === "discovered" || file.processingStatus === "pending",
-  );
+  ).length;
 }
 
 /**

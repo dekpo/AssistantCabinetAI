@@ -20,6 +20,7 @@ pub mod inventory;
 pub mod ocr;
 pub mod raster;
 pub mod retrieval;
+pub mod reveal;
 mod settings;
 mod work_folder;
 pub mod work_folder_context;
@@ -37,6 +38,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::load_app_snapshot,
             commands::save_settings,
+            commands::reset_settings,
             commands::choose_work_folder,
             commands::ensure_suggested_work_folder,
             commands::check_server_health,
@@ -46,6 +48,8 @@ pub fn run() {
             commands::ask_with_sources,
             commands::has_indexed_documents,
             commands::work_folder_inventory,
+            commands::reveal_work_folder,
+            commands::reset_index,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

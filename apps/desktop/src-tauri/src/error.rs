@@ -60,6 +60,11 @@ pub enum AppError {
     #[error("work_folder_not_writable")]
     WorkFolderNotWritable { path: String },
 
+    /// The system file manager could not be started. Nothing was read, written or moved: the
+    /// folder is exactly as it was, and she can still open it herself.
+    #[error("work_folder_reveal_failed")]
+    WorkFolderRevealFailed,
+
     #[error("server_unreachable")]
     ServerUnreachable { url: String },
 
@@ -141,6 +146,7 @@ impl AppError {
             Self::WorkFolderIsSymlink { .. } => "work_folder_is_symlink",
             Self::WorkFolderUncNotSupported { .. } => "work_folder_unc_not_supported",
             Self::WorkFolderNotWritable { .. } => "work_folder_not_writable",
+            Self::WorkFolderRevealFailed => "work_folder_reveal_failed",
             Self::ServerUnreachable { .. } => "server_unreachable",
             Self::ServerTimeout { .. } => "server_timeout",
             Self::ServerError { .. } => "server_error",
@@ -173,6 +179,7 @@ impl AppError {
             | Self::IndexUnavailable
             | Self::InsufficientEvidence
             | Self::ChatCancelled
+            | Self::WorkFolderRevealFailed
             | Self::OcrUnavailable => json!({}),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
                 json!({ "path": path })

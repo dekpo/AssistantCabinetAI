@@ -181,17 +181,34 @@ body {
   margin-bottom: 5px;
 }
 
+/* Four controls in one line, in a sidebar column narrow enough that two were already tight.
+   Every child grows from its own text width by an equal share of what is left over, so the row
+   fills the card edge to edge and the gaps between the buttons are identical - `space-between`
+   distributed the *gaps* instead, which left four buttons of four different widths adrift.
+   Nothing is ever crushed: the basis is the label, growing only adds to it.
+   `flex-wrap` stays as the last resort. At a width where even one-word labels do not fit, a
+   second line is better than four ellipses, and it is what keeps a longer translation safe. */
 .work-folder__row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-/* Never squeezed by a long folder-change label beside it. Written against the analyse button
-   itself rather than against `.button--primary`, which it only wears while a pass is still owed. */
-.work-folder__analyse {
-  flex: 0 0 auto;
+.work-folder__row > .button {
+  flex: 1 1 auto;
+  /* One word each, so a button is never the thing that wraps. */
+  white-space: nowrap;
+}
+
+/* The one that matters, so it is the one that gets the room. It takes three shares of the spare
+   width to the others' one, which reads as "largest" at both widths the card lives at rather than
+   only at the wide one: in the sidebar there is little spare and the four stay close to their
+   labels, in the settings panel there is a lot and this one visibly takes it.
+   Written against the analyse button itself rather than against `.button--primary`, which it only
+   wears while a pass is still owed. */
+.work-folder__row > .work-folder__analyse {
+  flex-grow: 3;
 }
 
 /* A hairline under both buttons, for the length of one analysis pass. A spinner only says "still
@@ -269,6 +286,30 @@ body {
 .inventory__state {
   color: var(--text-quiet);
   font-size: 0.95em;
+}
+
+/* The settings panel is wide enough to read a listing the way a listing is normally read: the name
+   and what happened to it on one line, the states aligned down the right. The stacked form above
+   stays for the sidebar, where the same two columns would leave the name a few characters wide.
+   One markup, two shapes, chosen by where the card is - not by a breakpoint, because the card's
+   width is decided by which of the two places it is in, not by the size of the window. */
+.inventory--wide .inventory__file {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* The name takes the width and keeps its ellipsis; the state is short and never wraps, so it can
+   hold its own width at the end of the line. */
+.inventory--wide .inventory__path {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inventory--wide .inventory__state {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .card .banner {
@@ -706,6 +747,22 @@ body {
   border-color: var(--accent);
 }
 
+/* The button that throws something away, and the only one wearing the alert palette the error
+   banner already uses - so "this one is different" is a colour she has met before rather than a
+   new vocabulary. Outlined rather than filled: it confirms a choice she has already made, it does
+   not compete with the accent for attention. */
+.button--destructive {
+  background: var(--alert-surface);
+  color: var(--alert-text);
+  border-color: var(--alert-border);
+}
+
+.button--destructive:active:enabled {
+  background: var(--alert-border);
+  color: var(--alert-surface);
+  border-color: var(--alert-border);
+}
+
 .button--primary .spinner {
   border-color: color-mix(in srgb, var(--accent-text) 35%, transparent);
   border-top-color: var(--accent-text);
@@ -866,13 +923,60 @@ body {
   margin: 0 0 8px;
 }
 
+/* `inset` gives it the window minus a margin; the ceiling stops it growing past the width its
+   content can actually use - `.field`'s 44em plus the body's own padding - and `margin-inline`
+   centres what is left instead of leaving it stuck against the left edge. */
 .dialog {
   position: fixed;
   inset: 48px;
+  max-width: calc(44em + 32px);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
   overflow: hidden;
+}
+
+/* A confirmation, not a place to work: small, centred, and over a dimmed window so the question
+   is plainly the only thing waiting on an answer. Settings uses the full-window `.dialog` because
+   it is somewhere she stays; this is one sentence and two buttons. */
+.confirm__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 35%);
+}
+
+.confirm {
+  width: min(380px, 100%);
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+}
+
+.confirm__title {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.confirm__body {
+  margin: 0 0 16px;
+  color: var(--text-quiet);
+  font-size: 13px;
+}
+
+/* The safe answer first in the DOM, so it is the first stop for the keyboard; the deliberate one
+   sits on the right, where this window puts every button that commits to something. */
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .dialog__header {
@@ -900,6 +1004,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-width: 44em;
+}
+
+/* The folder card is a card everywhere else, and in here it is one more setting among the fields
+   above it. Same ceiling as `.field`, written once against the dialog body rather than as a
+   modifier the card has to be told to wear: anything dropped into this panel later should line up
+   with the rest without being asked to. */
+.dialog__body > .card {
   max-width: 44em;
 }
 

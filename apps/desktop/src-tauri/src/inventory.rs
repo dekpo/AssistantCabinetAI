@@ -11,8 +11,9 @@
 //! `discovery` and the one index in `index_store` rather than opening a second scanner or a
 //! second database, so there is nothing for the two to disagree about.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -24,6 +25,74 @@ use crate::file_record::{
     IndexMetadata, ProcessingStatus, Readability,
 };
 use crate::index_store::{DocumentIndexRow, IndexStore};
+
+/// What one file's bytes hashed to, and the two cheap facts that say whether they still do.
+#[derive(Debug, Clone)]
+struct CachedHash {
+    size_bytes: u64,
+    modified_at: Option<i64>,
+    sha256: String,
+}
+
+/// Remembers what each file hashed to, so an inventory built often does not re-read the folder
+/// every time.
+///
+/// The inventory decides "indexed" against "changed since it was indexed" by comparing content
+/// hashes, which means reading every byte in the work folder. That was affordable while the panel
+/// was rebuilt on startup and after a pass. It is not affordable once it is also rebuilt every
+/// time she comes back to the window, on a folder of scans that is hundreds of megabytes.
+///
+/// A cached hash is reused only when **both** the size and the modification time are unchanged.
+/// The failure this accepts is a file rewritten within the same second to exactly the same length:
+/// the panel would go on calling it indexed until the next pass. It is a hint that would be
+/// briefly stale, never a wrong index - `indexing::run` hashes the bytes itself and remains the
+/// only thing that decides what is stored.
+///
+/// Owned by the caller rather than kept in a global, so a test builds its own and two work
+/// folders cannot share one. Keyed by absolute path for the same reason.
+#[derive(Debug, Default)]
+pub struct FileHashCache {
+    entries: Mutex<HashMap<String, CachedHash>>,
+}
+
+impl FileHashCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The file's content hash, read only when the cheap facts say it may have moved on. `None`
+    /// when the file could not be read at all, which is never cached: an unreadable file is a
+    /// transient state (a scanner still writing, a locked document), not an identity.
+    fn hash_of(&self, file: &DiscoveredFile) -> Option<String> {
+        if let Ok(entries) = self.entries.lock() {
+            if let Some(cached) = entries.get(&file.absolute_path) {
+                if cached.size_bytes == file.size_bytes && cached.modified_at == file.modified_at {
+                    return Some(cached.sha256.clone());
+                }
+            }
+        }
+        let sha256 = hash_file(Path::new(&file.absolute_path))?;
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.insert(
+                file.absolute_path.clone(),
+                CachedHash {
+                    size_bytes: file.size_bytes,
+                    modified_at: file.modified_at,
+                    sha256: sha256.clone(),
+                },
+            );
+        }
+        Some(sha256)
+    }
+
+    /// Drop everything remembered. Used when the index is emptied, so the next inventory is built
+    /// from the folder as it is rather than from what a previous session believed about it.
+    pub fn forget_all(&self) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.clear();
+        }
+    }
+}
 
 /// Counts, and nothing else. What the Work Folder panel shows, and what a "how many files?"
 /// question is answered from.
@@ -74,6 +143,17 @@ impl WorkFolderInventory {
     /// open, every file is `Discovered` and `NotAssessed`, which is exactly what a folder that
     /// has never been analysed should report.
     pub fn discover(root: &Path, index: Option<&IndexStore>) -> Result<Self, AppError> {
+        Self::discover_with_cache(root, index, &FileHashCache::new())
+    }
+
+    /// The same walk, reusing what `cache` already knows about each file's bytes. The command
+    /// that answers the folder panel passes a cache that lives as long as the application, so
+    /// rebuilding the panel is cheap enough to do whenever the window is looked at again.
+    pub fn discover_with_cache(
+        root: &Path,
+        index: Option<&IndexStore>,
+        cache: &FileHashCache,
+    ) -> Result<Self, AppError> {
         let rows = match index {
             Some(store) => store.all_documents()?,
             None => Vec::new(),
@@ -87,7 +167,7 @@ impl WorkFolderInventory {
             .into_iter()
             .map(|file| {
                 let indexed = by_path.get(file.relative_path.as_str()).copied();
-                record_for(&file, indexed)
+                record_for(&file, indexed, cache)
             })
             .collect();
 
@@ -197,6 +277,25 @@ impl WorkFolderInventory {
 
     pub fn indexed_files(&self) -> Vec<&FileRecord> {
         self.files.iter().filter(|file| file.indexed).collect()
+    }
+
+    /// How many documents one more analysis pass would still change: never read, or read and
+    /// changed since. A file that was read and produced nothing is **not** one of them - it will
+    /// not become readable by being analysed again, and counting it would leave a warning on
+    /// screen for ever, which teaches her to stop reading warnings. The same two states
+    /// `analysisPending` lights the Analyse button for, so the button and an answer can never
+    /// disagree about whether the folder is up to date.
+    pub fn unanalysed_documents(&self) -> usize {
+        self.files
+            .iter()
+            .filter(|file| {
+                file.kind.is_document()
+                    && matches!(
+                        file.processing_status,
+                        ProcessingStatus::Discovered | ProcessingStatus::Pending
+                    )
+            })
+            .count()
     }
 
     /// Every record carrying this identity. More than one means two byte-identical copies are in
@@ -319,7 +418,11 @@ fn sort_node(node: &mut FolderNode) {
 }
 
 /// Filesystem truth plus index truth, for one file.
-fn record_for(file: &DiscoveredFile, indexed: Option<&DocumentIndexRow>) -> FileRecord {
+fn record_for(
+    file: &DiscoveredFile,
+    indexed: Option<&DocumentIndexRow>,
+    cache: &FileHashCache,
+) -> FileRecord {
     let name = file
         .relative_path
         .rsplit('/')
@@ -329,7 +432,7 @@ fn record_for(file: &DiscoveredFile, indexed: Option<&DocumentIndexRow>) -> File
     // From the name the filesystem reports, never from what the file says about itself.
     let (stem, extension) = split_name(&name);
     let kind = FileKind::from_extension(&extension);
-    let sha256 = hash_file(Path::new(&file.absolute_path));
+    let sha256 = cache.hash_of(file);
 
     let (readability, processing_status, extraction_method) = match indexed {
         None => (
@@ -410,6 +513,102 @@ mod tests {
             std::fs::write(&path, content.as_bytes()).unwrap();
         }
         root
+    }
+
+    fn discovered(path: &std::path::Path, relative: &str) -> DiscoveredFile {
+        let metadata = std::fs::metadata(path).expect("reads metadata");
+        DiscoveredFile {
+            relative_path: relative.to_string(),
+            absolute_path: path.display().to_string(),
+            extension: "txt".into(),
+            size_bytes: metadata.len(),
+            modified_at: metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|duration| duration.as_secs() as i64),
+        }
+    }
+
+    #[test]
+    fn a_cached_hash_is_reused_while_size_and_modification_time_hold() {
+        let root = folder_with(&[("note.txt", "Bonjour Camille")]);
+        let path = root.path().join("note.txt");
+        let file = discovered(&path, "note.txt");
+        let cache = FileHashCache::new();
+
+        let first = cache.hash_of(&file).expect("hashes");
+        // The bytes change underneath, but the record the cache was given still claims the old
+        // size and time - which is exactly the situation a cache hit must survive unchanged.
+        std::fs::write(&path, b"Something else entirely").unwrap();
+        let second = cache.hash_of(&file).expect("hashes");
+
+        assert_eq!(first, second, "an unchanged size and time must not re-read");
+    }
+
+    #[test]
+    fn a_changed_size_sends_the_cache_back_to_the_bytes() {
+        let root = folder_with(&[("note.txt", "Bonjour")]);
+        let path = root.path().join("note.txt");
+        let cache = FileHashCache::new();
+        let before = cache.hash_of(&discovered(&path, "note.txt")).expect("hashes");
+
+        std::fs::write(&path, b"Bonjour Camille, bien plus long").unwrap();
+        let after = cache.hash_of(&discovered(&path, "note.txt")).expect("hashes");
+
+        assert_ne!(before, after);
+    }
+
+    #[test]
+    fn forgetting_everything_makes_the_next_hash_a_real_read() {
+        let root = folder_with(&[("note.txt", "Bonjour")]);
+        let path = root.path().join("note.txt");
+        let file = discovered(&path, "note.txt");
+        let cache = FileHashCache::new();
+        let before = cache.hash_of(&file).expect("hashes");
+
+        std::fs::write(&path, b"Autre").unwrap();
+        cache.forget_all();
+        let after = cache.hash_of(&file).expect("hashes");
+
+        assert_ne!(before, after);
+    }
+
+    #[test]
+    fn an_unreadable_file_is_not_remembered_as_an_identity() {
+        let root = folder_with(&[("note.txt", "Bonjour")]);
+        let missing = root.path().join("absent.txt");
+        let cache = FileHashCache::new();
+
+        let file = DiscoveredFile {
+            relative_path: "absent.txt".into(),
+            absolute_path: missing.display().to_string(),
+            extension: "txt".into(),
+            size_bytes: 7,
+            modified_at: Some(1),
+        };
+
+        assert_eq!(cache.hash_of(&file), None);
+        std::fs::write(&missing, b"Bonjour").unwrap();
+        assert!(
+            cache.hash_of(&file).is_some(),
+            "a file that appears later must be read, not remembered as unreadable"
+        );
+    }
+
+    #[test]
+    fn a_folder_never_analysed_has_every_document_waiting() {
+        let root = folder_with(&[
+            ("inbox/letter.txt", "Bonjour"),
+            ("inbox/note.md", "Note"),
+            ("inbox/planning.csv", "a,b"),
+        ]);
+
+        let inventory = WorkFolderInventory::discover(root.path(), None).expect("discovers");
+
+        // The spreadsheet is not a document this pipeline owns, so analysing again would not
+        // change it and it must not be counted as waiting.
+        assert_eq!(inventory.unanalysed_documents(), 2);
     }
 
     #[test]

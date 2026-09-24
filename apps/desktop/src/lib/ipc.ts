@@ -190,6 +190,8 @@ export interface IndexSummary {
   emptyFiles: string[];
   ocrFiles: string[];
   lowConfidenceFiles: string[];
+  /** Documents dropped from the index because they are no longer in the work folder. */
+  removedFiles: string[];
   /** Machine codes for an ingestion capability that did not start. Empty on a healthy install. */
   unavailableCapabilities: string[];
   chunkCount: number;
@@ -202,6 +204,8 @@ export interface AskAnswer {
   folderAnswer: FolderAnswer | null;
   /** Set when the question asked about every document. */
   coverage: EvidenceCoverage | null;
+  /** Documents this answer could not have used: never analysed, or changed since they were. */
+  unanalysedFiles: number;
 }
 
 export function loadAppSnapshot(): Promise<AppSnapshot> {
@@ -212,6 +216,18 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
   return invoke<AppSettings>("save_settings", { settings });
 }
 
+/**
+ * Put every setting back to a first launch, the documents folder included, and return what was
+ * stored. The defaults come from Rust rather than from here: a default server address can come
+ * from the environment, so it is read, never assumed.
+ *
+ * The local index is untouched - documents stay analysed, and choosing the same folder again
+ * finds them. Emptying the index is `resetIndex`, in the folder card.
+ */
+export function resetSettings(): Promise<AppSettings> {
+  return invoke<AppSettings>("reset_settings");
+}
+
 /** Opens the system folder dialog and validates the choice. Returns the accepted path. */
 export function chooseWorkFolder(): Promise<string> {
   return invoke<string>("choose_work_folder");
@@ -220,6 +236,23 @@ export function chooseWorkFolder(): Promise<string> {
 /** Create `~/AssistantCabinetAI` if it is missing, then return the accepted path. */
 export function ensureSuggestedWorkFolder(): Promise<string> {
   return invoke<string>("ensure_suggested_work_folder");
+}
+
+/**
+ * Show the work folder in the system's own file manager: Explorer on Windows, Finder on macOS.
+ * No path crosses the bridge - Rust reads the folder from settings, so this view can ask for
+ * "the work folder" and never for a folder of its own choosing.
+ */
+export function revealWorkFolder(): Promise<void> {
+  return invoke<void>("reveal_work_folder");
+}
+
+/**
+ * Forget everything the index holds. Every document stays exactly where it is on disk: this
+ * undoes the analysis, never the folder. Confirm before calling it.
+ */
+export function resetIndex(): Promise<void> {
+  return invoke<void>("reset_index");
 }
 
 export function checkServerHealth(): Promise<HealthSnapshot> {

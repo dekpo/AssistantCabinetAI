@@ -227,6 +227,61 @@ async fn a_fourth_pass_still_reads_scans() {
 }
 
 #[tokio::test]
+async fn a_document_deleted_from_the_folder_stops_being_citable() {
+    let server_url = start_fake_embeddings();
+    let gateway = GatewayClient::new().expect("builds a client");
+    let work = tempfile::tempdir().expect("temp work folder");
+    let index_dir = tempfile::tempdir().expect("temp index dir");
+    let mut index =
+        IndexStore::open_at(&index_dir.path().join("index.sqlite3")).expect("opens the index");
+    let ocr = fake_engine();
+    let rasterizer = FakeRasterizer::with_page_count(1);
+
+    add_document(work.path(), LETTER);
+    add_document(work.path(), SCAN);
+    let first = pass(
+        &mut index,
+        &gateway,
+        &server_url,
+        work.path(),
+        Some(&ocr),
+        Some(&rasterizer),
+    )
+    .await;
+    assert_eq!(first.indexed_files, 2);
+    assert!(first.removed_files.is_empty());
+    let chunks_with_both = first.chunk_count;
+
+    // She deletes the scan from the folder. Until this was fixed its rows outlived it: the panel
+    // stopped listing it, because that reads the filesystem, while retrieval went on offering its
+    // passages as evidence for an answer.
+    std::fs::remove_file(work.path().join(SCAN)).expect("removes the scan");
+    let second = pass(
+        &mut index,
+        &gateway,
+        &server_url,
+        work.path(),
+        Some(&ocr),
+        Some(&rasterizer),
+    )
+    .await;
+
+    assert_eq!(
+        second.removed_files,
+        vec![SCAN.to_string()],
+        "a document that left the folder is reported by name, not silently kept"
+    );
+    assert!(second.chunk_count < chunks_with_both);
+    assert!(
+        index
+            .search_lexical("rhumatologie", 10)
+            .expect("searches")
+            .is_empty(),
+        "the deleted document's passages must no longer be findable"
+    );
+}
+
+#[tokio::test]
 async fn a_missing_rasterizer_is_reported_rather_than_blamed_on_the_document() {
     let server_url = start_fake_embeddings();
     let gateway = GatewayClient::new().expect("builds a client");

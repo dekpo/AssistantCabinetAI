@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { resolveLocale } from "../i18n/catalogues";
 import { normaliseError, type AppError } from "../lib/errors";
-import { loadAppSnapshot, saveSettings, type AppSettings, type AppSnapshot } from "../lib/ipc";
+import {
+  loadAppSnapshot,
+  resetSettings,
+  saveSettings,
+  type AppSettings,
+  type AppSnapshot,
+} from "../lib/ipc";
 
 export interface AppSettingsState {
   snapshot: AppSnapshot | null;
@@ -11,6 +17,9 @@ export interface AppSettingsState {
   saveError: AppError | null;
   reload: () => void;
   update: (patch: Partial<AppSettings>) => Promise<void>;
+  /** Every setting back to a first launch, the documents folder included. Rejects on failure so
+   * the caller can keep its confirmation open rather than closing it over an error. */
+  reset: () => Promise<void>;
 }
 
 export function useAppSettings(): AppSettingsState {
@@ -44,6 +53,23 @@ export function useAppSettings(): AppSettingsState {
     [snapshot],
   );
 
+  /* Not `update` with a hand-built patch: the defaults belong to Rust, which reads some of them
+     from the environment. The stored result comes back and replaces what is on screen, so the
+     locale falls back to the system's again and the folder card returns to offering one. */
+  const reset = useCallback(async () => {
+    if (snapshot === null) {
+      return;
+    }
+    setSaveError(null);
+    try {
+      const stored = await resetSettings();
+      setSnapshot({ ...snapshot, settings: stored });
+    } catch (raw: unknown) {
+      setSaveError(normaliseError(raw));
+      throw raw;
+    }
+  }, [snapshot]);
+
   return {
     snapshot,
     locale: resolveLocale(snapshot?.settings.locale, snapshot?.systemLocale),
@@ -51,5 +77,6 @@ export function useAppSettings(): AppSettingsState {
     saveError,
     reload,
     update,
+    reset,
   };
 }

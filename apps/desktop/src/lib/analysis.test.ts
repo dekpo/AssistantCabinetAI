@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisFraction, analysisPending } from "./analysis";
+import { analysisFraction, analysisPending, countPending } from "./analysis";
 import type { FileRecord, ProcessingStatus } from "./ipc";
 
 function file(processingStatus: ProcessingStatus): FileRecord {
@@ -21,6 +21,34 @@ function file(processingStatus: ProcessingStatus): FileRecord {
     indexMetadata: null,
   };
 }
+
+describe("countPending", () => {
+  it("counts the files one more pass would change", () => {
+    expect(countPending([file("discovered"), file("pending"), file("indexed")])).toBe(2);
+  });
+
+  it("leaves out a file that was read and produced nothing", () => {
+    // Counting it would put a number on the button that analysing can never bring down.
+    expect(countPending([file("failed"), file("indexed")])).toBe(0);
+  });
+
+  it("is zero for a folder with nothing in it", () => {
+    expect(countPending([])).toBe(0);
+  });
+
+  it("never disagrees with the button beside it", () => {
+    const folders = [
+      [file("indexed")],
+      [file("discovered")],
+      [file("failed"), file("pending")],
+      [],
+    ];
+
+    for (const files of folders) {
+      expect(countPending(files) > 0).toBe(analysisPending(files));
+    }
+  });
+});
 
 describe("analysisPending", () => {
   it("is true for a folder nothing has read yet", () => {

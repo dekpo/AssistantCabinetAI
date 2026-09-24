@@ -18,7 +18,7 @@ use crate::file_record::FileRecord;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
-use crate::indexing::{self, IndexSummary};
+use crate::indexing::{self, IndexProgress, IndexSummary};
 use crate::inventory::{FolderNode, InventorySummary, WorkFolderInventory};
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
@@ -266,6 +266,7 @@ async fn conversation_answer(
 pub async fn index_work_folder(
     app: AppHandle,
     state: State<'_, AppState>,
+    on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
     let (work_folder, server_url, embedding_alias, locale) = state.read(|settings| {
         (
@@ -299,6 +300,10 @@ pub async fn index_work_folder(
         ocr,
         raster,
         locale,
+        // A closed window is not a failure worth reporting, exactly as for a chat delta.
+        &|progress| {
+            let _ = on_progress.send(progress);
+        },
     )
     .await
 }

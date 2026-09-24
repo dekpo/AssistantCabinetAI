@@ -32,6 +32,16 @@ pub struct IndexSummary {
     pub chunk_count: u64,
 }
 
+/// How far one pass has got, sent while it runs so a long analysis shows its progress rather than
+/// an unbroken spinner. Counts only: no document text and not even a file name travels here.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexProgress {
+    /// Files already dealt with, whether indexed, skipped as unchanged, or unreadable.
+    pub processed_files: usize,
+    pub total_files: usize,
+}
+
 /// One pass over the work folder. Files whose content hash has not changed since the last pass
 /// are skipped rather than re-extracted and re-embedded, unless the OCR engine that produced
 /// their stored chunks is no longer the one configured.
@@ -44,15 +54,32 @@ pub async fn run(
     ocr: Option<&dyn OcrProvider>,
     rasterizer: Option<&dyn PageRasterizer>,
     locale: &str,
+    // `on_progress` is called once before the first file and once after the last. `Sync` rather
+    // than a plain closure so the future stays `Send` and can be awaited from a Tauri command.
+    on_progress: &(dyn Fn(IndexProgress) + Sync),
 ) -> Result<IndexSummary, AppError> {
     let files = discovery::discover(work_folder);
+    let total_files = files.len();
+    // Sent before any work, so the bar appears at zero rather than only once the first file is
+    // done - on a folder of scans that first file can take a while on its own.
+    on_progress(IndexProgress {
+        processed_files: 0,
+        total_files,
+    });
     let mut indexed_files = 0usize;
     let mut unchanged_files = 0usize;
     let mut empty_files = Vec::new();
     let mut ocr_files = Vec::new();
     let mut low_confidence_files = Vec::new();
 
-    for file in &files {
+    for (position, file) in files.iter().enumerate() {
+        // Reported as this file starts rather than as it ends, because several branches below
+        // `continue`, and a count some paths forget to advance is worse than one that is a
+        // single file behind. The final call after the loop closes the gap.
+        on_progress(IndexProgress {
+            processed_files: position,
+            total_files,
+        });
         let sha256 = match hash_file(file) {
             Ok(hash) => hash,
             Err(_) => continue,
@@ -124,8 +151,13 @@ pub async fn run(
         }
     }
 
+    on_progress(IndexProgress {
+        processed_files: total_files,
+        total_files,
+    });
+
     Ok(IndexSummary {
-        scanned_files: files.len(),
+        scanned_files: total_files,
         indexed_files,
         unchanged_files,
         empty_files,

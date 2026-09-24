@@ -18,6 +18,8 @@ export function MessageList({
   onStop,
   onResend,
   onRegenerate,
+  onAnalyse,
+  analysing,
 }: {
   entries: ChatEntry[];
   phase: GenerationPhase;
@@ -27,6 +29,11 @@ export function MessageList({
   onResend: (questionEntryId: string, text: string) => void;
   /** Regenerate a past answer (item 4). */
   onRegenerate: (answerEntryId: string) => void;
+  /** Analyse the folder, then ask this question again. Offered under the one answer that says the
+   * documents have not been read yet, because that is the only thing that answer needs. */
+  onAnalyse: (answerEntryId: string) => void;
+  /** Whether the shared analysis pass is running, wherever it was started from. */
+  analysing: boolean;
 }) {
   const { t } = useTranslation();
   const messages = useRef<HTMLDivElement>(null);
@@ -250,7 +257,29 @@ export function MessageList({
               {entry.deterministic === true ? (
                 <p className="message__timing">{t("chat.deterministic")}</p>
               ) : null}
-              {idle && entry.content.length > 0 ? (
+              {/* An answer that says "analyse your documents first" is not text to keep or to
+                  write again - it is a step she has not taken. Copy and regenerate would both
+                  produce the same sentence, so the turn offers the step itself, and asks the
+                  question again once the pass has run. */}
+              {idle && entry.needsIndexing === true ? (
+                <p className="message__actions message__actions--turn">
+                  <button
+                    type="button"
+                    className="button button--compact"
+                    disabled={analysing}
+                    onClick={() => onAnalyse(entry.id)}
+                  >
+                    {analysing ? (
+                      <span className="message__pending">
+                        <span className="spinner" aria-hidden="true" />
+                        {t("actions.analyzing")}
+                      </span>
+                    ) : (
+                      t("actions.analyze")
+                    )}
+                  </button>
+                </p>
+              ) : idle && entry.content.length > 0 ? (
                 <p className="message__actions message__actions--turn">
                   <button
                     type="button"

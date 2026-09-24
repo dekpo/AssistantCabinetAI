@@ -3,6 +3,7 @@ import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
 import { useChat } from "../state/useChat";
+import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
 import { ErrorBanner } from "./ErrorBanner";
 import { KeyGlyph } from "./KeyGlyph";
@@ -13,12 +14,16 @@ export function ChatPanel({
   hasWorkFolder,
   modelAlias,
   aliases,
+  indexing,
   onModelAliasChange,
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
   modelAlias: string;
   aliases: string[];
+  /** The same analysis pass the folder card starts, so the answer that asks for one starts that
+   * pass rather than a second one of its own. */
+  indexing: IndexingState;
   onModelAliasChange: (alias: string) => void;
 }) {
   const { t } = useTranslation();
@@ -34,6 +39,15 @@ export function ChatPanel({
     const stopped = stop();
     if (stopped !== null) {
       setDraft(stopped);
+    }
+  };
+
+  /* What she asked for by clicking "analyse" under an unanswered question: the pass, and then the
+     answer she wanted in the first place. A pass that failed stops here - its error is already on
+     screen in the folder card, and asking again would only produce the same refusal. */
+  const analyseThenAsk = async (answerEntryId: string) => {
+    if (await indexing.run()) {
+      await regenerate(answerEntryId);
     }
   };
 
@@ -67,6 +81,8 @@ export function ChatPanel({
         onStop={onStop}
         onResend={(questionEntryId, text) => void resend(questionEntryId, text)}
         onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
+        onAnalyse={(answerEntryId) => void analyseThenAsk(answerEntryId)}
+        analysing={indexing.running}
       />
       {error === null ? null : <ErrorBanner error={error} onDismiss={dismissError} />}
       {hasCopyableConversation(entries, streamingId) ? (

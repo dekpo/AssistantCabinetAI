@@ -129,22 +129,37 @@ body {
   padding: 14px;
 }
 
+/* Every gap inside this card is half the app's elsewhere: it shares the sidebar with the
+   conversation, and each line it does not spend is one the answers get. The card's padding is
+   untouched - it still breathes at its edges, it is only tighter within. */
 .card__title {
-  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 5px;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-quiet);
 }
 
+/* Beside the heading, at its own size so a copy change cannot leave it stranded. It says which
+   of the two folders this card is: documents here, tables in the card that will sit beside it. */
+.card__glyph {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--text-quiet);
+}
+
 .card__description {
-  margin: 0 0 10px;
+  margin: 0 0 5px;
   color: var(--text-quiet);
   font-size: 12px;
 }
 
 .path {
-  margin: 0 0 12px;
+  margin: 0 0 6px;
   padding: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -162,8 +177,8 @@ body {
 .work-folder__actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 5px;
 }
 
 .work-folder__row {
@@ -173,49 +188,91 @@ body {
   gap: 8px;
 }
 
-.work-folder__row .button--primary {
+/* Never squeezed by a long folder-change label beside it. Written against the analyse button
+   itself rather than against `.button--primary`, which it only wears while a pass is still owed. */
+.work-folder__analyse {
   flex: 0 0 auto;
+}
+
+/* A hairline under both buttons, for the length of one analysis pass. A spinner only says "still
+   working"; a folder of scans takes minutes, and what she needs then is how much is left. It is
+   removed from the DOM when the pass ends rather than emptied, so nothing lingers at 100%. */
+.progress {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill {
+    transition: none;
+  }
 }
 
 /* Beside the conversation the listing is behind a disclosure, and smaller: the space belongs to
    the answers. The settings panel shows the same list open, where there is room for it. */
 .inventory-detail {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
   font-size: 12px;
+}
+
+/* What the last pass did, directly under the disclosure and above the listing it describes. Its
+   parts are lines of one paragraph, not paragraphs, so they stack without a blank line between
+   them - it is one account of one pass. */
+.inventory-detail__summary {
+  margin: 3px 0 0;
+  color: var(--text-quiet);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 /* The work folder as it actually is: one line per file, path first, state second. Deliberately
    plain - this is a way to check what the software sees, not a file manager. */
 .inventory {
   max-height: 220px;
-  margin: 8px 0 10px;
+  margin: 4px 0 5px;
   padding: 0;
   overflow-y: auto;
   list-style: none;
 }
 
+/* Stacked, not two columns: in a 300px sidebar a file name and its state side by side leaves the
+   name a few characters wide, and the name is the thing she is reading. */
 .inventory__file {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 3px 0;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 11px;
 }
 
+/* One line each, clipped rather than wrapped: a column of names that each fold onto a second line
+   cannot be scanned, and the full path is on the element's `title` for the ones that do not fit. */
 .inventory__path {
   font-family: ui-monospace, "Cascadia Mono", monospace;
-  overflow-wrap: anywhere;
+  font-size: 10px;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .inventory__state {
-  flex: 0 0 auto;
   color: var(--text-quiet);
+  font-size: 0.95em;
 }
 
 .card .banner {
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 .chat {
@@ -654,9 +711,10 @@ body {
   border-top-color: var(--accent-text);
 }
 
-/* Copy, edit and regenerate: same border, hover and pressed behaviour as every other button
-   (`.button`) - only smaller, since they sit under every finished turn rather than marking one
-   moment out like the stop button does. */
+/* The app's small button: same border, hover and pressed behaviour as every other button
+   (`.button`), only smaller. Copy, edit and regenerate under every finished turn, and the folder
+   card's own controls, which are the same kind of thing - a standing action, not a moment marked
+   out. One size for both, so the sidebar and the conversation read as one window. */
 .button--compact {
   padding: 2px 8px;
   font-size: 0.85em;

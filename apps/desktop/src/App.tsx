@@ -7,6 +7,7 @@ import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import { applyTheme } from "./lib/theme";
 import { useAppSettings } from "./state/useAppSettings";
+import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
 
 function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boolean }) {
@@ -28,6 +29,9 @@ export default function App() {
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
   );
+  /* Owned here rather than inside the folder card, because two places start the same pass: the
+     card's own button, and the answer that had to say the documents have not been read yet. */
+  const indexing = useIndexing();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
@@ -85,6 +89,7 @@ export default function App() {
               workFolder={snapshot.settings.workFolder}
               suggestedWorkFolder={snapshot.suggestedWorkFolder}
               onChosen={(path) => void update({ workFolder: path })}
+              indexing={indexing}
               detail="collapsible"
             />
             {snapshot.warnings.map((code) => (
@@ -97,6 +102,7 @@ export default function App() {
             hasWorkFolder={snapshot.settings.workFolder !== null}
             modelAlias={snapshot.settings.modelAlias}
             aliases={health?.aliases ?? []}
+            indexing={indexing}
             onModelAliasChange={(alias) => void update({ modelAlias: alias })}
           />
         </main>
@@ -107,6 +113,7 @@ export default function App() {
             suggestedWorkFolder={snapshot.suggestedWorkFolder}
             aliases={health?.aliases ?? []}
             saveError={saveError}
+            indexing={indexing}
             onUpdate={(patch) => void update(patch)}
             onClose={() => setSettingsOpen(false)}
           />

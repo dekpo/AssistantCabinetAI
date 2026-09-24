@@ -174,6 +174,15 @@ export type ChatStreamEvent =
   | { event: "sources"; sources: Evidence[]; coverage: EvidenceCoverage | null }
   | { event: "folder_answer"; answer: FolderAnswer };
 
+/**
+ * How far one analysis pass has got. Counts only: no document text and not even a file name
+ * crosses this channel, so a progress bar cannot become a second place document content leaks to.
+ */
+export interface IndexProgress {
+  processedFiles: number;
+  totalFiles: number;
+}
+
 export interface IndexSummary {
   scannedFiles: number;
   indexedFiles: number;
@@ -241,9 +250,18 @@ export function cancelChat(): Promise<void> {
   return invoke<void>("cancel_chat");
 }
 
-/** One pass of discovery, extraction, chunking and embedding over the work folder. */
-export function indexWorkFolder(): Promise<IndexSummary> {
-  return invoke<IndexSummary>("index_work_folder");
+/**
+ * One pass of discovery, extraction, chunking and embedding over the work folder.
+ *
+ * `onProgress` is called as the pass walks the folder, so a long analysis can show how far it has
+ * got rather than only that it is busy.
+ */
+export function indexWorkFolder(
+  onProgress?: (progress: IndexProgress) => void,
+): Promise<IndexSummary> {
+  const channel = new Channel<IndexProgress>();
+  channel.onmessage = (message) => onProgress?.(message);
+  return invoke<IndexSummary>("index_work_folder", { onProgress: channel });
 }
 
 /** Whether the local index has anything to search yet - a work folder can be chosen but never

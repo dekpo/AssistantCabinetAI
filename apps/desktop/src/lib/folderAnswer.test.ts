@@ -41,15 +41,15 @@ describe("a counting answer", () => {
   it("says how many files there are, in either language", () => {
     const answer: FolderAnswer = { kind: "file_count", total: 15 };
 
-    expect(formatFolderAnswer(english, answer)).toBe("Your work folder holds 15 files.");
+    expect(formatFolderAnswer(english, answer)).toBe("Your documents folder holds 15 files.");
     expect(formatFolderAnswer(french, answer)).toBe(
-      "Votre dossier de travail contient 15 fichiers.",
+      "Votre dossier de documents contient 15 fichiers.",
     );
   });
 
   it("uses the singular for one file", () => {
     expect(formatFolderAnswer(english, { kind: "file_count", total: 1 })).toBe(
-      "Your work folder holds 1 file.",
+      "Your documents folder holds 1 file.",
     );
   });
 
@@ -115,7 +115,7 @@ describe("a listing answer", () => {
 
   it("says so rather than printing an empty list when there is no subfolder", () => {
     expect(formatFolderAnswer(english, { kind: "folder_list", folders: [] })).toBe(
-      "Your work folder has no subfolder.",
+      "Your documents folder has no subfolder.",
     );
   });
 });
@@ -140,7 +140,7 @@ describe("an answer that must not resolve itself", () => {
       query: "secret-report.pdf",
     });
 
-    expect(text).toBe("No file named secret-report.pdf is in your work folder.");
+    expect(text).toBe("No file named secret-report.pdf is in your documents folder.");
   });
 
   it("says an unreadable file has nothing to quote", () => {

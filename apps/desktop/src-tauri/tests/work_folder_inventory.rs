@@ -172,6 +172,7 @@ async fn index_fixture(folder: &str) -> Indexed {
         Some(&ocr),
         None,
         LOCALE,
+        &|_| {},
     )
     .await
     .expect("indexes the fixture");
@@ -797,6 +798,7 @@ async fn e4_an_ocr_read_file_resolves_and_keeps_its_recognised_provenance() {
         Some(&ocr),
         Some(&rasterizer),
         LOCALE,
+        &|_| {},
     )
     .await
     .expect("indexes the gp sandbox");

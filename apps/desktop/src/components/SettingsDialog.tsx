@@ -3,6 +3,7 @@ import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
 import type { AppSettings, ThemeChoice } from "../lib/ipc";
+import type { IndexingState } from "../state/useIndexing";
 import { ErrorBanner } from "./ErrorBanner";
 import { WorkFolderCard } from "./WorkFolderCard";
 
@@ -26,6 +27,7 @@ export function SettingsDialog({
   suggestedWorkFolder,
   aliases,
   saveError,
+  indexing,
   onUpdate,
   onClose,
 }: {
@@ -34,6 +36,8 @@ export function SettingsDialog({
   suggestedWorkFolder: string | null;
   aliases: string[];
   saveError: AppError | null;
+  /** The same analysis pass the sidebar card starts: one pass, wherever it is started from. */
+  indexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
   onClose: () => void;
 }) {
@@ -165,6 +169,7 @@ export function SettingsDialog({
           workFolder={settings.workFolder}
           suggestedWorkFolder={suggestedWorkFolder}
           onChosen={(path) => onUpdate({ workFolder: path })}
+          indexing={indexing}
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}

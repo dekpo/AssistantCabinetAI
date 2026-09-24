@@ -8,7 +8,7 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use assistant_cabinet_ai_lib::gateway::GatewayClient;
 use assistant_cabinet_ai_lib::index_store::IndexStore;
@@ -188,6 +188,9 @@ async fn three_questions_get_sourced_answers_and_an_off_topic_one_is_refused() {
     let scan_path = sandbox_dir().join("inbox").join("2026-03-22_courrier-rhumatologie-scan.pdf");
     let bytes_before = std::fs::read(&scan_path).expect("reads the scan fixture");
 
+    // What the progress bar beside the buttons is drawn from.
+    let progress: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
+
     let summary = indexing::run(
         &mut index,
         &gateway,
@@ -197,9 +200,32 @@ async fn three_questions_get_sourced_answers_and_an_off_topic_one_is_refused() {
         Some(&ocr),
         Some(&rasterizer),
         "fr-FR",
+        &|step| {
+            progress
+                .lock()
+                .expect("progress lock")
+                .push((step.processed_files, step.total_files));
+        },
     )
     .await
     .expect("indexes the sandbox");
+
+    let steps = progress.into_inner().expect("progress lock");
+    let total = summary.scanned_files;
+    assert_eq!(
+        steps.first().copied(),
+        Some((0, total)),
+        "the bar starts at zero over the real total, before the first file is read"
+    );
+    assert_eq!(
+        steps.last().copied(),
+        Some((total, total)),
+        "the bar reaches the end, whatever branches the files took"
+    );
+    assert!(
+        steps.windows(2).all(|pair| pair[0].0 <= pair[1].0),
+        "progress never goes backwards"
+    );
 
     assert_eq!(
         bytes_before,

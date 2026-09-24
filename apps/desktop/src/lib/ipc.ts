@@ -190,6 +190,8 @@ export interface IndexSummary {
   emptyFiles: string[];
   ocrFiles: string[];
   lowConfidenceFiles: string[];
+  /** Machine codes for an ingestion capability that did not start. Empty on a healthy install. */
+  unavailableCapabilities: string[];
   chunkCount: number;
 }
 

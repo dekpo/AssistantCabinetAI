@@ -22,7 +22,7 @@ use crate::indexing::{self, IndexProgress, IndexSummary};
 use crate::inventory::{FolderNode, InventorySummary, WorkFolderInventory};
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
-use crate::raster::{PageRasterizer, Rasterizer};
+use crate::raster::{self, PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
@@ -285,9 +285,8 @@ pub async fn index_work_folder(
     let ocr: Option<&dyn OcrProvider> = tesseract
         .as_ref()
         .map(|provider| provider as &dyn OcrProvider);
-    let raster: Option<&dyn PageRasterizer> = rasterizer
-        .as_ref()
-        .map(|provider| provider as &dyn PageRasterizer);
+    let raster: Option<&dyn PageRasterizer> =
+        rasterizer.map(|provider| provider as &dyn PageRasterizer);
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
 
     let mut index = open_index(&app)?;
@@ -651,7 +650,12 @@ fn try_tesseract(app: &AppHandle) -> Option<TesseractProvider> {
     TesseractProvider::new(binary, tessdata).ok()
 }
 
-fn try_rasterizer(app: &AppHandle) -> Option<Rasterizer> {
+/// The process's rasteriser, not a new one. Discovery still runs on every pass - it is a handful
+/// of `exists()` calls, and it means a library staged mid-session is picked up on the next pass -
+/// but the instance itself comes from `raster::shared`, because pdfium can only be bound once per
+/// process and a second binding would silently disable OCR for every scanned PDF
+/// (`docs/TROUBLESHOOTING.md`).
+fn try_rasterizer(app: &AppHandle) -> Option<&'static Rasterizer> {
     let roots = search_roots(app);
     let library_names = ["pdfium.dll", "libpdfium.dylib", "libpdfium.so", "pdfium"];
     let mut candidates = Vec::new();
@@ -663,7 +667,7 @@ fn try_rasterizer(app: &AppHandle) -> Option<Rasterizer> {
         }
     }
     let library = first_existing(candidates)?;
-    Rasterizer::new(&library).ok()
+    raster::shared(&library)
 }
 
 #[cfg(test)]

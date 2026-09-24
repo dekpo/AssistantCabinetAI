@@ -78,6 +78,8 @@
     "ocrMany": "files read by OCR",
     "lowConfidenceOne": "file too unclear to index",
     "lowConfidenceMany": "files too unclear to index",
+    "ocrEngineUnavailable": "Text recognition did not start: scanned documents are reported unreadable while it is missing.",
+    "pageRasterizerUnavailable": "Scanned-PDF reading did not start: JPEG and PNG images are still read, scanned PDFs are not.",
     "filesOne": "file",
     "filesMany": "files",
     "detailToggle": "Detail"

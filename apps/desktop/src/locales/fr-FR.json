@@ -78,6 +78,8 @@
     "ocrMany": "fichiers lus par reconnaissance de texte",
     "lowConfidenceOne": "fichier trop peu lisible pour être indexé",
     "lowConfidenceMany": "fichiers trop peu lisibles pour être indexés",
+    "ocrEngineUnavailable": "La reconnaissance de texte n'a pas démarré : les documents numérisés sont signalés illisibles tant qu'elle manque.",
+    "pageRasterizerUnavailable": "La lecture des PDF numérisés n'a pas démarré : les images JPEG et PNG restent lues, les PDF numérisés non.",
     "filesOne": "fichier",
     "filesMany": "fichiers",
     "detailToggle": "Détail"

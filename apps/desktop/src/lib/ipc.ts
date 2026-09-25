@@ -206,6 +206,32 @@ export interface AskAnswer {
   coverage: EvidenceCoverage | null;
   /** Documents this answer could not have used: never analysed, or changed since they were. */
   unanalysedFiles: number;
+  /** Files the conversation's scope named that are gone or have changed since they were chosen.
+   * They were left out of the answer. */
+  scopeOutdated: string[];
+}
+
+/**
+ * Which files a conversation is about (`AnalysisScope` in Rust). The default is the whole folder;
+ * narrowing only ever picks among files the work folder already holds. Timestamps are
+ * milliseconds since the epoch, by the workstation clock.
+ */
+export type ScopeMode =
+  | { kind: "whole_folder" }
+  | { kind: "explicit"; entries: ScopeEntry[] };
+
+export interface ScopeEntry {
+  /** The handle into the work folder. Never an absolute path. */
+  relativePath: string;
+  /** The file's `id` when it was chosen, so a file replaced mid-conversation is noticed. */
+  pinnedId: string;
+  addedAt: number;
+}
+
+export interface AnalysisScope {
+  mode: ScopeMode;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export function loadAppSnapshot(): Promise<AppSnapshot> {
@@ -318,6 +344,8 @@ export function askWithSources(
   /** Ask the model even when the work folder could answer on its own. Her choice, made on an
    * answer she has already seen. */
   skipDeterministic = false,
+  /** The files the question may draw on. Left out, the whole folder. */
+  scope?: AnalysisScope,
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
@@ -334,6 +362,7 @@ export function askWithSources(
   return invoke<AskAnswer>("ask_with_sources", {
     question,
     skipDeterministic,
+    scope,
     onEvent: channel,
   });
 }

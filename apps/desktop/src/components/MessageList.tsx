@@ -252,6 +252,19 @@ export function MessageList({
                   })}
                 </p>
               )}
+              {/* Files she chose for this conversation that are gone or have changed. The answer was
+                  written without them, and the line says so. */}
+              {entry.scopeOutdated === undefined ? null : (
+                <p className="message__timing">
+                  {t("chat.scopeOutdated", {
+                    files: counted(
+                      entry.scopeOutdated.length,
+                      t("chat.scopeFileOne"),
+                      t("chat.scopeFileMany"),
+                    ),
+                  })}
+                </p>
+              )}
               {/* An answer she stopped has no duration to report, so this line takes the place of
                   the one below rather than joining it: what matters is that it is incomplete. */}
               {entry.interrupted === undefined ? null : (

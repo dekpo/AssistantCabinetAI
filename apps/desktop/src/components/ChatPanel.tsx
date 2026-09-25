@@ -2,12 +2,15 @@ import { useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
+import { wholeFolderScope } from "../lib/analysisScope";
+import type { AnalysisScope } from "../lib/ipc";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
 import { ErrorBanner } from "./ErrorBanner";
 import { KeyGlyph } from "./KeyGlyph";
 import { MessageList } from "./MessageList";
+import { ScopePicker } from "./ScopePicker";
 
 export function ChatPanel({
   onFailure,
@@ -28,12 +31,11 @@ export function ChatPanel({
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
+  /* The files this conversation is about. Held here, beside the single in-memory conversation it
+     belongs to: nothing persists a session yet, so nothing persists this. */
+  const [scope, setScope] = useState<AnalysisScope>(() => wholeFolderScope(Date.now()));
   const { entries, phase, streamingId, error, send, resend, regenerate, stop, dismissError } =
-    useChat(
-    onFailure,
-    hasWorkFolder,
-    modelAlias,
-  );
+    useChat(onFailure, hasWorkFolder, modelAlias, scope);
 
   const onStop = () => {
     const stopped = stop();
@@ -91,6 +93,9 @@ export function ChatPanel({
             {t("actions.copyConversation")}
           </button>
         </p>
+      ) : null}
+      {hasWorkFolder ? (
+        <ScopePicker scope={scope} onChange={setScope} disabled={phase !== "idle"} />
       ) : null}
       <Composer
         draft={draft}

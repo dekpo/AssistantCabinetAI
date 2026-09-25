@@ -4,6 +4,7 @@
 //! gateway. The interface is React and TypeScript, and it reaches none of this except through the
 //! commands registered below.
 
+pub mod analysis_scope;
 pub mod cancellation;
 pub mod chunking;
 mod commands;

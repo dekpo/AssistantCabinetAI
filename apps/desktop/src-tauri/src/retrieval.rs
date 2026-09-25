@@ -43,6 +43,8 @@ pub struct Evidence {
 pub enum RetrievalScope<'a> {
     WholeFolder,
     File(&'a str),
+    /// A user-chosen set of files (`AnalysisScope`): nothing outside it may be searched.
+    Files(&'a [String]),
 }
 
 /// Rank stored chunks against a query embedding plus its lexical text, merge the two rankings,
@@ -72,6 +74,13 @@ pub fn search_scoped(
     let all_chunks = match scope {
         RetrievalScope::WholeFolder => index.all_chunks()?,
         RetrievalScope::File(relative_path) => index.chunks_for_document(relative_path)?,
+        RetrievalScope::Files(relative_paths) => {
+            let mut chunks = Vec::new();
+            for relative_path in relative_paths {
+                chunks.extend(index.chunks_for_document(relative_path)?);
+            }
+            chunks
+        }
     };
 
     let mut scored: Vec<Evidence> = Vec::new();
@@ -325,6 +334,35 @@ mod tests {
 
         assert_eq!(scoped.len(), 1);
         assert_eq!(scoped[0].relative_path, "2026/mars/neurologie.pdf");
+    }
+
+    #[test]
+    fn a_file_set_scope_never_returns_evidence_from_outside_the_set() {
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+            ("b#p1#s1", "b.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+            ("c#p1#s1", "c.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+        ]);
+        let allowed = vec!["a.pdf".to_string(), "c.pdf".to_string()];
+
+        let hits = search_scoped(
+            &store,
+            "cephalees",
+            &[1.0, 0.0],
+            RetrievalScope::Files(&allowed),
+        )
+        .unwrap();
+
+        let mut paths: Vec<_> = hits.iter().map(|hit| hit.relative_path.as_str()).collect();
+        paths.sort();
+        assert_eq!(paths, vec!["a.pdf", "c.pdf"]);
+
+        let none =
+            search_scoped(&store, "cephalees", &[1.0, 0.0], RetrievalScope::Files(&[])).unwrap();
+        assert!(
+            none.is_empty(),
+            "an empty set allows nothing, not everything"
+        );
     }
 
     #[test]

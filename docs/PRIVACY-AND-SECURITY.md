@@ -131,6 +131,11 @@ A PDF can contain "ignore your rules and move everything to X".
 - Hashes before and after; fail if Word or the antivirus holds a lock.
 - Respect the pilot's own naming convention. The AI does not invent a parallel folder tree.
 - Journal: actor, plan id, hashes, decision — never the content of the acts.
+- One **owner-decided exception**: pressing Analyse renames documents to a clean name (no spaces or
+  accents) without a confirmation step. It never overwrites, never changes content, never leaves the file's
+  folder and logs every rename with its original name (`docs/DECISIONS.md`, "clean file names"). It is not a
+  precedent for any other file action (it is written into `AGENTS.md` rule 3), and it does not exempt the moves, deletions and filing this section
+  governs.
 - Never an automatic email, filing, or write into the patient record. "Export" produces an artefact; she
   transmits it herself.
 

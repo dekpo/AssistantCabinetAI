@@ -73,13 +73,15 @@ the Tauri commands are a thin adapter over them, which is what keeps a second cl
 ```text
 DocumentSource      discover(work_folder) -> DiscoveredFile[]     extension-driven, allow-list only
 WorkFolderInventory discover(root, index) -> FileRecord[]         every file on disk, joined with the index
-FileReferenceResolver resolve(text) -> FileReferenceResolution    exact / ambiguous / no match, never a guess
+FilenameSanitizer   sanitize_folder(root) -> SanitizeReport      clean names on Analyse; never overwrites, always logged
+FileReferenceResolver resolve(text) -> FileReferenceResolution    exact / ambiguous / no match, never a guess; accents and case folded
 TextExtractor       extract(path) -> ExtractedDocument            pdf / docx / txt / md, plus OCR
 OcrProvider         recognise(page image) -> OcrPage              one local engine, replaceable
 Chunker             chunk(document) -> Chunk[]                    keeps file, page, section
 Embedder            embed(text[]) -> Vector[]                     gateway today, local ONNX later
 IndexStore          upsert / search_lexical / search_vector       SQLite today
 RetrievalService    search(query, scope) -> Evidence[]
+AnalysisScope       resolve(inventory) -> ScopeResolution         optional narrowing of the work folder; default whole folder
 
 TabularDataSource   open(path) -> Workbook                        csv, xlsx
 TabularInventory    build(workbook) -> WorkbookInventory          structure and facts, full pass

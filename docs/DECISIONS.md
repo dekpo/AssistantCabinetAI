@@ -169,6 +169,45 @@ Measured causes and the reasoning: `docs/WORK-FOLDER-INVENTORY.md`.
 | Reaching the model anyway | The **existing** regenerate control, relabelled on deterministic answers: recomputing them would return the same bytes, so there the button asks the model instead. No new control - the window has no room for one |
 | What the model is sent for a per-document question | Counts, not the file listing. The excerpts already carry one header per file, and a second copy of every path pushed the first excerpts into the middle of a long prompt, which is where small models were observed losing them |
 
+## Settled by the analysis scope layer (25 September 2026)
+
+Prerequisite for Sprint 2b's tabular engine, not part of it. Code: `analysis_scope.rs`.
+
+| Subject | Decision |
+| --- | --- |
+| What a scope is | An **optional narrowing of the work folder allow-list**, defaulting to the whole folder (`ScopeMode::WholeFolder`, today's behaviour expressed as a case of the type rather than a path around it). It only ever picks among files the inventory already holds and copies nothing. It is **not** a per-conversation upload, which `docs/SPRINT-2-ASSESSMENT.md` section E rejects for a different reason |
+| How it is enforced | `AnalysisScope::resolve(&inventory)` returns an **inventory** holding only the members. The router, the file-reference resolver, the counts and the Work Folder context are all built on an inventory, so none of them can look past the scope without scope-specific code. Retrieval is held to the same members through `RetrievalScope::Files`. An explicit scope with no survivors allows **nothing**, never everything |
+| A pinned file that changed | Each entry pins `FileRecord::id` when it is chosen. An entry whose file vanished (`missing`) or no longer has that content (`changed`) is **left out, not answered from**, and reported to the interface as `scopeOutdated`, which writes a line under the answer. Answering from a file other than the one she chose would be the quiet failure the scope exists to prevent |
+| What is deliberately not stored | No `scope_id` (nothing persists a session yet), no `allowed_domains` (derived from members' `FileRecord::kind` on demand, so it cannot drift from real membership), no purpose label, no status enum, no sheet restrictions (`sheet_names` is added to `ScopeEntry` by Sprint 2b, when something exists to read it) |
+| Where it lives | In the client, beside the single in-memory conversation, and it is **lost on restart**. Full `ChatSession` persistence and a conversation list are a separate, larger feature. It is passed to `ask_with_sources` as an optional argument, so an absent scope means the whole folder |
+| Deferred | Intent-based proposal ("the file for Mrs X"), which needs semantic matching that does not exist yet. Resetting the scope when the work folder changes |
+| Sprint 2b contract | `TabularAnalysis.analyze(query, scope)` takes its scope from `AnalysisScope::resolve`, never from the folder directly, so a tabular question cannot read a workbook the conversation was not scoped to |
+
+## Settled by the clean file names change (25 September 2026)
+
+Code: `filename_sanitizer.rs`, `file_reference.rs`.
+
+| Subject | Decision |
+| --- | --- |
+| Renaming her documents on Analyse | **Decided by the owner, 25 September 2026, without a confirmation step.** Pressing **Analyser** first renames every document whose name is not clean, then reads the folder. This is a **deliberate exception** to "file actions = plan + human approve", written into `AGENTS.md` rule 3 the same day: a French practice's names carry spaces, accents and two Unicode spellings of the same accent, and a name that can be typed several ways cannot be matched reliably by a question or trusted as one path across a Windows and a Mac. The reasoning was that the files arrive as copies (downloads, e-mail attachments, another program's export), so the original survives elsewhere. **That is an assumption, not a guarantee**: a file dragged out of another folder rather than copied has no other copy, which is why the safeguards below exist |
+| What "clean" means | ASCII letters and digits, `-`, `_` and `.`. Accents are removed (`Esaie` for the accented form), `oe`, `ae` and `ss` are spelled out, every other character becomes one `-`, runs collapse, the ends are trimmed. The extension is kept. A stem with nothing left becomes `document`. A clean name is never touched, and cleaning twice changes nothing |
+| What it will not do | **Never overwrites**: a taken name (compared without case, as Windows and a default Mac disk do) gets `-2`, `-3`. **Never changes content**. **Never leaves the file's own folder**. **Never renames a folder.** Only files the pipeline reads are considered, so an unrelated file keeps its name; hidden files and Office lock files (`~$...`) are skipped, the second being Word's own bookkeeping |
+| Recovering an original name | Every rename is appended to `renamed-files.jsonl` in the application data folder (`at`, `from`, `to`; names only, never document text) **before** the pass starts, so a pass that fails afterwards still leaves the record. The interface lists the first five renames, old name and new, under the analysis summary, and counts the rest |
+| A file that cannot be renamed | Open in another program, read-only, or refused by the volume: left exactly as it was, counted in the summary, and still analysed under its old name. Nothing is silent |
+| Consequence for the index | A rename changes a document's relative path, so the first pass after it forgets the old path and reads the file again under the new one. A scope that pinned the old path reports it as missing. Both are one-time costs, and the picker only offers files that are already analysed, so a scope never holds a name that is about to change |
+| Matching a name she types | Comparisons fold accents and case through Unicode NFD, so the accented, unaccented and two-code-point spellings are one name. A file whose name is several words is also recognised when the question writes them as words (`Absence pour Esaie`), as a whole run of words only, for names of at least eight characters, and the longest name wins when two overlap. Single words are matched exactly as before: nothing looser was introduced |
+| Not decided here | Sanitising folder names, and asking before renaming as an option. Both stay possible without changing this design |
+
+## Analysis scope: what was added afterwards (25 September 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Sources listed once per file | An answer built from three excerpts of two files listed three lines, which read as three documents next to a two-file scope. The list now groups by file and gives the pages (`file.pdf, pages 1, 3`). The evidence sent to the model and the citations it writes are unchanged |
+| A scope that holds nothing usable | Refused with `scope_unavailable` ("choose them again"), never with `insufficient_evidence`, because the documents were not searched and found wanting: the ones she named could not be used. Raised without a gateway call when nothing survives, and also when a search of the survivors finds nothing while a chosen file was left out |
+| A different work folder | Resets the scope to the whole folder. Paths chosen in one folder resolve to nothing in another |
+| The picker | Offers files whose analysis is **current** (`processing_status = indexed`), not merely files that were once indexed, so a scope never pins a file whose stored passages are older than its content |
+| A changed pin | `id` falling back to a path hash means the bytes could not be read, and such a file is reported as changed rather than trusted. That is the intended outcome, not a false alarm |
+
 ## Known blind spots to keep in mind
 
 - **File actions are the number one business risk.** A bad batch rename over hundreds of documents is far

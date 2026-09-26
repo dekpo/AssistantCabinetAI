@@ -125,6 +125,39 @@ narrow retrieval to one document. Semantic resolution — "the March biology rep
 it — is **not** implemented; it would slot in behind this same interface and return the same
 `FileReferenceResolution`.
 
+## Clean file names, and matching a name she types (sprint 2a.7)
+
+Two changes, one purpose: a name that can be written several ways must not be a name a question can miss.
+
+**Names are made clean when she presses Analyse** (`apps/desktop/src-tauri/src/filename_sanitizer.rs`), before
+anything is read. "Ordonnance pour Esaïe.pdf" becomes "Ordonnance-pour-Esaie.pdf": ASCII letters and
+digits, `-`, `_` and `.`, accents removed, `oe`, `ae` and `ss` spelled out, every other character one `-`.
+It is idempotent, keeps the extension, never overwrites (a taken name, compared without case, gets `-2`,
+`-3`), never changes content, never leaves the file's folder, and never renames a folder. Only files the
+pipeline reads are considered; hidden files and Office lock files (`~$...`) are skipped. Every rename is
+appended to `renamed-files.jsonl` in the application data folder before the pass starts, and the summary
+under the Analyse button lists the first five, old name and new. A file that cannot be renamed keeps its name
+and is counted. This is the owner's deliberate exception to the confirmation rule for file actions, limited to
+names: `AGENTS.md` rule 3 and `docs/DECISIONS.md`.
+
+Because a rename changes the relative path, the first pass afterwards reads the file again under its new
+name, and the identity that survives it is the content SHA-256, exactly as `FileRecord` promised.
+
+**The resolver folds what she types.** Comparisons go through Unicode NFD with accents dropped and case
+lowered, so "Esaïe", "Esaie" and a Mac's two-code-point spelling are one name. A file whose name is several
+words is also found when the question writes them as words (`Absence pour Esaie`): only as a whole run of
+words, only for names of at least eight characters, the longest name winning when two overlap. Single words
+match exactly as before, which is what keeps an ordinary sentence from narrowing retrieval to one file.
+
+## The inventory a conversation sees is its scope's (sprint 2a.7)
+
+`AnalysisScope::resolve(&inventory)` returns a `WorkFolderInventory` holding only the files the conversation
+chose (the whole inventory by default). Everything in this document that reads an inventory - counts, listings,
+the resolver, the per-document list, the context sent to the model - therefore describes the scope and not the
+folder, with no scope-specific code in any of them. "How many files are there?" inside a two-file scope answers
+two. A file she chose that has since vanished or changed is left out and reported (`scopeOutdated`), never
+answered from. Decisions: `docs/DECISIONS.md`.
+
 ## Deterministic before generative
 
 `apps/desktop/src-tauri/src/folder_questions.rs` routes a question before anything is embedded:

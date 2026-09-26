@@ -29,6 +29,26 @@ the desktop is fire-and-forget on both platforms — macOS `open` behaves itself
 still block the command for as long as the window stays open. The only failure worth reporting is the
 spawn itself failing, which is a real one: no file manager, or a path the OS refused.
 
+## A document has a different name than the one she saved it under
+
+**Found:** 25 September 2026, by design rather than by accident, recorded here because it will be reported as a bug.
+
+Pressing Analyse renames documents to a clean name: "Ordonnance pour Esaïe.pdf" becomes
+"Ordonnance-pour-Esaie.pdf" (`filename_sanitizer.rs`, `docs/DECISIONS.md`, "clean file names"). It is
+deliberate, and it is limited to the name.
+
+- **Finding the original name:** every rename is appended to `renamed-files.jsonl` in the application data
+  folder (`%LOCALAPPDATA%\com.assistantcabinetai.desktop` on Windows), one JSON object per line with `at`
+  (seconds since the epoch), `from` and `to`, relative to the work folder. Renaming the file back by hand is
+  safe; the next Analyse will clean it again, so keep the original elsewhere if the exact name matters.
+- **A `-2` appeared:** the clean name was already taken by another file, and nothing is ever overwritten.
+- **"could not be renamed" in the summary:** the file is open in another program, read-only, or on a volume
+  that refused. It keeps its name and is still analysed. Close it and press Analyse again.
+- **A scope that says its files are missing after Analyse:** a scope pins the path it was chosen under, and a
+  rename changes it. Choose the files again; the picker only offers analysed files under their current names.
+- **Not renamed at all:** folder names, hidden files, Office lock files (`~$...`) and any file the pipeline does
+  not read (`.csv`, `.xlsx`, unknown types) are left alone on purpose.
+
 ## Only the first "Analyse" of a session could read a scanned PDF: pdfium refuses to be bound twice
 
 **Found:** 24 September 2026, after Elise dropped a real scanned prescription into the work folder and

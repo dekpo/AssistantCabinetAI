@@ -28,6 +28,9 @@ const CAPABILITY_KEYS: Record<string, string> = {
   pageRasterizer: "workFolder.pageRasterizerUnavailable",
 };
 
+/** Renames listed one by one under the analysis summary; the rest are counted. */
+const MAX_RENAMES_LISTED = 5;
+
 export function WorkFolderCard({
   workFolder,
   suggestedWorkFolder,
@@ -143,6 +146,36 @@ export function WorkFolderCard({
                   indexing.summary.removedFiles.length,
                   t("workFolder.removedOne"),
                   t("workFolder.removedMany"),
+                )}.`,
+              ]
+            : []),
+          /* Her files were renamed, so say which, old name and new. A count alone would hide the
+             one thing she may need to look for. */
+          ...(indexing.summary.renamedFiles.length > 0
+            ? [
+                `${counted(
+                  indexing.summary.renamedFiles.length,
+                  t("workFolder.renamedOne"),
+                  t("workFolder.renamedMany"),
+                )}.`,
+                ...indexing.summary.renamedFiles
+                  .slice(0, MAX_RENAMES_LISTED)
+                  .map(({ from, to }) => t("workFolder.renamedItem", { from, to })),
+                ...(indexing.summary.renamedFiles.length > MAX_RENAMES_LISTED
+                  ? [
+                      t("workFolder.renamedMore", {
+                        count: indexing.summary.renamedFiles.length - MAX_RENAMES_LISTED,
+                      }),
+                    ]
+                  : []),
+              ]
+            : []),
+          ...(indexing.summary.renameFailedFiles.length > 0
+            ? [
+                `${counted(
+                  indexing.summary.renameFailedFiles.length,
+                  t("workFolder.renameFailedOne"),
+                  t("workFolder.renameFailedMany"),
                 )}.`,
               ]
             : []),

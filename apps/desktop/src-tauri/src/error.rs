@@ -104,6 +104,13 @@ pub enum AppError {
     #[error("insufficient_evidence")]
     InsufficientEvidence,
 
+    /// The files she chose for this conversation are gone or have changed since, so the scope
+    /// holds nothing to answer from. Distinct from `InsufficientEvidence`: the documents were not
+    /// searched and found wanting, the ones she named could not be used, and the fix is to choose
+    /// them again.
+    #[error("scope_unavailable")]
+    ScopeUnavailable,
+
     /// She stopped the question herself, while it was still being worked on. Not a failure: the
     /// interface keeps no banner and nothing of the abandoned run (`docs/CHAT-UX-ASSESSMENT.md`).
     #[error("chat_cancelled")]
@@ -158,6 +165,7 @@ impl AppError {
             Self::ExtractionEmpty { .. } => "extraction_empty",
             Self::ExtractionFailed { .. } => "extraction_failed",
             Self::InsufficientEvidence => "insufficient_evidence",
+            Self::ScopeUnavailable => "scope_unavailable",
             Self::ChatCancelled => "chat_cancelled",
             Self::OcrUnavailable => "ocr_unavailable",
             Self::OcrLanguageUnavailable { .. } => "ocr_language_unavailable",
@@ -178,6 +186,7 @@ impl AppError {
             | Self::NoWorkFolderSet
             | Self::IndexUnavailable
             | Self::InsufficientEvidence
+            | Self::ScopeUnavailable
             | Self::ChatCancelled
             | Self::WorkFolderRevealFailed
             | Self::OcrUnavailable => json!({}),

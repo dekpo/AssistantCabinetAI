@@ -370,6 +370,42 @@ six files, 201 `vitest`, `tsc` and `cargo clippy` clean.
 `#[cfg]` review only - there is still no macOS CI job, so `open` opening Finder on the work folder is
 unproven until the Mac mini is on the desk.
 
+## Sprint 2a.7 - a conversation that knows which documents it is about (25 - 26 September)
+
+Deliverable: a user can say once which documents a conversation relies on, nothing outside that set can
+reach an answer, and her file names stop being a source of silent mismatches.
+
+Hardening again, and the prerequisite the owner wanted in place **before** Sprint 2b, so that the tabular
+engine's `analyze(query, scope)` has a scope to receive rather than one invented under pressure later.
+Design and decisions: `docs/DECISIONS.md` ("analysis scope", "clean file names").
+
+- **`AnalysisScope`** (`analysis_scope.rs`): whole folder by default, or an explicit set of files, each pinned
+  to the file's content id. `resolve` yields an inventory holding only the members, so the router, the
+  reference resolver, the counts and the context cannot look past it; retrieval is held to the same set.
+  A member that vanished or changed is left out and reported, never answered from. Scope lives in the client,
+  beside the single in-memory conversation, and is lost on restart.
+- **"Documents used"** disclosure above the composer: tick analysed files to narrow, one button to go back
+  to the whole folder. Sources under an answer are listed **once per file, with pages**.
+- **`scope_unavailable`** refusal when everything she chose is gone or changed, distinct from
+  `insufficient_evidence`; scope resets when the documents folder changes.
+- **Clean file names on Analyse** (`filename_sanitizer.rs`): spaces and accents removed, never overwriting,
+  every rename logged to `renamed-files.jsonl` and shown under the analysis summary. An owner-decided
+  exception to the confirmation rule for file actions, limited to names (`AGENTS.md`, rule 3).
+- **Name matching folds accents and case**, accepts either Unicode spelling of an accent, and recognises a
+  multi-word name written as words.
+
+**Out of this sprint, deliberately:** conversation persistence and a conversation list (a larger feature),
+intent-based scope proposal ("the file for Mrs X", needs semantic matching), sheet restrictions in a scope
+(Sprint 2b adds `sheet_names` when a tabular engine can read them), renaming folders, and asking before a
+rename as an option.
+
+**Delivered, 26 September 2026.** 198 `cargo test --lib`, 41 integration tests across six files, 213 `vitest`,
+`tsc` clean.
+
+**Not independently verified:** every test ran on Windows, and none drove the real window. The scope picker,
+the grouped sources and the rename summary have been exercised through unit tests and type checks only, and
+renaming on macOS (NFD names) is proven by tests on both Unicode spellings, not on a Mac.
+
 ## Sprint 3 — GP workflows (1 → 7 October)
 
 Deliverable: the actions that cost her 1.5 to 2 hours a day. Three flows, not five.
@@ -417,6 +453,10 @@ hospital staff who build schedules from exactly these files are a named user gro
 the reason `docs/ARCHITECTURE.md` keeps a second pipeline rather than flattening a workbook into text.
 A later sprint may not quietly drop it, defer it indefinitely, or reduce it to "spreadsheets as chunks".
 It ships to the standard in `docs/SPRINT-2-ASSESSMENT.md`, or it does not ship.
+
+**Prerequisite delivered in sprint 2a.7:** `AnalysisScope`. The tabular engine takes its scope from
+`AnalysisScope::resolve` and never from the folder directly; sheet restrictions (`sheet_names` on a scope
+entry) are added here, when something exists to read them.
 
 Scheduled here, and not before, for one reason: `docs/PILOT-GP.md` records about twenty specialist and
 imaging reports a day plus ten to twenty lab results, almost all PDF, and accounting left the scope in

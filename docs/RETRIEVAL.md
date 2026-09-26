@@ -99,6 +99,12 @@ neurologie.pdf say?" answerable from a different letter of the same name. And wh
 the system turn carries the filesystem context beside the excerpts, with a contract forbidding either to
 stand in for the other. Design: `docs/WORK-FOLDER-INVENTORY.md`.
 
+Since sprint 2a.7 a conversation can also be **scoped** to files she chose (`AnalysisScope`, `docs/DECISIONS.md`).
+Retrieval is then held to exactly those files (`RetrievalScope::Files`): a set with one member behaves like a
+named file, a set with none allows nothing rather than everything, and the caps are unchanged, so a narrower
+scope means better evidence and never more of it. Sources under an answer are listed once per file with their
+pages; the excerpts sent to the model and its citations are not affected by how they are listed.
+
 ## Tabular data is a second pipeline, not a special case of the first
 
 Spreadsheets are **not** flattened into text chunks so that they resemble PDFs. Chunking a schedule

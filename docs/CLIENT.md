@@ -27,6 +27,12 @@ One window, one product:
 - **top:** Assistant Cabinet AI;
 - **settings:** light / dark / follow the system, and the language, defaulting to the system choice.
 
+Above the composer sits a **Documents used** disclosure (sprint 2a.7). Closed, it says "the whole folder" or how
+many files; open, it lists the analysed files with a checkbox each and a button to go back to the whole folder.
+It narrows the current conversation only and is lost on restart: conversations are not saved yet, and there is no
+list of them. Under an answer, **Sources** lists each file once with its pages. Under the Analyse button, the
+summary names any file that was renamed to a clean name, old and new.
+
 Full-page chat in the style of a consumer assistant is excluded from the practice screen. Native fonts,
 lists, and margins instead. If a large PDF preview is added later it is still Assistant Cabinet AI, a second
 window of the same product, never Open WebUI.

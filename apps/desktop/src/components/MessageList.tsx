@@ -4,6 +4,7 @@ import { copyToClipboard } from "../lib/clipboard";
 import { coverageLine } from "../lib/coverage";
 import { formatDuration } from "../lib/duration";
 import { counted } from "../lib/plural";
+import { groupSources } from "../lib/sourceGroups";
 import type { GenerationPhase } from "../lib/generation";
 import { isNearBottom, prefersReducedMotion, scrollBehaviour } from "../lib/scroll";
 import { timestampParts } from "../lib/timestamp";
@@ -219,14 +220,13 @@ export function MessageList({
                 <details className="message__sources">
                   <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
                   <ul className="message__sources-list">
-                    {entry.sources.map((source, index) => (
-                      <li key={source.chunkId} className="message__source">
-                        {t("chat.sourceItem", {
-                          n: index + 1,
-                          path: source.relativePath,
-                          page: source.pageNumber,
+                    {groupSources(entry.sources).map((group) => (
+                      <li key={group.relativePath} className="message__source">
+                        {t(group.pages.length > 1 ? "chat.sourceItemPages" : "chat.sourceItemPage", {
+                          path: group.relativePath,
+                          pages: group.pages.join(", "),
                         })}
-                        {source.origin === "ocr" ? t("chat.sourceOcrMarker") : null}
+                        {group.ocr ? t("chat.sourceOcrMarker") : null}
                       </li>
                     ))}
                   </ul>
@@ -248,6 +248,19 @@ export function MessageList({
                       entry.unanalysedFiles,
                       t("chat.unanalysedOne"),
                       t("chat.unanalysedMany"),
+                    ),
+                  })}
+                </p>
+              )}
+              {/* Files she chose for this conversation that are gone or have changed. The answer was
+                  written without them, and the line says so. */}
+              {entry.scopeOutdated === undefined ? null : (
+                <p className="message__timing">
+                  {t("chat.scopeOutdated", {
+                    files: counted(
+                      entry.scopeOutdated.length,
+                      t("chat.scopeFileOne"),
+                      t("chat.scopeFileMany"),
                     ),
                   })}
                 </p>

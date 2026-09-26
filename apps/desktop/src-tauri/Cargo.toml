@@ -41,6 +41,8 @@ zip = "5.0.1"
 quick-xml = "0.41.0"
 walkdir = "2.5.0"
 sha2 = "0.10.9"
+# Accent-free, single-form file names and matching (`filename_sanitizer`, `file_reference`).
+unicode-normalization = "0.1"
 
 # Rasterises a PDF page to a bitmap in memory, feeding the OCR port (docs/SPRINT-2.5-ASSESSMENT.md
 # section E). No `#[cfg(windows)]`: the platform difference is which prebuilt pdfium library is

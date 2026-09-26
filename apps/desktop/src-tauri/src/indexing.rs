@@ -41,6 +41,12 @@ pub struct IndexSummary {
     /// by name: forgetting a document is as much a result of a pass as reading one, and she is
     /// the only one who can tell a deliberate deletion from a folder that failed to mount.
     pub removed_files: Vec<String>,
+    /// Files renamed to a clean name before this pass read anything (`filename_sanitizer`), old
+    /// and new. Filled by the caller that ran the rename, so a pass that fails halfway still
+    /// leaves the rename recorded elsewhere; empty here.
+    pub renamed_files: Vec<crate::filename_sanitizer::Renamed>,
+    /// Files that needed a clean name and could not be renamed. Left as they were.
+    pub rename_failed_files: Vec<String>,
     /// Machine codes for an ingestion capability that did not start for this pass, in a stable
     /// order. Empty on a healthy installation. Reported so an unreadable scan can be explained
     /// by the interface instead of being blamed on the document: the engine being absent and the
@@ -193,6 +199,8 @@ pub async fn run(
         ocr_files,
         low_confidence_files,
         removed_files,
+        renamed_files: Vec::new(),
+        rename_failed_files: Vec::new(),
         unavailable_capabilities,
         chunk_count: index.chunk_count()?,
     })

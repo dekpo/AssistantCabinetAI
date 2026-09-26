@@ -22,6 +22,8 @@ const MIN_TOKEN_CHARS: usize = 4;
 /// How much of a name, beside its extension, a shortened reference has to carry before the end of
 /// it is matched against the folder.
 const MIN_FRAGMENT_STEM_CHARS: usize = 3;
+/// A multi-word file name shorter than this is too easily a phrase in an ordinary sentence.
+const MIN_PHRASE_CHARS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -247,47 +249,76 @@ impl<'a> FileReferenceResolver<'a> {
                 _ => return Some(FileReferenceResolution::several(&token, matches)),
             }
         }
-        None
+
+        // A file whose name is several words ("ordonnance-pour-esaie") is written by a person as
+        // several words. Matched only as a whole run of words, folded the same way, and only for
+        // names long enough and multi-word enough that a chance match is not a concern; the
+        // longest name wins, so naming the longer of two overlapping files names that one.
+        let question_words = format!("-{}-", fold_words(question));
+        let mut phrase_matches: Vec<(usize, &'a FileRecord)> = self
+            .inventory
+            .all_files()
+            .iter()
+            .filter_map(|file| {
+                let words = fold_words(&file.stem);
+                let is_phrase = words.contains('-') && words.chars().count() >= MIN_PHRASE_CHARS;
+                (is_phrase && question_words.contains(&format!("-{words}-")))
+                    .then(|| (words.chars().count(), file))
+            })
+            .collect();
+        let longest = phrase_matches.iter().map(|(length, _)| *length).max()?;
+        phrase_matches.retain(|(length, _)| *length == longest);
+        match phrase_matches.len() {
+            1 => Some(FileReferenceResolution::exact(
+                &phrase_matches[0].1.stem,
+                phrase_matches[0].1,
+                ResolutionReason::StemToken,
+            )),
+            _ => Some(FileReferenceResolution::several(
+                &phrase_matches[0].1.stem,
+                phrase_matches.into_iter().map(|(_, file)| file).collect(),
+            )),
+        }
     }
 
     fn case_insensitive_paths(&self, path: &str) -> Vec<&'a FileRecord> {
-        let wanted = path.to_lowercase();
+        let wanted = fold_text(&path);
         self.inventory
             .all_files()
             .iter()
-            .filter(|file| file.relative_path.to_lowercase() == wanted)
+            .filter(|file| fold_text(&file.relative_path) == wanted)
             .collect()
     }
 
     fn case_insensitive_names(&self, name: &str) -> Vec<&'a FileRecord> {
-        let wanted = name.to_lowercase();
+        let wanted = fold_text(&name);
         self.inventory
             .all_files()
             .iter()
-            .filter(|file| file.name.to_lowercase() == wanted)
+            .filter(|file| fold_text(&file.name) == wanted)
             .collect()
     }
 
     /// Every file whose name ends with `fragment`, once case is set aside. The comparison is on
     /// the name alone, never the folder, so a fragment cannot reach across the folder structure.
     fn names_ending_with(&self, fragment: &str) -> Vec<&'a FileRecord> {
-        let wanted = fragment.to_lowercase();
+        let wanted = fold_text(&fragment);
         self.inventory
             .all_files()
             .iter()
             .filter(|file| {
-                let name = file.name.to_lowercase();
+                let name = fold_text(&file.name);
                 name.len() > wanted.len() && name.ends_with(&wanted)
             })
             .collect()
     }
 
     fn case_insensitive_stems(&self, stem: &str) -> Vec<&'a FileRecord> {
-        let wanted = stem.to_lowercase();
+        let wanted = fold_text(&stem);
         self.inventory
             .all_files()
             .iter()
-            .filter(|file| file.stem.to_lowercase() == wanted)
+            .filter(|file| fold_text(&file.stem) == wanted)
             .collect()
     }
 }
@@ -339,6 +370,32 @@ fn path_like_tokens(question: &str) -> Vec<String> {
 /// accident. A fragment carrying a folder separator is not one either - a path is matched as a
 /// path, above, and matching part of one would let `mars/neurologie.pdf` reach a file in
 /// `janvier/`.
+/// Lowercase, accents removed, one canonical form for every spelling of an accent. What she types
+/// and what the folder holds are compared through this, so an accented "Esaie", "Esaie" and "ESAIE" are one
+/// name, and a Mac's two-code-point accent is the same as Windows's one.
+fn fold_text(text: &str) -> String {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+    text.nfd()
+        .filter(|c| !is_combining_mark(*c))
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// `fold_text`, with every run of anything that is not a letter or digit reduced to one `-`, so a
+/// name written with spaces and the same name written with hyphens compare equal.
+fn fold_words(text: &str) -> String {
+    let mut out = String::new();
+    for c in fold_text(text).chars() {
+        if c.is_alphanumeric() {
+            out.push(c);
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
 fn usable_fragment(reference: &str) -> Option<String> {
     if reference.contains('/') {
         return None;
@@ -715,5 +772,72 @@ mod tests {
 
         assert_eq!(resolution.status, ReferenceStatus::Exact);
         assert_eq!(resolution.reason, ResolutionReason::StemToken);
+    }
+
+    fn esaie() -> WorkFolderInventory {
+        WorkFolderInventory::from_records(
+            Path::new("root"),
+            vec![
+                record("Ordonnance-pour-Esaie.pdf"),
+                record("Ordonnance-pour-Esaie-2.pdf"),
+                record("Absence-pour-Esaie.pdf"),
+            ],
+        )
+    }
+
+    #[test]
+    fn a_name_typed_with_accents_finds_the_accent_free_file() {
+        let inventory = esaie();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        let resolution = resolver.resolve("Absence-pour-Esa\u{ef}e.pdf");
+
+        assert_eq!(resolution.status, ReferenceStatus::Exact);
+        assert_eq!(resolution.exact_match.unwrap().name, "Absence-pour-Esaie.pdf");
+    }
+
+    #[test]
+    fn both_spellings_of_an_accent_match_the_same_file() {
+        let inventory = esaie();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        for typed in ["Absence-pour-Esa\u{ef}e.pdf", "Absence-pour-Esai\u{308}e.pdf"] {
+            assert_eq!(resolver.resolve(typed).status, ReferenceStatus::Exact, "{typed}");
+        }
+    }
+
+    #[test]
+    fn a_multi_word_name_typed_with_spaces_is_recognised() {
+        let inventory = esaie();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        let resolution = resolver
+            .resolve_in_question("Que dit Absence pour Esa\u{ef}e ?")
+            .expect("the question names a file");
+
+        assert_eq!(resolution.status, ReferenceStatus::Exact);
+        assert_eq!(resolution.exact_match.unwrap().name, "Absence-pour-Esaie.pdf");
+    }
+
+    #[test]
+    fn naming_the_longer_of_two_overlapping_files_names_that_one() {
+        let inventory = esaie();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        let resolution = resolver
+            .resolve_in_question("Resume Ordonnance pour Esaie 2 s'il te plait")
+            .expect("the question names a file");
+
+        assert_eq!(resolution.exact_match.unwrap().name, "Ordonnance-pour-Esaie-2.pdf");
+    }
+
+    #[test]
+    fn an_ordinary_sentence_names_no_file() {
+        let inventory = esaie();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        assert!(resolver
+            .resolve_in_question("What dose was given to Esaie ?")
+            .is_none());
     }
 }

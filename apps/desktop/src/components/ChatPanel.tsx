@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
+import { wholeFolderScope } from "../lib/analysisScope";
+import type { AnalysisScope } from "../lib/ipc";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
 import { ErrorBanner } from "./ErrorBanner";
 import { KeyGlyph } from "./KeyGlyph";
 import { MessageList } from "./MessageList";
+import { ScopePicker } from "./ScopePicker";
 
 export function ChatPanel({
   onFailure,
   hasWorkFolder,
+  workFolder,
   modelAlias,
   aliases,
   indexing,
@@ -19,6 +23,8 @@ export function ChatPanel({
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
+  /** The chosen folder. Only compared, to notice when it changes. */
+  workFolder: string | null;
   modelAlias: string;
   aliases: string[];
   /** The same analysis pass the folder card starts, so the answer that asks for one starts that
@@ -28,12 +34,14 @@ export function ChatPanel({
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
+  /* The files this conversation is about. Held here, beside the single in-memory conversation it
+     belongs to: nothing persists a session yet, so nothing persists this. */
+  const [scope, setScope] = useState<AnalysisScope>(() => wholeFolderScope(Date.now()));
+  /* Files chosen in one folder mean nothing in another: their paths would resolve to nothing and
+     every question would be refused. A different folder starts from the whole folder again. */
+  useEffect(() => setScope(wholeFolderScope(Date.now())), [workFolder]);
   const { entries, phase, streamingId, error, send, resend, regenerate, stop, dismissError } =
-    useChat(
-    onFailure,
-    hasWorkFolder,
-    modelAlias,
-  );
+    useChat(onFailure, hasWorkFolder, modelAlias, scope);
 
   const onStop = () => {
     const stopped = stop();
@@ -91,6 +99,9 @@ export function ChatPanel({
             {t("actions.copyConversation")}
           </button>
         </p>
+      ) : null}
+      {hasWorkFolder ? (
+        <ScopePicker scope={scope} onChange={setScope} disabled={phase !== "idle"} />
       ) : null}
       <Composer
         draft={draft}

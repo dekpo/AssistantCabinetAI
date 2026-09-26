@@ -100,6 +100,7 @@ export default function App() {
           <ChatPanel
             onFailure={refresh}
             hasWorkFolder={snapshot.settings.workFolder !== null}
+            workFolder={snapshot.settings.workFolder}
             modelAlias={snapshot.settings.modelAlias}
             aliases={health?.aliases ?? []}
             indexing={indexing}

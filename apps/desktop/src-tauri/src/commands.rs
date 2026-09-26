@@ -12,9 +12,11 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::analysis_scope::AnalysisScope;
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::error::AppError;
 use crate::file_record::FileRecord;
+use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
@@ -23,8 +25,8 @@ use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderIn
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{self, PageRasterizer, Rasterizer};
-use crate::reveal;
 use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
+use crate::reveal;
 use crate::settings::{self, Settings};
 use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
 use crate::work_folder_context::{self, ContextView};
@@ -314,8 +316,24 @@ pub async fn index_work_folder(
         rasterizer.map(|provider| provider as &dyn PageRasterizer);
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
 
+    // Names are made plain before anything is read, so the pass, the index and every later question
+    // agree on one spelling of each file. Logged as it happens: a pass that fails afterwards must
+    // not leave a renamed file with no record of what it used to be.
+    let sanitised = filename_sanitizer::sanitize_folder(Path::new(&work_folder));
+    if let Ok(directory) = app.path().app_local_data_dir() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs() as i64)
+            .unwrap_or(0);
+        let _ = filename_sanitizer::append_log(
+            &directory.join("renamed-files.jsonl"),
+            &sanitised.renamed,
+            now,
+        );
+    }
+
     let mut index = open_index(&app)?;
-    indexing::run(
+    let mut summary = indexing::run(
         &mut index,
         &state.gateway,
         &server_url,
@@ -329,7 +347,10 @@ pub async fn index_work_folder(
             let _ = on_progress.send(progress);
         },
     )
-    .await
+    .await?;
+    summary.renamed_files = sanitised.renamed;
+    summary.rename_failed_files = sanitised.failed;
+    Ok(summary)
 }
 
 /// Whether the local index has anything to search yet. The chat panel checks this before
@@ -423,6 +444,10 @@ pub struct AskAnswer {
     /// she had in mind. Retrieval refuses when it has too little evidence; this is the other half,
     /// for when there is plenty of evidence and it is simply the wrong evidence.
     pub unanalysed_files: usize,
+    /// Files the conversation's scope named that are gone, or no longer hold the content that was
+    /// pinned. They were left out of the answer, and the interface says so rather than let a
+    /// narrower answer read as the one she asked for.
+    pub scope_outdated: Vec<String>,
 }
 
 /// Retrieval, then a sourced chat answer. Refuses rather than answers when the index does not
@@ -439,6 +464,9 @@ pub async fn ask_with_sources(
     // answer she has already seen, so the deterministic path stays the default and the model
     // stays reachable (`docs/WORK-FOLDER-INVENTORY.md`).
     skip_deterministic: Option<bool>,
+    // The files this conversation is about. Absent means the whole folder, which is what every
+    // caller did before scopes existed.
+    scope: Option<AnalysisScope>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let mut stopped = state.cancellation.begin();
@@ -449,6 +477,7 @@ pub async fn ask_with_sources(
             state.inner(),
             question,
             skip_deterministic.unwrap_or(false),
+            scope.unwrap_or_else(|| AnalysisScope::whole_folder(0)),
             &on_event,
         ),
     )
@@ -460,6 +489,7 @@ async fn sourced_answer(
     state: &AppState,
     question: String,
     skip_deterministic: bool,
+    scope: AnalysisScope,
     on_event: &Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let (work_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) = state
@@ -478,7 +508,23 @@ async fn sourced_answer(
     };
 
     let index = open_index(app)?;
-    let inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    // From here on the conversation sees the scope's inventory and nothing wider: the router, the
+    // per-document list, the counts and the context all read it, and retrieval is held to its
+    // members below.
+    let resolution = scope.resolve(&full_inventory);
+    let narrowed = resolution.narrowed;
+    let scope_outdated: Vec<String> = resolution
+        .missing
+        .into_iter()
+        .chain(resolution.changed)
+        .collect();
+    let inventory = resolution.inventory;
+    let scoped_paths: Vec<String> = inventory
+        .indexed_files()
+        .into_iter()
+        .map(|file| file.relative_path.clone())
+        .collect();
     let locale = locale.as_deref();
 
     // Deterministic before generative (`docs/ARCHITECTURE.md`). Routing happens before the
@@ -522,6 +568,7 @@ async fn sourced_answer(
                 // A folder answer is read from the filesystem, not from the index, so it already
                 // accounts for every file there is. Nothing about it is waiting on a pass.
                 unanalysed_files: 0,
+                scope_outdated,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -530,6 +577,12 @@ async fn sourced_answer(
         }
         QuestionRoute::GlobalRetrieval => Plan::WholeFolder,
     };
+
+    // Everything she chose is gone or has changed: nothing was searched and nothing could be, so
+    // say that rather than the generic refusal, and spend no gateway call finding out.
+    if narrowed && scoped_paths.is_empty() && !scope_outdated.is_empty() {
+        return Err(AppError::ScopeUnavailable);
+    }
 
     // A question about one named file gets that file's record; anything else gets counts only.
     // A per-document question deliberately gets counts rather than the whole listing: the
@@ -573,11 +626,19 @@ async fn sourced_answer(
             &index,
             &question,
             &query_embedding,
-            RetrievalScope::WholeFolder,
+            match narrowed {
+                true => RetrievalScope::Files(&scoped_paths),
+                false => RetrievalScope::WholeFolder,
+            },
         )?,
     };
     if evidence.is_empty() {
-        return Err(AppError::InsufficientEvidence);
+        // A file she chose that could not be used may be exactly where the answer was, so the
+        // refusal names that rather than blaming the documents that were searched.
+        return Err(match narrowed && !scope_outdated.is_empty() {
+            true => AppError::ScopeUnavailable,
+            false => AppError::InsufficientEvidence,
+        });
     }
 
     // How much of the corpus this answer really rests on. Reported only when the question asked
@@ -647,6 +708,7 @@ async fn sourced_answer(
         folder_answer: None,
         coverage,
         unanalysed_files: inventory.unanalysed_documents(),
+        scope_outdated,
     })
 }
 

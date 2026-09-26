@@ -44,6 +44,12 @@
   box-sizing: border-box;
 }
 
+/* Checkboxes and radios use the accent green rather than the browser's default blue. */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
 html,
 body,
 #root {
@@ -251,7 +257,7 @@ body {
   line-height: 1.45;
 }
 
-/* The work folder as it actually is: one line per file, path first, state second. Deliberately
+/* The work folder as it actually is: one line per file, state dot first, name second. Deliberately
    plain - this is a way to check what the software sees, not a file manager. */
 .inventory {
   max-height: 220px;
@@ -261,12 +267,10 @@ body {
   list-style: none;
 }
 
-/* Stacked, not two columns: in a 300px sidebar a file name and its state side by side leaves the
-   name a few characters wide, and the name is the thing she is reading. */
 .inventory__file {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 6px;
   padding: 4px 0;
   border-bottom: 1px solid var(--border);
   font-size: 11px;
@@ -275,6 +279,7 @@ body {
 /* One line each, clipped rather than wrapped: a column of names that each fold onto a second line
    cannot be scanned, and the full path is on the element's `title` for the ones that do not fit. */
 .inventory__path {
+  min-width: 0;
   font-family: ui-monospace, "Cascadia Mono", monospace;
   font-size: 10px;
   font-weight: 400;
@@ -283,33 +288,60 @@ body {
   text-overflow: ellipsis;
 }
 
-.inventory__state {
-  color: var(--text-quiet);
-  font-size: 0.95em;
-}
-
-/* The settings panel is wide enough to read a listing the way a listing is normally read: the name
-   and what happened to it on one line, the states aligned down the right. The stacked form above
-   stays for the sidebar, where the same two columns would leave the name a few characters wide.
-   One markup, two shapes, chosen by where the card is - not by a breakpoint, because the card's
-   width is decided by which of the two places it is in, not by the size of the window. */
-.inventory--wide .inventory__file {
-  flex-direction: row;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* The name takes the width and keeps its ellipsis; the state is short and never wraps, so it can
-   hold its own width at the end of the line. */
-.inventory--wide .inventory__path {
-  flex: 1 1 auto;
+/* The checkbox, the state dot and the name share one line; the name keeps its ellipsis. */
+.inventory__choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  cursor: pointer;
 }
 
-.inventory--wide .inventory__state {
+.inventory__choice input {
   flex: 0 0 auto;
-  white-space: nowrap;
+  margin: 0;
+}
+
+/* A file's state as a colour, in the palette the rest of the window already uses: the accent green
+   for read, the warning amber for waiting, the offline red for unreadable. The words are on the
+   dot's hover and its aria-label. */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.status-dot--ok {
+  background: var(--accent);
+}
+
+.status-dot--wait {
+  background: var(--degraded);
+}
+
+.status-dot--fail {
+  background: var(--offline);
+}
+
+/* Shown beside "the whole folder" only: the default is the case worth a second look, because it
+   is the one that quietly widens what an answer may rest on. The triangle's drawing sits high in
+   its box, so it is nudged down to the text's baseline. */
+.warning-glyph__wrap {
+  display: inline-flex;
+}
+
+.warning-glyph {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--degraded);
+  transform: translateY(0);
+}
+
+.scope-picker .button {
+  margin-top: 4px;
 }
 
 .card .banner {

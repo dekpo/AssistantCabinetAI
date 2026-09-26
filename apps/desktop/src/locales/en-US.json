@@ -57,8 +57,7 @@
     "scopeSummaryWhole": "Documents used: the whole folder",
     "scopeSummaryExplicit": "Documents used: {files}",
     "scopeWholeFolder": "Use the whole folder",
-    "scopeHelp": "Pick the analysed documents this conversation should rely on. Nothing is copied or moved.",
-    "scopeEmpty": "No analysed document to choose from yet.",
+    "scopeWholeWarning": "Every analysed document is used. Open the list to choose the ones this conversation is about.",
     "unanalysedMany": "unanalysed documents",
     "coverageUnreadable": "{files} could not be read.",
     "coverageFileOne": "file",
@@ -81,6 +80,8 @@
     "change": "Change",
     "changeHint": "Change the folder",
     "progressLabel": "Analysis in progress",
+    "analysedOne": "analysed",
+    "analysedMany": "analysed",
     "indexedOne": "document analysed",
     "indexedMany": "documents analysed",
     "unchangedOne": "unchanged",
@@ -107,8 +108,7 @@
     "resetTitle": "Erase the analysis?",
     "resetBody": "Everything that has been analysed will be forgotten, and the analysis has to be run again before these documents can be asked about. Your files are neither moved nor deleted: they stay exactly where they are in the folder.",
     "filesOne": "file",
-    "filesMany": "files",
-    "detailToggle": "Detail"
+    "filesMany": "files"
   },
   "folderAnswer": {
     "fileOne": "file",

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
+import { scopedPaths, toggleScopeFile, wholeFolderScope } from "../lib/analysisScope";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
   chooseWorkFolder,
@@ -8,6 +9,7 @@ import {
   resetIndex,
   revealWorkFolder,
   workFolderInventory,
+  type AnalysisScope,
   type FileRecord,
   type InventoryReport,
 } from "../lib/ipc";
@@ -16,6 +18,7 @@ import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
 import { ErrorBanner } from "./ErrorBanner";
+import { WarningGlyph } from "./WarningGlyph";
 
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
 const CANCELLED = "work_folder_selection_cancelled";
@@ -37,6 +40,9 @@ export function WorkFolderCard({
   onChosen,
   indexing,
   detail = "expanded",
+  scope,
+  onScopeChange,
+  scopeLocked = false,
 }: {
   workFolder: string | null;
   suggestedWorkFolder: string | null;
@@ -48,8 +54,16 @@ export function WorkFolderCard({
    * conversation, where vertical space is what the answers need, and in the settings panel,
    * where there is room to read the whole folder at once. */
   detail?: "collapsible" | "expanded";
+  /** The documents the conversation may rely on, chosen from the listing in the collapsible
+   * form. Absent in the settings panel, which only lists. */
+  scope?: AnalysisScope;
+  onScopeChange?: (scope: AnalysisScope) => void;
+  /** A question is being answered: changing the scope under it would describe a different answer
+   * from the one being written. */
+  scopeLocked?: boolean;
 }) {
   const { t } = useTranslation();
+  const chosen = scope === undefined ? [] : scopedPaths(scope);
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   /* What is actually in the folder, read from the disk and from the local index. The counts below
@@ -357,23 +371,26 @@ export function WorkFolderCard({
       ) : (
         <>
           <p className="card__description">
-            {`${[
-              counted(
-                inventory.summary.totalFiles,
-                t("workFolder.filesOne"),
-                t("workFolder.filesMany"),
-              ),
-              counted(
-                inventory.summary.indexedFiles,
-                t("workFolder.indexedOne"),
-                t("workFolder.indexedMany"),
-              ),
-              counted(
-                inventory.summary.unreadableFiles,
-                t("workFolder.unreadableOne"),
-                t("workFolder.unreadableMany"),
-              ),
-            ].join(", ")}.`}
+            {/* The same colours as the dots in the listing below, so the line is its key. */}
+            {counted(
+              inventory.summary.totalFiles,
+              t("workFolder.filesOne"),
+              t("workFolder.filesMany"),
+            )}
+            {", "}
+            {counted(
+              inventory.summary.indexedFiles,
+              t("workFolder.analysedOne"),
+              t("workFolder.analysedMany"),
+            )}{" "}
+            <StatusDot tone="ok" label={t("folderAnswer.processing.indexed")} />
+            {", "}
+            {counted(
+              inventory.summary.unreadableFiles,
+              t("workFolder.unreadableOne"),
+              t("workFolder.unreadableMany"),
+            )}{" "}
+            <StatusDot tone="fail" label={t("folderAnswer.processing.failed")} />.
           </p>
           {inventory.summary.totalFiles === 0 ? (
             passSummary
@@ -382,16 +399,45 @@ export function WorkFolderCard({
                what is behind it in one line and gives the room back when it is closed. What the
                last pass did goes inside it, above the listing, because it is a note about that
                listing rather than a fourth fact about the card. */
-            <details className="inventory-detail">
-              <summary className="disclosure">{t("workFolder.detailToggle")}</summary>
+            <details className="inventory-detail scope-picker">
+              <summary className="disclosure">
+                {chosen.length === 0 ? (
+                  <>
+                    {t("chat.scopeSummaryWhole")}
+                    <span className="warning-glyph__wrap" title={t("chat.scopeWholeWarning")}>
+                      <WarningGlyph />
+                    </span>
+                  </>
+                ) : (
+                  t("chat.scopeSummaryExplicit", {
+                    files: counted(chosen.length, t("chat.scopeFileOne"), t("chat.scopeFileMany")),
+                  })
+                )}
+              </summary>
               {passSummary}
-              <FileList files={inventory.files} />
+              <FileList
+                files={inventory.files}
+                scope={scope}
+                onScopeChange={onScopeChange}
+                scopeLocked={scopeLocked}
+              />
+              {chosen.length === 0 || onScopeChange === undefined || scope === undefined ? null : (
+                <button
+                  type="button"
+                  className="button button--compact"
+                  disabled={scopeLocked}
+                  onClick={() =>
+                    onScopeChange({ ...wholeFolderScope(scope.createdAt), updatedAt: Date.now() })
+                  }
+                >
+                  {t("chat.scopeWholeFolder")}
+                </button>
+              )}
             </details>
           ) : (
             <>
               {passSummary}
-              {/* The panel this card sits in is wide, so the listing gets its second column. */}
-              <FileList files={inventory.files} wide />
+              <FileList files={inventory.files} />
             </>
           )}
         </>
@@ -474,32 +520,83 @@ function AnalysisProgress({ fraction, label }: { fraction: number; label: string
   );
 }
 
-/** One file per row, and the same two facts a deterministic answer prints, so the panel and an
- * answer can never disagree.
- *
- * Two shapes for one markup, chosen by where the card is rather than by a breakpoint - the card's
- * width is decided by which of its two homes it is in, not by the size of the window. In the
- * settings panel there is room to put the state beside the name and align the states down the
- * right, which is how a listing is normally read. In the sidebar the same two columns would leave
- * the name a few characters wide, so the state goes underneath it and the name keeps the width. */
-function FileList({ files, wide = false }: { files: FileRecord[]; wide?: boolean }) {
+type Tone = "ok" | "wait" | "fail";
+
+/** What a file's state looks like at a glance: read and searchable, waiting for an analysis, or
+ * unreadable. The words stay on hover and for screen readers - a colour alone is not an answer. */
+const TONE_OF_STATUS: Record<FileRecord["processingStatus"], Tone> = {
+  indexed: "ok",
+  discovered: "wait",
+  pending: "wait",
+  processing: "wait",
+  failed: "fail",
+};
+
+function StatusDot({ tone, label }: { tone: Tone; label: string }) {
+  return <span className={`status-dot status-dot--${tone}`} role="img" aria-label={label} title={label} />;
+}
+
+/** One file per row: a dot for its state, then its name, so the listing is one short line per
+ * file in the sidebar and in the settings panel alike. The state's words are on the dot's hover,
+ * and are the same words a deterministic answer prints, so the panel and an answer can never
+ * disagree. */
+function FileList({
+  files,
+  scope,
+  onScopeChange,
+  scopeLocked = false,
+}: {
+  files: FileRecord[];
+  /** When given, each analysed file gets a checkbox: the listing doubles as the choice of the
+   * documents the conversation may rely on. Only analysed files can be chosen, because only they
+   * can be searched as they are now; choosing one copies nothing. */
+  scope?: AnalysisScope;
+  onScopeChange?: (scope: AnalysisScope) => void;
+  scopeLocked?: boolean;
+}) {
   const { t } = useTranslation();
+  const chosen = scope === undefined ? [] : scopedPaths(scope);
+  const selectable = scope !== undefined && onScopeChange !== undefined;
 
   return (
-    <ul className={wide ? "inventory inventory--wide" : "inventory"}>
-      {files.map((file) => (
-        <li key={file.id + file.relativePath} className="inventory__file">
-          {/* One line, whatever the path costs: a name broken across two lines is harder to scan
-              than one that ends in an ellipsis, and the full path is on hover for the rare name
-              long enough to need it. */}
+    <ul className="inventory">
+      {files.map((file) => {
+        const dot = (
+          <StatusDot
+            tone={TONE_OF_STATUS[file.processingStatus]}
+            label={t(`folderAnswer.processing.${file.processingStatus}`)}
+          />
+        );
+        /* One line, whatever the path costs: a name broken across two lines is harder to scan
+           than one that ends in an ellipsis, and the full path is on hover for the rare name long
+           enough to need it. */
+        const name = (
           <span className="inventory__path" title={file.relativePath}>
             {file.relativePath}
           </span>
-          <span className="inventory__state">
-            {t(`folderAnswer.processing.${file.processingStatus}`)}
-          </span>
-        </li>
-      ))}
+        );
+        return (
+          <li key={file.id + file.relativePath} className="inventory__file">
+            {selectable ? (
+              <label className="inventory__choice">
+                <input
+                  type="checkbox"
+                  disabled={scopeLocked || file.processingStatus !== "indexed"}
+                  checked={chosen.includes(file.relativePath)}
+                  onChange={() => onScopeChange(toggleScopeFile(scope, file, Date.now()))}
+                />
+                {dot}
+                {name}
+              </label>
+            ) : (
+              <>
+                {dot}
+                {name}
+              </>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

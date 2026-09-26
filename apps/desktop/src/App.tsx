@@ -5,6 +5,8 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
+import { wholeFolderScope } from "./lib/analysisScope";
+import type { AnalysisScope } from "./lib/ipc";
 import { applyTheme } from "./lib/theme";
 import { useAppSettings } from "./state/useAppSettings";
 import { useIndexing } from "./state/useIndexing";
@@ -33,6 +35,14 @@ export default function App() {
      card's own button, and the answer that had to say the documents have not been read yet. */
   const indexing = useIndexing();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* The files the conversation is about. Held here because it is chosen in the folder card and
+     used by the chat: nothing persists a session yet, so nothing persists this. */
+  const [scope, setScope] = useState<AnalysisScope>(() => wholeFolderScope(Date.now()));
+  const [chatBusy, setChatBusy] = useState(false);
+  const workFolder = snapshot?.settings.workFolder ?? null;
+  /* Files chosen in one folder mean nothing in another: their paths would resolve to nothing and
+     every question would be refused. A different folder starts from the whole folder again. */
+  useEffect(() => setScope(wholeFolderScope(Date.now())), [workFolder]);
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
 
@@ -91,6 +101,9 @@ export default function App() {
               onChosen={(path) => void update({ workFolder: path })}
               indexing={indexing}
               detail="collapsible"
+              scope={scope}
+              onScopeChange={setScope}
+              scopeLocked={chatBusy}
             />
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -100,7 +113,8 @@ export default function App() {
           <ChatPanel
             onFailure={refresh}
             hasWorkFolder={snapshot.settings.workFolder !== null}
-            workFolder={snapshot.settings.workFolder}
+            scope={scope}
+            onBusyChange={setChatBusy}
             modelAlias={snapshot.settings.modelAlias}
             aliases={health?.aliases ?? []}
             indexing={indexing}

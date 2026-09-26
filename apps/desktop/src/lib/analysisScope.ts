@@ -16,9 +16,8 @@ export function scopedPaths(scope: AnalysisScope): string[] {
  * The scope after `file` is ticked or unticked.
  *
  * Ticking pins the file's `id` at that moment, so Rust can tell when it was replaced afterwards.
- * An entry already in the scope keeps its original pin and `addedAt`: unticking and ticking again
- * is the user choosing the file as it is now, and is treated as a new choice. Unticking the last
- * file returns to the whole folder, never to a scope that allows nothing.
+ * Unticking removes the entry, so ticking it again is a new choice with a fresh pin. Unticking the
+ * last file returns to the whole folder, never to a scope that allows nothing.
  */
 export function toggleScopeFile(
   scope: AnalysisScope,

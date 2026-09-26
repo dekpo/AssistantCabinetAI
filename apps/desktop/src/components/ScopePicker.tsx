@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { scopedPaths, toggleScopeFile, wholeFolderScope } from "../lib/analysisScope";
 import { workFolderInventory, type AnalysisScope, type FileRecord } from "../lib/ipc";
@@ -6,7 +6,7 @@ import { counted } from "../lib/plural";
 
 /**
  * Which documents this conversation may rely on. The default is the whole folder; ticking files
- * narrows it. Only analysed files are offered, because only they can be searched, and choosing one
+ * narrows it. Only files whose analysis is current are offered, because only they can be searched as they are now, and choosing one
  * copies nothing: it names a file the folder already holds.
  */
 export function ScopePicker({
@@ -23,14 +23,26 @@ export function ScopePicker({
   const { t } = useTranslation();
   const [files, setFiles] = useState<FileRecord[] | null>(null);
   const chosen = scopedPaths(scope);
+  /* Which read is the latest. Opening, closing and reopening starts overlapping reads, and the one
+     that resolves last is not necessarily the one asked for last. */
+  const latestLoad = useRef(0);
 
   /* Read when the disclosure opens, not on mount: a file analysed since the last look must be
      offered, and a picker nobody opens should cost nothing. A failed read leaves the list empty
      rather than wrong. */
   const load = () => {
+    const thisLoad = ++latestLoad.current;
     workFolderInventory().then(
-      (report) => setFiles(report.files.filter((file) => file.indexed)),
-      () => setFiles([]),
+      (report) => {
+        if (thisLoad === latestLoad.current) {
+          setFiles(report.files.filter((file) => file.processingStatus === "indexed"));
+        }
+      },
+      () => {
+        if (thisLoad === latestLoad.current) {
+          setFiles([]);
+        }
+      },
     );
   };
 

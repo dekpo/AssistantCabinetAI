@@ -13,6 +13,7 @@ pub mod error;
 pub mod extraction;
 pub mod file_record;
 pub mod file_reference;
+pub mod filename_sanitizer;
 pub mod folder_questions;
 pub mod gateway;
 pub mod index_store;

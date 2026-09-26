@@ -183,6 +183,11 @@ export interface IndexProgress {
   totalFiles: number;
 }
 
+export interface RenamedFile {
+  from: string;
+  to: string;
+}
+
 export interface IndexSummary {
   scannedFiles: number;
   indexedFiles: number;
@@ -192,6 +197,11 @@ export interface IndexSummary {
   lowConfidenceFiles: string[];
   /** Documents dropped from the index because they are no longer in the work folder. */
   removedFiles: string[];
+  /** Files renamed to a clean name (no spaces or accents) before the pass read anything. Names
+   * only, relative to the work folder. */
+  renamedFiles: RenamedFile[];
+  /** Files that needed a clean name and could not be renamed. Left as they were. */
+  renameFailedFiles: string[];
   /** Machine codes for an ingestion capability that did not start. Empty on a healthy install. */
   unavailableCapabilities: string[];
   chunkCount: number;

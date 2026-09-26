@@ -16,6 +16,7 @@ use crate::analysis_scope::AnalysisScope;
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::error::AppError;
 use crate::file_record::FileRecord;
+use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
@@ -315,8 +316,24 @@ pub async fn index_work_folder(
         rasterizer.map(|provider| provider as &dyn PageRasterizer);
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
 
+    // Names are made plain before anything is read, so the pass, the index and every later question
+    // agree on one spelling of each file. Logged as it happens: a pass that fails afterwards must
+    // not leave a renamed file with no record of what it used to be.
+    let sanitised = filename_sanitizer::sanitize_folder(Path::new(&work_folder));
+    if let Ok(directory) = app.path().app_local_data_dir() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs() as i64)
+            .unwrap_or(0);
+        let _ = filename_sanitizer::append_log(
+            &directory.join("renamed-files.jsonl"),
+            &sanitised.renamed,
+            now,
+        );
+    }
+
     let mut index = open_index(&app)?;
-    indexing::run(
+    let mut summary = indexing::run(
         &mut index,
         &state.gateway,
         &server_url,
@@ -330,7 +347,10 @@ pub async fn index_work_folder(
             let _ = on_progress.send(progress);
         },
     )
-    .await
+    .await?;
+    summary.renamed_files = sanitised.renamed;
+    summary.rename_failed_files = sanitised.failed;
+    Ok(summary)
 }
 
 /// Whether the local index has anything to search yet. The chat panel checks this before
@@ -558,6 +578,12 @@ async fn sourced_answer(
         QuestionRoute::GlobalRetrieval => Plan::WholeFolder,
     };
 
+    // Everything she chose is gone or has changed: nothing was searched and nothing could be, so
+    // say that rather than the generic refusal, and spend no gateway call finding out.
+    if narrowed && scoped_paths.is_empty() && !scope_outdated.is_empty() {
+        return Err(AppError::ScopeUnavailable);
+    }
+
     // A question about one named file gets that file's record; anything else gets counts only.
     // A per-document question deliberately gets counts rather than the whole listing: the
     // excerpts already carry one header per file, so a listing would repeat every path in a
@@ -607,7 +633,12 @@ async fn sourced_answer(
         )?,
     };
     if evidence.is_empty() {
-        return Err(AppError::InsufficientEvidence);
+        // A file she chose that could not be used may be exactly where the answer was, so the
+        // refusal names that rather than blaming the documents that were searched.
+        return Err(match narrowed && !scope_outdated.is_empty() {
+            true => AppError::ScopeUnavailable,
+            false => AppError::InsufficientEvidence,
+        });
     }
 
     // How much of the corpus this answer really rests on. Reported only when the question asked

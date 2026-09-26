@@ -302,6 +302,15 @@ body {
   margin: 0;
 }
 
+/* The "See" button ends the row, pushed to the right edge; the name gives it the room it needs. */
+.inventory__see {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-top: 1px;
+  padding-bottom: 1px;
+  font-size: 10px;
+}
+
 /* A file's state as a colour, in the palette the rest of the window already uses: the accent green
    for read, the warning amber for waiting, the offline red for unreadable. The words are on the
    dot's hover and its aria-label. */

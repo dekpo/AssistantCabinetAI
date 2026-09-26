@@ -12,8 +12,14 @@ import { counted } from "./plural";
  *
  * Files nothing could be read from are named in the same breath, because "10 of 10 documents" is
  * only the whole truth when the folder holds nothing else.
+ *
+ * A complete answer with nothing unreadable has nothing to disclose, so it gets no line: the line
+ * is there to reveal a gap, and "1 of 1" only repeats what she chose.
  */
-export function coverageLine(t: Translator, coverage: EvidenceCoverage): string {
+export function coverageLine(t: Translator, coverage: EvidenceCoverage): string | null {
+  if (coverage.filesCovered >= coverage.indexedFiles && coverage.unreadableFiles === 0) {
+    return null;
+  }
   const documents = counted(
     coverage.indexedFiles,
     t("chat.coverageDocumentOne"),

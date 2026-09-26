@@ -51,6 +51,7 @@ pub fn run() {
             commands::has_indexed_documents,
             commands::work_folder_inventory,
             commands::reveal_work_folder,
+            commands::reveal_work_file,
             commands::reset_index,
         ])
         .run(tauri::generate_context!())

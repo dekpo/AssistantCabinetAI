@@ -407,6 +407,20 @@ pub fn reveal_work_folder(state: State<'_, AppState>) -> Result<(), AppError> {
     reveal::folder(Path::new(&work_folder))
 }
 
+/// Show one file of the work folder, selected in the system's file manager.
+///
+/// Unlike the command above this one takes a path from the webview, so it takes a path *relative
+/// to the work folder* and nothing else: `reveal::file` refuses anything that could lead outside
+/// it, and the folder itself still comes from settings. The file is pointed at, never opened.
+#[tauri::command]
+pub fn reveal_work_file(state: State<'_, AppState>, relative_path: String) -> Result<(), AppError> {
+    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    reveal::file(Path::new(&work_folder), &relative_path)
+}
+
 /// Forget everything the index holds, leaving every document in the work folder untouched.
 ///
 /// This is the deliberate way back to "nothing has been analysed yet", and it exists because the

@@ -174,6 +174,7 @@ export function MessageList({
           const streaming = entry.id === streamingId;
           const showPending = streaming && phase === "thinking";
           const showStop = streaming && phase === "writing";
+          const coverage = entry.coverage === undefined ? null : coverageLine(t, entry.coverage);
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
@@ -235,9 +236,7 @@ export function MessageList({
               {/* How much of the folder this answer rests on, for a question that asked about
                   every document. Written beside the answer rather than inside it, so the model
                   cannot leave it out (`docs/WORK-FOLDER-INVENTORY.md`). */}
-              {entry.coverage !== undefined ? (
-                <p className="message__timing">{coverageLine(t, entry.coverage)}</p>
-              ) : null}
+              {coverage === null ? null : <p className="message__timing">{coverage}</p>}
               {/* Documents the answer could not have used. Retrieval refuses when it has too
                   little evidence; this is the other half, for when it had plenty and the file she
                   had in mind was simply not among it. */}

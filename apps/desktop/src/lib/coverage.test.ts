@@ -30,14 +30,20 @@ describe("the coverage line", () => {
     expect(text).toContain("6 of 10");
   });
 
-  it("leaves out the unreadable sentence when there is nothing to disclose", () => {
+  it("says nothing when the answer is complete and nothing is unreadable", () => {
+    expect(
+      coverageLine(english, { filesCovered: 4, indexedFiles: 4, unreadableFiles: 0 }),
+    ).toBeNull();
+  });
+
+  it("leaves out the unreadable sentence when a partial answer has none to disclose", () => {
     const text = coverageLine(english, {
-      filesCovered: 4,
+      filesCovered: 3,
       indexedFiles: 4,
       unreadableFiles: 0,
     });
 
-    expect(text).toBe("Based on 4 of 4 analysed documents.");
+    expect(text).toBe("Based on 3 of 4 analysed documents.");
   });
 
   it("uses the singular for a single document", () => {

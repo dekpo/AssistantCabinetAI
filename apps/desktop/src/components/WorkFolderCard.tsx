@@ -7,6 +7,7 @@ import {
   chooseWorkFolder,
   ensureSuggestedWorkFolder,
   resetIndex,
+  revealWorkFile,
   revealWorkFolder,
   workFolderInventory,
   type AnalysisScope,
@@ -117,34 +118,13 @@ export function WorkFolderCard({
     }
   }, [finishedPasses, refreshInventory]);
 
-  /* What the last pass did. One paragraph of short lines rather than three paragraphs: it is one
-     fact about one pass, and a blank line between the parts made it read as three separate
-     announcements. It lives inside the disclosure, above the listing it describes. */
+  /* What the last pass did, beyond the counts the line under the buttons already gives. One
+     paragraph of short lines rather than several paragraphs: it is one fact about one pass, and a
+     blank line between the parts made it read as separate announcements. It lives inside the disclosure, above the listing it describes. */
   const passLines =
     indexing.summary === null
       ? []
       : [
-          `${[
-            counted(
-              indexing.summary.indexedFiles,
-              t("workFolder.indexedOne"),
-              t("workFolder.indexedMany"),
-            ),
-            counted(
-              indexing.summary.unchangedFiles,
-              t("workFolder.unchangedOne"),
-              t("workFolder.unchangedMany"),
-            ),
-            ...(indexing.summary.emptyFiles.length > 0
-              ? [
-                  counted(
-                    indexing.summary.emptyFiles.length,
-                    t("workFolder.unreadableOne"),
-                    t("workFolder.unreadableMany"),
-                  ),
-                ]
-              : []),
-          ].join(", ")}.`,
           ...(indexing.summary.ocrFiles.length > 0
             ? [
                 `${counted(
@@ -229,6 +209,17 @@ export function WorkFolderCard({
     setError(null);
     try {
       await revealWorkFolder();
+    } catch (raw: unknown) {
+      setError(normaliseError(raw));
+    }
+  };
+
+  /* The same door as the folder's "See", one file at a time: the file is shown selected in the file
+     manager, never opened, so this too changes nothing. */
+  const revealFile = async (relativePath: string) => {
+    setError(null);
+    try {
+      await revealWorkFile(relativePath);
     } catch (raw: unknown) {
       setError(normaliseError(raw));
     }
@@ -437,7 +428,7 @@ export function WorkFolderCard({
           ) : (
             <>
               {passSummary}
-              <FileList files={inventory.files} />
+              <FileList files={inventory.files} onReveal={(path) => void revealFile(path)} />
             </>
           )}
         </>
@@ -545,8 +536,11 @@ function FileList({
   scope,
   onScopeChange,
   scopeLocked = false,
+  onReveal,
 }: {
   files: FileRecord[];
+  /** When given, each row ends with a "See" button that shows the file in the file manager. */
+  onReveal?: (relativePath: string) => void;
   /** When given, each analysed file gets a checkbox: the listing doubles as the choice of the
    * documents the conversation may rely on. Only analysed files can be chosen, because only they
    * can be searched as they are now; choosing one copies nothing. */
@@ -593,6 +587,16 @@ function FileList({
                 {dot}
                 {name}
               </>
+            )}
+            {onReveal === undefined ? null : (
+              <button
+                type="button"
+                className="button button--compact inventory__see"
+                title={t("workFolder.revealFileHint")}
+                onClick={() => onReveal(file.relativePath)}
+              >
+                {t("workFolder.reveal")}
+              </button>
             )}
           </li>
         );

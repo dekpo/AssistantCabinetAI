@@ -283,6 +283,12 @@ export function revealWorkFolder(): Promise<void> {
   return invoke<void>("reveal_work_folder");
 }
 
+/** Show one file of the work folder, selected in the system's file manager. Takes the path
+ * relative to the folder, as the inventory lists it; Rust refuses anything else. */
+export function revealWorkFile(relativePath: string): Promise<void> {
+  return invoke<void>("reveal_work_file", { relativePath });
+}
+
 /**
  * Forget everything the index holds. Every document stays exactly where it is on disk: this
  * undoes the analysis, never the folder. Confirm before calling it.

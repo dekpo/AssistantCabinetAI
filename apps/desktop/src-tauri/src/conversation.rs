@@ -6,25 +6,51 @@
 //! was learned from them, and each question retrieves its own.
 //!
 //! How much is remembered is the chosen model's context window, which the server device sets and
-//! publishes. The current instruction, excerpts and question always come first; past exchanges
-//! fill what is left, newest first, and are dropped whole, oldest first. A long conversation
-//! therefore forgets gently instead of being refused. Everything here is counting characters over
-//! a handful of strings: no model call, nothing heavy, done afresh for every question so that
-//! switching models mid-conversation simply changes the budget.
+//! publishes. Past exchanges fill what memory is left after the current turn's own material -
+//! this question's instruction, its grounding and the question itself, always the *last* thing the
+//! model reads (`commands::Writer::write`) - and are dropped whole, oldest first, newest kept. A
+//! long conversation therefore forgets gently instead of being refused. Everything here is
+//! counting characters over a handful of strings: no model call, nothing heavy, done afresh for
+//! every question so that switching models mid-conversation simply changes the budget.
+//!
+//! **Memory never outranks grounding.** A conversation that remembers everything and answers one
+//! fact wrongly has failed at the one thing this product exists for; a conversation that forgets
+//! after two exchanges but never states an unfounded fact has not (27 September 2026, after a
+//! hallucination regression traced to exactly this: `docs/SELECTION-AND-MEMORY.md`, "grounding
+//! outranks memory"). Two rules follow from that, enforced here rather than hoped for from the
+//! model: past exchanges are text only, never re-injected as if they were fresh evidence: and
+//! whatever material grounds *this* question sits immediately before it, past every exchange, so a
+//! long conversation cannot dilute what the model is meant to be looking at.
 
 use std::collections::HashMap;
 
 use crate::gateway::{ChatTurn, MAX_CONTEXT_CHARS};
 
-/// Sent in place of the retrieval instruction when she selected no document. English, like every
-/// instruction (`docs/LANGUAGE-AND-LOCALE.md`). Short on purpose: small models echo long lists of
-/// rules back into their answers.
+/// Sent in place of the retrieval instruction when neither a document nor tabular data is
+/// selected. The last of three priority tiers, decided deterministically upstream and never left
+/// to the model to guess (`docs/SELECTION-AND-MEMORY.md`, "the grounding priority chain"):
+///
+///   1. a document is selected -> `retrieval::RETRIEVAL_INSTRUCTION`, grounded strictly on its
+///      excerpts, unconditionally;
+///   2. *(reserved for Sprint 2b)* tabular data is selected and no document is -> a future
+///      instruction of the same shape, grounded strictly on the deterministic tabular result;
+///   3. neither -> this one.
+///
+/// Meant to be rare - once Sprint 2b exists, tier 3 is reached only when she has attached neither
+/// a document nor a table - and still cautious even then: general knowledge is a last resort, not
+/// a licence to speculate, and inventing a specific detail is exactly what the wording below
+/// forbids. English, like every instruction (`docs/LANGUAGE-AND-LOCALE.md`); short, because small
+/// models echo long lists of rules back into their answers; and, like every model-facing string in
+/// this product, silent on who the user is or what they do - a doctor, a lawyer, a notary and an
+/// accountant all read the same sentence.
 pub const NO_DOCUMENTS_INSTRUCTION: &str =
-    "No excerpt from the practice's documents is attached: the user has selected none for this \
-     conversation. Answer as a general administrative assistant, from general knowledge. Never \
-     claim to have read, seen or checked any of the practice's files. If the question needs a \
-     specific document, say in one sentence that no document is selected and that one can be \
-     ticked in the documents list.";
+    "No document is attached: the user has selected none for this conversation. You may answer \
+     from general knowledge, but stay strictly factual: never invent a specific name, date, \
+     amount or other detail you are not certain of, and say plainly when you do not know \
+     something rather than guessing. Anything the user has already told you earlier in this \
+     conversation is true and may be used. Never claim to have read, seen or checked any of the \
+     user's files. If the question needs a specific document, say in one sentence that none is \
+     selected and that one can be ticked in the documents list.";
 
 /// Deliberately pessimistic for French: real tokenizers do better, and overestimating what fits
 /// is what would make the runtime drop messages silently.
@@ -162,6 +188,39 @@ pub fn retrieval_query(question: &str, history: &[ChatTurn]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Same guard as `retrieval::the_retrieval_instruction_stays_neutral_about_who_the_user_is`,
+    /// for this tier's instruction.
+    #[test]
+    fn the_no_documents_instruction_stays_neutral_about_who_the_user_is() {
+        let lower = NO_DOCUMENTS_INSTRUCTION.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(
+                !lower.contains(word),
+                "{word:?} found in NO_DOCUMENTS_INSTRUCTION"
+            );
+        }
+    }
+
+    /// The one thing this whole tier exists to forbid, stated in the constant itself: a small
+    /// model that skims this instruction and only reads the first clause must still find the
+    /// caution, because that first clause is the one it is most likely to act on.
+    #[test]
+    fn the_no_documents_instruction_forbids_inventing_before_it_permits_general_knowledge() {
+        let permission = NO_DOCUMENTS_INSTRUCTION.find("general knowledge").unwrap();
+        let caution = NO_DOCUMENTS_INSTRUCTION.find("never invent").unwrap();
+        assert!(
+            caution > permission,
+            "the caution must follow the permission closely, not be an afterthought"
+        );
+        // And it must arrive within the same sentence as the permission, not several sentences
+        // later where a model skimming for "am I allowed to answer" stops reading.
+        let between = &NO_DOCUMENTS_INSTRUCTION[permission..caution];
+        assert!(
+            !between.contains('.'),
+            "a full stop separates the permission from its caution"
+        );
+    }
 
     fn turn(role: &str, content: &str) -> ChatTurn {
         ChatTurn {

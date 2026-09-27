@@ -4,8 +4,8 @@ Run it on the server device, against the gateway, when a model is installed or c
 
     uv run python scripts/measure_context.py --url http://127.0.0.1:8080 --alias cabinet-chat
 
-It sends synthetic conversations only - never a document, never a patient - with 0, 1, 2 and 4
-remembered exchanges, and prints how long each answer took and how large the prompt was according
+It sends synthetic conversations only - never a document, never real user data - with 0, 1, 2 and
+4 remembered exchanges, and prints how long each answer took and how large the prompt was according
 to the runtime. Read the result against the window `/health` publishes for the alias, then set
 `MODEL_CONTEXT_WINDOWS` (or `DEFAULT_CONTEXT_WINDOW`) in the server device's `.env`
 (docs/SELECTION-AND-MEMORY.md, docs/OPERATIONS.md).
@@ -28,7 +28,7 @@ ANSWER_CHARS = 900
 ANSWER_TOKENS = 128
 
 FILLER = (
-    "Synthetic administrative text for a timing test. The practice received a letter about an "
+    "Synthetic administrative text for a timing test. The user received a letter about an "
     "appointment, a request for a certificate and a reminder about a form to return. "
 )
 

@@ -5,6 +5,94 @@ model context really behaved in the code. The table form of every decision is in
 ("document selection and conversation memory"). This file keeps the reasoning, so that a later session can
 tell a deliberate choice from an accident.
 
+**Amended the same day.** The first cut of conversation memory (`## Conversation memory`, below) shipped a
+real regression: real testing found the models hallucinating more, not less, once they could remember the
+conversation. Traced and fixed the same day; the two rules that came out of it are load-bearing for
+everything else in this file and are stated first, on purpose, rather than buried where the bug was.
+
+## Grounding outranks memory
+
+**A model that forgets after two exchanges but never states an unfounded fact is a success. A model that
+remembers the whole conversation and invents one fact has failed at the one thing this product exists for.**
+Memory is a convenience; grounding is the product. Whenever the two pull in different directions, grounding
+wins, without exception and without asking the model to judge the trade-off itself.
+
+What actually caused the regression, both found by reading the exact strings sent to the model rather than
+guessing:
+
+- **The honesty rule became conditional.** The base prompt used to say, unconditionally, "you never invent a
+  fact; when the information you were given does not carry the answer, say so." Sprint 2a.8 rewrote it to
+  "you never invent a fact **about the practice, its patients or its documents**... **when a question depends
+  on the practice's documents** and the information does not carry the answer, say so." That second clause
+  handed the model a judgement call - *does this question depend on the documents?* - that used to not exist.
+  Once a question's connection to the documents was even slightly indirect (a short follow-up, a question the
+  excerpts only partly covered), the model could decide "no" and answer from training data instead of saying
+  it did not know. **Fixed:** the base rule (`BASE_SYSTEM_PROMPT` in `prompts.py`) is unconditional again. The
+  licence to use general knowledge exists **only** in the instruction Rust sends on the one path it has
+  already determined has no document (`NO_DOCUMENTS_INSTRUCTION`) - never as something the model infers for
+  itself on a path where documents **are** attached.
+- **Grounding material sat several turns away from the point of generation.** The message order was
+  `[system: base rules] [system: retrieval instruction + this question's excerpts] [...history...] [user:
+  question]`. Structurally correct, but for a small local model (1–3B), a distant system turn is read with
+  less weight than the turns immediately before generation starts - "lost in the middle" is a documented
+  property of exactly this model class, not a guess. The longer the remembered conversation, the further the
+  excerpts drifted from the question, and the more the model leaned on the *tone* of prior answers - or
+  reused a citation from a previous turn's excerpts - instead of re-checking what was actually retrieved for
+  *this* question. **Fixed:** `commands::Writer::write` no longer sends a leading system turn for the
+  grounding material. Whatever grounds this specific question - the tier's instruction, plus its excerpts or
+  data - is folded into one turn immediately before the question, *after* every past exchange, so it is
+  always the last thing the model reads before it starts writing, however long the conversation has gotten.
+  The gateway's own system turn (the tier-independent safety rules) still comes first, once, and is
+  unaffected by how much history follows it.
+
+### The grounding priority chain
+
+Which material a question is answered from is decided by Rust, deterministically, from what is actually
+selected - never guessed by the model from the question's wording. Three tiers, evaluated in this order:
+
+1. **A document is selected** → `retrieval::RETRIEVAL_INSTRUCTION`, held to its excerpts, unconditionally.
+2. **Reserved for Sprint 2b: no document is selected, but tabular data is.** No code yet - `analysis_scope`
+   and the selection only know about documents today - but the chain is designed with this slot in mind so
+   the tabular engine does not have to redesign the honesty rule when it lands. When it does: an instruction
+   of the same shape as `RETRIEVAL_INSTRUCTION`, held strictly to the deterministic tabular result, not to
+   raw rows and not to the model's own arithmetic (`## Open direction: documents and tables together`,
+   below).
+3. **Neither is selected** → `conversation::NO_DOCUMENTS_INSTRUCTION`. Meant to be rare - once tier 2 exists,
+   this is reached only when she has attached neither a document nor a table - and still cautious even then:
+   general knowledge is a last resort the instruction explicitly bounds ("stay strictly factual: never
+   invent a specific name, date, amount or other detail you are not certain of"), not a return to an
+   unconstrained chat assistant. It does trust one thing beyond the current turn: whatever the user has
+   already stated earlier in the conversation, because that came from her, not from the model.
+
+A conversation moving between tiers - she answers two questions with a document selected, then unticks it -
+is normal and each question is graded independently; nothing here tries to keep a conversation in one tier.
+
+## Profession-neutral model-facing text
+
+**Every string sent to the model - the base prompt, the retrieval instruction, the no-documents instruction,
+and anything added later - must read the same for a doctor, a lawyer, a notary or an accountant.** The pilot
+is a French GP's practice (`AGENTS.md`), and that stays true of the *product* and its *docs*, which are
+allowed to describe the current pilot in plain terms. It must not be true of what is sent to the model: a
+prompt that says "the practice's patients" bakes a medical assumption into the one part of the system a
+future non-medical profession cannot configure around.
+
+Found and corrected on 27 September 2026: `BASE_SYSTEM_PROMPT` said "the practice, its patients", "clinical,
+diagnostic or prescribing advice"; `RETRIEVAL_INSTRUCTION` said "the practice's own documents";
+`NO_DOCUMENTS_INSTRUCTION` said "the practice's documents" and "the practice's files" twice. All four are
+now written in terms of **the user** and **their documents/files**, with no mention of patients, doctors,
+practitioners, or the word "practice" itself. The one deliberate exception: `BASE_SYSTEM_PROMPT`'s
+professional-advice rule now reads "clinical, legal, financial or otherwise" - naming a clinical example
+*alongside* legal and financial ones is what makes the sentence read as multi-profession rather than
+medical-first; dropping it to a bare "professional advice of any kind" would have been just as compliant but
+less protective, since a concrete anchor is what a small model pattern-matches against.
+
+**This is a standing rule for every session and every agent that touches a prompt in this codebase, not a
+one-time cleanup.** `retrieval.rs` and `conversation.rs` each carry a test
+(`..._stays_neutral_about_who_the_user_is`) that fails the build if `patient`, `doctor`, `practitioner`,
+`practice` or `gp` reappears in the instruction constant it guards; `apps/server/tests/test_prompts.py`
+carries the equivalent for `BASE_SYSTEM_PROMPT`. Any new model-facing constant - a future `TABULAR_INSTRUCTION`
+included - should get the same guard alongside it, not rely on someone remembering to check by eye.
+
 ## What was wrong
 
 A trace of every path a question could take found four ways to block her, one way to be told something
@@ -76,9 +164,10 @@ pass - a passage from outside the folder can no longer come back. Analyse itself
 
 ## Answering without documents
 
-- **Its own short instruction**, English like every instruction, sent in place of the retrieval
-  instruction: no excerpts are attached; answer as a general administrative assistant; never claim to have
-  read, seen or checked the practice's files; if the question needs a specific document, say in one sentence
+- **Tier 3's instruction** (`## The grounding priority chain`, above), sent in place of the retrieval
+  instruction: no document is attached; general knowledge is allowed but bounded - never invent a specific
+  detail, say plainly when unsure, trust what the user has already said in this conversation; never claim to
+  have read, seen or checked the user's files; if the question needs a specific document, say in one sentence
   that none is selected and that one can be ticked in the documents list. No embedding call is made, so this
   answer is also the fastest.
 - **A line under the answer:** "Réponse sans vos documents." Nothing more.
@@ -86,20 +175,23 @@ pass - a passage from outside the folder can no longer come back. Analyse itself
 
 ### Models that recite their rules
 
-Small models often end an answer by quoting their instructions ("as an assistant I cannot give medical
-advice…"). To her that reads as a malfunction. What is done about it:
+Small models often end an answer by quoting their instructions ("as an assistant I cannot give professional
+advice…"). To her that reads as a malfunction. What is done about it, and what was undone:
 
-- The gateway's base rule "when the information does not carry the answer, say so" is **narrowed to
-  questions that depend on the practice's documents**. It was the rule driving both the "I do not have the
-  information" parrot and the recited disclaimers.
+- **Tried and reverted, 27 September 2026:** narrowing the base prompt's honesty rule to "questions that
+  depend on the documents" did stop some recited disclaimers, but it did so by giving the model discretion
+  over when grounding was required, and that discretion is what caused the hallucination regression this
+  file opens with. The base rule is unconditional again (`## Grounding outranks memory`); reciting rules is
+  addressed by the two items below instead, which do not touch how strict the honesty rule is.
 - One line in the base prompt: the rules shape the answer, they are not part of it; never quote, list or
   mention them unless the request is something they forbid.
 - Instructions stay short. Small models echo long lists of rules.
 - **Not done:** deleting sentences from an answer after generation. That changes what the model said, which
   is worse than the problem.
 - **Still to do:** a small, re-runnable check against the real models that flags meta phrases ("mes
-  instructions", "en tant qu'assistant", an unprompted medical disclaimer), run whenever a model or a prompt
-  changes. It needs the real models, so it belongs with the measuring script, on the server device.
+  instructions", "en tant qu'assistant", an unprompted professional-advice disclaimer), run whenever a model
+  or a prompt changes. It needs the real models, so it belongs with the measuring script, on the server
+  device.
 
 ## The documents folder is mandatory
 
@@ -119,9 +211,11 @@ about documents or not. What is remembered, and how much:
 - **What is remembered:** past questions and answers, as the text she saw. Old excerpts are **not** resent:
   the answers already carry what was learned from them, and each question retrieves its own fresh excerpts.
   A turn the software wrote itself ("analyse your documents first") is not a model answer and is left out.
-- **A budget, never a wall.** In priority order: the instructions, the current excerpts and the current
-  question; then the last exchange; then older ones. Exchanges are dropped whole, oldest first, and never
-  split. A long conversation therefore forgets gently and never blocks - "shorten your question" disappears.
+- **A budget, never a wall.** This question's own turn - its tier instruction, its excerpts or data, and the
+  question - is reserved first and always kept whole; what is left goes to history, the last exchange first,
+  older ones after, each exchange kept or dropped whole, never split. A long conversation therefore forgets
+  gently and never blocks - "shorten your question" disappears - and never trims the one turn that actually
+  answers the question to make room for older ones.
 - **The budget is the model's real window.** Characters are converted with a deliberately conservative
   3 characters per token, the answer's own reserve (`MAX_OUTPUT_TOKENS`) is subtracted, and Rust's 24,000
   character ceiling still applies on top.
@@ -154,6 +248,11 @@ about documents or not. What is remembered, and how much:
 ## Open direction: documents and tables together (decide in Sprint 2b)
 
 Recorded now so Sprint 2b starts from it rather than inventing it under pressure. Not a decision.
+
+The case of tables and **no** documents is tier 2 of `## The grounding priority chain`, above - reserved
+there already, so implementing it here means adding one instruction constant next to
+`NO_DOCUMENTS_INSTRUCTION`, not redesigning how the model is told what it may trust. The case below, both
+selected, is the one the chain does not cover on its own and needs the design that follows.
 
 - **Each engine alone, never carrying the other's material.** Tables selected and no documents: the tabular
   engine runs, with no excerpt. Documents selected and no tables: the document engine runs, with no data and

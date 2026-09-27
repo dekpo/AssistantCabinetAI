@@ -248,10 +248,16 @@ impl EvidenceCoverage {
 /// The English instruction plus the excerpts, ready to send as one turn to the gateway. The
 /// instruction is English (`docs/LANGUAGE-AND-LOCALE.md`); the excerpts are copied verbatim,
 /// whatever language the source document is in - they are data, never rewritten.
+///
+/// Tier 1 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a document is
+/// selected, so the answer is held to it, unconditionally - never softened into a suggestion the
+/// model is free to weigh against its own general knowledge. Never mentions who the user is or
+/// what profession they practise: the wording must read the same for a doctor, a lawyer, a notary
+/// or an accountant, because none of that is this product's business to assume.
 pub const RETRIEVAL_INSTRUCTION: &str =
-    "You are given excerpts retrieved from the practice's own documents. Answer only from \
-     these excerpts, citing the file and page for every fact. If the excerpts do not contain \
-     the answer, say so instead of guessing.";
+    "You are given excerpts retrieved from the user's own documents. Answer only from these \
+     excerpts, citing the file and page for every fact. If the excerpts do not contain the \
+     answer, say so instead of guessing.";
 
 pub fn build_context_turn(evidence: &[Evidence]) -> String {
     format!("{RETRIEVAL_INSTRUCTION}\n\n{}", format_evidence(evidence))
@@ -298,6 +304,21 @@ mod tests {
                 .unwrap();
         }
         store
+    }
+
+    /// A guard against exactly the regression `RETRIEVAL_INSTRUCTION` was rewritten for on
+    /// 27 September 2026: any hint that the person on the other side of this product is a medical
+    /// professional, which would be false for the lawyers, notaries and accountants it is meant to
+    /// serve too (`docs/DECISIONS.md`, "profession-neutral model-facing text").
+    #[test]
+    fn the_retrieval_instruction_stays_neutral_about_who_the_user_is() {
+        let lower = RETRIEVAL_INSTRUCTION.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(
+                !lower.contains(word),
+                "{word:?} found in RETRIEVAL_INSTRUCTION"
+            );
+        }
     }
 
     #[test]

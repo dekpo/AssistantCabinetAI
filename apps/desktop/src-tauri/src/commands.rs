@@ -488,27 +488,33 @@ struct Writer<'a> {
 }
 
 impl Writer<'_> {
-    /// The system turn, then as much of the conversation as fits beside it, then the question.
-    /// Streams the answer to the interface and returns it whole.
+    /// As much of the conversation as fits, then one turn carrying everything this question needs
+    /// to be answered: the tier's instruction, its grounding material (excerpts, or nothing for
+    /// the no-documents tier), and the question itself, in that order. Streams the answer to the
+    /// interface and returns it whole.
+    ///
+    /// Deliberately **not** a leading system turn. A small local model weighs a nearby turn more
+    /// than a distant one, and history sitting between the grounding material and the question -
+    /// which a system-first layout would produce - is exactly what let a model drift onto a prior
+    /// turn's topic instead of the current excerpts (`docs/SELECTION-AND-MEMORY.md`, "why the
+    /// grounding material moved next to the question"). The gateway still prepends its own system
+    /// turn of stable, tier-independent rules (`prompts.py`); this is what comes right after the
+    /// conversation, immediately before generation starts.
     async fn write(
         &self,
-        system: String,
+        instruction: String,
         history: &[ChatTurn],
         question: String,
         on_event: &Channel<ChatStreamEvent>,
     ) -> Result<String, AppError> {
-        let fixed = system.chars().count() + question.chars().count();
-        let mut turns = vec![ChatTurn {
-            role: "system".to_string(),
-            content: system,
-        }];
-        turns.extend(conversation::fit_history(
+        let final_turn = format!("{instruction}\n\nQuestion: {question}");
+        let mut turns = conversation::fit_history(
             history,
-            self.budget.history_chars(fixed),
-        ));
+            self.budget.history_chars(final_turn.chars().count()),
+        );
         turns.push(ChatTurn {
             role: "user".to_string(),
-            content: question,
+            content: final_turn,
         });
 
         let answer = self
@@ -774,18 +780,19 @@ async fn sourced_answer(
         coverage,
     });
 
-    // Two kinds of evidence in one turn, kept apart on purpose: the excerpts say what the
+    // Two kinds of evidence in one instruction, kept apart on purpose: the excerpts say what the
     // documents state, the Work Folder context says which files exist and what was done to them,
-    // and the contract between them forbids using either as a substitute for the other. Past
-    // exchanges go between this turn and the question; past excerpts are never resent.
+    // and the contract between them forbids using either as a substitute for the other. `write`
+    // puts this immediately before the question, after any past exchanges; past excerpts
+    // themselves are never resent - each question retrieves its own.
     let folder_context = work_folder_context::build(&inventory, &view);
-    let context_turn = format!(
+    let grounding = format!(
         "{}\n{}",
         work_folder_context::build_system_turn(retrieval::RETRIEVAL_INSTRUCTION, &folder_context),
         retrieval::format_evidence(&evidence)
     );
     let answer = writer
-        .write(context_turn, &history, question, on_event)
+        .write(grounding, &history, question, on_event)
         .await?;
 
     Ok(AskAnswer {

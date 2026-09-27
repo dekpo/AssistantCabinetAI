@@ -234,6 +234,20 @@ Decided by the owner after a trace of every path a question could take. Reasonin
 | Privacy | Unchanged. The history lives in the application's memory and is lost on restart; the gateway stores hashes only |
 | Documents and tables together | **Open, for Sprint 2b.** Direction: the engines compute and the model only writes; Rust routes each question; two labelled blocks with separate budgets; one "based on" line per engine (`docs/SELECTION-AND-MEMORY.md`) |
 
+## Settled by the grounding-over-memory correction (27 September 2026, the same day)
+
+The conversation memory shipped hours earlier caused a real hallucination regression: traced to two specific
+causes, both fixed the same day. Full reasoning: `docs/SELECTION-AND-MEMORY.md`, "Grounding outranks memory"
+and "Profession-neutral model-facing text".
+
+| Subject | Decision |
+| --- | --- |
+| The honesty rule | **Unconditional again.** `BASE_SYSTEM_PROMPT`'s "you never invent a fact... say so" no longer depends on the model's own judgement of whether a question "depends on the documents" - that judgement call is exactly what let the model reason its way into hallucinating. General-knowledge answers are permitted **only** by `NO_DOCUMENTS_INSTRUCTION`, sent on the one path Rust has already determined has no document selected |
+| The grounding priority chain | Three tiers, decided deterministically by Rust, never guessed by the model: (1) a document selected → `RETRIEVAL_INSTRUCTION`, strict; (2) *(reserved, Sprint 2b)* tabular data selected and no document → a future instruction of the same shape, strict; (3) neither → `NO_DOCUMENTS_INSTRUCTION`, meant to be rare and still cautious - general knowledge is a bounded last resort, not a licence to invent, though what the user herself has already said in the conversation is trusted |
+| Where the grounding material sits in the request | **Immediately before the question, after every past exchange** - never in a leading system turn separated from the question by history. `commands::Writer::write` folds the tier's instruction and its excerpts/data into the final turn. Small local models weigh nearby turns more than distant ones ("lost in the middle"); the longer a remembered conversation got, the more this let a model drift onto a prior turn's topic or reuse a stale citation instead of the current excerpts |
+| Profession-neutral model-facing text | **Standing rule, not a one-time cleanup** (`AGENTS.md`). Every string sent to the model must read the same for a doctor, a lawyer, a notary or an accountant. `BASE_SYSTEM_PROMPT`, `RETRIEVAL_INSTRUCTION` and `NO_DOCUMENTS_INSTRUCTION` no longer mention "practice", "patient", "doctor" or "practitioner"; each carries a guard test that fails the build if one reappears. The one kept word, "clinical" - one of three parallel examples, "clinical, legal, financial or otherwise" - is deliberate: naming it alongside two other professions is what makes the sentence read as multi-profession, and dropping it would have been less protective, not more neutral |
+| What was not changed | The selection default (still "none"), the mandatory documents folder, the memory budget mechanics (`fit_history`, whole exchanges, oldest dropped first), and the follow-up query heuristic. None of these caused the regression |
+
 ## Known blind spots to keep in mind
 
 - **File actions are the number one business risk.** A bad batch rename over hundreds of documents is far

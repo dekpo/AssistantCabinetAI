@@ -51,6 +51,7 @@ Full design: `docs/LANGUAGE-AND-LOCALE.md`. In short:
 - English: `prompts/` bodies and keys, all of `docs/`, code, comments, tests, commits, branches, README, CONTRIBUTING, this file, machine codes, JSON fields, audit fields. Open WebUI stays an English owner workbench.
 - The user's language: everything a human reads in Assistant Cabinet AI — interface, model answers, proposed file names, error messages, disclaimers. French for the pilot.
 - Rust and Python return **machine codes**, never user-facing prose. The UI localises them. A French string literal in `apps/server` or `apps/desktop/src-tauri` is a bug.
+- **Every string sent to the model** (`prompts.py`, `RETRIEVAL_INSTRUCTION`, `NO_DOCUMENTS_INSTRUCTION`, and anything added later) must read the same for a doctor, a lawyer, a notary or an accountant: no "practice", "patient", "doctor" or profession-specific wording, even though the pilot is a GP. The docs may describe the pilot in plain terms; what the model reads may not assume it. Decided 27 September 2026 after a hallucination regression traced partly to this — see `docs/SELECTION-AND-MEMORY.md`, "Profession-neutral model-facing text". Guard tests live beside each constant (`..._stays_neutral_about_who_the_user_is`); add one for any new model-facing constant.
 
 ## Out of scope for now
 

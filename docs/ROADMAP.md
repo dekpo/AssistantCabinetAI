@@ -422,9 +422,10 @@ In this order, each step with its tests before the next:
    instruction and `withoutDocuments` on the answer; `nothing_selected` and `file_not_selected` deterministic
    answers; "tous" searches only files present in the current folder (`RetrievalScope::CurrentFolder`).
    Existing retrieval, isolation and refusal tests stay green.
-2. **Gateway.** The "say so" rule narrowed to questions about the practice's documents, and a line keeping the
-   rules out of the answer. A context window per alias (`MODEL_CONTEXT_WINDOWS`, `DEFAULT_CONTEXT_WINDOW` =
-   8,192), capped at the model's maximum, sent as `num_ctx`, and published in `/health` with `MAX_OUTPUT_TOKENS`.
+2. **Gateway.** A line keeping the rules out of the answer. A context window per alias (`MODEL_CONTEXT_WINDOWS`,
+   `DEFAULT_CONTEXT_WINDOW` = 8,192), capped at the model's maximum, sent as `num_ctx`, and published in
+   `/health` with `MAX_OUTPUT_TOKENS`. *(A first cut also narrowed the "say so" rule to questions about the
+   documents; reverted the same day, see below - it is unconditional.)*
 3. **Interface.** The sidebar selection: "aucun" by default, "N fichiers", "tous"; a header checkbox; a warning
    sign with its own tooltip on "aucun" and on "tous"; "Réponse sans vos documents." under such answers; the
    composer disabled until a documents folder is chosen; the no-folder chat path (`send_chat_message`) retired.
@@ -441,6 +442,15 @@ two-device deployment runbook (Sprint 4).
 (10 new), 223 `vitest`, `tsc` and `ruff` clean. Checked against the running Ollama: `/api/show` reports the
 context length the gateway reads (`llama.context_length`, `qwen2.context_length`, ...; gemma2 caps at 8,192), and
 `num_ctx` is honoured (`ollama ps` shows the requested window).
+
+**Corrected the same day.** Real testing found the model hallucinating more once it could remember the
+conversation - traced to the conditional honesty rule from step 2 and to grounding material sitting several
+turns away from the question. Both fixed: the honesty rule is unconditional again, general knowledge is
+permitted only by the no-documents-tier instruction, grounding material moved to the turn immediately before
+the question, and every model-facing string was also found to name the pilot's profession and was reworded to
+read the same for any profession. Reasoning: `docs/SELECTION-AND-MEMORY.md`, "Grounding outranks memory" and
+"Profession-neutral model-facing text"; decisions: `docs/DECISIONS.md`, "grounding-over-memory correction".
+227 `cargo test --lib` (3 new guard tests), 70 `pytest` (5 new), `ruff` and `cargo build` clean, no new warnings.
 
 **Not independently verified:** no test drove the real window, and the gateway container still runs the previous
 build until it is rebuilt (`docker compose up -d --build server`); until then the desktop app falls back to the

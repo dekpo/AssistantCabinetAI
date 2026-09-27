@@ -39,6 +39,10 @@ class OllamaProvider:
             timeout=httpx.Timeout(request_timeout_seconds, connect=10.0),
         )
         self._health_timeout_seconds = health_timeout_seconds
+        #: The largest context each model supports, read once from `/api/show`. Only answers are
+        #: kept: a model not pulled yet is asked again next time rather than remembered as
+        #: unlimited.
+        self._context_limits: dict[str, int] = {}
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[GenerationChunk]:
         payload: dict[str, object] = {
@@ -51,6 +55,8 @@ class OllamaProvider:
             options["temperature"] = request.temperature
         if request.max_output_tokens is not None:
             options["num_predict"] = request.max_output_tokens
+        if request.context_window is not None:
+            options["num_ctx"] = request.context_window
         if options:
             payload["options"] = options
 
@@ -111,6 +117,39 @@ class OllamaProvider:
             )
         models = response.json().get("models", [])
         return ProviderHealth(reachable=True, latency_ms=latency_ms, model_count=len(models))
+
+    async def context_limit(self, model: str) -> int | None:
+        """The model's trained context length, from its metadata.
+
+        Ollama reports it under an architecture-specific key (`llama.context_length`,
+        `qwen2.context_length`, ...), so the key is found by its suffix rather than named.
+        Any failure is `None`: the configured window then applies unchanged, which is what the
+        gateway did before it knew the limit at all.
+        """
+        cached = self._context_limits.get(model)
+        if cached is not None:
+            return cached
+        try:
+            response = await self._client.post(
+                "/api/show", json={"model": model}, timeout=self._health_timeout_seconds
+            )
+        except httpx.HTTPError:
+            return None
+        if response.status_code >= 400:
+            return None
+        try:
+            model_info = response.json().get("model_info") or {}
+        except ValueError:
+            return None
+        limits = [
+            value
+            for key, value in model_info.items()
+            if key.endswith(".context_length") and isinstance(value, int) and value > 0
+        ]
+        if not limits:
+            return None
+        self._context_limits[model] = limits[0]
+        return limits[0]
 
     async def aclose(self) -> None:
         await self._client.aclose()

@@ -30,6 +30,9 @@ class GenerationRequest(BaseModel):
     messages: list[Message]
     temperature: float | None = None
     max_output_tokens: int | None = None
+    #: How many tokens the runtime may hold for this request, prompt and answer together. `None`
+    #: leaves it to the runtime, which the gateway never does (docs/SELECTION-AND-MEMORY.md).
+    context_window: int | None = None
 
 
 class GenerationChunk(BaseModel):
@@ -102,5 +105,12 @@ class AIProvider(Protocol):
     async def rerank(self, request: RerankRequest) -> RerankResult: ...
 
     async def check_health(self) -> ProviderHealth: ...
+
+    async def context_limit(self, model: str) -> int | None:
+        """The largest context `model` itself supports, in tokens, or `None` when unknown.
+
+        Read once per model and kept: it is a property of the weights, not of the moment.
+        """
+        ...
 
     async def aclose(self) -> None: ...

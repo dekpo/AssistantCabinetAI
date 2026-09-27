@@ -139,5 +139,10 @@ class HealthResponse(BaseModel):
     embedding_alias: str
     default_output_locale: str
     output_locales: list[str]
+    #: Each chat alias's context window in tokens, capped at the model's own maximum. The client
+    #: fits the conversation's memory to it (docs/SELECTION-AND-MEMORY.md).
+    context_windows: dict[str, int] = Field(default_factory=dict)
+    #: What one answer may take out of that window (`MAX_OUTPUT_TOKENS`).
+    max_output_tokens: int
     #: Machine codes describing why the status is degraded. Empty when everything answers.
     issues: list[str] = Field(default_factory=list)

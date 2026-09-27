@@ -51,10 +51,14 @@ class FakeProvider:
         reply: str = "Bonjour.",
         reachable: bool = True,
         failure: GatewayError | None = None,
+        context_limit: int | None = None,
     ) -> None:
         self.reply = reply
         self.reachable = reachable
         self.failure = failure
+        #: What `context_limit` reports for every model: `None` is a runtime that does not say.
+        self.model_context_limit = context_limit
+        self.context_limit_requests: list[str] = []
         self.requests: list[GenerationRequest] = []
         self.embed_requests: list[EmbeddingRequest] = []
         #: Set to return fewer vectors than inputs, which is the misalignment the route refuses.
@@ -94,6 +98,10 @@ class FakeProvider:
         if not self.reachable:
             return ProviderHealth(reachable=False, error_code=ErrorCode.provider_unreachable.value)
         return ProviderHealth(reachable=True, latency_ms=3, model_count=2)
+
+    async def context_limit(self, model: str) -> int | None:
+        self.context_limit_requests.append(model)
+        return self.model_context_limit
 
     async def aclose(self) -> None:
         self.closed = True

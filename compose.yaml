@@ -69,6 +69,10 @@ services:
       # The counterpart: how long an answer may be. Not a tuning knob - without it a model that
       # falls into a repetition loop writes until a client gives up (docs/TROUBLESHOOTING.md).
       MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-2048}
+      # How much one request may hold, conversation memory included. Never left to the runtime's
+      # default, which silently dropped the oldest messages (docs/SELECTION-AND-MEMORY.md).
+      DEFAULT_CONTEXT_WINDOW: ${DEFAULT_CONTEXT_WINDOW:-8192}
+      MODEL_CONTEXT_WINDOWS: ${MODEL_CONTEXT_WINDOWS:-}
       # Indexing sends batches of chunks, so it is capped on both count and size.
       MAX_EMBEDDING_INPUTS: ${MAX_EMBEDDING_INPUTS:-256}
       MAX_EMBEDDING_CHARS: ${MAX_EMBEDDING_CHARS:-200000}

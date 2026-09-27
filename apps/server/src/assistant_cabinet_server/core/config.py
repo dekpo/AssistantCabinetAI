@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     # 1 300 tokens, and short enough that a repetition loop ends in about a minute.
     max_output_tokens: int = Field(default=2_048, alias="MAX_OUTPUT_TOKENS")
 
+    # How much one request may hold, in tokens: the prompt, the conversation's memory and the
+    # answer together. Sent to the runtime on every request, so it is never left to the runtime's
+    # own default, which silently dropped the oldest messages (docs/SELECTION-AND-MEMORY.md).
+    # Measured on the server device (scripts/measure_context.py), then set per alias where the
+    # default does not suit: a larger window is slower and needs more memory.
+    default_context_window: int = Field(default=8_192, alias="DEFAULT_CONTEXT_WINDOW")
+    model_context_windows: Annotated[dict[str, int], NoDecode] = Field(
+        default_factory=dict, alias="MODEL_CONTEXT_WINDOWS"
+    )
+
     # Indexing sends batches of chunks rather than one conversation, so embeddings get their own
     # caps. They exist to stop a client sending a whole folder, not to tune throughput.
     max_embedding_chars: int = Field(default=200_000, alias="MAX_EMBEDDING_CHARS")
@@ -83,6 +93,31 @@ class Settings(BaseSettings):
                 raise ValueError(f"malformed alias entry: {item!r}")
             pairs[alias.strip()] = model.strip()
         return pairs
+
+    @field_validator("model_context_windows", mode="before")
+    @classmethod
+    def _parse_context_windows(cls, value: object) -> object:
+        """Accept JSON or `alias=tokens,alias=tokens`, like `MODEL_ALIASES`."""
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if not text:
+            return {}
+        if text.startswith("{"):
+            return json.loads(text)
+        windows: dict[str, int] = {}
+        for item in text.split(","):
+            if not item.strip():
+                continue
+            alias, separator, tokens = item.partition("=")
+            if not separator or not alias.strip() or not tokens.strip().isdigit():
+                raise ValueError(f"malformed context window entry: {item!r}")
+            windows[alias.strip()] = int(tokens.strip())
+        return windows
+
+    def context_window_for(self, alias: str) -> int:
+        """The window configured for `alias`, before the model's own maximum is applied."""
+        return self.model_context_windows.get(alias, self.default_context_window)
 
     @property
     def allowed_aliases(self) -> list[str]:

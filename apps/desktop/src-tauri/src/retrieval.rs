@@ -45,6 +45,12 @@ pub enum RetrievalScope<'a> {
     File(&'a str),
     /// A user-chosen set of files (`AnalysisScope`): nothing outside it may be searched.
     Files(&'a [String]),
+    /// The whole folder as it is now: every stored chunk whose file is still among these paths,
+    /// in the index's own order. Identical to `WholeFolder` whenever the index describes the
+    /// current folder. The difference is a previous folder's passages, or a deleted file's, which
+    /// the index keeps until the next Analyse and which must not be cited meanwhile
+    /// (`docs/SELECTION-AND-MEMORY.md`).
+    CurrentFolder(&'a [String]),
 }
 
 /// Rank stored chunks against a query embedding plus its lexical text, merge the two rankings,
@@ -80,6 +86,15 @@ pub fn search_scoped(
                 chunks.extend(index.chunks_for_document(relative_path)?);
             }
             chunks
+        }
+        RetrievalScope::CurrentFolder(relative_paths) => {
+            let present: std::collections::HashSet<&str> =
+                relative_paths.iter().map(String::as_str).collect();
+            index
+                .all_chunks()?
+                .into_iter()
+                .filter(|chunk| present.contains(chunk.relative_path.as_str()))
+                .collect()
         }
     };
 
@@ -363,6 +378,58 @@ mod tests {
             none.is_empty(),
             "an empty set allows nothing, not everything"
         );
+    }
+
+    #[test]
+    fn the_current_folder_answers_exactly_as_the_whole_index_when_they_match() {
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+            ("b#p1#s1", "b.pdf", "Cephalees episodiques", vec![0.9, 0.1]),
+            ("c#p1#s1", "c.pdf", "Cephalees depuis hier", vec![0.8, 0.2]),
+        ]);
+        let present = vec![
+            "a.pdf".to_string(),
+            "b.pdf".to_string(),
+            "c.pdf".to_string(),
+        ];
+
+        let whole = search(&store, "cephalees", &[1.0, 0.0]).unwrap();
+        let current = search_scoped(
+            &store,
+            "cephalees",
+            &[1.0, 0.0],
+            RetrievalScope::CurrentFolder(&present),
+        )
+        .unwrap();
+
+        assert_eq!(current, whole, "no regression: same evidence, same order");
+    }
+
+    #[test]
+    fn the_current_folder_never_cites_a_file_that_is_no_longer_in_it() {
+        // `old.pdf` belongs to the previous folder, or was deleted since the last Analyse: the
+        // index still holds it until the next pass, and it must not reach an answer meanwhile.
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+            (
+                "old#p1#s1",
+                "old.pdf",
+                "Cephalees episodiques",
+                vec![1.0, 0.0],
+            ),
+        ]);
+        let present = vec!["a.pdf".to_string()];
+
+        let hits = search_scoped(
+            &store,
+            "cephalees",
+            &[1.0, 0.0],
+            RetrievalScope::CurrentFolder(&present),
+        )
+        .unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].relative_path, "a.pdf");
     }
 
     #[test]

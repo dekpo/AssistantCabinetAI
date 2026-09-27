@@ -8,6 +8,7 @@ pub mod analysis_scope;
 pub mod cancellation;
 pub mod chunking;
 mod commands;
+pub mod conversation;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
@@ -44,7 +45,6 @@ pub fn run() {
             commands::choose_work_folder,
             commands::ensure_suggested_work_folder,
             commands::check_server_health,
-            commands::send_chat_message,
             commands::cancel_chat,
             commands::index_work_folder,
             commands::ask_with_sources,

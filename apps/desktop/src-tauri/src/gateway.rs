@@ -3,6 +3,7 @@
 //! The webview never reaches the network itself: it calls a command, and this module applies the
 //! address, the alias, the output locale and the context cap before anything leaves the machine.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -46,6 +47,12 @@ pub struct HealthSnapshot {
     pub issues: Vec<String>,
     pub default_output_locale: String,
     pub output_locales: Vec<String>,
+    /// Each chat alias's context window, in tokens, as the server device set it. Rust keeps the
+    /// latest copy to decide how much of the conversation each question can carry
+    /// (`docs/SELECTION-AND-MEMORY.md`). Empty from a gateway that predates it.
+    pub context_windows: HashMap<String, usize>,
+    /// What the gateway reserves for one answer (`MAX_OUTPUT_TOKENS`).
+    pub max_output_tokens: Option<usize>,
 }
 
 /// The gateway body, in its own snake_case vocabulary.
@@ -59,6 +66,11 @@ struct HealthBody {
     issues: Vec<String>,
     default_output_locale: String,
     output_locales: Vec<String>,
+    /// Absent from an older gateway, which then gets the defaults rather than an error.
+    #[serde(default)]
+    context_windows: HashMap<String, usize>,
+    #[serde(default)]
+    max_output_tokens: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,6 +121,8 @@ impl GatewayClient {
             issues: body.issues,
             default_output_locale: body.default_output_locale,
             output_locales: body.output_locales,
+            context_windows: body.context_windows,
+            max_output_tokens: body.max_output_tokens,
         })
     }
 

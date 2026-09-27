@@ -6,6 +6,7 @@ import type { AnalysisScope } from "../lib/ipc";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorBanner } from "./ErrorBanner";
 import { KeyGlyph } from "./KeyGlyph";
 import { MessageList } from "./MessageList";
@@ -35,12 +36,26 @@ export function ChatPanel({
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
-  const { entries, phase, streamingId, error, send, resend, regenerate, stop, dismissError } =
-    useChat(onFailure, hasWorkFolder, modelAlias, scope);
+  const {
+    entries,
+    phase,
+    streamingId,
+    error,
+    send,
+    resend,
+    regenerate,
+    stop,
+    dismissError,
+    clear,
+  } = useChat(onFailure, hasWorkFolder, modelAlias, scope);
   /* The sidebar's picker is locked while a question is being answered, and only this panel knows
      when that is. */
   const busy = phase !== "idle";
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
+  /* Confirmed before anything is thrown away - the one guarantee this temporary control has to
+     keep, since there is nowhere to recover a cleared conversation from yet
+     (`docs/ROADMAP.md`, saved conversations). */
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const onStop = () => {
     const stopped = stop();
@@ -92,12 +107,39 @@ export function ChatPanel({
         analysing={indexing.running}
       />
       {error === null ? null : <ErrorBanner error={error} onDismiss={dismissError} />}
-      {hasCopyableConversation(entries, streamingId) ? (
-        <p className="message__actions chat__copy-all">
-          <button type="button" className="button button--compact" onClick={copyAll}>
-            {t("actions.copyConversation")}
+      {entries.length === 0 ? null : (
+        <p className="message__actions chat__conversation-actions">
+          {/* Temporary, until conversations can be saved and listed (`docs/ROADMAP.md`): today the
+              only way to a clean slate is restarting the application, and this replaces that.
+              Left, opposite "Copier la conversation", because the two act on the whole panel but
+              pull in opposite directions - one keeps the conversation, the other throws it away. */}
+          <button
+            type="button"
+            className="button button--compact"
+            disabled={busy}
+            onClick={() => setConfirmingClear(true)}
+          >
+            {t("actions.clearConversation")}
           </button>
+          {hasCopyableConversation(entries, streamingId) ? (
+            <button type="button" className="button button--compact" onClick={copyAll}>
+              {t("actions.copyConversation")}
+            </button>
+          ) : null}
         </p>
+      )}
+      {confirmingClear ? (
+        <ConfirmDialog
+          title={t("chat.clearTitle")}
+          body={t("chat.clearBody")}
+          confirmLabel={t("actions.clearConversation")}
+          destructive
+          onConfirm={() => {
+            clear();
+            setConfirmingClear(false);
+          }}
+          onCancel={() => setConfirmingClear(false)}
+        />
       ) : null}
       <Composer
         draft={draft}

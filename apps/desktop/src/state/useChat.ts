@@ -103,6 +103,13 @@ export interface ChatState {
    * rephrase far more often than one to forget. Returns null when an answer was already being
    * written, since that text stays on screen and the composer is left as she had it. */
   stop: () => string | null;
+  /** Empty the conversation and start a fresh one. Temporary, until conversations can be saved and
+   * listed: today the only way to a clean slate was restarting the whole application, which is
+   * what this replaces. Refuses while a question is in flight - the caller should keep the control
+   * disabled then, the same way the folder card disables Reset while indexing runs - so a clear
+   * never has to reason about a request that is still streaming into a conversation that no
+   * longer exists on screen. */
+  clear: () => void;
 }
 
 /**
@@ -365,6 +372,14 @@ export function useChat(
 
   const dismissError = useCallback(() => setError(null), []);
 
+  const clear = useCallback(() => {
+    if (phase !== "idle") {
+      return;
+    }
+    setEntries([]);
+    setError(null);
+  }, [phase]);
+
   return {
     entries,
     phase,
@@ -375,5 +390,6 @@ export function useChat(
     regenerate,
     stop,
     dismissError,
+    clear,
   };
 }

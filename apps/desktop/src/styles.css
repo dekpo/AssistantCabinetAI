@@ -834,11 +834,13 @@ body {
   margin: 4px 0 0;
 }
 
-/* Between the conversation and the composer, right-aligned like the send button below it rather
-   than left like a per-turn action - it acts on the whole panel, not on one bubble. */
-.chat__copy-all {
+/* Between the conversation and the composer: Clear at the start, Copy at the end. Both act on the
+   whole panel rather than one bubble, which is why they sit here and not among the per-turn
+   actions; space-between keeps Clear at the left edge whether or not Copy is there to balance it
+   (`hasCopyableConversation` is stricter than "something to clear", so Copy is sometimes absent). */
+.chat__conversation-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin: 0;
 }
 

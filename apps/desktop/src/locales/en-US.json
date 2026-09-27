@@ -8,6 +8,7 @@
     "analyze": "Analyze",
     "analyzing": "Analyzing",
     "cancel": "Cancel",
+    "clearConversation": "Clear the conversation",
     "close": "Close",
     "copy": "Copy",
     "copyConversation": "Copy the conversation",
@@ -71,7 +72,9 @@
     "scrollToBottom": "Go to the latest message",
     "keyboardHintSend": "Enter sends",
     "keyboardHintBreak": "Shift Enter new line",
-    "disclaimer": "Administrative assistance. Always check the answer: the practitioner remains the sole decision maker."
+    "disclaimer": "Administrative assistance. Always check the answer: the practitioner remains the sole decision maker.",
+    "clearTitle": "Clear this conversation?",
+    "clearBody": "Every question and answer on screen will be forgotten. Your documents and their analysis are not affected."
   },
   "workFolder": {
     "title": "Documents folder",

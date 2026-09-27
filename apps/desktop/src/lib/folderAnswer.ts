@@ -92,6 +92,10 @@ export function formatFolderAnswer(t: Translator, answer: FolderAnswer): string 
       return t("folderAnswer.noMatch", { query: answer.query });
     case "file_unreadable":
       return t("folderAnswer.fileUnreadable", { name: answer.file.name });
+    case "file_not_selected":
+      return t("folderAnswer.notSelected", { query: answer.query });
+    case "nothing_selected":
+      return t("folderAnswer.nothingSelected");
   }
 }
 

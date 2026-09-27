@@ -109,6 +109,7 @@ export function ChatPanel({
         modelAlias={modelAlias}
         aliases={aliases}
         onModelAliasChange={onModelAliasChange}
+        needsFolder={!hasWorkFolder}
       />
     </section>
   );

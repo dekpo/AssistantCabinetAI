@@ -16,7 +16,11 @@ export function Composer({
   modelAlias,
   aliases,
   onModelAliasChange,
+  needsFolder = false,
 }: {
+  /** No documents folder is chosen yet. This is a practice assistant, not a chatbot: nothing is
+   * asked until there is a folder, even an empty one (`docs/SELECTION-AND-MEMORY.md`). */
+  needsFolder?: boolean;
   draft: string;
   onDraftChange: (draft: string) => void;
   phase: GenerationPhase;
@@ -30,7 +34,7 @@ export function Composer({
   const { t } = useTranslation();
 
   const submit = () => {
-    if (draft.trim().length === 0 || phase !== "idle") {
+    if (needsFolder || draft.trim().length === 0 || phase !== "idle") {
       return;
     }
     onSend(draft);
@@ -57,8 +61,9 @@ export function Composer({
         className="composer__input"
         value={draft}
         rows={3}
-        placeholder={t("chat.placeholder")}
-        aria-label={t("chat.placeholder")}
+        disabled={needsFolder}
+        placeholder={t(needsFolder ? "chat.needsFolder" : "chat.placeholder")}
+        aria-label={t(needsFolder ? "chat.needsFolder" : "chat.placeholder")}
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={onKeyDown}
       />
@@ -83,7 +88,9 @@ export function Composer({
             type="button"
             className="button button--primary composer__send"
             onClick={stopping ? onStop : submit}
-            disabled={!stopping && (phase !== "idle" || draft.trim().length === 0)}
+            disabled={
+              !stopping && (needsFolder || phase !== "idle" || draft.trim().length === 0)
+            }
           >
             {t(stopping ? "actions.stop" : "actions.send")}
           </button>

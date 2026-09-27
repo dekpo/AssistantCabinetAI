@@ -1,7 +1,13 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
-import { scopedPaths, toggleScopeFile, wholeFolderScope } from "../lib/analysisScope";
+import {
+  scopedPaths,
+  selectionOf,
+  tickedPaths,
+  toggleAll,
+  toggleScopeFile,
+} from "../lib/analysisScope";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
   chooseWorkFolder,
@@ -64,7 +70,6 @@ export function WorkFolderCard({
   scopeLocked?: boolean;
 }) {
   const { t } = useTranslation();
-  const chosen = scope === undefined ? [] : scopedPaths(scope);
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   /* What is actually in the folder, read from the disk and from the local index. The counts below
@@ -82,6 +87,12 @@ export function WorkFolderCard({
      do"; the number says how much, which is the difference between a badge she learns to ignore
      and one she acts on. */
   const pendingCount = inventory === null ? 0 : countPending(inventory.files);
+  /* What the selection says, and whether there is anything to select: "tous" means nothing while
+     no document has been analysed. */
+  const chosen = scope === undefined ? [] : scopedPaths(scope);
+  const selection = scope === undefined ? "none" : selectionOf(scope);
+  const analysedCount =
+    inventory === null ? 0 : inventory.files.filter(isSelectable).length;
 
   const refreshInventory = useCallback(() => {
     if (workFolder === null) {
@@ -387,43 +398,47 @@ export function WorkFolderCard({
             passSummary
           ) : detail === "collapsible" ? (
             /* The same disclosure as the sources under an answer, for the same reason: it says
-               what is behind it in one line and gives the room back when it is closed. What the
-               last pass did goes inside it, above the listing, because it is a note about that
-               listing rather than a fourth fact about the card. */
+               what is behind it in one line and gives the room back when it is closed. The
+               selection comes first - the line that says what is selected, the box that selects
+               every document or none, then the files - and what the last pass did comes after
+               the listing, as a note about it (`docs/SELECTION-AND-MEMORY.md`). */
             <details className="inventory-detail scope-picker">
               <summary className="disclosure">
-                {chosen.length === 0 ? (
-                  <>
-                    {t("chat.scopeSummaryWhole")}
-                    <span className="warning-glyph__wrap" title={t("chat.scopeWholeWarning")}>
-                      <WarningGlyph />
-                    </span>
-                  </>
-                ) : (
+                {selection === "some" ? (
                   t("chat.scopeSummaryExplicit", {
                     files: counted(chosen.length, t("chat.scopeFileOne"), t("chat.scopeFileMany")),
                   })
+                ) : (
+                  /* Both ends carry the warning, each with its own reason: with no document the
+                     answers do not rest on her folder, and with every document the model has more
+                     to sift than it can use well. */
+                  <>
+                    {t(selection === "all" ? "chat.scopeSummaryAll" : "chat.scopeSummaryNone")}
+                    <span
+                      className="warning-glyph__wrap"
+                      title={t(
+                        selection === "all" ? "chat.scopeWholeWarning" : "chat.scopeNoneWarning",
+                      )}
+                    >
+                      <WarningGlyph />
+                    </span>
+                  </>
                 )}
               </summary>
-              {passSummary}
+              {scope === undefined || onScopeChange === undefined ? null : (
+                <SelectAll
+                  scope={scope}
+                  onScopeChange={onScopeChange}
+                  disabled={scopeLocked || analysedCount === 0}
+                />
+              )}
               <FileList
                 files={inventory.files}
                 scope={scope}
                 onScopeChange={onScopeChange}
                 scopeLocked={scopeLocked}
               />
-              {chosen.length === 0 || onScopeChange === undefined || scope === undefined ? null : (
-                <button
-                  type="button"
-                  className="button button--compact"
-                  disabled={scopeLocked}
-                  onClick={() =>
-                    onScopeChange({ ...wholeFolderScope(scope.createdAt), updatedAt: Date.now() })
-                  }
-                >
-                  {t("chat.scopeWholeFolder")}
-                </button>
-              )}
+              {passSummary}
             </details>
           ) : (
             <>
@@ -511,6 +526,50 @@ function AnalysisProgress({ fraction, label }: { fraction: number; label: string
   );
 }
 
+/** Only a file whose analysis is current can be selected: only it can be searched as it is now,
+ * and a selection never pins a file whose stored passages are older than its content. */
+function isSelectable(file: FileRecord): boolean {
+  return file.processingStatus === "indexed";
+}
+
+/**
+ * The box above the listing: every document, or none. Checked for "tous", partly filled while
+ * some files are ticked, empty for "aucun" - the same three states the line above it names.
+ */
+function SelectAll({
+  scope,
+  onScopeChange,
+  disabled,
+}: {
+  scope: AnalysisScope;
+  onScopeChange: (scope: AnalysisScope) => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const box = useRef<HTMLInputElement>(null);
+  const selection = selectionOf(scope);
+
+  /* "Partly filled" has no attribute, only a DOM property, so it is set after each render. */
+  useEffect(() => {
+    if (box.current !== null) {
+      box.current.indeterminate = selection === "some";
+    }
+  }, [selection]);
+
+  return (
+    <label className="inventory__choice scope-picker__all">
+      <input
+        ref={box}
+        type="checkbox"
+        disabled={disabled}
+        checked={selection === "all"}
+        onChange={() => onScopeChange(toggleAll(scope, Date.now()))}
+      />
+      <span>{t("chat.scopeSelectAll")}</span>
+    </label>
+  );
+}
+
 type Tone = "ok" | "wait" | "fail";
 
 /** What a file's state looks like at a glance: read and searchable, waiting for an analysis, or
@@ -549,7 +608,8 @@ function FileList({
   scopeLocked?: boolean;
 }) {
   const { t } = useTranslation();
-  const chosen = scope === undefined ? [] : scopedPaths(scope);
+  const analysed = files.filter(isSelectable);
+  const ticked = scope === undefined ? [] : tickedPaths(scope, analysed);
   const selectable = scope !== undefined && onScopeChange !== undefined;
 
   return (
@@ -575,9 +635,11 @@ function FileList({
               <label className="inventory__choice">
                 <input
                   type="checkbox"
-                  disabled={scopeLocked || file.processingStatus !== "indexed"}
-                  checked={chosen.includes(file.relativePath)}
-                  onChange={() => onScopeChange(toggleScopeFile(scope, file, Date.now()))}
+                  disabled={scopeLocked || !isSelectable(file)}
+                  checked={ticked.includes(file.relativePath)}
+                  onChange={() =>
+                    onScopeChange(toggleScopeFile(scope, file, analysed, Date.now()))
+                  }
                 />
                 {dot}
                 {name}

@@ -349,8 +349,18 @@ body {
   transform: translateY(0);
 }
 
-.scope-picker .button {
+/* "Tous les documents": the listing's header row, so it reads as the box that governs the boxes
+   below it. Same size and rhythm as a file row, a firmer rule under it. */
+.scope-picker__all {
   margin-top: 4px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--text-quiet);
+  font-size: 11px;
+}
+
+.scope-picker__all input:disabled,
+.scope-picker__all:has(input:disabled) {
+  cursor: default;
 }
 
 .card .banner {

@@ -21,7 +21,7 @@ These hold from the prototype, not "later".
 | --- | --- | --- | --- |
 | Business files | Yes (local disk or existing store) | No | Open WebUI Knowledge upload |
 | Index and embeddings | Yes | No | A central PGVector or Chroma of case files |
-| Chat history | Yes, encrypted (Windows profile) | No | Open WebUI chat logs over real files |
+| Chat history | Yes, encrypted (Windows profile) once conversations are saved; today application memory only, lost on restart | Memory only, for the request that carries it (sprint 2a.8 sends recent exchanges with each question, never past excerpts) | Open WebUI chat logs over real files |
 | Excerpts sent to the LLM | Ephemeral on send | Memory only | Log files, clear swap, crash dumps |
 | Request register | Local copy possible | Yes (metadata) | Prompt or answer bodies |
 | Action plans | Yes | Hashes and decision only | A journal containing full excerpts |

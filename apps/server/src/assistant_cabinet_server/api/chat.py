@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from ..core.aliases import resolve_model_alias
+from ..core.context_window import effective_context_window
 from ..core.errors import ErrorCode, GatewayError
 from ..core.locales import LocalePack
 from ..core.prompts import build_system_prompt
@@ -138,6 +139,7 @@ async def create_chat_completion(
             messages=messages,
             temperature=payload.temperature,
             max_output_tokens=capped_output_tokens(payload.max_tokens, settings.max_output_tokens),
+            context_window=await effective_context_window(settings, provider, alias, runtime_model),
         )
     )
 

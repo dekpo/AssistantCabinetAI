@@ -1,9 +1,14 @@
-//! Which files a conversation is about: an optional narrowing of the Work Folder allow-list.
+//! Which files a conversation is about: a narrowing of the Work Folder allow-list.
 //!
-//! The default is the whole folder, which is today's exact behaviour expressed as a case of this
-//! type rather than a special path around it. A user opts into narrowing it, and a narrowing only
-//! ever picks among files the inventory already holds: it copies nothing and reaches outside
-//! nothing (`docs/SPRINT-2-ASSESSMENT.md` section E).
+//! Two shapes: the whole folder, or an explicit set she ticked. A narrowing only ever picks among
+//! files the inventory already holds: it copies nothing and reaches outside nothing
+//! (`docs/SPRINT-2-ASSESSMENT.md` section E).
+//!
+//! An explicit set with **no document in it** is a choice too, and since 27 September 2026 the
+//! interface's default: the conversation is answered without excerpts rather than refused
+//! (`docs/SELECTION-AND-MEMORY.md`). It still reads no document. What keeps that safe is telling
+//! "she chose nothing" apart from "she chose files that can no longer be used", which is why
+//! `ScopeResolution` reports the first on its own rather than leaving it to an empty inventory.
 //!
 //! Deliberately absent, so they cannot drift from real membership or from what consumes them: a
 //! scope id (nothing persists a session yet), the allowed domains (derived on demand from each
@@ -18,9 +23,10 @@ use crate::inventory::WorkFolderInventory;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "entries")]
 pub enum ScopeMode {
-    /// Default. Every retrieval or tabular operation may use the whole inventory.
+    /// Every retrieval or tabular operation may use the whole inventory.
     WholeFolder,
     /// Only these entries. Retrieval and the folder-question router must not look past this set.
+    /// No entries at all means she chose no document: answered without excerpts.
     Explicit(Vec<ScopeEntry>),
 }
 
@@ -70,6 +76,7 @@ impl AnalysisScope {
                     full.all_files().to_vec(),
                 ),
                 narrowed: false,
+                no_documents_chosen: false,
                 missing: Vec::new(),
                 changed: Vec::new(),
             };
@@ -90,6 +97,10 @@ impl AnalysisScope {
         ScopeResolution {
             inventory: WorkFolderInventory::from_records(full.root(), members),
             narrowed: true,
+            // Every entry today is a document: the picker offers analysed files only. When tables
+            // can be chosen too, this becomes "no entry is a document", and a table-only choice
+            // reaches the tabular engine without excerpts.
+            no_documents_chosen: entries.is_empty(),
             missing,
             changed,
         }
@@ -104,6 +115,9 @@ pub struct ScopeResolution {
     /// Whether retrieval must be held to `inventory` rather than to the whole index. An
     /// explicit scope with no survivors is still narrowed: it allows nothing, not everything.
     pub narrowed: bool,
+    /// She chose no document at all. The one case answered without excerpts. Never true for a
+    /// selection whose files vanished or changed: that is `missing` or `changed`, and refused.
+    pub no_documents_chosen: bool,
     /// Entries whose file is no longer in the folder.
     pub missing: Vec<String>,
     /// Entries whose file is there but no longer has the content that was pinned.
@@ -222,6 +236,38 @@ mod tests {
         let resolution = explicit(&[]).resolve(&folder());
         assert!(resolution.narrowed);
         assert!(resolution.inventory.is_empty());
+    }
+
+    #[test]
+    fn choosing_nothing_is_reported_as_such() {
+        let resolution = explicit(&[]).resolve(&folder());
+        assert!(resolution.no_documents_chosen);
+        assert!(resolution.missing.is_empty() && resolution.changed.is_empty());
+    }
+
+    #[test]
+    fn choosing_files_that_are_gone_is_not_choosing_nothing() {
+        // The distinction the whole rule rests on: she named documents, so answering without them
+        // would be the quiet failure. This one is refused upstream, never answered without files.
+        let resolution = explicit(&[("gone.txt", "id-x"), ("a.txt", "old-id")]).resolve(&folder());
+        assert!(!resolution.no_documents_chosen);
+        assert!(resolution.inventory.is_empty());
+        assert_eq!(resolution.missing, vec!["gone.txt".to_string()]);
+        assert_eq!(resolution.changed, vec!["a.txt".to_string()]);
+    }
+
+    #[test]
+    fn the_whole_folder_and_a_real_choice_are_not_choosing_nothing() {
+        assert!(
+            !AnalysisScope::whole_folder(1)
+                .resolve(&folder())
+                .no_documents_chosen
+        );
+        assert!(
+            !explicit(&[("b.txt", "id-b")])
+                .resolve(&folder())
+                .no_documents_chosen
+        );
     }
 
     #[test]

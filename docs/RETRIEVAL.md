@@ -101,9 +101,19 @@ stand in for the other. Design: `docs/WORK-FOLDER-INVENTORY.md`.
 
 Since sprint 2a.7 a conversation can also be **scoped** to files she chose (`AnalysisScope`, `docs/DECISIONS.md`).
 Retrieval is then held to exactly those files (`RetrievalScope::Files`): a set with one member behaves like a
-named file, a set with none allows nothing rather than everything, and the caps are unchanged, so a narrower
-scope means better evidence and never more of it. Sources under an answer are listed once per file with their
-pages; the excerpts sent to the model and its citations are not affected by how they are listed.
+named file, and the caps are unchanged, so a narrower scope means better evidence and never more of it. Sources
+under an answer are listed once per file with their pages; the excerpts sent to the model and its citations are
+not affected by how they are listed.
+
+Since sprint 2a.8 (`docs/SELECTION-AND-MEMORY.md`) a selection with **no document chosen** - the default - is not
+searched at all: the question is answered without excerpts, with no embedding call, and the interface says so
+under the answer. A selection whose chosen files are all gone or changed is still refused (`scope_unavailable`).
+The whole folder ("tous") is searched through `RetrievalScope::CurrentFolder`, which keeps only chunks of files
+present in the current folder, so a previous folder's passages cannot be cited before the next Analyse.
+
+A short follow-up question (eight words or fewer) is searched together with the previous question, so "and for
+the second one?" finds what the conversation is about. The router and the file-name resolver still read the
+current question only.
 
 ## Tabular data is a second pipeline, not a special case of the first
 

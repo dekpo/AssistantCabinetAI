@@ -27,11 +27,19 @@ One window, one product:
 - **top:** Assistant Cabinet AI;
 - **settings:** light / dark / follow the system, and the language, defaulting to the system choice.
 
-Above the composer sits a **Documents used** disclosure (sprint 2a.7). Closed, it says "the whole folder" or how
-many files; open, it lists the analysed files with a checkbox each and a button to go back to the whole folder.
-It narrows the current conversation only and is lost on restart: conversations are not saved yet, and there is no
-list of them. Under an answer, **Sources** lists each file once with its pages. Under the Analyse button, the
-summary names any file that was renamed to a clean name, old and new.
+Under the folder's buttons sits a **Documents used** disclosure (sprint 2a.7, moved into the sidebar and
+reworked by sprint 2a.8, `docs/SELECTION-AND-MEMORY.md`). Closed, it says **aucun** ⚠, **tous** ⚠ or how many files
+she ticked; open, it lists every file with a coloured state dot (green analysed, amber waiting, red unreadable), a
+checkbox on each analysed file, and a header checkbox that selects all documents or none. The selection starts
+empty at startup and whenever the folder changes, survives Analyse, and applies to the current conversation only:
+conversations are not saved yet, and there is no list of them. With nothing selected, questions are answered
+without documents and say so under the answer ("Réponse sans vos documents."). The composer is disabled until a
+documents folder is chosen. Under an answer, **Sources** lists each file once with its pages. Under the Analyse
+button, the summary names any file that was renamed to a clean name, old and new. The settings panel shows the
+same listing with a **See** button on each file, which shows it selected in the file manager without opening it.
+
+The conversation remembers its recent exchanges, as many as the chosen model's context window allows; past
+excerpts are never resent. Design and budget: `docs/SELECTION-AND-MEMORY.md`.
 
 Full-page chat in the style of a consumer assistant is excluded from the practice screen. Native fonts,
 lists, and margins instead. If a large PDF preview is added later it is still Assistant Cabinet AI, a second

@@ -59,6 +59,22 @@ half minutes (`docs/TROUBLESHOOTING.md`, 22 September 2026). A related piece of 
 `MODEL_ALIASES` is a promise that the model works, so weights under about 1B do not belong there
 however fast they are.
 
+`DEFAULT_CONTEXT_WINDOW` (default 8192 tokens) and `MODEL_CONTEXT_WINDOWS` (`alias=tokens` pairs, for the
+aliases that need another value) set how much a model may read in one request - the conversation's memory
+included. The gateway passes it on every request (`num_ctx`), caps it at what the model itself supports, and
+publishes each chat alias's window in `/health`, where the desktop app reads it to decide how many past
+exchanges fit (`docs/SELECTION-AND-MEMORY.md`). Before 27 September 2026 it was left to Ollama's default, which
+silently dropped the oldest messages. A larger window is slower and needs more memory, so the value is measured
+on the server device rather than guessed:
+
+```powershell
+cd apps/server
+uv run python scripts/measure_context.py --url http://127.0.0.1:8080 --alias cabinet-chat
+```
+
+It sends synthetic conversations only - never a document - with 0, 1, 2 and 4 remembered exchanges, and prints
+the time to answer and the prompt size the runtime reports.
+
 Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.
@@ -145,3 +161,12 @@ folders in it.
 Same repository, same `compose.yaml`, a new `.env`. Run `docker compose up -d`, pull the model, create the
 account, recreate the instructions from `prompts/`. Do **not** carry the Windows `data/` over: it is a test
 account, not a recipe.
+
+**Pending, recorded 27 September 2026: a step-by-step runbook for a separate server device.** Today the
+gateway, Ollama and Open WebUI run on the same machine as the desktop app. The target is a **server device**
+(the Mac mini first, other hardware later - the runbook must not assume one machine) and a **user device**
+(the desktop app, its index and OCR). Beyond the steps above it has to settle what the constraint "no inference
+port exposed on the LAN" becomes: the user device must reach the gateway over the practice network, so the
+gateway alone is published there - never Ollama, never Open WebUI - behind a firewall rule and a per-person
+access key (Sprint 4). Then run `scripts/measure_context.py` on that device and set `MODEL_CONTEXT_WINDOWS`
+from what it measures. Tracked in `docs/ROADMAP.md`, Sprint 4.

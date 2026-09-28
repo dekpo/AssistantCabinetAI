@@ -158,6 +158,12 @@ folder, with no scope-specific code in any of them. "How many files are there?" 
 two. A file she chose that has since vanished or changed is left out and reported (`scopeOutdated`), never
 answered from. Decisions: `docs/DECISIONS.md`.
 
+Two refinements since sprint 2a.8 (`docs/SELECTION-AND-MEMORY.md`). With **no document selected**, a question
+about the folder's files answers `nothing_selected` rather than counting an empty inventory, and anything else
+is answered without documents. A question naming a file that is in the folder but **not in the selection**
+answers `file_not_selected` rather than claiming no such file exists; the full inventory is consulted only to
+tell those two apart, never to answer from.
+
 ## Deterministic before generative
 
 `apps/desktop/src-tauri/src/folder_questions.rs` routes a question before anything is embedded:

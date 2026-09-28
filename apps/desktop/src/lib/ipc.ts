@@ -42,6 +42,10 @@ export interface HealthSnapshot {
   issues: string[];
   defaultOutputLocale: string;
   outputLocales: string[];
+  /** Each chat alias's context window, in tokens. Rust reads it to fit the conversation's memory;
+   * the view has no use for it beyond display. */
+  contextWindows: Record<string, number>;
+  maxOutputTokens: number | null;
 }
 
 export interface ChatTurn {
@@ -154,7 +158,11 @@ export type FolderAnswer =
   | { kind: "file_details"; file: FileRecord }
   | { kind: "ambiguous_reference"; query: string; candidates: FileRecord[] }
   | { kind: "no_matching_file"; query: string }
-  | { kind: "file_unreadable"; file: FileRecord };
+  | { kind: "file_unreadable"; file: FileRecord }
+  /** A file the folder holds but this conversation's selection does not. */
+  | { kind: "file_not_selected"; query: string }
+  /** No document is selected, and the question was about the documents themselves. */
+  | { kind: "nothing_selected" };
 
 /**
  * How much of the work folder an answer really rests on. Computed in Rust from the evidence it
@@ -219,12 +227,15 @@ export interface AskAnswer {
   /** Files the conversation's scope named that are gone or have changed since they were chosen.
    * They were left out of the answer. */
   scopeOutdated: string[];
+  /** She selected no document, so this answer rests on none. Said under the answer. */
+  withoutDocuments: boolean;
 }
 
 /**
- * Which files a conversation is about (`AnalysisScope` in Rust). The default is the whole folder;
- * narrowing only ever picks among files the work folder already holds. Timestamps are
- * milliseconds since the epoch, by the workstation clock.
+ * Which files a conversation is about (`AnalysisScope` in Rust): the whole folder, or the files she
+ * ticked. An explicit selection with no entries is "no document", the default, answered without
+ * excerpts (`docs/SELECTION-AND-MEMORY.md`). Selecting only ever picks among files the work folder
+ * already holds. Timestamps are milliseconds since the epoch, by the workstation clock.
  */
 export type ScopeMode =
   | { kind: "whole_folder" }
@@ -302,23 +313,6 @@ export function checkServerHealth(): Promise<HealthSnapshot> {
 }
 
 /**
- * Send the conversation and receive the answer as it is written. Rust holds the server address,
- * the model alias and the output locale, so the view cannot send a request to somewhere else.
- */
-export function sendChatMessage(
-  turns: ChatTurn[],
-  onDelta: (text: string) => void,
-): Promise<string> {
-  const channel = new Channel<ChatStreamEvent>();
-  channel.onmessage = (message) => {
-    if (message.event === "delta") {
-      onDelta(message.text);
-    }
-  };
-  return invoke<string>("send_chat_message", { turns, onEvent: channel });
-}
-
-/**
  * Stop the question being worked on, wherever it has got to: embedding it, searching the index, or
  * streaming the answer. The command returns at once; the stopped request then rejects with
  * `chat_cancelled`, which is how the interface learns it really ended.
@@ -349,8 +343,10 @@ export function hasIndexedDocuments(): Promise<boolean> {
 }
 
 /**
- * Retrieval, then a sourced chat answer. Rejects with `insufficient_evidence` rather than
- * answering when the local index carries nothing relevant.
+ * Every question goes through here. Retrieval, then a sourced chat answer, rejecting with
+ * `insufficient_evidence` rather than answering when the local index carries nothing relevant; or,
+ * with no document selected, an answer without excerpts that says so. Rust holds the server
+ * address, the model alias and the output locale, so the view cannot send a request elsewhere.
  */
 export function askWithSources(
   question: string,
@@ -362,6 +358,8 @@ export function askWithSources(
   skipDeterministic = false,
   /** The files the question may draw on. Left out, the whole folder. */
   scope?: AnalysisScope,
+  /** The conversation so far. Rust keeps as much of it as the chosen model can read. */
+  history: ChatTurn[] = [],
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
@@ -379,6 +377,7 @@ export function askWithSources(
     question,
     skipDeterministic,
     scope,
+    history,
     onEvent: channel,
   });
 }

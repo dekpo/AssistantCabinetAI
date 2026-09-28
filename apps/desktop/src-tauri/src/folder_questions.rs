@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::file_record::{FileRecord, Readability};
-use crate::file_reference::{FileReferenceResolver, ReferenceStatus};
+use crate::file_reference::{FileReferenceResolver, ReferenceStatus, ResolutionReason};
 use crate::inventory::WorkFolderInventory;
 
 /// The shipped packs. `include_str!` rather than a runtime resource lookup: the vocabulary is
@@ -188,6 +188,16 @@ pub enum FolderAnswer {
     FileUnreadable {
         file: Box<FileRecord>,
     },
+    /// The question named a file the Work Folder holds but the conversation's selection does not.
+    /// "No such file" would be false, and answering from it would read past her choice. Only her
+    /// own words travel back, not the record: the selection is what this conversation may see.
+    FileNotSelected {
+        query: String,
+    },
+    /// No document is selected for this conversation and the question was about the documents
+    /// themselves. Counting or listing an empty selection would read as a statement about the
+    /// folder (`docs/SELECTION-AND-MEMORY.md`).
+    NothingSelected,
 }
 
 /// Where a question goes.
@@ -290,6 +300,79 @@ pub fn route(
     }
 
     QuestionRoute::GlobalRetrieval
+}
+
+/// What the conversation's selection allows, as the router needs to know it.
+pub struct Selection<'a> {
+    /// The folder as it is. Consulted for one thing only: whether a name she used is in the
+    /// folder at all. Nothing is ever answered from it.
+    pub full: &'a WorkFolderInventory,
+    /// The files she selected. Everything is answered from this.
+    pub scoped: &'a WorkFolderInventory,
+    /// Whether the selection narrows the folder.
+    pub narrowed: bool,
+    /// She chose no document at all (`ScopeResolution::no_documents_chosen`).
+    pub no_documents_chosen: bool,
+}
+
+/// `route`, for a conversation whose selection may narrow the folder.
+///
+/// The selected files answer everything, exactly as `route` does on its own. Two cases are told
+/// apart first, because `route` alone would describe them falsely:
+///
+/// - a name that is in the folder but not in the selection is `FileNotSelected`, rather than "no
+///   file with that name";
+/// - with no document chosen, a question about the files themselves is `NothingSelected`, rather
+///   than a count of an empty selection. Anything else falls through to `GlobalRetrieval`, which the
+///   caller answers without excerpts.
+pub fn route_in_selection(
+    selection: &Selection<'_>,
+    corpus: &dyn CorpusWords,
+    question: &str,
+    locale: &str,
+) -> QuestionRoute {
+    if selection.narrowed {
+        if let Some(query) = named_outside_selection(selection, question) {
+            return QuestionRoute::Deterministic(FolderAnswer::FileNotSelected { query });
+        }
+    }
+
+    let routed = route(selection.scoped, corpus, question, locale);
+    if !selection.no_documents_chosen {
+        return routed;
+    }
+    match routed {
+        // A name found nowhere in the folder is still "no file with that name": that is true.
+        QuestionRoute::Deterministic(FolderAnswer::NoMatchingFile { query }) => {
+            QuestionRoute::Deterministic(FolderAnswer::NoMatchingFile { query })
+        }
+        QuestionRoute::Deterministic(_) | QuestionRoute::PerDocumentRetrieval { .. } => {
+            QuestionRoute::Deterministic(FolderAnswer::NothingSelected)
+        }
+        other => other,
+    }
+}
+
+/// The name a question used, when it names a file the folder holds and the selection does not.
+///
+/// The selection's own resolver is asked first. When it finds a selected file, or an ambiguity
+/// among selected files, the question is about the selection and `route` handles it. Otherwise
+/// the folder's resolver is asked the same question, and anything it finds is outside the
+/// selection by construction: the same rules over a subset would have found it.
+fn named_outside_selection(selection: &Selection<'_>, question: &str) -> Option<String> {
+    let in_selection = FileReferenceResolver::new(selection.scoped).resolve_in_question(question);
+    let in_folder = FileReferenceResolver::new(selection.full);
+    let found = match in_selection {
+        None => in_folder.resolve_in_question(question)?,
+        Some(reference)
+            if reference.status == ReferenceStatus::NoMatch
+                && reference.reason != ResolutionReason::OutsideWorkFolder =>
+        {
+            in_folder.resolve(&reference.query)
+        }
+        Some(_) => return None,
+    };
+    (found.status != ReferenceStatus::NoMatch).then_some(found.query)
 }
 
 /// Whether the question asks about **every** document rather than about whatever is most
@@ -898,5 +981,163 @@ mod tests {
 
         assert_eq!(payload["kind"], "file_count");
         assert_eq!(payload["total"], 5);
+    }
+
+    /// The folder narrowed to `paths`, as `AnalysisScope::resolve` would hand it over.
+    fn only(paths: &[&str]) -> WorkFolderInventory {
+        WorkFolderInventory::from_records(
+            Path::new("cabinet"),
+            folder()
+                .all_files()
+                .iter()
+                .filter(|file| paths.contains(&file.relative_path.as_str()))
+                .cloned()
+                .collect(),
+        )
+    }
+
+    fn in_selection(
+        scoped: &WorkFolderInventory,
+        no_documents_chosen: bool,
+        question: &str,
+        locale: &str,
+    ) -> QuestionRoute {
+        let full = folder();
+        let selection = Selection {
+            full: &full,
+            scoped,
+            narrowed: true,
+            no_documents_chosen,
+        };
+        route_in_selection(&selection, &NoCorpus, question, locale)
+    }
+
+    #[test]
+    fn a_file_in_the_folder_but_not_in_the_selection_is_said_to_be_unselected() {
+        let scoped = only(&["notes.txt"]);
+        for (question, locale, query) in [
+            ("Que dit neurologie.pdf ?", "fr-FR", "neurologie.pdf"),
+            ("What does neurologie.pdf say?", "en-US", "neurologie.pdf"),
+            ("Resume neurologie", "fr-FR", "neurologie"),
+        ] {
+            assert_eq!(
+                in_selection(&scoped, false, question, locale),
+                QuestionRoute::Deterministic(FolderAnswer::FileNotSelected {
+                    query: query.to_string()
+                }),
+                "{question}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_selected_file_is_answered_exactly_as_before() {
+        let scoped = only(&["neurologie.pdf"]);
+        match in_selection(&scoped, false, "Que dit neurologie.pdf ?", "fr-FR") {
+            QuestionRoute::TargetedRetrieval { file } => assert_eq!(file.name, "neurologie.pdf"),
+            other => panic!("expected retrieval inside the selected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_name_found_nowhere_in_the_folder_is_still_no_such_file() {
+        for no_documents_chosen in [false, true] {
+            let scoped = if no_documents_chosen {
+                only(&[])
+            } else {
+                only(&["notes.txt"])
+            };
+            assert_eq!(
+                in_selection(
+                    &scoped,
+                    no_documents_chosen,
+                    "Que dit cardiologie.pdf ?",
+                    "fr-FR"
+                ),
+                QuestionRoute::Deterministic(FolderAnswer::NoMatchingFile {
+                    query: "cardiologie.pdf".to_string()
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn with_nothing_selected_a_question_about_the_files_says_nothing_is_selected() {
+        let scoped = only(&[]);
+        for (question, locale) in [
+            ("How many files are in the work folder?", "en-US"),
+            ("Combien de fichiers au total ?", "fr-FR"),
+            ("List all files.", "en-US"),
+            ("Give me a summary of each document", "en-US"),
+            ("Un resume de chaque document", "fr-FR"),
+        ] {
+            assert_eq!(
+                in_selection(&scoped, true, question, locale),
+                QuestionRoute::Deterministic(FolderAnswer::NothingSelected),
+                "{question}"
+            );
+        }
+    }
+
+    #[test]
+    fn with_nothing_selected_a_named_file_is_unselected_rather_than_absent() {
+        assert_eq!(
+            in_selection(&only(&[]), true, "Que dit biologie.pdf ?", "fr-FR"),
+            QuestionRoute::Deterministic(FolderAnswer::FileNotSelected {
+                query: "biologie.pdf".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn with_nothing_selected_an_ordinary_question_goes_on_to_be_answered() {
+        // The caller answers it without excerpts: nothing here refuses it.
+        assert_eq!(
+            in_selection(
+                &only(&[]),
+                true,
+                "Comment rediger un courrier de relance ?",
+                "fr-FR"
+            ),
+            QuestionRoute::GlobalRetrieval
+        );
+    }
+
+    #[test]
+    fn the_whole_folder_routes_exactly_as_the_plain_router() {
+        let full = folder();
+        let selection = Selection {
+            full: &full,
+            scoped: &full,
+            narrowed: false,
+            no_documents_chosen: false,
+        };
+        for (question, locale) in [
+            ("Combien de fichiers au total ?", "fr-FR"),
+            ("Que dit neurologie.pdf ?", "fr-FR"),
+            ("Que dit cardiologie.pdf ?", "fr-FR"),
+            ("Give me a summary of each document", "en-US"),
+            ("Quand a lieu ce rendez-vous ?", "fr-FR"),
+        ] {
+            assert_eq!(
+                route_in_selection(&selection, &NoCorpus, question, locale),
+                route(&full, &NoCorpus, question, locale),
+                "{question}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_two_selection_answers_carry_machine_codes_only() {
+        let nothing = serde_json::to_value(FolderAnswer::NothingSelected).unwrap();
+        assert_eq!(nothing, serde_json::json!({ "kind": "nothing_selected" }));
+        let unselected = serde_json::to_value(FolderAnswer::FileNotSelected {
+            query: "neurologie.pdf".to_string(),
+        })
+        .unwrap();
+        assert_eq!(
+            unselected,
+            serde_json::json!({ "kind": "file_not_selected", "query": "neurologie.pdf" })
+        );
     }
 }

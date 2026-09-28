@@ -237,6 +237,11 @@ export function MessageList({
                   every document. Written beside the answer rather than inside it, so the model
                   cannot leave it out (`docs/WORK-FOLDER-INVENTORY.md`). */}
               {coverage === null ? null : <p className="message__timing">{coverage}</p>}
+              {/* She selected no document, so the model wrote this from general knowledge. Where
+                  the sources would be, because that is exactly what it lacks. */}
+              {entry.withoutDocuments === true ? (
+                <p className="message__timing">{t("chat.withoutDocuments")}</p>
+              ) : null}
               {/* Documents the answer could not have used. Retrieval refuses when it has too
                   little evidence; this is the other half, for when it had plenty and the file she
                   had in mind was simply not among it. */}

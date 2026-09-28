@@ -81,7 +81,8 @@ Chunker             chunk(document) -> Chunk[]                    keeps file, pa
 Embedder            embed(text[]) -> Vector[]                     gateway today, local ONNX later
 IndexStore          upsert / search_lexical / search_vector       SQLite today
 RetrievalService    search(query, scope) -> Evidence[]
-AnalysisScope       resolve(inventory) -> ScopeResolution         optional narrowing of the work folder; default whole folder
+AnalysisScope       resolve(inventory) -> ScopeResolution         the documents she chose; default none, which answers without excerpts
+ConversationMemory  fit_history(turns, budget) -> ChatTurn[]      recent exchanges within the model's window; excerpts never resent
 
 TabularDataSource   open(path) -> Workbook                        csv, xlsx
 TabularInventory    build(workbook) -> WorkbookInventory          structure and facts, full pass

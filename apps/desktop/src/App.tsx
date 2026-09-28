@@ -5,7 +5,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
-import { wholeFolderScope } from "./lib/analysisScope";
+import { noDocumentsScope } from "./lib/analysisScope";
 import type { AnalysisScope } from "./lib/ipc";
 import { applyTheme } from "./lib/theme";
 import { useAppSettings } from "./state/useAppSettings";
@@ -35,14 +35,16 @@ export default function App() {
      card's own button, and the answer that had to say the documents have not been read yet. */
   const indexing = useIndexing();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /* The files the conversation is about. Held here because it is chosen in the folder card and
-     used by the chat: nothing persists a session yet, so nothing persists this. */
-  const [scope, setScope] = useState<AnalysisScope>(() => wholeFolderScope(Date.now()));
+  /* The documents the conversation is about. Held here because it is chosen in the folder card and
+     used by the chat: nothing persists a session yet, so nothing persists this. It starts with no
+     document: the selection is built only from what she ticks (`docs/SELECTION-AND-MEMORY.md`). */
+  const [scope, setScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
   const workFolder = snapshot?.settings.workFolder ?? null;
   /* Files chosen in one folder mean nothing in another: their paths would resolve to nothing and
-     every question would be refused. A different folder starts from the whole folder again. */
-  useEffect(() => setScope(wholeFolderScope(Date.now())), [workFolder]);
+     every question would be refused. A different folder starts from no document again. Analyse
+     leaves the selection alone: each ticked file is pinned to its content and survives a pass. */
+  useEffect(() => setScope(noDocumentsScope(Date.now())), [workFolder]);
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
 

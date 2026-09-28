@@ -59,6 +59,8 @@ Sprint 2.5 local OCR      image-only PDF / JPEG / PNG
    ↓
 Sprint 2a.5 work folder   inventory, file identity, reference resolution (no new format)
    ↓
+Sprint 2a.7/2a.8 scope    documents she chooses, conversation memory (no new format)
+   ↓
 Sprint 2b  tabular data   CSV / XLSX
    ↓
 Sprint 3   GP workflows   summary, naming with duplicates, structured extraction
@@ -406,6 +408,55 @@ rename as an option.
 the grouped sources and the rename summary have been exercised through unit tests and type checks only, and
 renaming on macOS (NFD names) is proven by tests on both Unicode spellings, not on a Mac.
 
+## Sprint 2a.8 - documents she chooses, and a conversation that remembers (27 September)
+
+Deliverable: she is never blocked for having no document selected, the selection is hers alone, and the
+conversation remembers its recent exchanges as far as the model allows. Hardening, not a new capability, and the
+second half of the preparation for Sprint 2b: the selection is now phrased in terms of *documents*, so "tables
+selected, no documents" has a place to go. Design and reasoning: `docs/SELECTION-AND-MEMORY.md`; decisions:
+`docs/DECISIONS.md` ("document selection and conversation memory").
+
+In this order, each step with its tests before the next:
+
+1. **Rust.** An empty document selection is answered without excerpts (no embedding call), with its own short
+   instruction and `withoutDocuments` on the answer; `nothing_selected` and `file_not_selected` deterministic
+   answers; "tous" searches only files present in the current folder (`RetrievalScope::CurrentFolder`).
+   Existing retrieval, isolation and refusal tests stay green.
+2. **Gateway.** A line keeping the rules out of the answer. A context window per alias (`MODEL_CONTEXT_WINDOWS`,
+   `DEFAULT_CONTEXT_WINDOW` = 8,192), capped at the model's maximum, sent as `num_ctx`, and published in
+   `/health` with `MAX_OUTPUT_TOKENS`. *(A first cut also narrowed the "say so" rule to questions about the
+   documents; reverted the same day, see below - it is unconditional.)*
+3. **Interface.** The sidebar selection: "aucun" by default, "N fichiers", "tous"; a header checkbox; a warning
+   sign with its own tooltip on "aucun" and on "tous"; "Réponse sans vos documents." under such answers; the
+   composer disabled until a documents folder is chosen; the no-folder chat path (`send_chat_message`) retired.
+4. **Memory.** `ask_with_sources` receives the conversation; Rust keeps whole exchanges newest first within the
+   chosen model's budget; short follow-ups are searched with the previous question.
+5. **Measuring tool.** `apps/server/scripts/measure_context.py`, run on the server device, not at runtime.
+
+**Out of this sprint, deliberately:** saving, listing and deleting conversations (after Sprint 2b, and this
+history is what it will store); a model rewriting follow-up questions before the search (costs a model call);
+the re-runnable check for models reciting their rules (needs the real models on the server device); the
+two-device deployment runbook (Sprint 4).
+
+**Delivered, 27 September 2026.** 224 `cargo test --lib` (23 new) and the same 41 integration tests, 68 `pytest`
+(10 new), 223 `vitest`, `tsc` and `ruff` clean. Checked against the running Ollama: `/api/show` reports the
+context length the gateway reads (`llama.context_length`, `qwen2.context_length`, ...; gemma2 caps at 8,192), and
+`num_ctx` is honoured (`ollama ps` shows the requested window).
+
+**Corrected the same day.** Real testing found the model hallucinating more once it could remember the
+conversation - traced to the conditional honesty rule from step 2 and to grounding material sitting several
+turns away from the question. Both fixed: the honesty rule is unconditional again, general knowledge is
+permitted only by the no-documents-tier instruction, grounding material moved to the turn immediately before
+the question, and every model-facing string was also found to name the pilot's profession and was reworded to
+read the same for any profession. Reasoning: `docs/SELECTION-AND-MEMORY.md`, "Grounding outranks memory" and
+"Profession-neutral model-facing text"; decisions: `docs/DECISIONS.md`, "grounding-over-memory correction".
+227 `cargo test --lib` (3 new guard tests), 70 `pytest` (5 new), `ruff` and `cargo build` clean, no new warnings.
+
+**Not independently verified:** no test drove the real window, and the gateway container still runs the previous
+build until it is rebuilt (`docker compose up -d --build server`); until then the desktop app falls back to the
+8,192-token default while Ollama keeps its own. How well small models follow the no-documents instruction and
+stop reciting their rules has not been measured on real answers.
+
 ## Sprint 3 — GP workflows (1 → 7 October)
 
 Deliverable: the actions that cost her 1.5 to 2 hours a day. Three flows, not five.
@@ -439,6 +490,13 @@ Deliverable: the software installs and runs at her practice.
   an excerpt, not even in debug mode.
 - Offline and LAN testing: Mac mini at the practice, workstation on the same wired network, only the
   gateway exposed, Ollama on the mini's `127.0.0.1`.
+- **A step-by-step runbook for deploying the server side** (gateway, Ollama, Open WebUI, their configuration)
+  to a separate **server device**, written for any such device rather than for one Mac mini, since the stack
+  will be replicated on other hardware. Recorded on 27 September 2026, while the stack still runs on the same
+  machine as the desktop app and the Mac mini has not arrived. It needs design as well as steps: today
+  everything is published on `127.0.0.1`, and the user device must reach the gateway - and only the gateway -
+  over the practice network, behind a firewall rule and an access key. After the move, run
+  `apps/server/scripts/measure_context.py` there and set `MODEL_CONTEXT_WINDOWS` from what it measures.
 - Security checks: path allow-list, context cap, per-person access key, no clear text on the network.
 - `docs/user/`: installation and getting started, **in French**, written for her.
 
@@ -546,7 +604,9 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 
 ## After 14 October, not before
 
-Sprint 2b (tabular data) comes first, then voice, vision, mobile, app stores, a second profession,
+Sprint 2b (tabular data) comes first, then **saved conversations** (create, save, remove, each with its
+selection - the in-memory history of sprint 2a.8 is what they will store), then voice, vision, mobile, app
+stores, a second profession,
 autonomous agents, fine-tuning, an accounting module, the Ameli account, automatic transmission, RBAC,
 billing, analytics.
 

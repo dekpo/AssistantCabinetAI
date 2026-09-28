@@ -14,6 +14,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::analysis_scope::AnalysisScope;
 use crate::cancellation::{until_stopped, Cancellation};
+use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::error::AppError;
 use crate::file_record::FileRecord;
 use crate::filename_sanitizer;
@@ -40,6 +41,8 @@ pub struct AppState {
     /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
     /// scan in the folder (`inventory::FileHashCache`).
     pub file_hashes: FileHashCache,
+    /// Each model's context budget, as the gateway last published it (`conversation`).
+    pub model_budgets: Mutex<ModelBudgets>,
 }
 
 impl AppState {
@@ -49,6 +52,7 @@ impl AppState {
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
             file_hashes: FileHashCache::new(),
+            model_budgets: Mutex::new(ModelBudgets::default()),
         })
     }
 
@@ -222,21 +226,15 @@ pub fn ensure_suggested_work_folder(app: AppHandle) -> Result<String, AppError> 
 #[tauri::command]
 pub async fn check_server_health(state: State<'_, AppState>) -> Result<HealthSnapshot, AppError> {
     let server_url = state.read(|settings| settings.server_url.clone())?;
-    state.gateway.health(&server_url).await
-}
-
-#[tauri::command]
-pub async fn send_chat_message(
-    state: State<'_, AppState>,
-    turns: Vec<ChatTurn>,
-    on_event: Channel<ChatStreamEvent>,
-) -> Result<String, AppError> {
-    let mut stopped = state.cancellation.begin();
-    until_stopped(
-        &mut stopped,
-        conversation_answer(state.inner(), &turns, &on_event),
-    )
-    .await
+    let snapshot = state.gateway.health(&server_url).await?;
+    // Kept for every question that follows: the budget of each model is read from here rather
+    // than asked for again, so a question costs no extra round trip (`conversation`).
+    state
+        .model_budgets
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .update(snapshot.context_windows.clone(), snapshot.max_output_tokens);
+    Ok(snapshot)
 }
 
 /// Stop the question being worked on, and keep nothing of it.
@@ -247,43 +245,6 @@ pub async fn send_chat_message(
 #[tauri::command]
 pub fn cancel_chat(state: State<'_, AppState>) {
     state.cancellation.cancel();
-}
-
-async fn conversation_answer(
-    state: &AppState,
-    turns: &[ChatTurn],
-    on_event: &Channel<ChatStreamEvent>,
-) -> Result<String, AppError> {
-    let (server_url, model_alias, locale, idle_timeout) = state.read(|settings| {
-        (
-            settings.server_url.clone(),
-            settings.model_alias.clone(),
-            settings.locale.clone(),
-            settings.answer_idle_timeout(),
-        )
-    })?;
-
-    let answer = state
-        .gateway
-        .chat(
-            &server_url,
-            &model_alias,
-            locale.as_deref(),
-            turns,
-            idle_timeout,
-            |delta| {
-                // A closed window is not a failure worth reporting.
-                let _ = on_event.send(ChatStreamEvent::Delta {
-                    text: delta.to_string(),
-                });
-            },
-        )
-        .await?;
-
-    let _ = on_event.send(ChatStreamEvent::Completed {
-        text: answer.clone(),
-    });
-    Ok(answer)
 }
 
 /// Discovery -> extraction -> chunking -> embeddings -> local index, one pass over the current
@@ -462,10 +423,14 @@ pub struct AskAnswer {
     /// pinned. They were left out of the answer, and the interface says so rather than let a
     /// narrower answer read as the one she asked for.
     pub scope_outdated: Vec<String>,
+    /// She selected no document, so this answer rests on none. The interface says so under it.
+    pub without_documents: bool,
 }
 
-/// Retrieval, then a sourced chat answer. Refuses rather than answers when the index does not
-/// carry enough evidence for the question (`docs/ARCHITECTURE.md`).
+/// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
+/// rather than answering when the index does not carry enough evidence (`docs/ARCHITECTURE.md`);
+/// or, when she selected no document, an answer without excerpts that says so
+/// (`docs/SELECTION-AND-MEMORY.md`).
 ///
 /// The whole chain is stoppable, not only the chat leg: embedding the question is what runs while
 /// the spinner shows, which is precisely the moment she wants the button to answer.
@@ -481,6 +446,9 @@ pub async fn ask_with_sources(
     // The files this conversation is about. Absent means the whole folder, which is what every
     // caller did before scopes existed.
     scope: Option<AnalysisScope>,
+    // The conversation so far, as she saw it. Untrusted: `conversation::fit_history` keeps only
+    // answered questions and fits them to the chosen model's budget.
+    history: Option<Vec<ChatTurn>>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let mut stopped = state.cancellation.begin();
@@ -489,23 +457,102 @@ pub async fn ask_with_sources(
         sourced_answer(
             &app,
             state.inner(),
-            question,
-            skip_deterministic.unwrap_or(false),
-            scope.unwrap_or_else(|| AnalysisScope::whole_folder(0)),
+            Question {
+                text: question,
+                skip_deterministic: skip_deterministic.unwrap_or(false),
+                scope: scope.unwrap_or_else(|| AnalysisScope::whole_folder(0)),
+                history: history.unwrap_or_default(),
+            },
             &on_event,
         ),
     )
     .await
 }
 
+/// One question and everything it arrived with.
+struct Question {
+    text: String,
+    skip_deterministic: bool,
+    scope: AnalysisScope,
+    history: Vec<ChatTurn>,
+}
+
+/// What the gateway needs to write one answer, read once from the settings.
+struct Writer<'a> {
+    state: &'a AppState,
+    server_url: String,
+    model_alias: String,
+    locale: Option<String>,
+    idle_timeout: std::time::Duration,
+    budget: ContextBudget,
+}
+
+impl Writer<'_> {
+    /// As much of the conversation as fits, then one turn carrying everything this question needs
+    /// to be answered: the tier's instruction, its grounding material (excerpts, or nothing for
+    /// the no-documents tier), and the question itself, in that order. Streams the answer to the
+    /// interface and returns it whole.
+    ///
+    /// Deliberately **not** a leading system turn. A small local model weighs a nearby turn more
+    /// than a distant one, and history sitting between the grounding material and the question -
+    /// which a system-first layout would produce - is exactly what let a model drift onto a prior
+    /// turn's topic instead of the current excerpts (`docs/SELECTION-AND-MEMORY.md`, "why the
+    /// grounding material moved next to the question"). The gateway still prepends its own system
+    /// turn of stable, tier-independent rules (`prompts.py`); this is what comes right after the
+    /// conversation, immediately before generation starts.
+    async fn write(
+        &self,
+        instruction: String,
+        history: &[ChatTurn],
+        question: String,
+        on_event: &Channel<ChatStreamEvent>,
+    ) -> Result<String, AppError> {
+        let final_turn = format!("{instruction}\n\nQuestion: {question}");
+        let mut turns = conversation::fit_history(
+            history,
+            self.budget.history_chars(final_turn.chars().count()),
+        );
+        turns.push(ChatTurn {
+            role: "user".to_string(),
+            content: final_turn,
+        });
+
+        let answer = self
+            .state
+            .gateway
+            .chat(
+                &self.server_url,
+                &self.model_alias,
+                self.locale.as_deref(),
+                &turns,
+                self.idle_timeout,
+                |delta| {
+                    let _ = on_event.send(ChatStreamEvent::Delta {
+                        text: delta.to_string(),
+                    });
+                },
+            )
+            .await?;
+
+        let _ = on_event.send(ChatStreamEvent::Completed {
+            text: answer.clone(),
+        });
+        Ok(answer)
+    }
+}
+
 async fn sourced_answer(
     app: &AppHandle,
     state: &AppState,
-    question: String,
-    skip_deterministic: bool,
-    scope: AnalysisScope,
+    asked: Question,
     on_event: &Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
+    let Question {
+        text: question,
+        skip_deterministic,
+        scope,
+        history,
+    } = asked;
     let (work_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) = state
         .read(|settings| {
             (
@@ -520,14 +567,31 @@ async fn sourced_answer(
     let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
     };
+    // The budget of the model chosen for this question, from the last health check. Switching
+    // models mid-conversation changes this and nothing else.
+    let budget = state
+        .model_budgets
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .for_alias(&model_alias);
+    let writer = Writer {
+        state,
+        server_url: server_url.clone(),
+        model_alias,
+        locale: locale.clone(),
+        idle_timeout,
+        budget,
+    };
 
     let index = open_index(app)?;
     let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
     // From here on the conversation sees the scope's inventory and nothing wider: the router, the
     // per-document list, the counts and the context all read it, and retrieval is held to its
-    // members below.
+    // members below. The full inventory is kept for one thing: telling a file that is not
+    // selected apart from a file that does not exist (`folder_questions::route_in_selection`).
     let resolution = scope.resolve(&full_inventory);
     let narrowed = resolution.narrowed;
+    let no_documents_chosen = resolution.no_documents_chosen;
     let scope_outdated: Vec<String> = resolution
         .missing
         .into_iter()
@@ -552,24 +616,29 @@ async fn sourced_answer(
         EveryDocument(Vec<String>),
         /// Whatever ranks best in the folder.
         WholeFolder,
+        /// She selected no document: nothing is searched and nothing is embedded.
+        WithoutDocuments,
     }
 
-    let plan = match folder_questions::route(
-        &inventory,
+    let selection = folder_questions::Selection {
+        full: &full_inventory,
+        scoped: &inventory,
+        narrowed,
+        no_documents_chosen,
+    };
+    let plan = match folder_questions::route_in_selection(
+        &selection,
         &index,
         &question,
         locale.unwrap_or(settings::DEFAULT_LOCALE),
     ) {
-        // Asked for again, with the model this time. A question the folder answers is still a
-        // question about the folder, so the model gets every document rather than the handful
-        // that rank highest - the same treatment "summarise each document" gets.
-        _ if skip_deterministic => Plan::EveryDocument(
-            inventory
-                .indexed_files()
-                .into_iter()
-                .map(|file| file.relative_path.clone())
-                .collect(),
-        ),
+        // Asked for again, with the model this time. With no document selected there is nothing
+        // to give it but the conversation.
+        _ if skip_deterministic && no_documents_chosen => Plan::WithoutDocuments,
+        // A question the folder answers is still a question about the folder, so the model gets
+        // every document rather than the handful that rank highest - the same treatment
+        // "summarise each document" gets.
+        _ if skip_deterministic => Plan::EveryDocument(scoped_paths.clone()),
         QuestionRoute::Deterministic(answer) => {
             let _ = on_event.send(ChatStreamEvent::FolderAnswer {
                 answer: answer.clone(),
@@ -583,14 +652,38 @@ async fn sourced_answer(
                 // accounts for every file there is. Nothing about it is waiting on a pass.
                 unanalysed_files: 0,
                 scope_outdated,
+                without_documents: false,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
         QuestionRoute::PerDocumentRetrieval { files } => {
             Plan::EveryDocument(files.into_iter().map(|file| file.relative_path).collect())
         }
+        QuestionRoute::GlobalRetrieval if no_documents_chosen => Plan::WithoutDocuments,
         QuestionRoute::GlobalRetrieval => Plan::WholeFolder,
     };
+
+    // No document selected: answered from the conversation alone, under an instruction that says
+    // so. No embedding call and no search - nothing she did not choose can reach this answer.
+    if matches!(plan, Plan::WithoutDocuments) {
+        let answer = writer
+            .write(
+                conversation::NO_DOCUMENTS_INSTRUCTION.to_string(),
+                &history,
+                question,
+                on_event,
+            )
+            .await?;
+        return Ok(AskAnswer {
+            answer,
+            sources: Vec::new(),
+            folder_answer: None,
+            coverage: None,
+            unanalysed_files: 0,
+            scope_outdated: Vec::new(),
+            without_documents: true,
+        });
+    }
 
     // Everything she chose is gone or has changed: nothing was searched and nothing could be, so
     // say that rather than the generic refusal, and spend no gateway call finding out.
@@ -607,7 +700,7 @@ async fn sourced_answer(
         Plan::OneFile(relative_path) => ContextView::Targeted {
             relative_path: relative_path.clone(),
         },
-        Plan::EveryDocument(_) | Plan::WholeFolder => ContextView::Summary,
+        _ => ContextView::Summary,
     };
 
     // Nothing has been read yet: retrieval is certain to find nothing, so say so here rather
@@ -616,35 +709,46 @@ async fn sourced_answer(
         return Err(AppError::InsufficientEvidence);
     }
 
+    // A short follow-up is searched together with the previous question; the router above and the
+    // model below read the question as she wrote it.
+    let search_text = conversation::retrieval_query(&question, &history);
     let query_vectors = state
         .gateway
         .embed(
             &server_url,
             &embedding_alias,
-            std::slice::from_ref(&question),
+            std::slice::from_ref(&search_text),
         )
         .await?;
     let query_embedding = query_vectors.into_iter().next().unwrap_or_default();
 
+    // Every file present in the folder right now. "Tous" is held to these, so a previous folder's
+    // passages - which the index keeps until the next Analyse - cannot be cited meanwhile.
+    let present_paths: Vec<String> = inventory
+        .all_files()
+        .iter()
+        .map(|file| file.relative_path.clone())
+        .collect();
     let evidence = match &plan {
         Plan::OneFile(relative_path) => retrieval::search_scoped(
             &index,
-            &question,
+            &search_text,
             &query_embedding,
             RetrievalScope::File(relative_path.as_str()),
         )?,
         Plan::EveryDocument(relative_paths) => {
-            retrieval::search_per_document(&index, &question, &query_embedding, relative_paths)?
+            retrieval::search_per_document(&index, &search_text, &query_embedding, relative_paths)?
         }
         Plan::WholeFolder => retrieval::search_scoped(
             &index,
-            &question,
+            &search_text,
             &query_embedding,
             match narrowed {
                 true => RetrievalScope::Files(&scoped_paths),
-                false => RetrievalScope::WholeFolder,
+                false => RetrievalScope::CurrentFolder(&present_paths),
             },
         )?,
+        Plan::WithoutDocuments => Vec::new(),
     };
     if evidence.is_empty() {
         // A file she chose that could not be used may be exactly where the answer was, so the
@@ -676,45 +780,20 @@ async fn sourced_answer(
         coverage,
     });
 
-    // Two kinds of evidence in one turn, kept apart on purpose: the excerpts say what the
+    // Two kinds of evidence in one instruction, kept apart on purpose: the excerpts say what the
     // documents state, the Work Folder context says which files exist and what was done to them,
-    // and the contract between them forbids using either as a substitute for the other.
+    // and the contract between them forbids using either as a substitute for the other. `write`
+    // puts this immediately before the question, after any past exchanges; past excerpts
+    // themselves are never resent - each question retrieves its own.
     let folder_context = work_folder_context::build(&inventory, &view);
-    let context_turn = format!(
+    let grounding = format!(
         "{}\n{}",
         work_folder_context::build_system_turn(retrieval::RETRIEVAL_INSTRUCTION, &folder_context),
         retrieval::format_evidence(&evidence)
     );
-    let turns = vec![
-        ChatTurn {
-            role: "system".to_string(),
-            content: context_turn,
-        },
-        ChatTurn {
-            role: "user".to_string(),
-            content: question,
-        },
-    ];
-
-    let answer = state
-        .gateway
-        .chat(
-            &server_url,
-            &model_alias,
-            locale,
-            &turns,
-            idle_timeout,
-            |delta| {
-                let _ = on_event.send(ChatStreamEvent::Delta {
-                    text: delta.to_string(),
-                });
-            },
-        )
+    let answer = writer
+        .write(grounding, &history, question, on_event)
         .await?;
-
-    let _ = on_event.send(ChatStreamEvent::Completed {
-        text: answer.clone(),
-    });
 
     Ok(AskAnswer {
         answer,
@@ -723,6 +802,7 @@ async fn sourced_answer(
         coverage,
         unanalysed_files: inventory.unanalysed_documents(),
         scope_outdated,
+        without_documents: false,
     })
 }
 

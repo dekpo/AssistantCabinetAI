@@ -45,6 +45,12 @@ pub enum RetrievalScope<'a> {
     File(&'a str),
     /// A user-chosen set of files (`AnalysisScope`): nothing outside it may be searched.
     Files(&'a [String]),
+    /// The whole folder as it is now: every stored chunk whose file is still among these paths,
+    /// in the index's own order. Identical to `WholeFolder` whenever the index describes the
+    /// current folder. The difference is a previous folder's passages, or a deleted file's, which
+    /// the index keeps until the next Analyse and which must not be cited meanwhile
+    /// (`docs/SELECTION-AND-MEMORY.md`).
+    CurrentFolder(&'a [String]),
 }
 
 /// Rank stored chunks against a query embedding plus its lexical text, merge the two rankings,
@@ -80,6 +86,15 @@ pub fn search_scoped(
                 chunks.extend(index.chunks_for_document(relative_path)?);
             }
             chunks
+        }
+        RetrievalScope::CurrentFolder(relative_paths) => {
+            let present: std::collections::HashSet<&str> =
+                relative_paths.iter().map(String::as_str).collect();
+            index
+                .all_chunks()?
+                .into_iter()
+                .filter(|chunk| present.contains(chunk.relative_path.as_str()))
+                .collect()
         }
     };
 
@@ -233,10 +248,16 @@ impl EvidenceCoverage {
 /// The English instruction plus the excerpts, ready to send as one turn to the gateway. The
 /// instruction is English (`docs/LANGUAGE-AND-LOCALE.md`); the excerpts are copied verbatim,
 /// whatever language the source document is in - they are data, never rewritten.
+///
+/// Tier 1 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a document is
+/// selected, so the answer is held to it, unconditionally - never softened into a suggestion the
+/// model is free to weigh against its own general knowledge. Never mentions who the user is or
+/// what profession they practise: the wording must read the same for a doctor, a lawyer, a notary
+/// or an accountant, because none of that is this product's business to assume.
 pub const RETRIEVAL_INSTRUCTION: &str =
-    "You are given excerpts retrieved from the practice's own documents. Answer only from \
-     these excerpts, citing the file and page for every fact. If the excerpts do not contain \
-     the answer, say so instead of guessing.";
+    "You are given excerpts retrieved from the user's own documents. Answer only from these \
+     excerpts, citing the file and page for every fact. If the excerpts do not contain the \
+     answer, say so instead of guessing.";
 
 pub fn build_context_turn(evidence: &[Evidence]) -> String {
     format!("{RETRIEVAL_INSTRUCTION}\n\n{}", format_evidence(evidence))
@@ -283,6 +304,21 @@ mod tests {
                 .unwrap();
         }
         store
+    }
+
+    /// A guard against exactly the regression `RETRIEVAL_INSTRUCTION` was rewritten for on
+    /// 27 September 2026: any hint that the person on the other side of this product is a medical
+    /// professional, which would be false for the lawyers, notaries and accountants it is meant to
+    /// serve too (`docs/DECISIONS.md`, "profession-neutral model-facing text").
+    #[test]
+    fn the_retrieval_instruction_stays_neutral_about_who_the_user_is() {
+        let lower = RETRIEVAL_INSTRUCTION.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(
+                !lower.contains(word),
+                "{word:?} found in RETRIEVAL_INSTRUCTION"
+            );
+        }
     }
 
     #[test]
@@ -363,6 +399,58 @@ mod tests {
             none.is_empty(),
             "an empty set allows nothing, not everything"
         );
+    }
+
+    #[test]
+    fn the_current_folder_answers_exactly_as_the_whole_index_when_they_match() {
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+            ("b#p1#s1", "b.pdf", "Cephalees episodiques", vec![0.9, 0.1]),
+            ("c#p1#s1", "c.pdf", "Cephalees depuis hier", vec![0.8, 0.2]),
+        ]);
+        let present = vec![
+            "a.pdf".to_string(),
+            "b.pdf".to_string(),
+            "c.pdf".to_string(),
+        ];
+
+        let whole = search(&store, "cephalees", &[1.0, 0.0]).unwrap();
+        let current = search_scoped(
+            &store,
+            "cephalees",
+            &[1.0, 0.0],
+            RetrievalScope::CurrentFolder(&present),
+        )
+        .unwrap();
+
+        assert_eq!(current, whole, "no regression: same evidence, same order");
+    }
+
+    #[test]
+    fn the_current_folder_never_cites_a_file_that_is_no_longer_in_it() {
+        // `old.pdf` belongs to the previous folder, or was deleted since the last Analyse: the
+        // index still holds it until the next pass, and it must not reach an answer meanwhile.
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "Cephalees episodiques", vec![1.0, 0.0]),
+            (
+                "old#p1#s1",
+                "old.pdf",
+                "Cephalees episodiques",
+                vec![1.0, 0.0],
+            ),
+        ]);
+        let present = vec!["a.pdf".to_string()];
+
+        let hits = search_scoped(
+            &store,
+            "cephalees",
+            &[1.0, 0.0],
+            RetrievalScope::CurrentFolder(&present),
+        )
+        .unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].relative_path, "a.pdf");
     }
 
     #[test]

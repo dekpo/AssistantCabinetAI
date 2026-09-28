@@ -15,6 +15,7 @@ use rusqlite::Connection;
 use crate::chunking::Chunk;
 use crate::error::AppError;
 use crate::extraction::PageOrigin;
+use crate::tabular::inventory::TabularInventory;
 
 const INDEX_FILE_NAME: &str = "index.sqlite3";
 
@@ -100,6 +101,13 @@ impl IndexStore {
                     chunk_id UNINDEXED,
                     text
                 );
+                CREATE TABLE IF NOT EXISTS tabular_inventories (
+                    relative_path TEXT PRIMARY KEY,
+                    workbook_id TEXT NOT NULL,
+                    inventory_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS tabular_inventories_by_hash
+                    ON tabular_inventories (workbook_id);
                 ",
             )
             .map_err(|_| AppError::IndexUnavailable)?;
@@ -488,6 +496,62 @@ impl IndexStore {
                 _ => Err(AppError::IndexUnavailable),
             })
     }
+
+    /// Store this workbook's inventory, replacing whatever was cached for the same path.
+    /// Keyed by path rather than by content hash: a changed file naturally invalidates its old
+    /// entry by overwriting the row at its path, the same "changed file -> invalidated"
+    /// guarantee `put`/`get_by_hash`/`invalidate` promise (`docs/ARCHITECTURE.md`'s
+    /// `InventoryStore`), without a second table to keep in step with this one.
+    pub fn put_tabular_inventory(&self, inventory: &TabularInventory) -> Result<(), AppError> {
+        let json = serde_json::to_string(inventory).map_err(|_| AppError::IndexUnavailable)?;
+        self.connection
+            .execute(
+                "INSERT INTO tabular_inventories (relative_path, workbook_id, inventory_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(relative_path) DO UPDATE SET
+                    workbook_id = excluded.workbook_id,
+                    inventory_json = excluded.inventory_json",
+                rusqlite::params![inventory.relative_path, inventory.workbook_id, json],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// The cached inventory for this content hash, if the file at whatever path produced it is
+    /// still cached under that same hash. `None` both when nothing was ever cached and when the
+    /// file has since changed - the two are indistinguishable from a hash alone, which is
+    /// exactly why the caller re-parses on a miss rather than treating one as an error.
+    pub fn tabular_inventory_by_hash(
+        &self,
+        workbook_id: &str,
+    ) -> Result<Option<TabularInventory>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT inventory_json FROM tabular_inventories WHERE workbook_id = ?1
+                 ORDER BY relative_path LIMIT 1",
+                [workbook_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map(Some)
+            .or_else(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                _ => Err(AppError::IndexUnavailable),
+            })?
+            .map(|json| serde_json::from_str(&json).map_err(|_| AppError::IndexUnavailable))
+            .transpose()
+    }
+
+    /// Forget whatever inventory is cached for this path. Used when a file is dropped from the
+    /// Data Folder, so a stale entry cannot be found under its old hash for ever.
+    pub fn invalidate_tabular_inventory(&self, relative_path: &str) -> Result<(), AppError> {
+        self.connection
+            .execute(
+                "DELETE FROM tabular_inventories WHERE relative_path = ?1",
+                [relative_path],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
 }
 
 /// The index already holds every word in the corpus, so answering "is this a word from the
@@ -822,6 +886,80 @@ mod tests {
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].chunk_id, "inbox/letter.pdf#p1#s1");
+    }
+
+    fn sample_inventory(relative_path: &str, workbook_id: &str) -> TabularInventory {
+        use crate::tabular::inventory::{
+            ColumnInventory, ColumnType, SheetInventory, TabularFormat,
+        };
+
+        TabularInventory {
+            workbook_id: workbook_id.to_string(),
+            relative_path: relative_path.to_string(),
+            format: TabularFormat::Csv,
+            sheets: vec![SheetInventory {
+                name: relative_path.to_string(),
+                header_row: Some(0),
+                row_count: 1,
+                column_count: 1,
+                columns: vec![ColumnInventory {
+                    name: "montant".to_string(),
+                    index: 0,
+                    inferred_type: ColumnType::Numeric,
+                    has_formulas: false,
+                }],
+                has_formulas: false,
+            }],
+        }
+    }
+
+    #[test]
+    fn a_tabular_inventory_is_found_again_by_its_workbook_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let inventory = sample_inventory("data/montants.csv", "hash-1");
+
+        store.put_tabular_inventory(&inventory).unwrap();
+        let found = store.tabular_inventory_by_hash("hash-1").unwrap();
+
+        assert_eq!(found, Some(inventory));
+        assert_eq!(
+            store.tabular_inventory_by_hash("hash-absent").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_changed_file_is_no_longer_found_under_its_old_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let before = sample_inventory("data/montants.csv", "hash-old");
+        store.put_tabular_inventory(&before).unwrap();
+
+        // Same path, new content: the pass that re-reads a changed file stores its new hash at
+        // the same relative path, exactly as `put_tabular_inventory`'s own contract promises.
+        let after = sample_inventory("data/montants.csv", "hash-new");
+        store.put_tabular_inventory(&after).unwrap();
+
+        assert_eq!(store.tabular_inventory_by_hash("hash-old").unwrap(), None);
+        assert_eq!(
+            store.tabular_inventory_by_hash("hash-new").unwrap(),
+            Some(after)
+        );
+    }
+
+    #[test]
+    fn invalidating_a_path_forgets_whatever_was_cached_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let inventory = sample_inventory("data/montants.csv", "hash-1");
+        store.put_tabular_inventory(&inventory).unwrap();
+
+        store
+            .invalidate_tabular_inventory("data/montants.csv")
+            .unwrap();
+
+        assert_eq!(store.tabular_inventory_by_hash("hash-1").unwrap(), None);
     }
 
     #[test]

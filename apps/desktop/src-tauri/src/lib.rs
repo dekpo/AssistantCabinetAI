@@ -25,6 +25,7 @@ pub mod raster;
 pub mod retrieval;
 pub mod reveal;
 mod settings;
+pub mod tabular;
 mod work_folder;
 pub mod work_folder_context;
 

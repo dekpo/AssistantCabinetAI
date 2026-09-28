@@ -44,6 +44,13 @@ sha2 = "0.10.9"
 # Accent-free, single-form file names and matching (`filename_sanitizer`, `file_reference`).
 unicode-normalization = "0.1"
 
+# Tabular pipeline (docs/ARCHITECTURE.md): CSV/XLSX are a first-class source with their own
+# adapters, never flattened into text chunks and never routed through document embeddings.
+calamine = "0.26"
+csv = "1"
+# CP1252 decoding for a CSV a French Windows export did not save as UTF-8.
+encoding_rs = "0.8"
+
 # Rasterises a PDF page to a bitmap in memory, feeding the OCR port (docs/SPRINT-2.5-ASSESSMENT.md
 # section E). No `#[cfg(windows)]`: the platform difference is which prebuilt pdfium library is
 # bundled as a resource, resolved at runtime, never in this crate's code.

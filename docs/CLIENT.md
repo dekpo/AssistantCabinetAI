@@ -73,11 +73,11 @@ Desktop and Documents. Detail and the checks in code: `docs/PRIVACY-AND-SECURITY
 
 Rules:
 
-- The suggested folder is `~/AssistantCabinetAI/DOCS`, shown before anything is chosen. `DOCS` is a
-  dedicated subfolder of `~/AssistantCabinetAI` rather than the root itself, so a sibling `DATA`
+- The suggested folder is `~/AssistantCabinetAI/Docs`, shown before anything is chosen. `Docs` is a
+  dedicated subfolder of `~/AssistantCabinetAI` rather than the root itself, so a sibling `Data`
   folder for spreadsheet work (CSV/XLSX) can sit beside it later without the two kinds of file
   sharing one directory. A primary button **creates it if needed and uses it** (both the root and
-  `DOCS` together); **Choose a folder...** still opens the system dialog. Nothing is created until
+  `Docs` together); **Choose a folder...** still opens the system dialog. Nothing is created until
   she asks.
 - Refuse the drive root, system folders, the practice software's own store, and the whole of Documents as
   an allow-list. Today the pilot's downloads and scans land directly in My Documents; the work folder is a
@@ -102,8 +102,8 @@ same as Explorer or the Finder.
 
 ## The data folder
 
-A second, sibling folder for tabular files (CSV, XLSX): `~/AssistantCabinetAI/DATA`, beside
-`~/AssistantCabinetAI/DOCS`. The documents folder feeds retrieval — extract, index, answer with
+A second, sibling folder for tabular files (CSV, XLSX): `~/AssistantCabinetAI/Data`, beside
+`~/AssistantCabinetAI/Docs`. The documents folder feeds retrieval — extract, index, answer with
 sources. The data folder is not a second documents folder and does not feed that pipeline: it
 exists so CSV/XLSX files never share a directory with PDF/DOCX/scans, ahead of the tabular engine
 that will actually read them (sprint 2b, `docs/DECISIONS.md`).

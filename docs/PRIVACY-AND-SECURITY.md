@@ -46,7 +46,7 @@ File Provider client — OneDrive, Dropbox, Google Drive, Box — mounts under `
 
 ### What the code does about it
 
-The work folder is `~/AssistantCabinetAI/DOCS` (a dedicated `DOCS` subfolder, so a future `DATA`
+The work folder is `~/AssistantCabinetAI/Docs` (a dedicated `Docs` subfolder, so a future `Data`
 subfolder for spreadsheet work can sit beside it), directly in the home. OneDrive Backup only covers Desktop,
 Documents, Pictures, Music and Videos, and iCloud only Desktop and Documents, so neither reaches it. The
 same is true of File History and the Windows Backup app. The location is a default, not the guarantee;

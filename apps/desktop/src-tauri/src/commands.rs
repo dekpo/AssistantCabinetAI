@@ -75,10 +75,10 @@ pub struct AppSnapshot {
     settings: Settings,
     system_locale: String,
     settings_path: String,
-    /// What to propose when no folder has been chosen: `~/AssistantCabinetAI/DOCS`, outside
+    /// What to propose when no folder has been chosen: `~/AssistantCabinetAI/Docs`, outside
     /// Documents so that no cloud client mirrors it.
     suggested_work_folder: Option<String>,
-    /// The Data Folder equivalent: `~/AssistantCabinetAI/DATA`, a sibling of `DOCS` rather than a
+    /// The Data Folder equivalent: `~/AssistantCabinetAI/Data`, a sibling of `Docs` rather than a
     /// second Documents Folder.
     suggested_data_folder: Option<String>,
     warnings: Vec<String>,
@@ -226,7 +226,7 @@ pub async fn choose_work_folder(app: AppHandle) -> Result<String, AppError> {
     Ok(display(&accepted))
 }
 
-/// Create `~/AssistantCabinetAI/DOCS` if needed, then return the accepted path. The interface
+/// Create `~/AssistantCabinetAI/Docs` if needed, then return the accepted path. The interface
 /// still has to save the settings; this command does not write `settings.json` on its own.
 #[tauri::command]
 pub fn ensure_suggested_work_folder(app: AppHandle) -> Result<String, AppError> {
@@ -252,7 +252,7 @@ pub async fn choose_data_folder(app: AppHandle) -> Result<String, AppError> {
     Ok(display(&accepted))
 }
 
-/// Create `~/AssistantCabinetAI/DATA` if needed, then return the accepted path. The interface
+/// Create `~/AssistantCabinetAI/Data` if needed, then return the accepted path. The interface
 /// still has to save the settings; this command does not write `settings.json` on its own.
 #[tauri::command]
 pub fn ensure_suggested_data_folder(app: AppHandle) -> Result<String, AppError> {

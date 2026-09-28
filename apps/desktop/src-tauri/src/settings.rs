@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn a_data_folder_round_trips_through_serialisation_like_the_work_folder() {
         let settings = Settings {
-            data_folder: Some("D:\\data\\AssistantCabinetAI\\DATA".into()),
+            data_folder: Some("D:\\data\\AssistantCabinetAI\\Data".into()),
             ..Settings::default()
         };
 

@@ -30,9 +30,9 @@ export interface AppSnapshot {
   systemLocale: string;
   /** Where `settings.json` lives on this machine. Shown in the settings panel, never guessed. */
   settingsPath: string;
-  /** `~/AssistantCabinetAI/DOCS`, proposed when nothing has been chosen. Null when there is no home. */
+  /** `~/AssistantCabinetAI/Docs`, proposed when nothing has been chosen. Null when there is no home. */
   suggestedWorkFolder: string | null;
-  /** `~/AssistantCabinetAI/DATA`, a sibling of `suggestedWorkFolder` rather than a second Documents
+  /** `~/AssistantCabinetAI/Data`, a sibling of `suggestedWorkFolder` rather than a second Documents
    * Folder. Null when there is no home. */
   suggestedDataFolder: string | null;
   /** Machine codes for what went wrong while reading, without preventing the window opening. */
@@ -286,7 +286,7 @@ export function chooseWorkFolder(): Promise<string> {
   return invoke<string>("choose_work_folder");
 }
 
-/** Create `~/AssistantCabinetAI/DOCS` if it is missing, then return the accepted path. */
+/** Create `~/AssistantCabinetAI/Docs` if it is missing, then return the accepted path. */
 export function ensureSuggestedWorkFolder(): Promise<string> {
   return invoke<string>("ensure_suggested_work_folder");
 }
@@ -306,7 +306,7 @@ export function chooseDataFolder(): Promise<string> {
   return invoke<string>("choose_data_folder");
 }
 
-/** Create `~/AssistantCabinetAI/DATA` if it is missing, then return the accepted path. */
+/** Create `~/AssistantCabinetAI/Data` if it is missing, then return the accepted path. */
 export function ensureSuggestedDataFolder(): Promise<string> {
   return invoke<string>("ensure_suggested_data_folder");
 }

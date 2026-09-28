@@ -29,7 +29,9 @@ use crate::raster::{self, PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
 use crate::reveal;
 use crate::settings::{self, Settings};
-use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
+use crate::work_folder::{
+    self, display, suggested_data_folder, suggested_work_folder, WorkFolderPolicy,
+};
 use crate::work_folder_context::{self, ContextView};
 
 pub struct AppState {
@@ -76,6 +78,9 @@ pub struct AppSnapshot {
     /// What to propose when no folder has been chosen: `~/AssistantCabinetAI/DOCS`, outside
     /// Documents so that no cloud client mirrors it.
     suggested_work_folder: Option<String>,
+    /// The Data Folder equivalent: `~/AssistantCabinetAI/DATA`, a sibling of `DOCS` rather than a
+    /// second Documents Folder.
+    suggested_data_folder: Option<String>,
     warnings: Vec<String>,
 }
 
@@ -154,15 +159,22 @@ pub fn load_app_snapshot(
             warnings.push(AppError::WorkFolderNoLongerAllowed.code().to_string());
         }
     }
+    if let Some(chosen) = stored.data_folder.clone() {
+        let policy = work_folder_policy(&app);
+        if policy.validate(Path::new(&chosen)).is_err() {
+            stored.data_folder = None;
+            warnings.push(AppError::DataFolderNoLongerAllowed.code().to_string());
+        }
+    }
 
+    let home = app.path().home_dir().ok();
     state.replace(stored.clone())?;
     Ok(AppSnapshot {
         settings: stored,
         system_locale: sys_locale::get_locale().unwrap_or_default(),
         settings_path: display(&settings::settings_path(&app)?),
-        suggested_work_folder: suggested_work_folder(app.path().home_dir().ok().as_deref())
-            .as_deref()
-            .map(display),
+        suggested_work_folder: suggested_work_folder(home.as_deref()).as_deref().map(display),
+        suggested_data_folder: suggested_data_folder(home.as_deref()).as_deref().map(display),
         warnings,
     })
 }
@@ -220,6 +232,32 @@ pub async fn choose_work_folder(app: AppHandle) -> Result<String, AppError> {
 pub fn ensure_suggested_work_folder(app: AppHandle) -> Result<String, AppError> {
     let home = app.path().home_dir().ok();
     let accepted = work_folder::ensure_suggested(&work_folder_policy(&app), home.as_deref())?;
+    Ok(display(&accepted))
+}
+
+/// Opens the system dialog, then applies the allow-list, for the Data Folder. Nothing is stored
+/// until the interface saves the settings, and nothing is read from the folder in this sprint.
+#[tauri::command]
+pub async fn choose_data_folder(app: AppHandle) -> Result<String, AppError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |chosen| {
+        let _ = sender.send(chosen);
+    });
+
+    let Some(chosen) = receiver.await.map_err(|_| AppError::Internal)? else {
+        return Err(AppError::WorkFolderSelectionCancelled);
+    };
+    let path = chosen.into_path().map_err(|_| AppError::Internal)?;
+    let accepted = work_folder_policy(&app).validate(&path)?;
+    Ok(display(&accepted))
+}
+
+/// Create `~/AssistantCabinetAI/DATA` if needed, then return the accepted path. The interface
+/// still has to save the settings; this command does not write `settings.json` on its own.
+#[tauri::command]
+pub fn ensure_suggested_data_folder(app: AppHandle) -> Result<String, AppError> {
+    let home = app.path().home_dir().ok();
+    let accepted = work_folder::ensure_suggested_data(&work_folder_policy(&app), home.as_deref())?;
     Ok(display(&accepted))
 }
 
@@ -366,6 +404,17 @@ pub fn reveal_work_folder(state: State<'_, AppState>) -> Result<(), AppError> {
         return Err(AppError::NoWorkFolderSet);
     };
     reveal::folder(Path::new(&work_folder))
+}
+
+/// Show the Data Folder in the system's own file manager. Same shape as `reveal_work_folder`:
+/// takes no path, reads the folder from settings, and reveal itself stays folder-type-agnostic.
+#[tauri::command]
+pub fn reveal_data_folder(state: State<'_, AppState>) -> Result<(), AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    reveal::folder(Path::new(&data_folder))
 }
 
 /// Show one file of the work folder, selected in the system's file manager.

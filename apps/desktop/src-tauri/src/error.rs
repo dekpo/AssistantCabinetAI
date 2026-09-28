@@ -51,6 +51,11 @@ pub enum AppError {
     #[error("work_folder_no_longer_allowed")]
     WorkFolderNoLongerAllowed,
 
+    /// The Data Folder equivalent, reported separately from `WorkFolderNoLongerAllowed` so the
+    /// interface names the folder that actually stopped passing the rules.
+    #[error("data_folder_no_longer_allowed")]
+    DataFolderNoLongerAllowed,
+
     #[error("work_folder_is_symlink")]
     WorkFolderIsSymlink { path: String },
 
@@ -87,6 +92,12 @@ pub enum AppError {
 
     #[error("no_work_folder_set")]
     NoWorkFolderSet,
+
+    /// The Data Folder equivalent of `NoWorkFolderSet`: distinct from it because the two folders
+    /// are chosen independently, and the interface has to tell a missing Data Folder apart from a
+    /// missing Documents Folder to say the right sentence.
+    #[error("no_data_folder_set")]
+    NoDataFolderSet,
 
     #[error("index_unavailable")]
     IndexUnavailable,
@@ -150,6 +161,7 @@ impl AppError {
             Self::WorkFolderIsProtected { .. } => "work_folder_is_protected",
             Self::WorkFolderIsCloudSynced { .. } => "work_folder_is_cloud_synced",
             Self::WorkFolderNoLongerAllowed => "work_folder_no_longer_allowed",
+            Self::DataFolderNoLongerAllowed => "data_folder_no_longer_allowed",
             Self::WorkFolderIsSymlink { .. } => "work_folder_is_symlink",
             Self::WorkFolderUncNotSupported { .. } => "work_folder_unc_not_supported",
             Self::WorkFolderNotWritable { .. } => "work_folder_not_writable",
@@ -161,6 +173,7 @@ impl AppError {
             Self::ContextTooLarge { .. } => "context_too_large",
             Self::Gateway { code, .. } => code,
             Self::NoWorkFolderSet => "no_work_folder_set",
+            Self::NoDataFolderSet => "no_data_folder_set",
             Self::IndexUnavailable => "index_unavailable",
             Self::ExtractionEmpty { .. } => "extraction_empty",
             Self::ExtractionFailed { .. } => "extraction_failed",
@@ -182,8 +195,10 @@ impl AppError {
             | Self::SettingsWriteFailed
             | Self::WorkFolderSelectionCancelled
             | Self::WorkFolderNoLongerAllowed
+            | Self::DataFolderNoLongerAllowed
             | Self::ServerResponseInvalid
             | Self::NoWorkFolderSet
+            | Self::NoDataFolderSet
             | Self::IndexUnavailable
             | Self::InsufficientEvidence
             | Self::ScopeUnavailable

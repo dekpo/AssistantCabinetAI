@@ -65,6 +65,10 @@ pub struct Settings {
     pub model_alias: String,
     pub embedding_alias: String,
     pub work_folder: Option<String>,
+    /// The Data Folder (CSV/XLSX), a sibling of `work_folder` rather than a rename of it: the two
+    /// are validated through the same `WorkFolderPolicy` but kept as separate settings so neither
+    /// folder can be lost by the other's absence.
+    pub data_folder: Option<String>,
     /// Seconds of silence before an answer is abandoned. A setting rather than a constant,
     /// because how long a model stays quiet depends on the model and on the machine, and neither
     /// is knowable from here (`.cursor/rules/v0-sprint.mdc`: nothing hardcoded).
@@ -81,6 +85,7 @@ impl Default for Settings {
             model_alias: DEFAULT_MODEL_ALIAS.to_string(),
             embedding_alias: DEFAULT_EMBEDDING_ALIAS.to_string(),
             work_folder: None,
+            data_folder: None,
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
         }
     }
@@ -149,6 +154,11 @@ pub fn save(
         Some(chosen) if chosen.trim().is_empty() => None,
         Some(chosen) => Some(display(&policy.validate(Path::new(chosen))?)),
     };
+    checked.data_folder = match checked.data_folder.as_deref() {
+        None => None,
+        Some(chosen) if chosen.trim().is_empty() => None,
+        Some(chosen) => Some(display(&policy.validate(Path::new(chosen))?)),
+    };
 
     let path = settings_path(app)?;
     if let Some(parent) = path.parent() {
@@ -189,6 +199,7 @@ mod tests {
         let defaults = Settings::default();
 
         assert_eq!(defaults.work_folder, None);
+        assert_eq!(defaults.data_folder, None);
         // `None` means "follow the system", which is what a first launch does.
         assert_eq!(defaults.locale, None);
         assert_eq!(defaults.model_alias, DEFAULT_MODEL_ALIAS);
@@ -211,6 +222,7 @@ mod tests {
             model_alias: "cabinet-chat".into(),
             embedding_alias: "cabinet-embed".into(),
             work_folder: Some("D:\\work".into()),
+            data_folder: Some("D:\\data".into()),
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
         };
 
@@ -221,6 +233,7 @@ mod tests {
         assert_eq!(json["serverUrl"], "http://mac-mini.local:8080");
         assert_eq!(json["modelAlias"], "cabinet-chat");
         assert_eq!(json["workFolder"], "D:\\work");
+        assert_eq!(json["dataFolder"], "D:\\data");
         assert_eq!(
             json["answerIdleTimeoutSeconds"],
             DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
@@ -249,6 +262,29 @@ mod tests {
             settings.answer_idle_timeout(),
             std::time::Duration::from_secs(120)
         );
+    }
+
+    #[test]
+    fn a_data_folder_round_trips_through_serialisation_like_the_work_folder() {
+        let settings = Settings {
+            data_folder: Some("D:\\data\\AssistantCabinetAI\\DATA".into()),
+            ..Settings::default()
+        };
+
+        let json = serde_json::to_string(&settings).expect("serialises");
+        let restored: Settings = serde_json::from_str(&json).expect("deserialises");
+
+        assert_eq!(restored.data_folder, settings.data_folder);
+    }
+
+    #[test]
+    fn a_file_written_before_the_data_folder_setting_existed_still_loads() {
+        // Same `serde(default)` contract as the idle timeout below: an older `settings.json`
+        // carries no `dataFolder`, and must open with `None` rather than refuse to load.
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+
+        assert_eq!(settings.data_folder, None);
     }
 
     #[test]

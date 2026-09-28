@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
+import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
@@ -107,6 +108,12 @@ export default function App() {
               onScopeChange={setScope}
               scopeLocked={chatBusy}
             />
+            <DataFolderCard
+              dataFolder={snapshot.settings.dataFolder}
+              suggestedDataFolder={snapshot.suggestedDataFolder}
+              onChosen={(path) => void update({ dataFolder: path })}
+              compact
+            />
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />
             ))}
@@ -128,6 +135,7 @@ export default function App() {
             settings={snapshot.settings}
             settingsPath={snapshot.settingsPath}
             suggestedWorkFolder={snapshot.suggestedWorkFolder}
+            suggestedDataFolder={snapshot.suggestedDataFolder}
             aliases={health?.aliases ?? []}
             saveError={saveError}
             indexing={indexing}

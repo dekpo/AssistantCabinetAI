@@ -114,6 +114,19 @@
     "filesOne": "file",
     "filesMany": "files"
   },
+  "dataFolder": {
+    "title": "Data folder",
+    "descriptionFull": "The folder for tables: CSV, XLSX. Choose a dedicated folder, not a folder copied to a cloud service. Reading these files is not built yet: this only sets the folder aside for later.",
+    "none": "No folder chosen yet",
+    "suggestionLabel": "Suggested:",
+    "suggestionWhy": "It sits beside your documents folder, outside your Documents, so that nothing is copied to OneDrive or iCloud.",
+    "createSuggested": "Create and use this folder",
+    "choose": "Choose a folder...",
+    "change": "Change",
+    "changeHint": "Change the folder",
+    "reveal": "See",
+    "revealHint": "Open this folder in the file manager"
+  },
   "folderAnswer": {
     "fileOne": "file",
     "fileMany": "files",
@@ -203,6 +216,8 @@
     "scope_unavailable": "The documents you chose for this conversation are missing or have changed. Choose them again.",
     "internal_error": "The AI ran into an unexpected problem. Try again; if it persists, note the time and report it.",
     "no_work_folder_set": "Choose a documents folder before asking a question about your documents.",
+    "no_data_folder_set": "Choose a data folder before opening it in the file manager.",
+    "data_folder_no_longer_allowed": "Your data folder no longer meets the safety rules, most often because a cloud service now copies it. Choose it again.",
     "invalid_request": "The AI refused the request because it was malformed. Please report it.",
     "model_alias_not_allowed": "The profile {requested} is not offered by this AI. Choose another one in the settings.",
     "ocr_failed": "This page could not be read by recognition ({path}, page {page}).",

@@ -16,6 +16,9 @@ export interface AppSettings {
   modelAlias: string;
   embeddingAlias: string;
   workFolder: string | null;
+  /** The Data Folder (CSV/XLSX), a sibling of `workFolder` rather than a second copy of it: the
+   * two are chosen independently and validated through the same allow-list. */
+  dataFolder: string | null;
   /** Seconds of silence before an answer is abandoned. Silence, not duration: an answer that
    * keeps arriving is never cut off, however long it takes. Rust clamps whatever is sent. */
   answerIdleTimeoutSeconds: number;
@@ -29,6 +32,9 @@ export interface AppSnapshot {
   settingsPath: string;
   /** `~/AssistantCabinetAI/DOCS`, proposed when nothing has been chosen. Null when there is no home. */
   suggestedWorkFolder: string | null;
+  /** `~/AssistantCabinetAI/DATA`, a sibling of `suggestedWorkFolder` rather than a second Documents
+   * Folder. Null when there is no home. */
+  suggestedDataFolder: string | null;
   /** Machine codes for what went wrong while reading, without preventing the window opening. */
   warnings: string[];
 }
@@ -292,6 +298,23 @@ export function ensureSuggestedWorkFolder(): Promise<string> {
  */
 export function revealWorkFolder(): Promise<void> {
   return invoke<void>("reveal_work_folder");
+}
+
+/** The Data Folder equivalent of `chooseWorkFolder`. Opens the system folder dialog and
+ * validates the choice through the same allow-list. Returns the accepted path. */
+export function chooseDataFolder(): Promise<string> {
+  return invoke<string>("choose_data_folder");
+}
+
+/** Create `~/AssistantCabinetAI/DATA` if it is missing, then return the accepted path. */
+export function ensureSuggestedDataFolder(): Promise<string> {
+  return invoke<string>("ensure_suggested_data_folder");
+}
+
+/** The Data Folder equivalent of `revealWorkFolder`. No path crosses the bridge: Rust reads the
+ * folder from settings. */
+export function revealDataFolder(): Promise<void> {
+  return invoke<void>("reveal_data_folder");
 }
 
 /** Show one file of the work folder, selected in the system's file manager. Takes the path

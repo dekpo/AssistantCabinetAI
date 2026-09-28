@@ -114,6 +114,19 @@
     "filesOne": "fichier",
     "filesMany": "fichiers"
   },
+  "dataFolder": {
+    "title": "Dossier des données",
+    "descriptionFull": "Le dossier des tableurs : CSV, XLSX. Choisissez un dossier dédié, jamais un dossier recopié vers un service en ligne. La lecture de ces fichiers n'est pas encore construite : ceci réserve seulement le dossier pour plus tard.",
+    "none": "Aucun dossier choisi pour le moment",
+    "suggestionLabel": "Suggestion :",
+    "suggestionWhy": "Il est placé à côté de votre dossier de documents, en dehors de vos Documents, pour que rien ne soit recopié vers OneDrive ou iCloud.",
+    "createSuggested": "Créer et utiliser ce dossier",
+    "choose": "Choisir un dossier...",
+    "change": "Changer",
+    "changeHint": "Changer de dossier",
+    "reveal": "Voir",
+    "revealHint": "Ouvrir ce dossier dans l'explorateur de fichiers"
+  },
   "folderAnswer": {
     "fileOne": "fichier",
     "fileMany": "fichiers",
@@ -203,6 +216,8 @@
     "scope_unavailable": "Les documents choisis pour cette conversation sont absents ou ont été modifiés. Choisissez-les à nouveau.",
     "internal_error": "L'IA a rencontré un problème inattendu. Réessayez ; si cela persiste, notez l'heure et signalez-le.",
     "no_work_folder_set": "Choisissez un dossier de documents avant de poser une question sur vos documents.",
+    "no_data_folder_set": "Choisissez un dossier de données avant de l'ouvrir dans l'explorateur de fichiers.",
+    "data_folder_no_longer_allowed": "Votre dossier de données ne respecte plus les règles de sécurité, le plus souvent parce qu'un service en ligne le recopie désormais. Choisissez-le à nouveau.",
     "invalid_request": "L'IA a refusé la demande car elle était mal formée. Merci de le signaler.",
     "model_alias_not_allowed": "Le profil {requested} n'est pas proposé par cette IA. Choisissez-en un autre dans les réglages.",
     "ocr_failed": "Cette page n'a pas pu être lue par la reconnaissance ({path}, page {page}).",

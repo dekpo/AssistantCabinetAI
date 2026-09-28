@@ -5,6 +5,7 @@ import type { AppError } from "../lib/errors";
 import type { AppSettings, ThemeChoice } from "../lib/ipc";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DataFolderCard } from "./DataFolderCard";
 import { ErrorBanner } from "./ErrorBanner";
 import { WorkFolderCard } from "./WorkFolderCard";
 
@@ -26,6 +27,7 @@ export function SettingsDialog({
   settings,
   settingsPath,
   suggestedWorkFolder,
+  suggestedDataFolder,
   aliases,
   saveError,
   indexing,
@@ -36,6 +38,7 @@ export function SettingsDialog({
   settings: AppSettings;
   settingsPath: string;
   suggestedWorkFolder: string | null;
+  suggestedDataFolder: string | null;
   aliases: string[];
   saveError: AppError | null;
   /** The same analysis pass the sidebar card starts: one pass, wherever it is started from. */
@@ -204,6 +207,12 @@ export function SettingsDialog({
           suggestedWorkFolder={suggestedWorkFolder}
           onChosen={(path) => onUpdate({ workFolder: path })}
           indexing={indexing}
+        />
+
+        <DataFolderCard
+          dataFolder={settings.dataFolder}
+          suggestedDataFolder={suggestedDataFolder}
+          onChosen={(path) => onUpdate({ dataFolder: path })}
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}

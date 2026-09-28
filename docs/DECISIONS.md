@@ -249,6 +249,22 @@ and "Profession-neutral model-facing text".
 | Profession-neutral model-facing text | **Standing rule, not a one-time cleanup** (`AGENTS.md`). Every string sent to the model must read the same for a doctor, a lawyer, a notary or an accountant. `BASE_SYSTEM_PROMPT`, `RETRIEVAL_INSTRUCTION` and `NO_DOCUMENTS_INSTRUCTION` no longer mention "practice", "patient", "doctor" or "practitioner"; each carries a guard test that fails the build if one reappears. The one kept word, "clinical" - one of three parallel examples, "clinical, legal, financial or otherwise" - is deliberate: naming it alongside two other professions is what makes the sentence read as multi-profession, and dropping it would have been less protective, not more neutral |
 | What was not changed | The selection default (still "none"), the mandatory documents folder, the memory budget mechanics (`fit_history`, whole exchanges, oldest dropped first), and the follow-up query heuristic. None of these caused the regression |
 
+## Settled by the Data Folder UI session (28 September 2026)
+
+Frontend follow-up to the 28 September Rust plumbing session (`Settings.data_folder`,
+`choose_data_folder`, `ensure_suggested_data_folder`, `reveal_data_folder`). A working session note
+had recommended starting with a settings-panel-only card and adding a sidebar presence "only once
+the CSV/XLSX feature has something to show" — that was one agent's own recommendation, never
+entered here, and the owner overruled it the same day.
+
+| Subject | Decision |
+| --- | --- |
+| Where the Data Folder card lives | **Both.** A dedicated card in the sidebar, directly under the documents folder card, and the same card again in the settings panel — not settings-only. The owner's reasoning: the folder is choosable today (Rust plumbing already ships it) and a control that only exists in Settings reads as hidden, not as "not ready yet" |
+| The Data Folder card's shape | Deliberately **smaller** than `WorkFolderCard`, not a clone of its behaviour: choose, see the suggested path, create it, change it, reveal it in the file manager. No Analyse button, no file listing, no index reset — there is no spreadsheet parsing or indexing to drive them yet (sprint 2b proper). Same CSS classes as the documents folder card (`.card`, `.card__title`, `.work-folder__row`, the same buttons), so the two look alike wherever a control is actually offered |
+| CSV/XLSX in document retrieval | **Still out**, unchanged from the sprint 2 architectural reframe: tabular files get their own engine (`docs/SPRINT-2-ASSESSMENT.md`), not a flattening into text chunks fed to the documents pipeline. The data folder card added this session is infrastructure only — choosing and revealing a folder — and does not read, index or analyse a single file |
+| Card title casing | "Data folder" / "Dossier des données", the same sentence-case convention as `workFolder.title` ("Documents folder" / "Dossier des documents"). Both render in capitals on screen because `.card__title` already applies `text-transform: uppercase` — the catalogue strings stay sentence case so the CSS rule, not a hand-typed literal, is what makes them read as capitals |
+| `abbreviateWorkFolderPath()` | Renamed to `abbreviateFolderPath()` in `lib/folderPath.ts`: the function was already generic over any folder path, but its name named the work-folder concept specifically, and it is now shared by both cards. Behaviour and every Documents Folder call site are unchanged |
+
 ## Known blind spots to keep in mind
 
 - **File actions are the number one business risk.** A bad batch rename over hundreds of documents is far

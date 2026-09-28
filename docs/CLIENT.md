@@ -22,7 +22,7 @@ Reference: [Tauri 2](https://v2.tauri.app/start/), [webview versions](https://v2
 
 One window, one product:
 
-- **left:** the work folder (files);
+- **left:** the documents folder, then the data folder (files);
 - **right:** chat, the proposed plan, and Approve / Cancel;
 - **top:** Assistant Cabinet AI;
 - **settings:** light / dark / follow the system, and the language, defaulting to the system choice.
@@ -99,6 +99,22 @@ After she has filed the documents in her own software, the work folder empties i
 **Undo the batch** works only while the files are still in the work folder. What she typed into Medilink is
 outside our reach, and the screen says so. If she empties the dedicated trash herself, we do not restore —
 same as Explorer or the Finder.
+
+## The data folder
+
+A second, sibling folder for tabular files (CSV, XLSX): `~/AssistantCabinetAI/DATA`, beside
+`~/AssistantCabinetAI/DOCS`. The documents folder feeds retrieval — extract, index, answer with
+sources. The data folder is not a second documents folder and does not feed that pipeline: it
+exists so CSV/XLSX files never share a directory with PDF/DOCX/scans, ahead of the tabular engine
+that will actually read them (sprint 2b, `docs/DECISIONS.md`).
+
+Its own card sits in the sidebar, under the documents folder card, and again in the settings
+panel — same markup and styling as the documents folder card (`.card`, the same buttons), reusing
+`WorkFolderPolicy`'s allow-list rules as-is. It is deliberately smaller: choose, see the suggested
+path, create it, change it, reveal it in the file manager. No analyse button, no file listing and
+no index reset, because there is no spreadsheet parsing or indexing yet — those controls would
+have nothing to do. The description on the card says so, so nobody mistakes an empty folder box
+for a working feature.
 
 ## Why not Open WebUI Computer
 

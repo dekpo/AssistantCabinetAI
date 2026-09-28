@@ -20,8 +20,8 @@ import {
   type FileRecord,
   type InventoryReport,
 } from "../lib/ipc";
+import { abbreviateFolderPath } from "../lib/folderPath";
 import { counted } from "../lib/plural";
-import { abbreviateWorkFolderPath } from "../lib/workFolderPath";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
@@ -84,7 +84,7 @@ export function WorkFolderCard({
      directory above the folder's own name is dropped, and only "collapsible" is this tight - the
      settings panel has the room to show the whole thing (`detail`, above). */
   const shownPath = (path: string) =>
-    detail === "collapsible" ? abbreviateWorkFolderPath(path) : path;
+    detail === "collapsible" ? abbreviateFolderPath(path) : path;
   const { finishedPasses, reset: resetIndexing } = indexing;
   /* Filled while one more pass would still change what the software knows, plain once it would
      not: the button says "do this next" exactly while that is true, and no longer. */

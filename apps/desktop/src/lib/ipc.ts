@@ -27,7 +27,7 @@ export interface AppSnapshot {
   systemLocale: string;
   /** Where `settings.json` lives on this machine. Shown in the settings panel, never guessed. */
   settingsPath: string;
-  /** `~/AssistantCabinetAI`, proposed when nothing has been chosen. Null when there is no home. */
+  /** `~/AssistantCabinetAI/DOCS`, proposed when nothing has been chosen. Null when there is no home. */
   suggestedWorkFolder: string | null;
   /** Machine codes for what went wrong while reading, without preventing the window opening. */
   warnings: string[];
@@ -280,7 +280,7 @@ export function chooseWorkFolder(): Promise<string> {
   return invoke<string>("choose_work_folder");
 }
 
-/** Create `~/AssistantCabinetAI` if it is missing, then return the accepted path. */
+/** Create `~/AssistantCabinetAI/DOCS` if it is missing, then return the accepted path. */
 export function ensureSuggestedWorkFolder(): Promise<string> {
   return invoke<string>("ensure_suggested_work_folder");
 }

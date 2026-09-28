@@ -22,6 +22,7 @@ that were spread across the earlier French notes. If a decision changes, change 
 | Permanent delete | **No** in v1. Dedicated trash folder only |
 | Allow-list equal to all of Documents | **No** — a dedicated work folder |
 | Work folder under Documents | **No**, corrected 18 September 2026. Windows Known Folder Move and iCloud "Desktop & Documents" mirror Documents to a cloud service. The folder is `~/AssistantCabinetAI`, directly in the home |
+| Documents live at the work folder's root | **No**, decided 28 September 2026, ahead of CSV/XLSX work. The suggested and allow-listed folder is `~/AssistantCabinetAI/DOCS`, a dedicated subfolder, so a sibling `~/AssistantCabinetAI/DATA` for spreadsheet work can be added later without the two kinds of file sharing one directory. The sidebar shows the abbreviated path (`…\DOCS` / `…/DOCS`); the settings panel still shows it in full |
 | A folder any cloud client synchronises | **Refused in code**, with the product named on screen, re-checked at every launch. No opt-out. `docs/PRIVACY-AND-SECURITY.md` |
 | Local retrieval index location | `%LOCALAPPDATA%` (`app_local_data_dir()`), never roaming `%APPDATA%`: the index holds document text, and a roaming profile copies `%APPDATA%` to a server |
 | A large model on the 2019 practice PC | **No.** A thin client, yes — otherwise no local file writes are possible |

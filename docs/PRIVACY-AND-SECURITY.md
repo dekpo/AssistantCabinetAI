@@ -46,7 +46,8 @@ File Provider client — OneDrive, Dropbox, Google Drive, Box — mounts under `
 
 ### What the code does about it
 
-The work folder is `~/AssistantCabinetAI`, directly in the home. OneDrive Backup only covers Desktop,
+The work folder is `~/AssistantCabinetAI/DOCS` (a dedicated `DOCS` subfolder, so a future `DATA`
+subfolder for spreadsheet work can sit beside it), directly in the home. OneDrive Backup only covers Desktop,
 Documents, Pictures, Music and Videos, and iCloud only Desktop and Documents, so neither reaches it. The
 same is true of File History and the Windows Backup app. The location is a default, not the guarantee;
 the guarantee is in `apps/desktop/src-tauri/src/work_folder.rs`:

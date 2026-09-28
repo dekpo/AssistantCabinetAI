@@ -1,0 +1,21 @@
+{
+  "locale": "en-US",
+  "_comment": "Vocabulary for classifying a question about a selected workbook as structural (answered from TabularInventory alone) or a data-analysis operation (computed by tabular::engine, no model call either way). Data, never literals in Rust (docs/DECISIONS.md). A sheet or column name is never guessed from this list - it is matched against the workbook's own real names, in tabular/question.rs.",
+  "structural": {
+    "sheets": ["sheet", "sheets", "tab", "tabs"],
+    "rows": ["row", "rows", "line", "lines", "entry", "entries"],
+    "columns": ["column", "columns", "field", "fields"],
+    "numeric": ["numeric"],
+    "formulas": ["formula", "formulas"]
+  },
+  "operations": {
+    "count": ["count", "many", "number"],
+    "distinct": ["distinct", "unique", "different"],
+    "sum": ["sum", "total", "add"],
+    "min": ["minimum", "min", "lowest", "smallest"],
+    "max": ["maximum", "max", "highest"],
+    "largest_row": ["largest", "biggest"],
+    "sort": ["sort", "order", "ranked"]
+  },
+  "descending": ["descending", "desc"]
+}

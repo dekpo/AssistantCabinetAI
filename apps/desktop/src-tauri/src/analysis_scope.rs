@@ -12,8 +12,14 @@
 //!
 //! Deliberately absent, so they cannot drift from real membership or from what consumes them: a
 //! scope id (nothing persists a session yet), the allowed domains (derived on demand from each
-//! member's `FileRecord::kind`), a purpose label, a status enum, and sheet restrictions (Sprint 2b
-//! adds `sheet_names` to `ScopeEntry` when a tabular engine exists to read them).
+//! member's `FileRecord::kind`), and a purpose label or status enum.
+//!
+//! Sprint 2b adds `sheet_names` to `ScopeEntry`: a selected workbook may be narrowed to some of
+//! its sheets. `FileRecord` stays sheet-agnostic (`docs/ARCHITECTURE.md`'s rule that a domain
+//! fact lives with the domain that produced it), so the restriction cannot live on the resolved
+//! inventory the way the rest of a scope does. `ScopeResolution::sheet_restrictions` carries it
+//! instead, keyed by relative path, and the tabular engine is the only reader of it: retrieval
+//! and the document router never look at it.
 
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +46,12 @@ pub struct ScopeEntry {
     /// this entry was added, so a silent file replacement mid-conversation can be detected.
     pub pinned_id: String,
     pub added_at: i64,
+    /// Restricts a selected workbook to these sheets. Empty means every sheet it holds -
+    /// meaningless for a document entry, and never consulted for one. Sheet names, not indices,
+    /// because they are what a workbook's own inventory names them by and what survives a column
+    /// being inserted elsewhere in the file.
+    #[serde(default)]
+    pub sheet_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,19 +91,27 @@ impl AnalysisScope {
                 no_documents_chosen: false,
                 missing: Vec::new(),
                 changed: Vec::new(),
+                sheet_restrictions: std::collections::BTreeMap::new(),
             };
         };
 
         let mut members = Vec::new();
         let mut missing = Vec::new();
         let mut changed = Vec::new();
+        let mut sheet_restrictions = std::collections::BTreeMap::new();
         for entry in entries {
             match full.find_by_relative_path(&entry.relative_path) {
                 None => missing.push(entry.relative_path.clone()),
                 Some(record) if record.id != entry.pinned_id => {
                     changed.push(entry.relative_path.clone())
                 }
-                Some(record) => members.push(record.clone()),
+                Some(record) => {
+                    if !entry.sheet_names.is_empty() {
+                        sheet_restrictions
+                            .insert(entry.relative_path.clone(), entry.sheet_names.clone());
+                    }
+                    members.push(record.clone());
+                }
             }
         }
         ScopeResolution {
@@ -103,6 +123,7 @@ impl AnalysisScope {
             no_documents_chosen: entries.is_empty(),
             missing,
             changed,
+            sheet_restrictions,
         }
     }
 }
@@ -122,6 +143,22 @@ pub struct ScopeResolution {
     pub missing: Vec<String>,
     /// Entries whose file is there but no longer has the content that was pinned.
     pub changed: Vec<String>,
+    /// Sheet names a surviving entry was narrowed to, keyed by relative path. A path absent here
+    /// carries no restriction: every sheet the workbook holds is in scope. Read only by the
+    /// tabular engine (`tabular::engine::execute`), which must treat a sheet outside this list
+    /// exactly as it treats a sheet that does not exist - never distinguishing the two, or a
+    /// question could probe which sheets exist outside the scope she chose.
+    pub sheet_restrictions: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl ScopeResolution {
+    /// The sheets a workbook at `relative_path` is restricted to, if any. `None` means
+    /// unrestricted - every sheet the workbook holds.
+    pub fn sheets_allowed(&self, relative_path: &str) -> Option<&[String]> {
+        self.sheet_restrictions
+            .get(relative_path)
+            .map(Vec::as_slice)
+    }
 }
 
 #[cfg(test)]
@@ -143,6 +180,7 @@ mod tests {
                 relative_path: "2026/mars/bilan.pdf".to_string(),
                 pinned_id: "abc123".to_string(),
                 added_at: 2_000,
+                sheet_names: Vec::new(),
             }]),
             created_at: 1_000,
             updated_at: 2_000,
@@ -188,14 +226,24 @@ mod tests {
     }
 
     fn explicit(entries: &[(&str, &str)]) -> AnalysisScope {
+        explicit_with_sheets(
+            &entries
+                .iter()
+                .map(|(path, id)| (*path, *id, &[][..]))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn explicit_with_sheets(entries: &[(&str, &str, &[&str])]) -> AnalysisScope {
         AnalysisScope {
             mode: ScopeMode::Explicit(
                 entries
                     .iter()
-                    .map(|(path, id)| ScopeEntry {
+                    .map(|(path, id, sheets)| ScopeEntry {
                         relative_path: path.to_string(),
                         pinned_id: id.to_string(),
                         added_at: 1,
+                        sheet_names: sheets.iter().map(|s| s.to_string()).collect(),
                     })
                     .collect(),
             ),
@@ -268,6 +316,89 @@ mod tests {
                 .resolve(&folder())
                 .no_documents_chosen
         );
+    }
+
+    #[test]
+    fn a_sheet_restriction_is_reported_only_for_the_entry_that_carries_one() {
+        let resolution = explicit_with_sheets(&[
+            ("a.txt", "id-a", &["Facturation"]),
+            ("b.txt", "id-b", &[]),
+        ])
+        .resolve(&folder());
+
+        assert_eq!(
+            resolution.sheets_allowed("a.txt"),
+            Some(&["Facturation".to_string()][..])
+        );
+        assert_eq!(resolution.sheets_allowed("b.txt"), None);
+        assert_eq!(resolution.sheets_allowed("c.txt"), None);
+    }
+
+    #[test]
+    fn an_empty_sheet_names_list_means_unrestricted() {
+        let resolution = explicit_with_sheets(&[("a.txt", "id-a", &[])]).resolve(&folder());
+
+        assert_eq!(resolution.sheets_allowed("a.txt"), None);
+    }
+
+    #[test]
+    fn a_sheet_restriction_on_a_changed_or_missing_entry_is_not_reported() {
+        // The entry did not survive, so nothing at all should be said about its sheets - a
+        // restriction on a workbook that was rejected would be a stray fact nobody can act on.
+        let resolution = explicit_with_sheets(&[
+            ("a.txt", "old-id", &["Facturation"]),
+            ("gone.txt", "id-x", &["Consultations"]),
+        ])
+        .resolve(&folder());
+
+        assert!(resolution.sheet_restrictions.is_empty());
+    }
+
+    #[test]
+    fn the_whole_folder_scope_never_carries_a_sheet_restriction() {
+        let resolution = AnalysisScope::whole_folder(1).resolve(&folder());
+
+        assert!(resolution.sheet_restrictions.is_empty());
+    }
+
+    #[test]
+    fn sheet_names_round_trip_through_the_wire_form() {
+        let scope = explicit_with_sheets(&[("data.csv", "id-1", &["Facturation", "Stock"])]);
+        let json = serde_json::to_value(&scope).unwrap();
+
+        let ScopeMode::Explicit(entries) = &scope.mode else {
+            panic!("expected an explicit scope");
+        };
+        assert_eq!(
+            json["mode"]["entries"][0]["sheetNames"],
+            serde_json::json!(["Facturation", "Stock"])
+        );
+        let back: AnalysisScope = serde_json::from_value(json).unwrap();
+        assert_eq!(back, scope);
+        assert_eq!(entries[0].sheet_names, vec!["Facturation", "Stock"]);
+    }
+
+    #[test]
+    fn a_scope_entry_with_no_sheet_names_field_still_deserialises() {
+        // Written before this field existed, or written by a caller that only ever means "every
+        // sheet". `#[serde(default)]` is what keeps that reading as "unrestricted" rather than a
+        // parse failure.
+        let json = serde_json::json!({
+            "mode": {
+                "kind": "explicit",
+                "entries": [
+                    { "relativePath": "a.csv", "pinnedId": "id-a", "addedAt": 1 }
+                ]
+            },
+            "createdAt": 1,
+            "updatedAt": 1
+        });
+
+        let scope: AnalysisScope = serde_json::from_value(json).unwrap();
+        let ScopeMode::Explicit(entries) = &scope.mode else {
+            panic!("expected an explicit scope");
+        };
+        assert!(entries[0].sheet_names.is_empty());
     }
 
     #[test]

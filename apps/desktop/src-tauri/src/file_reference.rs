@@ -373,7 +373,7 @@ fn path_like_tokens(question: &str) -> Vec<String> {
 /// Lowercase, accents removed, one canonical form for every spelling of an accent. What she types
 /// and what the folder holds are compared through this, so an accented "Esaie", "Esaie" and "ESAIE" are one
 /// name, and a Mac's two-code-point accent is the same as Windows's one.
-fn fold_text(text: &str) -> String {
+pub(crate) fn fold_text(text: &str) -> String {
     use unicode_normalization::char::is_combining_mark;
     use unicode_normalization::UnicodeNormalization;
     text.nfd()

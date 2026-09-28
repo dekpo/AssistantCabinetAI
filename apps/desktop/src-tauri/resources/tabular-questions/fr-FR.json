@@ -1,0 +1,21 @@
+{
+  "locale": "fr-FR",
+  "_comment": "Vocabulaire de classification d'une question sur un classeur selectionne : structurelle (repondue depuis TabularInventory seul) ou operation d'analyse de donnees (calculee par tabular::engine, sans appel au modele dans les deux cas). Donnees, jamais des litteraux en Rust (docs/DECISIONS.md). Un nom de feuille ou de colonne n'est jamais devine depuis cette liste - il est compare aux noms reels du classeur, dans tabular/question.rs. Formes accentuees et non accentuees toutes deux presentes, comme dans work-folder-questions (on ne peut pas exiger qu'un accent soit tape).",
+  "structural": {
+    "sheets": ["feuille", "feuilles", "onglet", "onglets"],
+    "rows": ["ligne", "lignes", "entree", "entrees", "entrée", "entrées"],
+    "columns": ["colonne", "colonnes", "champ", "champs"],
+    "numeric": ["numerique", "numérique"],
+    "formulas": ["formule", "formules"]
+  },
+  "operations": {
+    "count": ["compte", "combien", "nombre"],
+    "distinct": ["distinct", "distinctes", "uniques", "differentes", "différentes"],
+    "sum": ["somme", "total", "totale"],
+    "min": ["minimum", "min"],
+    "max": ["maximum", "max"],
+    "largest_row": ["grosse", "importante", "important"],
+    "sort": ["trier", "tri", "ordonner"]
+  },
+  "descending": ["decroissant", "décroissant", "descendant"]
+}

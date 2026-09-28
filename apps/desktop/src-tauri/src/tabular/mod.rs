@@ -14,7 +14,11 @@
 //! This module reads files only. It never sends anything to the gateway or the network.
 
 pub mod csv_adapter;
+pub mod engine;
+pub mod escalation;
 pub mod inventory;
+pub mod question;
+pub mod structural;
 pub mod xlsx_adapter;
 
 use std::path::Path;
@@ -29,6 +33,13 @@ pub enum TabularError {
     ParseFailed,
     #[error("unsupported_extension")]
     UnsupportedExtension,
+    /// The bytes on disk no longer hash to the identity the caller expected - the workbook
+    /// changed, or was replaced, since whatever pinned that identity (a cached inventory, a
+    /// selected `ScopeEntry`) was built. The engine must reject it explicitly rather than run
+    /// against a workbook that is silently no longer the one that was chosen
+    /// (`docs/SESSION-DATA-04-TABULAR-Engine.md` section 5).
+    #[error("workbook_changed")]
+    WorkbookChanged,
 }
 
 /// One cell, exactly as the adapter read it. A formula's cached value and its expression are
@@ -121,6 +132,36 @@ pub fn build_inventory(
     ))
 }
 
+/// Re-read a workbook and confirm it still hashes to `expected_workbook_id` before handing back
+/// fresh cells and a fresh inventory to run an operation against.
+///
+/// This is what `AnalysisScope::resolve`'s `changed`/`missing` reporting does for a *selected*
+/// workbook, applied at the moment the engine actually reads one: a workbook can change between
+/// the pass that built the cached inventory the scope pinned and the question that reads it, and
+/// silently running the engine against the old inventory but the new bytes - or the new bytes
+/// under the old inventory's stale header/column assumptions - would be exactly the quiet failure
+/// this pipeline exists to avoid (`docs/SESSION-DATA-04-TABULAR-Engine.md` section 5).
+pub fn load_current(
+    path: &Path,
+    relative_path: &str,
+    expected_workbook_id: &str,
+) -> Result<(Workbook, inventory::TabularInventory), TabularError> {
+    let inventory = build_inventory(path, relative_path)?;
+    if inventory.workbook_id != expected_workbook_id {
+        return Err(TabularError::WorkbookChanged);
+    }
+    let extension = path
+        .extension()
+        .map(|ext| ext.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let workbook = match extension.as_str() {
+        "csv" => csv_adapter::CsvDataSource.open(path)?,
+        "xls" | "xlsx" | "xlsm" => xlsx_adapter::XlsxDataSource.open(path)?,
+        _ => return Err(TabularError::UnsupportedExtension),
+    };
+    Ok((workbook, inventory))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +181,96 @@ mod tests {
         let result = build_inventory(&path, "archive.zip");
 
         assert_eq!(result.unwrap_err(), TabularError::UnsupportedExtension);
+    }
+
+    // --- Adversarial cases (docs/SESSION-DATA-04-TABULAR-Engine.md section 7) ------------
+
+    #[test]
+    fn a_workbook_that_changed_since_the_inventory_was_built_is_rejected_explicitly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("montants.csv");
+        std::fs::write(&path, b"nom,montant\nCamille,10\n").unwrap();
+        let original = build_inventory(&path, "montants.csv").unwrap();
+
+        // The file changes underneath the pinned identity - a new export overwriting the old one,
+        // for instance - before the next question reads it.
+        std::fs::write(&path, b"nom,montant\nCamille,10\nEsaie,20\n").unwrap();
+
+        let result = load_current(&path, "montants.csv", &original.workbook_id);
+
+        assert_eq!(result.unwrap_err(), TabularError::WorkbookChanged);
+    }
+
+    #[test]
+    fn a_workbook_with_an_unchanged_hash_loads_fresh_cells_and_inventory() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("montants.csv");
+        std::fs::write(&path, b"nom,montant\nCamille,10\n").unwrap();
+        let original = build_inventory(&path, "montants.csv").unwrap();
+
+        let (workbook, inventory) =
+            load_current(&path, "montants.csv", &original.workbook_id).unwrap();
+
+        assert_eq!(inventory, original);
+        assert_eq!(workbook.sheets[0].rows.len(), 2);
+    }
+
+    #[test]
+    fn a_workbook_that_has_disappeared_from_disk_is_rejected_not_guessed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("montants.csv");
+        std::fs::write(&path, b"nom,montant\nCamille,10\n").unwrap();
+        let original = build_inventory(&path, "montants.csv").unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        let result = load_current(&path, "montants.csv", &original.workbook_id);
+
+        assert_eq!(result.unwrap_err(), TabularError::ReadFailed);
+    }
+
+    #[test]
+    fn two_workbooks_with_confusable_file_names_are_never_chosen_between() {
+        // The tabular pipeline reuses the same file-reference resolver documents already use -
+        // it does not reinvent ambiguity handling for its own file kind.
+        use crate::file_reference::{FileReferenceResolver, ReferenceStatus};
+        use crate::file_record::{mime_type_for, split_name, FileKind, FileRecord};
+        use crate::inventory::WorkFolderInventory;
+
+        fn workbook_record(relative_path: &str) -> FileRecord {
+            let name = relative_path.rsplit('/').next().unwrap().to_string();
+            let (stem, extension) = split_name(&name);
+            FileRecord {
+                id: format!("id-{relative_path}"),
+                relative_path: relative_path.to_string(),
+                name,
+                stem,
+                mime_type: mime_type_for(&extension).to_string(),
+                kind: FileKind::from_extension(&extension),
+                extension,
+                size_bytes: 1,
+                modified_at: None,
+                sha256: Some("f".repeat(64)),
+                readability: crate::file_record::Readability::Readable,
+                processing_status: crate::file_record::ProcessingStatus::Indexed,
+                extraction_method: crate::file_record::ExtractionMethod::None,
+                indexed: false,
+                index_metadata: None,
+            }
+        }
+
+        let inventory = WorkFolderInventory::from_records(
+            Path::new("data"),
+            vec![
+                workbook_record("2026/janvier/facturation.csv"),
+                workbook_record("2026/mars/facturation.csv"),
+            ],
+        );
+
+        let resolution =
+            FileReferenceResolver::new(&inventory).resolve("facturation.csv");
+
+        assert_eq!(resolution.status, ReferenceStatus::MultipleMatches);
+        assert_eq!(resolution.candidates.len(), 2);
     }
 }

@@ -295,6 +295,51 @@ fn cell_text(cell: &CellValue) -> Option<String> {
     }
 }
 
+/// The data rows one sheet's inventory was built from: below the header when one was found,
+/// every row otherwise - the exact slicing `build_sheet` used, so the engine that computes over
+/// these rows and the inventory that counted them can never disagree about which rows they are.
+pub(crate) fn data_rows<'a>(
+    sheet_inventory: &SheetInventory,
+    data: &'a SheetData,
+) -> &'a [Vec<CellValue>] {
+    match sheet_inventory.header_row {
+        Some(index) if index < data.rows.len() => &data.rows[index + 1..],
+        _ => &data.rows[..],
+    }
+}
+
+/// A cell's value as a number, under the same locale rules `classify_cell` uses - a plain
+/// decimal point or a lone decimal comma, never a guessed thousands separator. `None` for
+/// anything that is not a number, including a formula: a formula's cached value is never treated
+/// as an ordinary numeric cell by this function, because the caller must decide separately
+/// whether an unverified cached value may be used at all (`docs/DECISIONS.md`, "a formula's
+/// cached result").
+pub(crate) fn numeric_value(cell: &CellValue) -> Option<f64> {
+    match cell {
+        CellValue::Number(number) => Some(*number),
+        CellValue::Text(text) => parse_locale_number(text.trim()),
+        _ => None,
+    }
+}
+
+/// A cell's value as text, for display in a row listing (`tabular::engine::row_cells`) - what a
+/// person would actually see in the cell, not the file's internal representation of it. A
+/// formula cell therefore shows its last cached value when one was read, falling back to the
+/// expression only when no cached value exists; `cell_text` alone would show the expression
+/// always, which reads as if the sheet stored formula source text as data. This is a display
+/// choice only - it never marks the value verified, and every aggregate that would have to read
+/// a formula column's values refuses before reaching this function at all
+/// (`docs/DECISIONS.md`, "a formula's cached result").
+pub(crate) fn text_value(cell: &CellValue) -> String {
+    match cell {
+        CellValue::Formula {
+            cached_value: Some(inner),
+            ..
+        } => text_value(inner),
+        other => cell_text(other).unwrap_or_default(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

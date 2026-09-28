@@ -21,6 +21,7 @@ import {
   type InventoryReport,
 } from "../lib/ipc";
 import { counted } from "../lib/plural";
+import { abbreviateWorkFolderPath } from "../lib/workFolderPath";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
@@ -79,6 +80,11 @@ export function WorkFolderCard({
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const showSuggestion = workFolder === null && suggestedWorkFolder !== null;
+  /* In the sidebar, the box is a column among others, not a place to read a path: the home
+     directory above the folder's own name is dropped, and only "collapsible" is this tight - the
+     settings panel has the room to show the whole thing (`detail`, above). */
+  const shownPath = (path: string) =>
+    detail === "collapsible" ? abbreviateWorkFolderPath(path) : path;
   const { finishedPasses, reset: resetIndexing } = indexing;
   /* Filled while one more pass would still change what the software knows, plain once it would
      not: the button says "do this next" exactly while that is true, and no longer. */
@@ -282,13 +288,13 @@ export function WorkFolderCard({
            is choosing a folder, and the rest of the time it is four lines the conversation could
            have had. */
         <p className="path" title={t("workFolder.descriptionFull")}>
-          {workFolder}
+          {shownPath(workFolder)}
         </p>
       ) : showSuggestion ? (
         <>
           <p className="card__description">{t("workFolder.suggestionLabel")}</p>
           <p className="path" title={t("workFolder.descriptionFull")}>
-            {suggestedWorkFolder}
+            {suggestedWorkFolder === null ? null : shownPath(suggestedWorkFolder)}
           </p>
           <p className="card__description">{t("workFolder.suggestionWhy")}</p>
         </>

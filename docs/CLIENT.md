@@ -105,21 +105,40 @@ same as Explorer or the Finder.
 A second, sibling folder for tabular files (CSV, XLSX): `~/AssistantCabinetAI/Data`, beside
 `~/AssistantCabinetAI/Docs`. The documents folder feeds retrieval — extract, index, answer with
 sources. The data folder is not a second documents folder and does not feed that pipeline: it
-exists so CSV/XLSX files never share a directory with PDF/DOCX/scans, and it now sits in front of
-a real engine — Sprint 2b sessions 3 and 4 built `TabularDataSource`/`TabularInventory` and the
-deterministic `tabular::engine` (`docs/ARCHITECTURE.md`'s "Tabular analysis" row) — but nothing in
-the client invokes any of it yet.
+exists so CSV/XLSX files never share a directory with PDF/DOCX/scans, and it feeds the deterministic
+tabular engine (`tabular::engine`, `docs/ARCHITECTURE.md`'s "Tabular analysis" row) instead.
+**Unlike the documents folder, it is never required**: the conversation works without one.
 
-Its own card sits in the sidebar, under the documents folder card, and again in the settings
-panel — same markup and styling as the documents folder card (`.card`, the same buttons), reusing
-`WorkFolderPolicy`'s allow-list rules as-is. It is deliberately smaller: choose, see the suggested
-path, create it, change it, reveal it in the file manager. No analyse button, no file listing and
-no index reset, because nothing yet reads a file from this folder — the card is folder
-infrastructure only, and the Rust engine behind it is reachable from `cargo test` but from no
-Tauri command. The description on the card says so, so nobody mistakes an empty folder box for a
-working feature. Wiring a command, a scope selection and a chat surface to it is future work,
-deliberately not decided by the engine session: see `docs/SELECTION-AND-MEMORY.md`, "documents and
-tables together".
+Its card is the documents folder card, cloned (tabular UI session, 28 September 2026): one
+component, `DataFolderCard`, in the sidebar and again in the settings panel, built from the same
+parts as `WorkFolderCard` (`components/FolderCardParts.tsx`) — the same buttons (Voir, Changer,
+Reset, **Analyser**), the same summary line ("X fichiers, Y analysés, Z illisibles"), the same dots,
+and, in the sidebar, the same selection list ("Données utilisées : aucune ⚠ / N fichiers /
+toutes ⚠").
+
+- **Analyser** (`index_data_folder`) cleans file names exactly as the documents pass does (same
+  rule, same `renamed-files.jsonl`), then parses every CSV/XLS/XLSX/XLSM file on this computer and
+  caches its `TabularInventory`. No embedding and no gateway call, so it is over in a moment; the
+  line under the card says so, because an Analyse that finishes before the spinner is seen would
+  otherwise read as a button that did nothing.
+- **Three states per file**, computed by `data_folder::DataFolder` from the filesystem
+  (`WorkFolderInventory`, unchanged, built with no index) joined with the cached inventories
+  (`IndexStore::all_tabular_inventories`): orange, not analysed yet or changed since; green, at
+  least one sheet looks like a real table (`TabularInventory::has_a_usable_sheet`: 8 rows, 2
+  columns, formulas under 5 % of the rows); red, analysed and nothing usable in it — a note renamed
+  `.csv`, a three-row table, a file that is not a workbook — or not a spreadsheet at all.
+- **Only a green file can be ticked**, as only an analysed document can be. Unticking the last file
+  returns to "aucune", never to "toutes". Changing the data folder resets the data selection; the
+  next Analyse drops the inventories of files no longer present.
+- **Reset** (`reset_data_index`) forgets the workbook analyses only. The documents index is never
+  touched by it, nor the workbooks by the documents card's Reset.
+
+A conversation with workbooks selected and no document is answered by the tabular engine alone —
+tier 2 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a computed value or a
+structural fact, cited by **sheet** (and column) where a document answer cites its page, with no
+model involved; or, when the engine cannot answer exactly, a sentence naming the workbook's real
+columns and the operations that work. Documents and workbooks selected together are refused with
+`documents_and_tables_together` for now: combining them is the next session's design.
 
 ## Why not Open WebUI Computer
 

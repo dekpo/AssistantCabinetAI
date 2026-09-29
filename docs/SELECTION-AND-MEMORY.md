@@ -51,12 +51,14 @@ Which material a question is answered from is decided by Rust, deterministically
 selected - never guessed by the model from the question's wording. Three tiers, evaluated in this order:
 
 1. **A document is selected** → `retrieval::RETRIEVAL_INSTRUCTION`, held to its excerpts, unconditionally.
-2. **Reserved for Sprint 2b: no document is selected, but tabular data is.** No code yet - `analysis_scope`
-   and the selection only know about documents today - but the chain is designed with this slot in mind so
-   the tabular engine does not have to redesign the honesty rule when it lands. When it does: an instruction
-   of the same shape as `RETRIEVAL_INSTRUCTION`, held strictly to the deterministic tabular result, not to
-   raw rows and not to the model's own arithmetic (`## Open direction: documents and tables together`,
-   below).
+2. **No document is selected, but tabular data is** → the tabular engine alone (`tabular_answer`), with
+   **no model at all** (since the tabular UI session, 28 September 2026). `AnalysisScope` carries the two
+   selections side by side (`mode` for documents, `dataMode` for workbooks) and `AnalysisScope::tier` picks
+   the tier from them before any file is read. A question the engine answers returns a computed value or a
+   structural fact, citing its sheet; one it cannot answer returns a *nudge* naming the workbook's real
+   columns and the operations that do work - never an open-chat fallback. `tabular::escalation::TABULAR_INSTRUCTION`
+   is kept, unsent, for the case below where both are selected. Both selected at once is refused
+   (`documents_and_tables_together`) until that case is designed.
 3. **Neither is selected** → `conversation::NO_DOCUMENTS_INSTRUCTION`. Meant to be rare - once tier 2 exists,
    this is reached only when she has attached neither a document nor a table - and still cautious even then:
    general knowledge is a last resort the instruction explicitly bounds ("stay strictly factual: never
@@ -249,10 +251,10 @@ about documents or not. What is remembered, and how much:
 
 Recorded now so Sprint 2b starts from it rather than inventing it under pressure. Not a decision.
 
-The case of tables and **no** documents is tier 2 of `## The grounding priority chain`, above - reserved
-there already, so implementing it here means adding one instruction constant next to
-`NO_DOCUMENTS_INSTRUCTION`, not redesigning how the model is told what it may trust. The case below, both
-selected, is the one the chain does not cover on its own and needs the design that follows.
+The case of tables and **no** documents is tier 2 of `## The grounding priority chain`, above - built, and
+answered by the engine alone, with no model. The case below, both selected, is the one the chain does not
+cover on its own and needs the design that follows; until then it is refused explicitly
+(`documents_and_tables_together`) rather than routed to one side.
 
 - **Each engine alone, never carrying the other's material.** Tables selected and no documents: the tabular
   engine runs, with no excerpt. Documents selected and no tables: the document engine runs, with no data and

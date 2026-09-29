@@ -31,6 +31,7 @@ export function SettingsDialog({
   aliases,
   saveError,
   indexing,
+  dataIndexing,
   onUpdate,
   onReset,
   onClose,
@@ -43,6 +44,8 @@ export function SettingsDialog({
   saveError: AppError | null;
   /** The same analysis pass the sidebar card starts: one pass, wherever it is started from. */
   indexing: IndexingState;
+  /** The Data Folder's pass, the same one its sidebar card starts. */
+  dataIndexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure.
    * Written as a method rather than `() => Promise<void>` so the literal guard in
@@ -213,6 +216,7 @@ export function SettingsDialog({
           dataFolder={settings.dataFolder}
           suggestedDataFolder={suggestedDataFolder}
           onChosen={(path) => onUpdate({ dataFolder: path })}
+          indexing={dataIndexing}
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}

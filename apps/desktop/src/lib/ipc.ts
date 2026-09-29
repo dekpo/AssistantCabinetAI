@@ -221,6 +221,121 @@ export interface IndexSummary {
   chunkCount: number;
 }
 
+/**
+ * The Data Folder as its card shows it: every file, each with its tabular state carried in the
+ * same `readability` / `processingStatus` fields the Documents Folder listing reads - `indexed` is
+ * green (a usable table), `failed` is red (analysed, nothing usable, or not a spreadsheet at all),
+ * `discovered` and `pending` are orange (not analysed yet, or changed since).
+ */
+export interface DataFolderReport {
+  rootIdentifier: string;
+  summary: DataFolderSummary;
+  files: FileRecord[];
+}
+
+export interface DataFolderSummary {
+  totalFiles: number;
+  analysedFiles: number;
+  unreadableFiles: number;
+  notAssessedFiles: number;
+}
+
+/** Why the tabular engine could not answer exactly. Machine codes: this side writes the sentence. */
+export type NotAnswerableReason =
+  | "sheet_not_found"
+  | "ambiguous_sheet_name"
+  | "column_not_found"
+  | "ambiguous_column_name"
+  | "row_out_of_range"
+  | "non_numeric_column"
+  | "formula_cannot_be_verified"
+  | "empty_sheet";
+
+/** Where inside a workbook a value came from: the tabular sibling of `Evidence.pageNumber`. */
+export interface TabularLocator {
+  sheet: string;
+  headerRow: number | null;
+  column: string | null;
+  /** 0-indexed, inclusive, into the sheet's data rows. */
+  rowRange: [number, number] | null;
+}
+
+export interface TabularCell {
+  column: string;
+  text: string;
+}
+
+export interface TabularRow {
+  rowIndex: number;
+  cells: TabularCell[];
+}
+
+export type TabularValue =
+  | { kind: "count"; value: number }
+  | { kind: "sum"; value: number }
+  | { kind: "min"; value: number }
+  | { kind: "max"; value: number }
+  | { kind: "distinct"; value: string[] }
+  | { kind: "group_sums"; value: { group: string; sum: number }[] }
+  /** The groups with the largest totals, largest first: a total per group, never one row. */
+  | {
+      kind: "largest_group";
+      value: { groupColumn: string; top: { group: string; sum: number }[]; groupCount: number };
+    }
+  | { kind: "largest_row"; value: TabularRow }
+  | { kind: "row"; value: TabularRow }
+  | { kind: "rows"; value: TabularRow[] };
+
+export interface TabularDerivation {
+  kind: "computed";
+  operation: string;
+  row_count: number;
+}
+
+/** A structural fact read from a workbook's inventory. Rust's field names, as they cross. */
+export type StructuralAnswer =
+  | { kind: "sheet_names"; sheets: string[] }
+  | { kind: "row_count"; sheet: string; rows: number }
+  | { kind: "column_names"; sheet: string; columns: string[] }
+  | { kind: "is_column_numeric"; sheet: string; column: string; numeric: boolean }
+  | { kind: "has_formulas"; sheet: string; has_formulas: boolean };
+
+/**
+ * A question the tabular engine answered, with no model and no gateway call: tables were
+ * selected and no document was (`docs/SELECTION-AND-MEMORY.md`, tier 2). Facts and machine codes;
+ * the sentence is written in `lib/tabularAnswer.ts`.
+ */
+export type TabularAnswer =
+  | {
+      kind: "value";
+      file: string;
+      value: TabularValue;
+      locator: TabularLocator;
+      derivation: TabularDerivation;
+    }
+  | { kind: "structural"; file: string; answer: StructuralAnswer }
+  | {
+      kind: "nudge";
+      file: string;
+      /** Null when the question was not recognised at all. */
+      reason: NotAnswerableReason | null;
+      availableSheets: string[];
+      availableColumns: string[];
+      /** A column the engine can total as it stands, for a concrete example. */
+      exampleColumn: string | null;
+      /** A text column to group by, for a second example. */
+      exampleGroup: string | null;
+    }
+  /** A group question with several columns it could total, none named: asked, never picked. */
+  | { kind: "which_measure"; file: string; groupColumn: string; candidates: string[] }
+  | { kind: "workbook_unreadable"; file: string }
+  | { kind: "workbook_not_analysed"; file: string }
+  | { kind: "which_workbook"; candidates: string[] }
+  | { kind: "ambiguous_reference"; query: string; candidates: string[] }
+  | { kind: "file_not_selected"; query: string }
+  | { kind: "no_matching_file"; query: string }
+  | { kind: "no_usable_table" };
+
 export interface AskAnswer {
   answer: string;
   sources: Evidence[];
@@ -235,6 +350,9 @@ export interface AskAnswer {
   scopeOutdated: string[];
   /** She selected no document, so this answer rests on none. Said under the answer. */
   withoutDocuments: boolean;
+  /** Set when tables were selected and no document: the tabular engine answered it. `answer` is
+   * then empty. */
+  tabularAnswer: TabularAnswer | null;
 }
 
 /**
@@ -255,10 +373,20 @@ export interface ScopeEntry {
   addedAt: number;
 }
 
+/**
+ * One selection list, as a card holds it. Both cards use this same shape, each relative to its own
+ * folder; `combineScopes` joins them into what is sent with a question.
+ */
 export interface AnalysisScope {
   mode: ScopeMode;
   createdAt: number;
   updatedAt: number;
+}
+
+/** What a question is sent with: the Documents selection (`mode`) and the Data selection
+ * (`dataMode`), built from both lists before every question. */
+export interface CombinedScope extends AnalysisScope {
+  dataMode: ScopeMode;
 }
 
 export function loadAppSnapshot(): Promise<AppSnapshot> {
@@ -315,6 +443,36 @@ export function ensureSuggestedDataFolder(): Promise<string> {
  * folder from settings. */
 export function revealDataFolder(): Promise<void> {
   return invoke<void>("reveal_data_folder");
+}
+
+/** Show one file of the Data Folder, selected in the system's file manager. A path relative to
+ * the Data Folder, as its listing gives it; Rust refuses anything else. */
+export function revealDataFile(relativePath: string): Promise<void> {
+  return invoke<void>("reveal_data_file", { relativePath });
+}
+
+/**
+ * The Data Folder's Analyse: clean file names, then every CSV/XLSX parsed on this computer. No
+ * embedding and no AI: it is over in moments. Reported in the Documents pass's own shape -
+ * `indexedFiles` counts the workbooks holding a usable table.
+ */
+export function indexDataFolder(
+  onProgress?: (progress: IndexProgress) => void,
+): Promise<IndexSummary> {
+  const channel = new Channel<IndexProgress>();
+  channel.onmessage = (message) => onProgress?.(message);
+  return invoke<IndexSummary>("index_data_folder", { onProgress: channel });
+}
+
+/** What is in the Data Folder right now, and which workbooks hold a usable table. */
+export function dataFolderInventory(): Promise<DataFolderReport> {
+  return invoke<DataFolderReport>("data_folder_inventory");
+}
+
+/** Forget every workbook analysis. The documents' analysis and every file stay as they are.
+ * Confirm before calling it. */
+export function resetDataIndex(): Promise<void> {
+  return invoke<void>("reset_data_index");
 }
 
 /** Show one file of the work folder, selected in the system's file manager. Takes the path
@@ -379,8 +537,9 @@ export function askWithSources(
   /** Ask the model even when the work folder could answer on its own. Her choice, made on an
    * answer she has already seen. */
   skipDeterministic = false,
-  /** The files the question may draw on. Left out, the whole folder. */
-  scope?: AnalysisScope,
+  /** The files the question may draw on, from both folders. Left out, the whole documents
+   * folder and no table. */
+  scope?: CombinedScope,
   /** The conversation so far. Rust keeps as much of it as the chosen model can read. */
   history: ChatTurn[] = [],
 ): Promise<AskAnswer> {

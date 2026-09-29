@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
-import type { AnalysisScope } from "../lib/ipc";
+import type { CombinedScope } from "../lib/ipc";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
@@ -23,8 +23,8 @@ export function ChatPanel({
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
-  /** The files this conversation is about, chosen in the folder card beside it. */
-  scope: AnalysisScope;
+  /** The files this conversation is about, chosen in the two folder cards beside it. */
+  scope: CombinedScope;
   /** Whether a question is being answered, so the folder card can lock the choice meanwhile. */
   onBusyChange: (busy: boolean) => void;
   modelAlias: string;

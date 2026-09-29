@@ -1,13 +1,7 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
-import {
-  scopedPaths,
-  selectionOf,
-  tickedPaths,
-  toggleAll,
-  toggleScopeFile,
-} from "../lib/analysisScope";
+import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
   chooseWorkFolder,
@@ -26,6 +20,14 @@ import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
 import { ErrorBanner } from "./ErrorBanner";
+import {
+  AnalyseButton,
+  AnalysisProgress,
+  FileList,
+  isSelectable,
+  SelectAll,
+  StatusDot,
+} from "./FolderCardParts";
 import { WarningGlyph } from "./WarningGlyph";
 
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
@@ -261,6 +263,9 @@ export function WorkFolderCard({
     }
   };
 
+  /* The same words a deterministic answer prints, so the panel and an answer cannot disagree. */
+  const statusLabel = (file: FileRecord) => t(`folderAnswer.processing.${file.processingStatus}`);
+
   const run = async (action: typeof chooseWorkFolder) => {
     setError(null);
     resetIndexing();
@@ -436,10 +441,12 @@ export function WorkFolderCard({
                   scope={scope}
                   onScopeChange={onScopeChange}
                   disabled={scopeLocked || analysedCount === 0}
+                  label={t("chat.scopeSelectAll")}
                 />
               )}
               <FileList
                 files={inventory.files}
+                statusLabel={statusLabel}
                 scope={scope}
                 onScopeChange={onScopeChange}
                 scopeLocked={scopeLocked}
@@ -449,7 +456,11 @@ export function WorkFolderCard({
           ) : (
             <>
               {passSummary}
-              <FileList files={inventory.files} onReveal={(path) => void revealFile(path)} />
+              <FileList
+                files={inventory.files}
+                statusLabel={statusLabel}
+                onReveal={(path) => void revealFile(path)}
+              />
             </>
           )}
         </>
@@ -468,207 +479,5 @@ export function WorkFolderCard({
         />
       ) : null}
     </section>
-  );
-}
-
-/**
- * The one control that starts a pass. Filled with the accent colour only while a pass would still
- * change something - once every file has been read it is an ordinary button beside "change the
- * folder", because by then it is a thing she may do, not the thing she must do first.
- */
-function AnalyseButton({
-  indexing,
-  emphasised,
-  pendingCount,
-}: {
-  indexing: IndexingState;
-  emphasised: boolean;
-  /** How many documents the pass would still change. Shown only while it is worth acting on. */
-  pendingCount: number;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <button
-      type="button"
-      className={
-        emphasised
-          ? "button button--compact button--primary work-folder__analyse"
-          : "button button--compact work-folder__analyse"
-      }
-      disabled={indexing.running}
-      onClick={() => void indexing.run()}
-    >
-      {indexing.running ? (
-        <span className="message__pending">
-          <span className="spinner" aria-hidden="true" />
-          {t("actions.analyzing")}
-        </span>
-      ) : pendingCount > 0 ? (
-        /* "Analyser (3)". The count rides inside the label rather than in a separate badge: the
-           row already carries three controls, and a badge would be a fourth thing competing for
-           the same few pixels. */
-        `${t("actions.analyze")} (${pendingCount})`
-      ) : (
-        t("actions.analyze")
-      )}
-    </button>
-  );
-}
-
-/** A hairline that fills as the pass walks the folder. Gone the moment the pass ends. */
-function AnalysisProgress({ fraction, label }: { fraction: number; label: string }) {
-  return (
-    <div
-      className="progress"
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(fraction * 100)}
-    >
-      <div className="progress__fill" style={{ width: `${fraction * 100}%` }} />
-    </div>
-  );
-}
-
-/** Only a file whose analysis is current can be selected: only it can be searched as it is now,
- * and a selection never pins a file whose stored passages are older than its content. */
-function isSelectable(file: FileRecord): boolean {
-  return file.processingStatus === "indexed";
-}
-
-/**
- * The box above the listing: every document, or none. Checked for "tous", partly filled while
- * some files are ticked, empty for "aucun" - the same three states the line above it names.
- */
-function SelectAll({
-  scope,
-  onScopeChange,
-  disabled,
-}: {
-  scope: AnalysisScope;
-  onScopeChange: (scope: AnalysisScope) => void;
-  disabled: boolean;
-}) {
-  const { t } = useTranslation();
-  const box = useRef<HTMLInputElement>(null);
-  const selection = selectionOf(scope);
-
-  /* "Partly filled" has no attribute, only a DOM property, so it is set after each render. */
-  useEffect(() => {
-    if (box.current !== null) {
-      box.current.indeterminate = selection === "some";
-    }
-  }, [selection]);
-
-  return (
-    <label className="inventory__choice scope-picker__all">
-      <input
-        ref={box}
-        type="checkbox"
-        disabled={disabled}
-        checked={selection === "all"}
-        onChange={() => onScopeChange(toggleAll(scope, Date.now()))}
-      />
-      <span>{t("chat.scopeSelectAll")}</span>
-    </label>
-  );
-}
-
-type Tone = "ok" | "wait" | "fail";
-
-/** What a file's state looks like at a glance: read and searchable, waiting for an analysis, or
- * unreadable. The words stay on hover and for screen readers - a colour alone is not an answer. */
-const TONE_OF_STATUS: Record<FileRecord["processingStatus"], Tone> = {
-  indexed: "ok",
-  discovered: "wait",
-  pending: "wait",
-  processing: "wait",
-  failed: "fail",
-};
-
-function StatusDot({ tone, label }: { tone: Tone; label: string }) {
-  return <span className={`status-dot status-dot--${tone}`} role="img" aria-label={label} title={label} />;
-}
-
-/** One file per row: a dot for its state, then its name, so the listing is one short line per
- * file in the sidebar and in the settings panel alike. The state's words are on the dot's hover,
- * and are the same words a deterministic answer prints, so the panel and an answer can never
- * disagree. */
-function FileList({
-  files,
-  scope,
-  onScopeChange,
-  scopeLocked = false,
-  onReveal,
-}: {
-  files: FileRecord[];
-  /** When given, each row ends with a "See" button that shows the file in the file manager. */
-  onReveal?: (relativePath: string) => void;
-  /** When given, each analysed file gets a checkbox: the listing doubles as the choice of the
-   * documents the conversation may rely on. Only analysed files can be chosen, because only they
-   * can be searched as they are now; choosing one copies nothing. */
-  scope?: AnalysisScope;
-  onScopeChange?: (scope: AnalysisScope) => void;
-  scopeLocked?: boolean;
-}) {
-  const { t } = useTranslation();
-  const analysed = files.filter(isSelectable);
-  const ticked = scope === undefined ? [] : tickedPaths(scope, analysed);
-  const selectable = scope !== undefined && onScopeChange !== undefined;
-
-  return (
-    <ul className="inventory">
-      {files.map((file) => {
-        const dot = (
-          <StatusDot
-            tone={TONE_OF_STATUS[file.processingStatus]}
-            label={t(`folderAnswer.processing.${file.processingStatus}`)}
-          />
-        );
-        /* One line, whatever the path costs: a name broken across two lines is harder to scan
-           than one that ends in an ellipsis, and the full path is on hover for the rare name long
-           enough to need it. */
-        const name = (
-          <span className="inventory__path" title={file.relativePath}>
-            {file.relativePath}
-          </span>
-        );
-        return (
-          <li key={file.id + file.relativePath} className="inventory__file">
-            {selectable ? (
-              <label className="inventory__choice">
-                <input
-                  type="checkbox"
-                  disabled={scopeLocked || !isSelectable(file)}
-                  checked={ticked.includes(file.relativePath)}
-                  onChange={() =>
-                    onScopeChange(toggleScopeFile(scope, file, analysed, Date.now()))
-                  }
-                />
-                {dot}
-                {name}
-              </label>
-            ) : (
-              <>
-                {dot}
-                {name}
-              </>
-            )}
-            {onReveal === undefined ? null : (
-              <button
-                type="button"
-                className="button button--compact inventory__see"
-                title={t("workFolder.revealFileHint")}
-                onClick={() => onReveal(file.relativePath)}
-              >
-                {t("workFolder.reveal")}
-              </button>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }

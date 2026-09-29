@@ -47,6 +47,20 @@ describe("conversation history", () => {
     ]);
   });
 
+  it("leaves out the tabular engine's suggestion of what to ask instead", () => {
+    expect(
+      conversationHistory([
+        { role: "user", content: "q1" },
+        { role: "assistant", content: "Its columns are: montant.", tabularNudge: true },
+        { role: "user", content: "q2" },
+        { role: "assistant", content: "a2" },
+      ]),
+    ).toStrictEqual([
+      { role: "user", content: "q2" },
+      { role: "assistant", content: "a2" },
+    ]);
+  });
+
   it("is empty for a new conversation", () => {
     expect(conversationHistory([])).toStrictEqual([]);
   });

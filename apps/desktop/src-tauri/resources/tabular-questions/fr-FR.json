@@ -11,11 +11,22 @@
   "operations": {
     "count": ["compte", "combien", "nombre"],
     "distinct": ["distinct", "distinctes", "uniques", "differentes", "différentes"],
+    "list": ["liste", "listes", "lister", "listez", "affiche", "afficher", "affichez", "montre", "montrer", "montrez", "enumere", "énumère", "enumerer", "énumérer"],
     "sum": ["somme", "total", "totale"],
     "min": ["minimum", "min"],
     "max": ["maximum", "max"],
     "largest_row": ["grosse", "importante", "important"],
     "sort": ["trier", "tri", "ordonner"]
+  },
+  "groups": {
+    "which": ["quel", "quelle", "quels", "quelles", "lequel", "laquelle", "qui"],
+    "most": ["plus", "maximum", "max", "premier", "premiere", "première"],
+    "per": ["par", "chaque"]
+  },
+  "column_names": {
+    "_comment": "Mots a l'interieur du nom d'une colonne. Lus dans tous les packs a la fois, quelle que soit la langue de l'interface, car les en-tetes d'un classeur sont dans la langue de son export. 'measures' designe une colonne a additionner ; 'not_measures' un nombre qui n'est pas un montant (une annee, un identifiant, un code). Sert seulement a choisir la colonne a additionner quand la question n'en nomme aucune.",
+    "measures": ["montant", "montants", "cout", "couts", "coût", "coûts", "prix", "recette", "recettes", "depense", "depenses", "dépense", "dépenses", "total", "valeur", "somme", "honoraires", "tarif", "solde", "ttc", "ht", "budget"],
+    "not_measures": ["id", "annee", "annees", "année", "années", "code", "postal", "telephone", "téléphone", "numero", "numéro", "num", "mois", "jour", "ref", "reference", "référence", "siret", "siren", "type"]
   },
   "descending": ["decroissant", "décroissant", "descendant"]
 }

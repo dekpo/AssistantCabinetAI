@@ -12,9 +12,10 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::analysis_scope::AnalysisScope;
+use crate::analysis_scope::{AnalysisScope, GroundingTier};
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::conversation::{self, ContextBudget, ModelBudgets};
+use crate::data_folder::{self, DataFolder, DataFolderReport};
 use crate::error::AppError;
 use crate::file_record::FileRecord;
 use crate::filename_sanitizer;
@@ -29,6 +30,7 @@ use crate::raster::{self, PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
 use crate::reveal;
 use crate::settings::{self, Settings};
+use crate::tabular_answer::{self, TabularAnswer};
 use crate::work_folder::{
     self, display, suggested_data_folder, suggested_work_folder, WorkFolderPolicy,
 };
@@ -43,6 +45,9 @@ pub struct AppState {
     /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
     /// scan in the folder (`inventory::FileHashCache`).
     pub file_hashes: FileHashCache,
+    /// The same, for the Data Folder. Kept apart so resetting one folder's analysis never makes
+    /// the other re-read its files.
+    pub data_file_hashes: FileHashCache,
     /// Each model's context budget, as the gateway last published it (`conversation`).
     pub model_budgets: Mutex<ModelBudgets>,
 }
@@ -54,6 +59,7 @@ impl AppState {
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
             file_hashes: FileHashCache::new(),
+            data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
         })
     }
@@ -319,17 +325,7 @@ pub async fn index_work_folder(
     // agree on one spelling of each file. Logged as it happens: a pass that fails afterwards must
     // not leave a renamed file with no record of what it used to be.
     let sanitised = filename_sanitizer::sanitize_folder(Path::new(&work_folder));
-    if let Ok(directory) = app.path().app_local_data_dir() {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_secs() as i64)
-            .unwrap_or(0);
-        let _ = filename_sanitizer::append_log(
-            &directory.join("renamed-files.jsonl"),
-            &sanitised.renamed,
-            now,
-        );
-    }
+    log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
     let mut summary = indexing::run(
@@ -448,6 +444,91 @@ pub fn reset_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), App
     Ok(())
 }
 
+/// The Data Folder's Analyse: clean names first, exactly as for the Documents Folder, then every
+/// CSV/XLS/XLSX/XLSM file parsed and its inventory cached (`data_folder::analyse`). No embedding
+/// and no gateway call - local parsing only, so it is over in moments where the Documents pass
+/// takes minutes. Counts only on the progress channel: no file name, no cell.
+#[tauri::command]
+pub fn index_data_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    on_progress: Channel<IndexProgress>,
+) -> Result<IndexSummary, AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+
+    // The same rename, the same log and the same guarantees as the Documents Folder's pass
+    // (`docs/DECISIONS.md`, "clean file names"): the name only, never the content, never over
+    // another file, never out of its folder.
+    let sanitised = filename_sanitizer::sanitize_folder(Path::new(&data_folder));
+    log_renames(&app, &sanitised.renamed);
+
+    let mut index = open_index(&app)?;
+    let mut summary = data_folder::analyse(Path::new(&data_folder), &mut index, &|progress| {
+        let _ = on_progress.send(progress);
+    })?;
+    summary.renamed_files = sanitised.renamed;
+    summary.rename_failed_files = sanitised.failed;
+    Ok(summary)
+}
+
+/// What is in the Data Folder right now, and which workbooks hold a usable table: the
+/// filesystem, joined with the cached tabular inventories. The one place both are read together
+/// (`docs/DECISIONS.md`, "the two inventories stay separate").
+#[tauri::command]
+pub fn data_folder_inventory(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DataFolderReport, AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let index = open_index(&app).ok();
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        index.as_ref(),
+        &state.data_file_hashes,
+    )?;
+    Ok(folder.report())
+}
+
+/// Show one file of the Data Folder, selected in the system's file manager. A path relative to
+/// the Data Folder and nothing else, refused if it could leave it - `reveal_work_file`'s rules.
+#[tauri::command]
+pub fn reveal_data_file(state: State<'_, AppState>, relative_path: String) -> Result<(), AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    reveal::file(Path::new(&data_folder), &relative_path)
+}
+
+/// Forget every workbook analysis, and nothing else: the Data Folder card's Reset. The documents
+/// index is left exactly as it is, as `reset_index` leaves the workbooks - two cards, two
+/// independent resets. No file in either folder is touched.
+#[tauri::command]
+pub fn reset_data_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    let mut index = open_index(&app)?;
+    index.clear_tabular_inventories()?;
+    state.data_file_hashes.forget_all();
+    Ok(())
+}
+
+/// Append the renames a pass made to `renamed-files.jsonl`, as they happen: a pass that fails
+/// afterwards must not leave a renamed file with no record of what it used to be.
+fn log_renames(app: &AppHandle, renamed: &[filename_sanitizer::Renamed]) {
+    if let Ok(directory) = app.path().app_local_data_dir() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs() as i64)
+            .unwrap_or(0);
+        let _ = filename_sanitizer::append_log(&directory.join("renamed-files.jsonl"), renamed, now);
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AskAnswer {
@@ -474,6 +555,9 @@ pub struct AskAnswer {
     pub scope_outdated: Vec<String>,
     /// She selected no document, so this answer rests on none. The interface says so under it.
     pub without_documents: bool,
+    /// Present when tables were selected and no document: the tabular engine answered, with no
+    /// gateway call. `answer` is then empty, as for `folder_answer`.
+    pub tabular_answer: Option<TabularAnswer>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -602,6 +686,15 @@ async fn sourced_answer(
         scope,
         history,
     } = asked;
+
+    // Which tier this question is on, decided from the two selections before anything is read
+    // (`docs/SELECTION-AND-MEMORY.md`, the grounding priority chain).
+    match scope.tier() {
+        // Not designed yet, so not guessed at: neither engine is chosen for her.
+        GroundingTier::DocumentsAndTables => return Err(AppError::DocumentsAndTablesTogether),
+        GroundingTier::TablesOnly => return tabular_tier(app, state, &question, &scope),
+        GroundingTier::Documents => {}
+    }
     let (work_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) = state
         .read(|settings| {
             (
@@ -702,6 +795,7 @@ async fn sourced_answer(
                 unanalysed_files: 0,
                 scope_outdated,
                 without_documents: false,
+                tabular_answer: None,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -731,6 +825,7 @@ async fn sourced_answer(
             unanalysed_files: 0,
             scope_outdated: Vec::new(),
             without_documents: true,
+            tabular_answer: None,
         });
     }
 
@@ -852,6 +947,46 @@ async fn sourced_answer(
         unanalysed_files: inventory.unanalysed_documents(),
         scope_outdated,
         without_documents: false,
+        tabular_answer: None,
+    })
+}
+
+/// Tier 2: tables selected, no document. Answered by the tabular engine alone - structural facts,
+/// computed values, or a nudge naming the real columns - with no gateway call, no embedding and no
+/// model, whether or not `skip_deterministic` was asked for: there is no model on this tier to ask
+/// (`tabular_answer`). The conversation history is not needed and not read.
+fn tabular_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+) -> Result<AskAnswer, AppError> {
+    let (data_folder, locale) =
+        state.read(|settings| (settings.data_folder.clone(), settings.locale.clone()))?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let index = open_index(app)?;
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
+    let answer = tabular_answer::answer(
+        question,
+        &folder,
+        &scope.data_mode,
+        locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE),
+    )?;
+    Ok(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated: Vec::new(),
+        without_documents: false,
+        tabular_answer: Some(answer),
     })
 }
 

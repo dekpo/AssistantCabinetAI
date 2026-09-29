@@ -56,6 +56,10 @@ pub struct ColumnInventory {
     pub inferred_type: ColumnType,
     /// Whether any data cell in this column carries a formula rather than a plain value.
     pub has_formulas: bool,
+    /// A numeric column whose every value is a whole number between 1900 and 2100: a year, not
+    /// an amount. Never totalled unless a question names it (`tabular::question`).
+    #[serde(default)]
+    pub year_like: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,7 +76,21 @@ pub struct SheetInventory {
     pub columns: Vec<ColumnInventory>,
     /// True when at least one cell anywhere on the sheet carries a formula.
     pub has_formulas: bool,
+    /// How many data cells carry a formula, counted in the same pass as `has_formulas`. Read by
+    /// `has_a_usable_sheet` only. Defaults to zero for an inventory cached before the field
+    /// existed; the next Analyse pass rebuilds every workbook, so the default never outlives it.
+    #[serde(default)]
+    pub formula_cells: usize,
 }
+
+/// "Does this sheet look like a real data table", in numbers borrowed from LocalGridMind's
+/// `src/core/stats.py` (`TABULAR_MIN_ROWS`, `TABULAR_MIN_COLUMNS`, `TABULAR_MAX_FORMULA_RATIO`),
+/// tuned there against real spreadsheets. Numbers only: no code is shared
+/// (`docs/DECISIONS.md`, "external reference: LocalGridMind").
+const USABLE_MIN_ROWS: usize = 8;
+const USABLE_MIN_COLUMNS: usize = 2;
+/// Formula cells, as a share of the sheet's data rows.
+const USABLE_MAX_FORMULA_RATIO: f64 = 0.05;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,6 +133,28 @@ impl TabularInventory {
             .filter(|sheet| sheet.name == name)
             .collect()
     }
+
+    /// Whether at least one sheet looks like a table a person could actually query - the
+    /// difference between green and red on the Data Folder listing. "Parsed without an error" is
+    /// not enough: the CSV adapter reads almost any text as a one-column sheet, so a note renamed
+    /// `.csv` parses cleanly and still holds nothing to ask about.
+    ///
+    /// Deliberately per sheet, never a per-file formula budget: the engine already refuses
+    /// column by column when a formula is involved, so one formula-laden sheet must not hide a
+    /// clean one beside it (`docs/DECISIONS.md`, "the tabular UI session").
+    pub fn has_a_usable_sheet(&self) -> bool {
+        self.sheets.iter().any(SheetInventory::looks_tabular)
+    }
+}
+
+impl SheetInventory {
+    /// Enough rows and columns to be a grid rather than a note, and few enough formulas that its
+    /// values are mostly stored rather than computed by the file.
+    pub fn looks_tabular(&self) -> bool {
+        self.row_count >= USABLE_MIN_ROWS
+            && self.column_count >= USABLE_MIN_COLUMNS
+            && (self.formula_cells as f64) <= USABLE_MAX_FORMULA_RATIO * self.row_count as f64
+    }
 }
 
 fn build_sheet(sheet: &SheetData) -> SheetInventory {
@@ -129,6 +169,11 @@ fn build_sheet(sheet: &SheetData) -> SheetInventory {
         .map(|index| build_column(sheet, header_row, data_rows, index))
         .collect();
     let has_formulas = columns.iter().any(|column| column.has_formulas);
+    let formula_cells = data_rows
+        .iter()
+        .flatten()
+        .filter(|cell| matches!(cell, CellValue::Formula { .. }))
+        .count();
 
     SheetInventory {
         name: sheet.name.clone(),
@@ -137,6 +182,7 @@ fn build_sheet(sheet: &SheetData) -> SheetInventory {
         column_count,
         columns,
         has_formulas,
+        formula_cells,
     }
 }
 
@@ -154,6 +200,7 @@ fn build_column(
         .unwrap_or_else(|| format!("column_{}", index + 1));
 
     let mut has_formulas = false;
+    let mut all_years = true;
     let mut numeric = 0usize;
     let mut date = 0usize;
     let mut other = 0usize;
@@ -167,7 +214,11 @@ fn build_column(
         }
         match classify_cell(cell) {
             CellClass::Empty => {}
-            CellClass::Numeric => numeric += 1,
+            CellClass::Numeric => {
+                numeric += 1;
+                all_years &= numeric_value(cell)
+                    .is_some_and(|value| value.fract() == 0.0 && (1900.0..=2100.0).contains(&value));
+            }
             CellClass::Date => date += 1,
             CellClass::Other => other += 1,
         }
@@ -186,6 +237,7 @@ fn build_column(
         index,
         inferred_type,
         has_formulas,
+        year_like: inferred_type == ColumnType::Numeric && all_years,
     }
 }
 
@@ -498,6 +550,97 @@ mod tests {
 
         assert_eq!(inventory.sheets.len(), 2);
         assert_eq!(inventory.sheets_named("Feuille1").len(), 2);
+    }
+
+    fn grid(rows: usize, formula_rows: usize) -> Vec<Vec<CellValue>> {
+        let mut grid = vec![text_row(&["fournisseur", "montant", "total"])];
+        for index in 0..rows {
+            let total = if index < formula_rows {
+                CellValue::Formula {
+                    expression: format!("B{}*2", index + 2),
+                    cached_value: Some(Box::new(CellValue::Number(2.0))),
+                }
+            } else {
+                CellValue::Number(2.0)
+            };
+            grid.push(vec![
+                CellValue::Text(format!("Fournisseur {index}")),
+                CellValue::Number(1.0),
+                total,
+            ]);
+        }
+        grid
+    }
+
+    fn workbook_of(sheets: Vec<SheetData>) -> TabularInventory {
+        TabularInventory::build(
+            "classeur.xlsx",
+            "hash-w",
+            TabularFormat::Xlsx,
+            &Workbook { sheets },
+        )
+    }
+
+    #[test]
+    fn a_column_of_whole_years_is_marked_year_like_and_an_amount_is_not() {
+        let sheet = build_one(vec![
+            text_row(&["calendar_year", "amount", "code"]),
+            text_row(&["2019", "2019", "12"]),
+            text_row(&["2020", "1500,50", "7"]),
+        ]);
+
+        assert!(sheet.columns[0].year_like);
+        assert!(!sheet.columns[1].year_like, "one amount is not a whole year");
+        assert!(!sheet.columns[2].year_like);
+    }
+
+    #[test]
+    fn formula_cells_are_counted_in_the_same_pass() {
+        let inventory = workbook_of(vec![sheet("Calculs", grid(10, 4))]);
+
+        assert_eq!(inventory.sheets[0].formula_cells, 4);
+    }
+
+    #[test]
+    fn a_sheet_that_is_mostly_formulas_is_not_a_usable_table_on_its_own() {
+        let inventory = workbook_of(vec![sheet("Calculs", grid(20, 20))]);
+
+        assert!(!inventory.has_a_usable_sheet());
+    }
+
+    #[test]
+    fn one_clean_sheet_keeps_a_workbook_usable_beside_a_formula_heavy_one() {
+        // Not LocalGridMind's whole-file formula budget: the engine refuses per column, so the
+        // clean sheet stays queryable however many formulas the other one carries.
+        let inventory = workbook_of(vec![
+            sheet("Calculs", grid(40, 40)),
+            sheet("Facturation", grid(12, 0)),
+        ]);
+
+        assert!(!inventory.sheets[0].looks_tabular());
+        assert!(inventory.sheets[1].looks_tabular());
+        assert!(inventory.has_a_usable_sheet());
+    }
+
+    #[test]
+    fn a_few_formulas_under_the_ratio_do_not_turn_a_sheet_red() {
+        // One formula in twenty-four rows is under 5%.
+        let inventory = workbook_of(vec![sheet("Facturation", grid(24, 1))]);
+
+        assert!(inventory.has_a_usable_sheet());
+    }
+
+    #[test]
+    fn an_inventory_cached_before_formula_cells_existed_still_reads() {
+        let mut json = serde_json::to_value(workbook_of(vec![sheet("F", grid(8, 0))])).unwrap();
+        json["sheets"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("formulaCells");
+
+        let back: TabularInventory = serde_json::from_value(json).unwrap();
+
+        assert_eq!(back.sheets[0].formula_cells, 0);
     }
 
     #[test]

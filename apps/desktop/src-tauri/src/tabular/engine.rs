@@ -79,11 +79,31 @@ pub struct GroupSum {
     pub sum: f64,
 }
 
+/// The groups with the largest totals, largest first: "which agency costs the most". A **total
+/// per group**, never the largest single row - the two are different facts (`docs/RETRIEVAL.md`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupRanking {
+    /// The column the rows were grouped by. The summed column is the locator's `column`.
+    pub group_column: String,
+    /// At most `TOP_GROUPS`, largest total first; ties keep alphabetical order. Two leaders with
+    /// the same total are both here, and the interface says it is a tie rather than pick one.
+    pub top: Vec<GroupSum>,
+    /// How many distinct groups there were in all.
+    pub group_count: usize,
+}
+
+/// How many leading groups a ranking reports: the answer and enough context to read it by.
+pub const TOP_GROUPS: usize = 5;
+
 /// What one deterministic operation actually produced. A group **total** and the largest
 /// **single row** are different facts and are always labelled as such (`docs/RETRIEVAL.md`), so
 /// they are different variants rather than one shape read two ways.
+///
+/// Adjacently tagged (`{"kind": "sum", "value": 12.5}`): an internally tagged enum cannot carry a
+/// bare number or list, and serialising one failed at runtime until the interface first read it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum TabularValue {
     Count(usize),
     Sum(f64),
@@ -92,6 +112,7 @@ pub enum TabularValue {
     /// Sorted, so the same column always reports its distinct values in the same order.
     Distinct(Vec<String>),
     GroupSums(Vec<GroupSum>),
+    LargestGroup(GroupRanking),
     LargestRow(RowValue),
     /// A single row looked up directly, by position - not a maximum.
     Row(RowValue),
@@ -174,6 +195,8 @@ pub enum Operation {
     Min { column: String },
     Max { column: String },
     GroupSum { group_by: String, sum_column: String },
+    /// The group whose total is largest, with the runners-up.
+    LargestGroup { group_by: String, sum_column: String },
     LargestRow { by_column: String },
     Filter { filter: FilterSpec },
     Sort { column: String, descending: bool },
@@ -288,6 +311,10 @@ pub fn execute(
         Operation::GroupSum {
             group_by,
             sum_column,
+        }
+        | Operation::LargestGroup {
+            group_by,
+            sum_column,
         } => {
             let group_col = match resolve_value_column(columns, group_by) {
                 Ok(col) => col,
@@ -324,10 +351,31 @@ pub fn execute(
                 .into_iter()
                 .map(|(group, sum)| GroupSum { group, sum })
                 .collect();
+            if group_sums.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let (value, operation_name) = match operation {
+                Operation::LargestGroup { .. } => {
+                    let group_count = group_sums.len();
+                    let mut top = group_sums;
+                    // Stable: equal totals keep the alphabetical order the map gave them.
+                    top.sort_by(|a, b| b.sum.partial_cmp(&a.sum).unwrap_or(std::cmp::Ordering::Equal));
+                    top.truncate(TOP_GROUPS);
+                    (
+                        TabularValue::LargestGroup(GroupRanking {
+                            group_column: group_col.name.clone(),
+                            top,
+                            group_count,
+                        }),
+                        "largest_group",
+                    )
+                }
+                _ => (TabularValue::GroupSums(group_sums), "group_sum"),
+            };
             TabularOutcome::Value {
-                value: TabularValue::GroupSums(group_sums),
+                value,
                 locator: locator(sheet_inventory, Some(&sum_col.name), Some((0, rows.len() - 1))),
-                derivation: computed("group_sum", rows.len()),
+                derivation: computed(operation_name, rows.len()),
             }
         }
         Operation::LargestRow { by_column } => {
@@ -1294,6 +1342,69 @@ mod tests {
     }
 
     // --- Model independence ----------------------------------------------------------------
+
+    #[test]
+    fn the_largest_group_is_a_total_per_group_with_its_runners_up() {
+        let (workbook, inventory) = invoices();
+
+        let outcome = run(
+            &workbook,
+            &inventory,
+            Operation::LargestGroup {
+                group_by: "fournisseur".into(),
+                sum_column: "montant".into(),
+            },
+        );
+
+        let TabularOutcome::Value {
+            value: TabularValue::LargestGroup(ranking),
+            locator,
+            derivation,
+        } = outcome
+        else {
+            panic!("expected a ranking, got {outcome:?}");
+        };
+        assert_eq!(ranking.group_column, "fournisseur");
+        assert_eq!(ranking.group_count, 3);
+        assert_eq!(
+            ranking.top,
+            vec![
+                GroupSum { group: "Gamma".into(), sum: 500.0 },
+                GroupSum { group: "Alpha".into(), sum: 150.5 },
+                GroupSum { group: "Beta".into(), sum: 75.0 },
+            ]
+        );
+        assert_eq!(locator.column.as_deref(), Some("montant"));
+        assert_eq!(
+            derivation,
+            TabularDerivation::Computed {
+                operation: "largest_group".into(),
+                row_count: 4
+            }
+        );
+    }
+
+    #[test]
+    fn the_largest_group_refuses_a_text_column_as_the_total() {
+        let (workbook, inventory) = invoices();
+
+        let outcome = run(
+            &workbook,
+            &inventory,
+            Operation::LargestGroup {
+                group_by: "montant".into(),
+                sum_column: "fournisseur".into(),
+            },
+        );
+
+        assert!(matches!(
+            outcome,
+            TabularOutcome::NotDeterministicallyAnswerable {
+                reason: NotAnswerableReason::NonNumericColumn,
+                ..
+            }
+        ));
+    }
 
     /// `execute`'s signature takes no gateway, no model alias and no network client of any kind -
     /// this test module never imports `crate::gateway` at all, which is what makes "deterministic

@@ -54,12 +54,52 @@ pub struct ScopeEntry {
     pub sheet_names: Vec<String>,
 }
 
+/// One conversation's scope, built from both selection lists before every question: the
+/// documents she ticked in the Documents Folder card (`mode`) and the workbooks she ticked in the
+/// Data Folder card (`data_mode`). Two modes rather than one mixed list, because each is relative
+/// to its own folder - the same relative path can exist in both - and because "tous" means the
+/// whole of one folder, never of the other.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisScope {
+    /// The Documents Folder selection. Everything in this module's `resolve` reads this one only.
     pub mode: ScopeMode,
+    /// The Data Folder selection. Absent on the wire means no table, which is what every caller
+    /// sent before the Data Folder could be selected from. `WholeFolder` is every green workbook
+    /// in the Data Folder; `Explicit` holds entries relative to the Data Folder.
+    #[serde(default = "ScopeMode::nothing")]
+    pub data_mode: ScopeMode,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+impl ScopeMode {
+    /// An explicit selection with no entry: "aucun".
+    pub fn nothing() -> Self {
+        Self::Explicit(Vec::new())
+    }
+
+    /// Whether this selection chose anything at all. "Tous" did, even over an empty folder.
+    pub fn chose_something(&self) -> bool {
+        match self {
+            Self::WholeFolder => true,
+            Self::Explicit(entries) => !entries.is_empty(),
+        }
+    }
+}
+
+/// Which grounding tier a scope asks for (`docs/SELECTION-AND-MEMORY.md`, the grounding priority
+/// chain), decided from the two selections alone, before any file is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroundingTier {
+    /// Documents chosen, no table: tier 1, retrieval. Also "neither", tier 3, which the document
+    /// path already tells apart through `ScopeResolution::no_documents_chosen`.
+    Documents,
+    /// At least one table chosen and no document: tier 2, the tabular engine, no model.
+    TablesOnly,
+    /// Both. Refused explicitly (`AppError::DocumentsAndTablesTogether`) until combining the two
+    /// is designed; never silently routed to one side.
+    DocumentsAndTables,
 }
 
 impl AnalysisScope {
@@ -67,8 +107,17 @@ impl AnalysisScope {
     pub fn whole_folder(now: i64) -> Self {
         Self {
             mode: ScopeMode::WholeFolder,
+            data_mode: ScopeMode::nothing(),
             created_at: now,
             updated_at: now,
+        }
+    }
+
+    pub fn tier(&self) -> GroundingTier {
+        match (self.mode.chose_something(), self.data_mode.chose_something()) {
+            (true, true) => GroundingTier::DocumentsAndTables,
+            (false, true) => GroundingTier::TablesOnly,
+            (_, false) => GroundingTier::Documents,
         }
     }
 
@@ -117,9 +166,8 @@ impl AnalysisScope {
         ScopeResolution {
             inventory: WorkFolderInventory::from_records(full.root(), members),
             narrowed: true,
-            // Every entry today is a document: the picker offers analysed files only. When tables
-            // can be chosen too, this becomes "no entry is a document", and a table-only choice
-            // reaches the tabular engine without excerpts.
+            // Documents only: a table-only choice never reaches this function's caller on the
+            // document path, because `tier` routes it to the tabular engine first.
             no_documents_chosen: entries.is_empty(),
             missing,
             changed,
@@ -182,6 +230,7 @@ mod tests {
                 added_at: 2_000,
                 sheet_names: Vec::new(),
             }]),
+            data_mode: ScopeMode::nothing(),
             created_at: 1_000,
             updated_at: 2_000,
         };
@@ -247,6 +296,7 @@ mod tests {
                     })
                     .collect(),
             ),
+            data_mode: ScopeMode::nothing(),
             created_at: 1,
             updated_at: 1,
         }
@@ -399,6 +449,69 @@ mod tests {
             panic!("expected an explicit scope");
         };
         assert!(entries[0].sheet_names.is_empty());
+    }
+
+    fn with_data(documents: ScopeMode, data: ScopeMode) -> AnalysisScope {
+        AnalysisScope {
+            mode: documents,
+            data_mode: data,
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
+    fn one_entry(path: &str) -> ScopeMode {
+        ScopeMode::Explicit(vec![ScopeEntry {
+            relative_path: path.to_string(),
+            pinned_id: "id".to_string(),
+            added_at: 1,
+            sheet_names: Vec::new(),
+        }])
+    }
+
+    #[test]
+    fn the_tier_is_decided_from_the_two_selections_alone() {
+        use GroundingTier::*;
+        let none = ScopeMode::nothing;
+        assert_eq!(with_data(none(), none()).tier(), Documents);
+        assert_eq!(with_data(one_entry("a.pdf"), none()).tier(), Documents);
+        assert_eq!(with_data(ScopeMode::WholeFolder, none()).tier(), Documents);
+        assert_eq!(with_data(none(), one_entry("a.csv")).tier(), TablesOnly);
+        assert_eq!(with_data(none(), ScopeMode::WholeFolder).tier(), TablesOnly);
+        assert_eq!(
+            with_data(one_entry("a.pdf"), one_entry("a.csv")).tier(),
+            DocumentsAndTables
+        );
+        assert_eq!(
+            with_data(ScopeMode::WholeFolder, ScopeMode::WholeFolder).tier(),
+            DocumentsAndTables
+        );
+    }
+
+    #[test]
+    fn a_scope_sent_before_the_data_folder_existed_chooses_no_table() {
+        let json = serde_json::json!({
+            "mode": { "kind": "explicit", "entries": [] },
+            "createdAt": 1,
+            "updatedAt": 1
+        });
+
+        let scope: AnalysisScope = serde_json::from_value(json).unwrap();
+
+        assert_eq!(scope.data_mode, ScopeMode::nothing());
+        assert_eq!(scope.tier(), GroundingTier::Documents);
+    }
+
+    #[test]
+    fn the_data_selection_never_leaks_into_the_document_resolution() {
+        // A workbook ticked in the Data Folder is relative to that folder. Resolving the document
+        // selection must not see it at all - not as a member, and not as a missing file either.
+        let resolution =
+            with_data(ScopeMode::nothing(), one_entry("a.txt")).resolve(&folder());
+
+        assert!(resolution.no_documents_chosen);
+        assert!(resolution.inventory.is_empty());
+        assert!(resolution.missing.is_empty());
     }
 
     #[test]

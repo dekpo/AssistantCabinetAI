@@ -9,6 +9,7 @@ pub mod cancellation;
 pub mod chunking;
 mod commands;
 pub mod conversation;
+pub mod data_folder;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
@@ -26,6 +27,7 @@ pub mod retrieval;
 pub mod reveal;
 mod settings;
 pub mod tabular;
+pub mod tabular_answer;
 mod work_folder;
 pub mod work_folder_context;
 
@@ -48,6 +50,10 @@ pub fn run() {
             commands::choose_data_folder,
             commands::ensure_suggested_data_folder,
             commands::reveal_data_folder,
+            commands::reveal_data_file,
+            commands::index_data_folder,
+            commands::data_folder_inventory,
+            commands::reset_data_index,
             commands::check_server_health,
             commands::cancel_chat,
             commands::index_work_folder,

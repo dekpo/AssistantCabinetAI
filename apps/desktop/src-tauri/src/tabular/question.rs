@@ -13,18 +13,19 @@
 //!
 //! **Scope of this classifier, stated rather than discovered by surprise.** It recognises one
 //! operation keyword and at most one column reference per question, and resolves the sheet only
-//! when exactly one is reachable or the question names one unambiguously. It does **not** parse a
-//! filter clause ("... where category is X") or a group-by pair ("total per supplier") out of
-//! free text - `Operation::Filter`, `Operation::Count` with a filter, and `Operation::GroupSum`
-//! are fully supported by `tabular::engine` but are not reached by `classify`, only by
-//! constructing the `Operation` directly. A miscounted filter value would be exactly the kind of
-//! guess this pipeline exists to refuse, so the honest choice is `NotRecognised` rather than a
-//! best-effort parse of a clause this module cannot verify it read correctly.
+//! when exactly one is reachable or the question names one unambiguously. Since the tabular UI
+//! follow-up it also reads two group questions, because both name only real columns and no value:
+//! "which agency costs the most" (`Operation::LargestGroup`) and "total amount per agency"
+//! (`Operation::GroupSum`). The column to total is the one the question names, or else the one
+//! column that reads as an amount (`choose_measure`); when several do, it asks rather than picks.
+//! It still does **not** parse a filter clause ("... where category is X"): a misread filter value
+//! would be exactly the guess this pipeline exists to refuse, so `Operation::Filter` and a filtered
+//! `Operation::Count` are reached only by constructing the `Operation` directly.
 
 use serde::Deserialize;
 
 use super::engine::Operation;
-use super::inventory::{ColumnInventory, TabularInventory};
+use super::inventory::{ColumnInventory, ColumnType, TabularInventory};
 use super::structural::StructuralQuestion;
 use crate::file_reference::fold_text;
 
@@ -45,7 +46,24 @@ const FALLBACK_LOCALE: &str = "fr-FR";
 struct PatternPack {
     structural: StructuralWords,
     operations: OperationWords,
+    groups: GroupWords,
+    column_names: ColumnNameWords,
     descending: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GroupWords {
+    which: Vec<String>,
+    most: Vec<String>,
+    per: Vec<String>,
+}
+
+/// Words found inside a column's own name, not in a question. Read from every pack at once
+/// (`column_words`), since a workbook's headers are in the language it was exported in.
+#[derive(Debug, Clone, Deserialize)]
+struct ColumnNameWords {
+    measures: Vec<String>,
+    not_measures: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -61,6 +79,7 @@ struct StructuralWords {
 struct OperationWords {
     count: Vec<String>,
     distinct: Vec<String>,
+    list: Vec<String>,
     sum: Vec<String>,
     min: Vec<String>,
     max: Vec<String>,
@@ -100,6 +119,11 @@ pub enum TabularRoute {
         sheet: Option<String>,
         operation: Operation,
     },
+    /// A group question whose column to total could be any of `candidates`. Asked, never picked.
+    WhichMeasure {
+        group_by: String,
+        candidates: Vec<String>,
+    },
     /// The question could not be confidently read as either. Never a guess at which operation or
     /// which column was meant.
     NotRecognised,
@@ -109,15 +133,37 @@ pub enum TabularRoute {
 /// `tabular::engine::execute` and `tabular::structural::answer` are - a sheet outside the scope
 /// is never matched by name here either, so a question cannot even be classified against
 /// evidence it could not go on to read.
+///
+/// The interface language's words are tried first, then every other pack's: a question typed in
+/// English on a French interface - or about a workbook with English headers - is still read. Each
+/// pack still only ever points at columns and sheets the workbook really has.
 pub fn classify(
     question: &str,
     inventory: &TabularInventory,
     allowed_sheets: Option<&[String]>,
     locale: &str,
 ) -> TabularRoute {
-    let Some(pack) = pack_for(locale) else {
+    let Some(first) = pack_for(locale) else {
         return TabularRoute::NotRecognised;
     };
+    let others = PACKS
+        .iter()
+        .filter_map(|(_, body)| serde_json::from_str::<PatternPack>(body).ok());
+    for pack in std::iter::once(first).chain(others) {
+        let route = classify_with(question, inventory, allowed_sheets, &pack);
+        if route != TabularRoute::NotRecognised {
+            return route;
+        }
+    }
+    TabularRoute::NotRecognised
+}
+
+fn classify_with(
+    question: &str,
+    inventory: &TabularInventory,
+    allowed_sheets: Option<&[String]>,
+    pack: &PatternPack,
+) -> TabularRoute {
     let tokens = tokenise(question);
     if tokens.is_empty() {
         return TabularRoute::NotRecognised;
@@ -126,12 +172,22 @@ pub fn classify(
     let folded_question = fold_text(question);
     let sheet_name = find_sheet_name(inventory, allowed_sheets, &folded_question);
     let columns = columns_for_matching(inventory, allowed_sheets, sheet_name.as_deref());
-    let column_name = find_column_name(&columns, &folded_question);
+    // The folded-substring match first, as before; then whole words with a regular plural, which
+    // is what reaches `agency` from "agencies" - but only when exactly one column is named.
+    let column_name = find_column_name(&columns, &folded_question).or_else(|| {
+        match named_columns(&columns, question).as_slice() {
+            [only] => Some(only.name.clone()),
+            _ => None,
+        }
+    });
 
-    if let Some(structural) = detect_structural(&tokens, &pack, &sheet_name, &column_name) {
+    if let Some(structural) = detect_structural(&tokens, pack, &sheet_name, &column_name) {
         return TabularRoute::Structural(structural);
     }
-    if let Some(operation) = detect_operation(&tokens, &pack, &column_name) {
+    if let Some(route) = detect_group(&tokens, pack, question, &columns, &sheet_name) {
+        return route;
+    }
+    if let Some(operation) = detect_operation(&tokens, pack, &column_name) {
         return TabularRoute::Operation {
             sheet: sheet_name,
             operation,
@@ -183,6 +239,264 @@ fn detect_structural(
     None
 }
 
+/// "Which agency costs the most" and "total amount per agency": one group column the question
+/// names, and a column to total - the one it names, or the one that reads as an amount. `None`
+/// when the question is not shaped like either, so the ordinary operations still get their turn.
+fn detect_group(
+    tokens: &[String],
+    pack: &PatternPack,
+    question: &str,
+    columns: &[&ColumnInventory],
+    sheet_name: &Option<String>,
+) -> Option<TabularRoute> {
+    let has = |words: &[String]| tokens.iter().any(|token| contains(words, token));
+    let largest = has(&pack.groups.which) && has(&pack.groups.most);
+    let per_group = has(&pack.operations.sum) && has(&pack.groups.per);
+    if !largest && !per_group {
+        return None;
+    }
+
+    let named = named_columns(columns, question);
+    let groups: Vec<&ColumnInventory> = named
+        .iter()
+        .copied()
+        .filter(|column| is_group_column(column))
+        .collect();
+    let [group] = groups.as_slice() else {
+        return None;
+    };
+    let named_measures: Vec<&ColumnInventory> = named
+        .iter()
+        .copied()
+        .filter(|column| {
+            column.index != group.index && is_numeric_value(column) && !column.year_like
+        })
+        .collect();
+    let sum_column = match named_measures.as_slice() {
+        [one] => one.name.clone(),
+        [] => {
+            let others: Vec<&ColumnInventory> = columns
+                .iter()
+                .copied()
+                .filter(|column| column.index != group.index)
+                .collect();
+            match choose_measure(&others) {
+                MeasureChoice::One(name) => name,
+                MeasureChoice::Several(candidates) => {
+                    return Some(TabularRoute::WhichMeasure {
+                        group_by: group.name.clone(),
+                        candidates,
+                    })
+                }
+                MeasureChoice::Nothing => return None,
+            }
+        }
+        several => {
+            return Some(TabularRoute::WhichMeasure {
+                group_by: group.name.clone(),
+                candidates: several.iter().map(|column| column.name.clone()).collect(),
+            })
+        }
+    };
+    let group_by = group.name.clone();
+    Some(TabularRoute::Operation {
+        sheet: sheet_name.clone(),
+        operation: if largest {
+            Operation::LargestGroup {
+                group_by,
+                sum_column,
+            }
+        } else {
+            Operation::GroupSum {
+                group_by,
+                sum_column,
+            }
+        },
+    })
+}
+
+/// A column rows can be grouped by: text, or a year. Never a formula column.
+fn is_group_column(column: &ColumnInventory) -> bool {
+    !column.has_formulas && (column.inferred_type == ColumnType::Categorical || column.year_like)
+}
+
+fn is_numeric_value(column: &ColumnInventory) -> bool {
+    column.inferred_type == ColumnType::Numeric && !column.has_formulas
+}
+
+enum MeasureChoice {
+    One(String),
+    Several(Vec<String>),
+    Nothing,
+}
+
+/// The column to total when the question names none. Only a numeric, formula-free column that is
+/// not a year and whose name is not an identifier, a code or a date part can be; among those, the
+/// ones whose name reads as an amount are preferred. Several equally good ones are returned, never
+/// ranked.
+fn choose_measure(columns: &[&ColumnInventory]) -> MeasureChoice {
+    let words = column_words();
+    let candidates: Vec<&ColumnInventory> = columns
+        .iter()
+        .copied()
+        .filter(|column| {
+            is_numeric_value(column)
+                && !column.year_like
+                && !name_words(&column.name)
+                    .iter()
+                    .any(|word| words.not_measures.contains(word))
+        })
+        .collect();
+    let preferred: Vec<&ColumnInventory> = candidates
+        .iter()
+        .copied()
+        .filter(|column| {
+            name_words(&column.name)
+                .iter()
+                .any(|word| words.measures.contains(word))
+        })
+        .collect();
+    let pool = if preferred.is_empty() {
+        candidates
+    } else {
+        preferred
+    };
+    match pool.as_slice() {
+        [] => MeasureChoice::Nothing,
+        [one] => MeasureChoice::One(one.name.clone()),
+        several => {
+            MeasureChoice::Several(several.iter().map(|column| column.name.clone()).collect())
+        }
+    }
+}
+
+/// A column worth totalling and a column worth grouping by, for an example question the engine
+/// will answer - the nudge's "for example". `None` for either when the sheet has none.
+pub fn example_columns(columns: &[ColumnInventory]) -> (Option<String>, Option<String>) {
+    let all: Vec<&ColumnInventory> = columns.iter().collect();
+    let measure = match choose_measure(&all) {
+        MeasureChoice::One(name) => Some(name),
+        MeasureChoice::Several(names) => names.into_iter().next(),
+        MeasureChoice::Nothing => None,
+    };
+    let words = column_words();
+    let group = columns
+        .iter()
+        .find(|column| {
+            column.inferred_type == ColumnType::Categorical
+                && !column.has_formulas
+                && !name_words(&column.name)
+                    .iter()
+                    .any(|word| words.not_measures.contains(word))
+        })
+        .map(|column| column.name.clone());
+    (measure, group)
+}
+
+/// Every pack's column-name words, folded, in one list: a header's language is the export's, not
+/// the interface's.
+fn column_words() -> ColumnNameWords {
+    let mut merged = ColumnNameWords {
+        measures: Vec::new(),
+        not_measures: Vec::new(),
+    };
+    for pack in PACKS
+        .iter()
+        .filter_map(|(_, body)| serde_json::from_str::<PatternPack>(body).ok())
+    {
+        merged
+            .measures
+            .extend(pack.column_names.measures.iter().map(|word| fold_text(word)));
+        merged
+            .not_measures
+            .extend(pack.column_names.not_measures.iter().map(|word| fold_text(word)));
+    }
+    merged
+}
+
+/// A name's words, folded: `calendar_year` is `calendar` and `year`.
+fn name_words(text: &str) -> Vec<String> {
+    fold_text(text)
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Every column the question names, as whole words: `sub_agency` is named by "sub agency" or
+/// "sub_agency", never by "agency" alone, which names `agency`. A plural on the last word still
+/// counts. The longest names are matched first and each question word serves one column only. A
+/// group column may also be named by its last word alone ("year" for `calendar_year`) when that
+/// word is long enough and no other group column ends with it.
+fn named_columns<'a>(columns: &[&'a ColumnInventory], question: &str) -> Vec<&'a ColumnInventory> {
+    let words = name_words(question);
+    let mut used = vec![false; words.len()];
+    let mut found: Vec<&ColumnInventory> = Vec::new();
+
+    let mut by_length: Vec<(&ColumnInventory, Vec<String>)> = columns
+        .iter()
+        .map(|column| (*column, name_words(&column.name)))
+        .filter(|(_, parts)| !parts.is_empty())
+        .collect();
+    by_length.sort_by_key(|(_, parts)| std::cmp::Reverse(parts.len()));
+
+    let same = |question_word: &str, name_word: &str, last: bool| {
+        question_word == name_word || (last && plural_of(question_word, name_word))
+    };
+    for (column, parts) in &by_length {
+        let span = parts.len();
+        if span > words.len() {
+            continue;
+        }
+        for start in 0..=words.len() - span {
+            let matches = (0..span).all(|offset| {
+                !used[start + offset]
+                    && same(&words[start + offset], &parts[offset], offset + 1 == span)
+            });
+            if matches {
+                (start..start + span).for_each(|index| used[index] = true);
+                found.push(column);
+                break;
+            }
+        }
+    }
+
+    for (index, word) in words.iter().enumerate() {
+        if used[index] || word.chars().count() < 4 {
+            continue;
+        }
+        let tails: Vec<&ColumnInventory> = by_length
+            .iter()
+            .filter(|(column, parts)| {
+                parts.len() > 1
+                    && is_group_column(column)
+                    && parts.last().is_some_and(|last| same(word, last, true))
+                    && !found.iter().any(|seen| seen.index == column.index)
+            })
+            .map(|(column, _)| *column)
+            .collect();
+        if let [only] = tails.as_slice() {
+            used[index] = true;
+            found.push(only);
+        }
+    }
+    found
+}
+
+/// Whether `word` is a plural of `name`, by the regular endings of the two shipped languages:
+/// `montants`, `prix`/`travaux` (`-x`, `-aux` for `-al`), and `agencies` for `agency`. Spelling
+/// only, never meaning: a plural that is not regular is simply not matched.
+fn plural_of(word: &str, name: &str) -> bool {
+    word.strip_suffix('s') == Some(name)
+        || word.strip_suffix('x') == Some(name)
+        || word
+            .strip_suffix("ies")
+            .is_some_and(|stem| name.strip_suffix('y') == Some(stem))
+        || word
+            .strip_suffix("aux")
+            .is_some_and(|stem| name.strip_suffix("al") == Some(stem))
+}
+
 /// Order matters: a more specific operation is checked before `count`, so "how many distinct
 /// suppliers" is read as `distinct` rather than `count` - both words are present, and only one
 /// operation may be chosen.
@@ -214,7 +528,9 @@ fn detect_operation(
             .clone()
             .map(|column| Operation::LargestRow { by_column: column });
     }
-    if has(&pack.operations.distinct) {
+    // "List the agencies" is the column's different values, the same operation "which distinct
+    // agencies" already reaches.
+    if has(&pack.operations.distinct) || has(&pack.operations.list) {
         return column_name
             .clone()
             .map(|column| Operation::Distinct { column });

@@ -4,14 +4,13 @@
 //! deterministic tabular result, never to raw rows and never to the model's own arithmetic
 //! (`docs/ARCHITECTURE.md`, "deterministic before generative").
 //!
-//! **Not wired into `commands::sourced_answer` by this session.** Whether and how a document
-//! selection and a tabular selection combine in one conversation is still open
-//! (`docs/SELECTION-AND-MEMORY.md`, "documents and tables together"), and this session's own
-//! brief asks for model escalation only "if the repository architecture requires it for a real
-//! product surface" - today no chat surface can select a workbook at all, so there is nothing yet
-//! to route into this tier. What is built here is the instruction and the evidence format that
-//! wiring will need, so the decision above does not also have to invent the model-facing text
-//! under pressure.
+//! **Still not sent to any model.** Tier 2 is routed since the tabular UI session
+//! (`crate::tabular_answer`), but it answers from the engine alone: a computed value, a
+//! structural fact, or a nudge naming the real columns, with no gateway call at all. This
+//! instruction and evidence format are kept for the session that combines a document selection
+//! with a tabular one (`docs/SELECTION-AND-MEMORY.md`, "documents and tables together"), where the
+//! model writes and the engines compute - so that session does not have to invent the
+//! model-facing text under pressure.
 
 use super::engine::{TabularDerivation, TabularOutcome, TabularValue};
 
@@ -79,6 +78,12 @@ fn describe_value(value: &TabularValue) -> String {
         TabularValue::GroupSums(sums) => sums
             .iter()
             .map(|group| format!("{}: {}", group.group, group.sum))
+            .collect::<Vec<_>>()
+            .join("; "),
+        TabularValue::LargestGroup(ranking) => ranking
+            .top
+            .iter()
+            .map(|group| format!("{} {}: {}", ranking.group_column, group.group, group.sum))
             .collect::<Vec<_>>()
             .join("; "),
         TabularValue::LargestRow(row) | TabularValue::Row(row) => row

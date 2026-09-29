@@ -122,6 +122,12 @@ pub enum AppError {
     #[error("scope_unavailable")]
     ScopeUnavailable,
 
+    /// Documents and tables are both selected for this conversation. Answering from both at once
+    /// is not designed yet (`docs/SELECTION-AND-MEMORY.md`, "documents and tables together"), and
+    /// quietly picking one side would be worse than saying so: she unticks one list, or the other.
+    #[error("documents_and_tables_together")]
+    DocumentsAndTablesTogether,
+
     /// She stopped the question herself, while it was still being worked on. Not a failure: the
     /// interface keeps no banner and nothing of the abandoned run (`docs/CHAT-UX-ASSESSMENT.md`).
     #[error("chat_cancelled")]
@@ -179,6 +185,7 @@ impl AppError {
             Self::ExtractionFailed { .. } => "extraction_failed",
             Self::InsufficientEvidence => "insufficient_evidence",
             Self::ScopeUnavailable => "scope_unavailable",
+            Self::DocumentsAndTablesTogether => "documents_and_tables_together",
             Self::ChatCancelled => "chat_cancelled",
             Self::OcrUnavailable => "ocr_unavailable",
             Self::OcrLanguageUnavailable { .. } => "ocr_language_unavailable",
@@ -202,6 +209,7 @@ impl AppError {
             | Self::IndexUnavailable
             | Self::InsufficientEvidence
             | Self::ScopeUnavailable
+            | Self::DocumentsAndTablesTogether
             | Self::ChatCancelled
             | Self::WorkFolderRevealFailed
             | Self::OcrUnavailable => json!({}),

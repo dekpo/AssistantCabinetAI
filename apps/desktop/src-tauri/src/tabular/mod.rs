@@ -229,6 +229,57 @@ mod tests {
         assert_eq!(result.unwrap_err(), TabularError::ReadFailed);
     }
 
+    // --- Green or red on the Data Folder listing (docs/SESSION-DATA-05-TABULAR-UI.md 5a) --------
+
+    fn inventory_of(name: &str, content: &str) -> inventory::TabularInventory {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(name);
+        std::fs::write(&path, content.as_bytes()).unwrap();
+        build_inventory(&path, name).expect("a text file always parses as a CSV")
+    }
+
+    #[test]
+    fn a_note_renamed_to_csv_parses_but_is_not_a_usable_table() {
+        let note = "Call the lab back on Monday morning\n\
+                    Order paper for the printer\n\
+                    Check the July rota\n\
+                    Post the waiting letters\n\
+                    Update the on-call table\n\
+                    Read the maintenance contract again\n\
+                    File the quarterly invoices\n\
+                    Prepare the September meeting\n\
+                    Archive the June folders\n";
+
+        let parsed = inventory_of("notes.csv", note);
+
+        assert_eq!(parsed.sheets.len(), 1, "it did parse, as one sheet");
+        assert!(!parsed.has_a_usable_sheet());
+    }
+
+    #[test]
+    fn a_real_but_tiny_table_is_not_offered_as_queryable() {
+        let parsed = inventory_of(
+            "trois.csv",
+            "nom;montant\nAlpha;10,50\nBeta;20,00\nGamma;30,00\n",
+        );
+
+        assert_eq!(parsed.sheets[0].column_count, 2);
+        assert_eq!(parsed.sheets[0].row_count, 3);
+        assert!(!parsed.has_a_usable_sheet());
+    }
+
+    #[test]
+    fn an_invoice_sized_csv_is_a_usable_table() {
+        let mut csv = String::from("date;fournisseur;montant\n");
+        for day in 1..=24 {
+            csv.push_str(&format!("{day:02}/03/2026;Fournisseur {day};{day},50\n"));
+        }
+
+        let parsed = inventory_of("factures.csv", &csv);
+
+        assert!(parsed.has_a_usable_sheet());
+    }
+
     #[test]
     fn two_workbooks_with_confusable_file_names_are_never_chosen_between() {
         // The tabular pipeline reuses the same file-reference resolver documents already use -

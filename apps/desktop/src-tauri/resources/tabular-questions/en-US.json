@@ -11,11 +11,22 @@
   "operations": {
     "count": ["count", "many", "number"],
     "distinct": ["distinct", "unique", "different"],
+    "list": ["list", "lists", "show", "display", "enumerate"],
     "sum": ["sum", "total", "add"],
     "min": ["minimum", "min", "lowest", "smallest"],
     "max": ["maximum", "max", "highest"],
     "largest_row": ["largest", "biggest"],
     "sort": ["sort", "order", "ranked"]
+  },
+  "groups": {
+    "which": ["which", "what"],
+    "most": ["most", "highest", "largest", "biggest", "greatest", "top"],
+    "per": ["per", "by", "each"]
+  },
+  "column_names": {
+    "_comment": "Words inside a column's own name. Read from every pack at once, whatever the interface language, because a workbook's headers are in whatever language it was exported in. 'measures' marks a column worth totalling; 'not_measures' a number that is not an amount (a year, an identifier, a code). Used only to choose which column to total when a question does not name one.",
+    "measures": ["amount", "amounts", "cost", "costs", "price", "prices", "revenue", "revenues", "spend", "spending", "expense", "expenses", "income", "total", "value", "sum", "fee", "fees", "paid", "balance", "salary", "budget"],
+    "not_measures": ["id", "ids", "year", "years", "code", "codes", "zip", "phone", "index", "number", "no", "num", "ref", "reference", "postcode", "month", "day", "type"]
   },
   "descending": ["descending", "desc"]
 }

@@ -634,6 +634,33 @@ mod tests {
     use crate::tabular::inventory::TabularFormat;
     use crate::tabular::{CellValue, SheetData, Workbook};
 
+    /// Test questions in every shipped language, read as data: a French sentence may not sit in a
+    /// `.rs` file (`src/guards/sources.test.ts`), so both languages live in the fixtures.
+    const QUESTIONS: &[(&str, &str)] = &[
+        (
+            "en-US",
+            include_str!("../../tests/fixtures/tabular-questions/en-US.json"),
+        ),
+        (
+            "fr-FR",
+            include_str!("../../tests/fixtures/tabular-questions/fr-FR.json"),
+        ),
+    ];
+
+    /// The question stored under `key` for `locale`. Panics on a missing file or key, so a
+    /// renamed fixture fails loudly rather than testing an empty string.
+    fn question(locale: &str, key: &str) -> String {
+        let (_, body) = QUESTIONS
+            .iter()
+            .find(|(tag, _)| *tag == locale)
+            .unwrap_or_else(|| panic!("no question fixture for {locale}"));
+        let fixture: serde_json::Value = serde_json::from_str(body).expect("fixture parses");
+        fixture["questions"][key]
+            .as_str()
+            .unwrap_or_else(|| panic!("no question {key} for {locale}"))
+            .to_string()
+    }
+
     fn text_row(values: &[&str]) -> Vec<CellValue> {
         values
             .iter()
@@ -675,6 +702,25 @@ mod tests {
     }
 
     #[test]
+    fn every_question_fixture_asks_the_same_questions() {
+        let keys = |body: &str| -> Vec<String> {
+            let fixture: serde_json::Value = serde_json::from_str(body).expect("fixture parses");
+            let mut keys: Vec<String> = fixture["questions"]
+                .as_object()
+                .expect("a questions object")
+                .keys()
+                .cloned()
+                .collect();
+            keys.sort();
+            keys
+        };
+        let (_, first) = QUESTIONS[0];
+        for (tag, body) in QUESTIONS {
+            assert_eq!(keys(body), keys(first), "{tag} must ask the same questions");
+        }
+    }
+
+    #[test]
     fn every_shipped_pack_parses() {
         for (tag, _) in PACKS {
             assert!(pack_for(tag).is_some(), "pack {tag} must parse");
@@ -684,12 +730,10 @@ mod tests {
     #[test]
     fn sheet_names_is_recognised_in_both_languages() {
         let inventory = two_sheets();
-        for (question, locale) in [
-            ("What sheets does this workbook have?", "en-US"),
-            ("Quelles feuilles contient ce classeur ?", "fr-FR"),
-        ] {
+        for locale in ["en-US", "fr-FR"] {
+            let question = question(locale, "sheet_names");
             assert_eq!(
-                classify(question, &inventory, None, locale),
+                classify(&question, &inventory, None, locale),
                 TabularRoute::Structural(StructuralQuestion::SheetNames),
                 "{question}"
             );
@@ -699,28 +743,16 @@ mod tests {
     #[test]
     fn row_count_is_structural_even_when_a_sheet_is_named() {
         let inventory = two_sheets();
-        assert_eq!(
-            classify(
-                "How many rows are in the Facturation sheet?",
-                &inventory,
-                None,
-                "en-US"
-            ),
-            TabularRoute::Structural(StructuralQuestion::RowCount {
-                sheet: Some("Facturation".to_string())
-            })
-        );
-        assert_eq!(
-            classify(
-                "Combien de lignes dans la feuille Facturation ?",
-                &inventory,
-                None,
-                "fr-FR"
-            ),
-            TabularRoute::Structural(StructuralQuestion::RowCount {
-                sheet: Some("Facturation".to_string())
-            })
-        );
+        for locale in ["en-US", "fr-FR"] {
+            let question = question(locale, "row_count_in_named_sheet");
+            assert_eq!(
+                classify(&question, &inventory, None, locale),
+                TabularRoute::Structural(StructuralQuestion::RowCount {
+                    sheet: Some("Facturation".to_string())
+                }),
+                "{question}"
+            );
+        }
     }
 
     #[test]
@@ -757,12 +789,10 @@ mod tests {
     #[test]
     fn a_sum_question_resolves_to_the_sum_operation_over_the_named_column() {
         let inventory = invoices();
-        for (question, locale) in [
-            ("What is the total montant?", "en-US"),
-            ("Quelle est la somme des montant ?", "fr-FR"),
-        ] {
+        for locale in ["en-US", "fr-FR"] {
+            let question = question(locale, "sum_of_named_column");
             assert_eq!(
-                classify(question, &inventory, None, locale),
+                classify(&question, &inventory, None, locale),
                 TabularRoute::Operation {
                     sheet: None,
                     operation: Operation::Sum {

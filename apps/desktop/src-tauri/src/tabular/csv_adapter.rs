@@ -172,7 +172,8 @@ mod tests {
 
     #[test]
     fn a_cp1252_file_decodes_its_accents() {
-        // "R\xe9sum\xe9" is CP1252 for "Résumé"; not valid UTF-8 on its own.
+        // 0xE9 and 0xEE are CP1252 for e-acute and i-circumflex; not valid UTF-8 on their own.
+        // The expected text is escaped so no accented character sits in a `.rs` file.
         let mut bytes = b"nom;ville\n".to_vec();
         bytes.extend_from_slice(&[
             b'R', 0xE9, b's', b'u', b'm', 0xE9, b';', b'N', 0xEE, b'm', b'e', b's',
@@ -186,11 +187,11 @@ mod tests {
 
         assert_eq!(
             workbook.sheets[0].rows[1][0],
-            CellValue::Text("Résumé".into())
+            CellValue::Text("R\u{e9}sum\u{e9}".into())
         );
         assert_eq!(
             workbook.sheets[0].rows[1][1],
-            CellValue::Text("Nîmes".into())
+            CellValue::Text("N\u{ee}mes".into())
         );
     }
 
@@ -227,12 +228,12 @@ mod tests {
     fn a_comma_delimited_file_is_not_confused_by_a_semicolon_in_a_free_text_field() {
         let workbook = open_bytes(
             "notes.csv",
-            "nom,note\nCamille,\"a vu le Dr X; suivi prevu\"\n".as_bytes(),
+            "nom,note\nCamille,\"called back; follow-up planned\"\n".as_bytes(),
         );
 
         assert_eq!(
             workbook.sheets[0].rows[1][1],
-            CellValue::Text("a vu le Dr X; suivi prevu".into())
+            CellValue::Text("called back; follow-up planned".into())
         );
     }
 

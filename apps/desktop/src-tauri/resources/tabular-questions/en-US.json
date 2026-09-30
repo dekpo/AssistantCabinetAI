@@ -28,5 +28,6 @@
     "measures": ["amount", "amounts", "cost", "costs", "price", "prices", "revenue", "revenues", "spend", "spending", "expense", "expenses", "income", "total", "value", "sum", "fee", "fees", "paid", "balance", "salary", "budget"],
     "not_measures": ["id", "ids", "year", "years", "code", "codes", "zip", "phone", "index", "number", "no", "num", "ref", "reference", "postcode", "month", "day", "type"]
   },
-  "descending": ["descending", "desc"]
+  "descending": ["descending", "desc"],
+  "filler": ["a", "an", "the", "of", "in", "on", "at", "is", "are", "was", "were", "be", "for", "to", "with", "this", "that", "these", "those", "where", "when", "who", "whom", "whose", "and", "or", "please", "kindly", "how", "much", "do", "does", "did", "there", "me"]
 }

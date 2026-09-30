@@ -14,21 +14,23 @@
 //! `answer` takes no gateway, no model alias and no network client: that the tabular tier cannot
 //! reach a model is a property of its signature, not a promise.
 
+use std::collections::HashSet;
+
 use serde::Serialize;
 
 use crate::analysis_scope::ScopeMode;
 use crate::data_folder::DataFolder;
 use crate::error::AppError;
 use crate::file_record::{FileRecord, ProcessingStatus};
-use crate::file_reference::{FileReferenceResolver, ReferenceStatus};
+use crate::file_reference::{fold_text, FileReferenceResolver, ReferenceStatus};
 use crate::inventory::WorkFolderInventory;
 use crate::tabular::engine::{
     self, NotAnswerableReason, TabularDerivation, TabularLocator, TabularOutcome, TabularValue,
 };
-use crate::tabular::inventory::{SheetInventory, TabularInventory};
-use crate::tabular::question::{self, TabularRoute};
+use crate::tabular::inventory::{data_rows, text_value, SheetInventory, TabularInventory};
+use crate::tabular::question::{self, name_words, TabularRoute};
 use crate::tabular::structural::{self, StructuralAnswer};
-use crate::tabular::{self, TabularError};
+use crate::tabular::{self, TabularError, Workbook};
 
 /// What a question about the selected tables came to. `file` is always the workbook's path
 /// relative to the Data Folder, so the interface can cite it beside the sheet.
@@ -67,6 +69,14 @@ pub enum TabularAnswer {
         /// A text column to group by, for a second example ("which agency has the most
         /// amount"). `None` when the sheet has none, or no column to total.
         example_group: Option<String>,
+        /// Set only when `reason` is `FilterNotSupported`: the column a residual question word
+        /// was found in, when one was - a bare number with no matching column leaves this
+        /// `None` even though `filter_value` is set. `None` for every other nudge
+        /// (`docs/DECISIONS.md`, session 7's D1).
+        filter_column: Option<String>,
+        /// Set only when `reason` is `FilterNotSupported`: the word from the question that named
+        /// real data, exactly as she typed it. `None` for every other nudge.
+        filter_value: Option<String>,
     },
     /// A group question with several columns it could total, none named. Asked, never picked.
     WhichMeasure {
@@ -131,7 +141,8 @@ pub fn answer(
     };
     let allowed = target.sheets.as_deref();
 
-    match question::classify(question, inventory, allowed, locale) {
+    let (route, residual) = question::classify_traced(question, inventory, allowed, locale);
+    match route {
         TabularRoute::Structural(structural_question) => {
             match structural::answer(inventory, allowed, &structural_question) {
                 StructuralAnswer::NotAnswerable {
@@ -144,6 +155,8 @@ pub fn answer(
                     Some(reason),
                     available_sheets,
                     Vec::new(),
+                    None,
+                    None,
                 )),
                 answer => Ok(TabularAnswer::Structural { file, answer }),
             }
@@ -161,6 +174,25 @@ pub fn answer(
                     Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
                     Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
                 };
+
+            // Gap A: a residual word that names real data is the filter this classifier cannot
+            // apply - the answer must name it, never compute the unfiltered value
+            // (`docs/DECISIONS.md`, session 7's D1).
+            if let Some(detected) =
+                detect_filter(&residual, &fresh, &workbook, sheet.as_deref(), allowed)
+            {
+                return Ok(nudge(
+                    file,
+                    &fresh,
+                    allowed,
+                    Some(NotAnswerableReason::FilterNotSupported),
+                    Vec::new(),
+                    Vec::new(),
+                    detected.column,
+                    Some(detected.value),
+                ));
+            }
+
             match engine::execute(&workbook, &fresh, sheet.as_deref(), allowed, &operation) {
                 TabularOutcome::Value {
                     value,
@@ -183,6 +215,8 @@ pub fn answer(
                     Some(reason),
                     available_sheets,
                     available_columns,
+                    None,
+                    None,
                 )),
             }
         }
@@ -196,7 +230,9 @@ pub fn answer(
         }),
         TabularRoute::NotRecognised => {
             let sheets = sheet_names(engine::reachable_sheets(inventory, allowed));
-            Ok(nudge(file, inventory, allowed, None, sheets, Vec::new()))
+            Ok(nudge(
+                file, inventory, allowed, None, sheets, Vec::new(), None, None,
+            ))
         }
     }
 }
@@ -323,6 +359,8 @@ fn nudge(
     reason: Option<NotAnswerableReason>,
     available_sheets: Vec<String>,
     available_columns: Vec<String>,
+    filter_column: Option<String>,
+    filter_value: Option<String>,
 ) -> TabularAnswer {
     let reachable = engine::reachable_sheets(inventory, allowed);
     let sheet: Option<&SheetInventory> = if available_columns.is_empty() {
@@ -358,6 +396,8 @@ fn nudge(
         available_columns,
         example_column,
         example_group,
+        filter_column,
+        filter_value,
     }
 }
 
@@ -371,6 +411,74 @@ fn column_names(sheet: &SheetInventory) -> Vec<String> {
 
 fn sheet_names(sheets: Vec<&SheetInventory>) -> Vec<String> {
     sheets.into_iter().map(|sheet| sheet.name.clone()).collect()
+}
+
+/// A residual question word matched against a workbook's real cell data, per `detect_filter`.
+struct DetectedFilter {
+    /// The column whose values contained the word, when it was found that way. `None` for a
+    /// bare number matched by no column's own values.
+    column: Option<String>,
+    /// The word from the question that triggered the match, exactly as she typed it.
+    value: String,
+}
+
+/// Whether one of `residual`'s words happens to name real data: a value that appears, whole
+/// word, somewhere in a reachable column of the sheet the operation would actually run against
+/// (folded, so an unaccented word in the question still finds an accented real value), or
+/// failing that a plain number. The first match, in the order the words were typed, is the one
+/// reported - never a guess at which of several matches she meant. `None` when the operation's
+/// own sheet cannot be resolved at all: `engine::execute` will refuse it with the correct reason
+/// on its own.
+fn detect_filter(
+    residual: &[String],
+    fresh: &TabularInventory,
+    workbook: &Workbook,
+    sheet_name: Option<&str>,
+    allowed: Option<&[String]>,
+) -> Option<DetectedFilter> {
+    if residual.is_empty() {
+        return None;
+    }
+    let sheet_inventory = engine::resolve_sheet_inventory(fresh, sheet_name, allowed).ok()?;
+    let sheet_data = workbook
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == sheet_inventory.name)?;
+    let rows = data_rows(sheet_inventory, sheet_data);
+
+    let columns_words: Vec<(String, HashSet<String>)> = sheet_inventory
+        .columns
+        .iter()
+        .map(|column| {
+            let mut words = HashSet::new();
+            for row in rows {
+                if let Some(cell) = row.get(column.index) {
+                    words.extend(name_words(&text_value(cell)));
+                }
+            }
+            (column.name.clone(), words)
+        })
+        .collect();
+
+    for word in residual {
+        let folded = fold_text(word);
+        if let Some((column, _)) = columns_words
+            .iter()
+            .find(|(_, words)| words.contains(&folded))
+        {
+            return Some(DetectedFilter {
+                column: Some(column.clone()),
+                value: word.clone(),
+            });
+        }
+        if word.parse::<f64>().is_ok() {
+            return Some(DetectedFilter {
+                column: None,
+                value: word.clone(),
+            });
+        }
+    }
+    None
 }
 
 /// This module never imports `crate::gateway`, `crate::retrieval` or `crate::conversation`: every
@@ -514,6 +622,8 @@ mod tests {
                 available_columns: vec!["date".into(), "fournisseur".into(), "montant".into()],
                 example_column: Some("montant".into()),
                 example_group: Some("fournisseur".into()),
+                filter_column: None,
+                filter_value: None,
             }
         );
     }
@@ -1006,6 +1116,8 @@ mod tests {
             available_columns: vec!["a".into()],
             example_column: None,
             example_group: None,
+            filter_column: None,
+            filter_value: None,
         })
         .unwrap();
 
@@ -1013,5 +1125,171 @@ mod tests {
         assert_eq!(json["reason"], "column_not_found");
         assert_eq!(json["availableColumns"], serde_json::json!(["a"]));
         assert_eq!(json["exampleColumn"], serde_json::Value::Null);
+    }
+
+    // --- Gap A: a residual word that names real data is a filter this engine cannot apply -----
+
+    /// `date;fournisseur;montant`, 9 rows, suppliers Alpha/Beta/Gamma cycling, `montant` rising
+    /// by 10 each row (`10,00` to `90,00`). Beta's rows (`i` = 1, 4, 7): 20 + 50 + 80 = 150.
+    fn invoices_with_suppliers() -> String {
+        let suppliers = ["Alpha", "Beta", "Gamma"];
+        let mut csv = String::from("date;fournisseur;montant\n");
+        for i in 0..9 {
+            csv.push_str(&format!(
+                "{:02}/01/2026;{};{},00\n",
+                i + 1,
+                suppliers[i % 3],
+                (i + 1) * 10
+            ));
+        }
+        csv
+    }
+
+    #[test]
+    fn a_filter_clause_never_returns_the_unfiltered_count() {
+        let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
+
+        let result = folder
+            .ask(
+                "How many invoices where fournisseur is Alpha?",
+                &folder.ticked(&["factures.csv"]),
+            )
+            .unwrap();
+
+        let TabularAnswer::Nudge {
+            reason,
+            filter_column,
+            filter_value,
+            ..
+        } = result
+        else {
+            panic!("expected a filter nudge, got {result:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
+        assert_eq!(filter_column.as_deref(), Some("fournisseur"));
+        assert_eq!(filter_value.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn a_filter_clause_never_returns_the_unfiltered_sum() {
+        let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
+
+        let result = folder
+            .ask("Sum of montant for Beta", &folder.ticked(&["factures.csv"]))
+            .unwrap();
+
+        let TabularAnswer::Nudge {
+            reason,
+            filter_column,
+            filter_value,
+            ..
+        } = result
+        else {
+            panic!("expected a filter nudge, got {result:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
+        assert_eq!(filter_column.as_deref(), Some("fournisseur"));
+        assert_eq!(filter_value.as_deref(), Some("Beta"));
+    }
+
+    #[test]
+    fn a_year_number_in_the_question_is_detected_as_a_filter() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let result = folder
+            .ask(
+                "What is the total amount in 2021?",
+                &folder.ticked(&["revenue_sub_agency.csv"]),
+            )
+            .unwrap();
+
+        let TabularAnswer::Nudge {
+            reason,
+            filter_column,
+            filter_value,
+            ..
+        } = result
+        else {
+            panic!("expected a filter nudge, got {result:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
+        assert_eq!(filter_column.as_deref(), Some("calendar_year"));
+        assert_eq!(filter_value.as_deref(), Some("2021"));
+    }
+
+    #[test]
+    fn a_row_count_question_is_unaffected_by_the_filter_check() {
+        let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
+
+        let result = folder
+            .ask("How many rows?", &folder.ticked(&["factures.csv"]))
+            .unwrap();
+
+        assert_eq!(
+            result,
+            TabularAnswer::Structural {
+                file: "factures.csv".into(),
+                answer: StructuralAnswer::RowCount {
+                    sheet: "factures".into(),
+                    rows: 9
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn a_value_absent_from_every_column_leaves_the_answer_unchanged() {
+        let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
+
+        let result = folder
+            .ask(
+                "What is the total montant for Omega?",
+                &folder.ticked(&["factures.csv"]),
+            )
+            .unwrap();
+
+        assert!(
+            matches!(
+                result,
+                TabularAnswer::Value {
+                    value: TabularValue::Sum(_),
+                    ..
+                }
+            ),
+            "Omega names no real data, so the plain sum still resolves: got {result:?}"
+        );
+    }
+
+    #[test]
+    fn an_accented_value_is_detected_when_the_question_types_it_without_accents() {
+        let suppliers = ["Alpha", "Soci\u{e9}t\u{e9} G\u{e9}n\u{e9}rale", "Gamma"];
+        let mut csv = String::from("date;fournisseur;montant\n");
+        for i in 0..9 {
+            csv.push_str(&format!(
+                "{:02}/01/2026;{};{},00\n",
+                i + 1,
+                suppliers[i % 3],
+                (i + 1) * 10
+            ));
+        }
+        let folder = Folder::with(&[("factures.csv", &csv)]);
+
+        let result = folder
+            .ask(
+                "What is the total montant for Societe Generale?",
+                &folder.ticked(&["factures.csv"]),
+            )
+            .unwrap();
+
+        let TabularAnswer::Nudge {
+            reason,
+            filter_column,
+            ..
+        } = result
+        else {
+            panic!("expected a filter nudge, got {result:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
+        assert_eq!(filter_column.as_deref(), Some("fournisseur"));
     }
 }

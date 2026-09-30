@@ -312,8 +312,10 @@
       "row_out_of_range": "That row does not exist in {file}.",
       "non_numeric_column": "That column of {file} does not hold numbers only: it can be neither added up nor compared.",
       "formula_cannot_be_verified": "That column of {file} holds formulas: their results cannot be verified, so nothing is computed from them.",
-      "empty_sheet": "There is no data to compute in {file}."
+      "empty_sheet": "There is no data to compute in {file}.",
+      "filter_not_supported": "Your question names a filter (“{value}”) that this engine cannot apply yet, so nothing is computed unfiltered from {file}."
     },
+    "nudgeFilterColumn": "That word was found in the {column} column.",
     "nudgeColumns": "Its columns are: {columns}.",
     "nudgeSheets": "Its sheets are: {sheets}.",
     "nudgeOperations": "Try asking for a sum, a minimum, a maximum, a number of rows, the list of a column's values, or the group with the largest total.",

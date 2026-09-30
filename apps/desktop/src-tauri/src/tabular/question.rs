@@ -49,6 +49,11 @@ struct PatternPack {
     groups: GroupWords,
     column_names: ColumnNameWords,
     descending: Vec<String>,
+    /// Words that carry no vocabulary of their own - articles, prepositions, question words,
+    /// polite forms - read only by `residual_words` (gap A, `docs/DECISIONS.md`, session 7's
+    /// D1): a leftover word the classifier does not recognise may still be a filter value, and a
+    /// filler word must never be mistaken for one.
+    filler: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -143,19 +148,37 @@ pub fn classify(
     allowed_sheets: Option<&[String]>,
     locale: &str,
 ) -> TabularRoute {
+    classify_traced(question, inventory, allowed_sheets, locale).0
+}
+
+/// `classify`, plus the question's own words left over once every recognised route's own
+/// vocabulary - operation, structural and group words, the matched sheet and column names, and
+/// this pack's filler words - is removed. A residual word is not itself proof of anything: this
+/// module never reads a cell value, so it cannot tell a genuine filter ("Alpha") from ordinary
+/// prose the pack's filler list does not happen to name. `tabular_answer`, which does hold the
+/// workbook's real cell values, is the one place that turns a residual word into a refusal
+/// (gap A, `docs/DECISIONS.md`, session 7's D1). Empty whenever `route` is not
+/// `TabularRoute::Operation`: a structural question is exempt (naming a sheet is not a filter),
+/// and nothing else reaches the engine at all.
+pub fn classify_traced(
+    question: &str,
+    inventory: &TabularInventory,
+    allowed_sheets: Option<&[String]>,
+    locale: &str,
+) -> (TabularRoute, Vec<String>) {
     let Some(first) = pack_for(locale) else {
-        return TabularRoute::NotRecognised;
+        return (TabularRoute::NotRecognised, Vec::new());
     };
     let others = PACKS
         .iter()
         .filter_map(|(_, body)| serde_json::from_str::<PatternPack>(body).ok());
     for pack in std::iter::once(first).chain(others) {
-        let route = classify_with(question, inventory, allowed_sheets, &pack);
-        if route != TabularRoute::NotRecognised {
-            return route;
+        let outcome = classify_with(question, inventory, allowed_sheets, &pack);
+        if outcome.0 != TabularRoute::NotRecognised {
+            return outcome;
         }
     }
-    TabularRoute::NotRecognised
+    (TabularRoute::NotRecognised, Vec::new())
 }
 
 fn classify_with(
@@ -163,10 +186,10 @@ fn classify_with(
     inventory: &TabularInventory,
     allowed_sheets: Option<&[String]>,
     pack: &PatternPack,
-) -> TabularRoute {
+) -> (TabularRoute, Vec<String>) {
     let tokens = tokenise(question);
     if tokens.is_empty() {
-        return TabularRoute::NotRecognised;
+        return (TabularRoute::NotRecognised, Vec::new());
     }
 
     let folded_question = fold_text(question);
@@ -181,19 +204,135 @@ fn classify_with(
         }
     });
 
-    if let Some(structural) = detect_structural(&tokens, pack, &sheet_name, &column_name) {
-        return TabularRoute::Structural(structural);
+    // Gap H: a token that is one of the matched column's or sheet's own words must never be
+    // read as the question's operation or group word - "duree_min" must not let "min" outrank
+    // "sort" in "Sort by duree_min descending". Narrow on purpose: only tokens that are part of a
+    // name this question already resolved are excluded, and only from operation/group
+    // detection - `detect_structural` still reads every token.
+    let mut excluded_parts: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(name) = &sheet_name {
+        excluded_parts.extend(name_words(name));
     }
-    if let Some(route) = detect_group(&tokens, pack, question, &columns, &sheet_name) {
-        return route;
+    if let Some(name) = &column_name {
+        excluded_parts.extend(name_words(name));
     }
-    if let Some(operation) = detect_operation(&tokens, pack, &column_name) {
-        return TabularRoute::Operation {
-            sheet: sheet_name,
+    let detection_tokens: Vec<String> = tokens
+        .iter()
+        .filter(|token| !excluded_parts.contains(&fold_text(token)))
+        .cloned()
+        .collect();
+
+    let route = if let Some(structural) = detect_structural(&tokens, pack, &sheet_name, &column_name)
+    {
+        TabularRoute::Structural(structural)
+    } else if let Some(route) = detect_group(&detection_tokens, pack, question, &columns, &sheet_name)
+    {
+        route
+    } else if let Some(operation) = detect_operation(&detection_tokens, pack, &column_name) {
+        TabularRoute::Operation {
+            sheet: sheet_name.clone(),
             operation,
-        };
+        }
+    } else {
+        TabularRoute::NotRecognised
+    };
+
+    let residual = match &route {
+        TabularRoute::Operation { operation, .. } => {
+            residual_words(question, pack, &sheet_name, &column_name, operation)
+        }
+        _ => Vec::new(),
+    };
+    (route, residual)
+}
+
+/// Every column name an `Operation` actually reads, whether it was found through
+/// `find_column_name`, `named_columns` or `choose_measure` - so a group question's automatically
+/// chosen measure column ("amount", never named in "which agency costs the most") is excluded
+/// from the residual check exactly as a directly named column is.
+fn operation_column_names(operation: &Operation) -> Vec<&str> {
+    match operation {
+        Operation::Count { filter } => filter.iter().map(|spec| spec.column.as_str()).collect(),
+        Operation::Distinct { column }
+        | Operation::Sum { column }
+        | Operation::Min { column }
+        | Operation::Max { column }
+        | Operation::Sort { column, .. } => vec![column.as_str()],
+        Operation::LargestRow { by_column } => vec![by_column.as_str()],
+        Operation::GroupSum {
+            group_by,
+            sum_column,
+        }
+        | Operation::LargestGroup {
+            group_by,
+            sum_column,
+        } => vec![group_by.as_str(), sum_column.as_str()],
+        Operation::Filter { filter } => vec![filter.column.as_str()],
+        Operation::RowAt { .. } => Vec::new(),
     }
-    TabularRoute::NotRecognised
+}
+
+/// The question's own words, in the order typed, with none of: this pack's structural,
+/// operation, group, descending and filler vocabulary; the matched sheet's own words; and every
+/// column the resolved operation actually reads. What remains may still be nothing - most
+/// recognised questions leave no residue - or ordinary prose this pack's `filler` list does not
+/// happen to name; neither is treated as a filter here, only by `tabular_answer`, which can read
+/// the workbook's real cell values.
+fn residual_words(
+    question: &str,
+    pack: &PatternPack,
+    sheet_name: &Option<String>,
+    column_name: &Option<String>,
+    operation: &Operation,
+) -> Vec<String> {
+    let mut consumed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    fold_into(&mut consumed, &pack.filler);
+    fold_into(&mut consumed, &pack.structural.sheets);
+    fold_into(&mut consumed, &pack.structural.rows);
+    fold_into(&mut consumed, &pack.structural.columns);
+    fold_into(&mut consumed, &pack.structural.numeric);
+    fold_into(&mut consumed, &pack.structural.formulas);
+    fold_into(&mut consumed, &pack.operations.count);
+    fold_into(&mut consumed, &pack.operations.distinct);
+    fold_into(&mut consumed, &pack.operations.list);
+    fold_into(&mut consumed, &pack.operations.sum);
+    fold_into(&mut consumed, &pack.operations.min);
+    fold_into(&mut consumed, &pack.operations.max);
+    fold_into(&mut consumed, &pack.operations.largest_row);
+    fold_into(&mut consumed, &pack.operations.sort);
+    fold_into(&mut consumed, &pack.groups.which);
+    fold_into(&mut consumed, &pack.groups.most);
+    fold_into(&mut consumed, &pack.groups.per);
+    fold_into(&mut consumed, &pack.descending);
+    if let Some(name) = sheet_name {
+        consumed.extend(name_words(name));
+    }
+    if let Some(name) = column_name {
+        consumed.extend(name_words(name));
+    }
+    for name in operation_column_names(operation) {
+        consumed.extend(name_words(name));
+    }
+
+    words_with_original(question)
+        .into_iter()
+        .filter(|(_, folded)| !consumed.contains(folded))
+        .map(|(original, _)| original)
+        .collect()
+}
+
+fn fold_into(consumed: &mut std::collections::HashSet<String>, words: &[String]) {
+    consumed.extend(words.iter().map(|word| fold_text(word)));
+}
+
+/// A text's words, each paired with its folded form: like `name_words`, but keeping the original
+/// spelling too, since a filter nudge should name what she typed ("Alpha"), not a folded form of
+/// it.
+fn words_with_original(text: &str) -> Vec<(String, String)> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(|word| (word.to_string(), fold_text(word)))
+        .collect()
 }
 
 fn detect_structural(
@@ -414,8 +553,10 @@ fn column_words() -> ColumnNameWords {
     merged
 }
 
-/// A name's words, folded: `calendar_year` is `calendar` and `year`.
-fn name_words(text: &str) -> Vec<String> {
+/// A name's words, folded: `calendar_year` is `calendar` and `year`. `pub(crate)` so
+/// `tabular_answer`'s gap-A filter check can fold a workbook's own cell text by the same rule a
+/// residual question word was folded by.
+pub(crate) fn name_words(text: &str) -> Vec<String> {
     fold_text(text)
         .split(|c: char| !c.is_alphanumeric())
         .filter(|word| !word.is_empty())
@@ -923,23 +1064,76 @@ mod tests {
     }
 
     #[test]
-    fn filter_and_group_sum_are_deliberately_out_of_this_classifiers_scope() {
+    fn a_filter_clause_is_still_not_parsed_but_its_words_are_left_residual() {
         let inventory = invoices();
         // A filter clause is not parsed from free text - only structural facts and single-column
         // operations are. This is a documented scope limit, not a bug: guessing a filter value
-        // wrongly would be exactly the failure this pipeline exists to refuse.
+        // wrongly would be exactly the failure this pipeline exists to refuse. What changed
+        // (session 9, superseding this test's old name and the unconditional Count it used to
+        // assert): the classifier now also reports "Alpha" as residual, so `tabular_answer` can
+        // recognise it names real data and refuse rather than silently return the unfiltered
+        // count (`docs/DECISIONS.md`, session 7's D1).
+        let (route, residual) = classify_traced(
+            "How many invoices where fournisseur is Alpha?",
+            &inventory,
+            None,
+            "en-US",
+        );
         assert_eq!(
-            classify(
-                "How many invoices where fournisseur is Alpha?",
-                &inventory,
-                None,
-                "en-US"
-            ),
+            route,
             TabularRoute::Operation {
                 sheet: None,
                 operation: Operation::Count { filter: None }
             },
-            "the filter clause is ignored rather than mis-parsed; the plain count still resolves"
+            "the filter clause is still ignored rather than mis-parsed; the plain count still resolves"
+        );
+        // "invoices" is left over too - this pack's filler list is grammar, not a domain
+        // dictionary - but only "Alpha" happens to name real data, which is for
+        // `tabular_answer` to decide.
+        assert_eq!(
+            residual,
+            vec!["invoices".to_string(), "Alpha".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_column_names_own_word_does_not_outrank_the_real_operation() {
+        // Gap H: "duree_min" splits into "duree" and "min" on the underscore, and "min" is also
+        // this pack's minimum operation word. Once the column is matched, "min" must not be read
+        // as the question's operation - "sort" must win, not the minimum.
+        let workbook = Workbook {
+            sheets: vec![SheetData {
+                name: "Planning".to_string(),
+                rows: vec![
+                    text_row(&["salle", "duree_min"]),
+                    text_row(&["Azur", "20"]),
+                    text_row(&["Lotus", "60"]),
+                ],
+            }],
+        };
+        let inventory =
+            TabularInventory::build("rendez-vous.xlsx", "hash-3", TabularFormat::Xlsx, &workbook);
+
+        assert_eq!(
+            classify("Sort by duree_min descending", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::Sort {
+                    column: "duree_min".to_string(),
+                    descending: true,
+                }
+            }
+        );
+        // The fix excludes a matched column's own words from operation detection - it does not
+        // disable "min" as an operation word everywhere: naming the minimum still reaches it.
+        assert_eq!(
+            classify("What is the minimum duree_min?", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::Min {
+                    column: "duree_min".to_string(),
+                }
+            }
         );
     }
 }

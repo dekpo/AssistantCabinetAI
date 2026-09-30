@@ -249,7 +249,8 @@ export type NotAnswerableReason =
   | "row_out_of_range"
   | "non_numeric_column"
   | "formula_cannot_be_verified"
-  | "empty_sheet";
+  | "empty_sheet"
+  | "filter_not_supported";
 
 /** Where inside a workbook a value came from: the tabular sibling of `Evidence.pageNumber`. */
 export interface TabularLocator {
@@ -325,6 +326,12 @@ export type TabularAnswer =
       exampleColumn: string | null;
       /** A text column to group by, for a second example. */
       exampleGroup: string | null;
+      /** Set only when `reason` is `filter_not_supported`: the column a residual question word
+       * was found in, when one was. */
+      filterColumn: string | null;
+      /** Set only when `reason` is `filter_not_supported`: the word from the question that named
+       * real data, exactly as typed. */
+      filterValue: string | null;
     }
   /** A group question with several columns it could total, none named: asked, never picked. */
   | { kind: "which_measure"; file: string; groupColumn: string; candidates: string[] }

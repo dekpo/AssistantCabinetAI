@@ -28,5 +28,6 @@
     "measures": ["montant", "montants", "cout", "couts", "coût", "coûts", "prix", "recette", "recettes", "depense", "depenses", "dépense", "dépenses", "total", "valeur", "somme", "honoraires", "tarif", "solde", "ttc", "ht", "budget"],
     "not_measures": ["id", "annee", "annees", "année", "années", "code", "postal", "telephone", "téléphone", "numero", "numéro", "num", "mois", "jour", "ref", "reference", "référence", "siret", "siren", "type"]
   },
-  "descending": ["decroissant", "décroissant", "descendant"]
+  "descending": ["decroissant", "décroissant", "descendant"],
+  "filler": ["le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "est", "sont", "etait", "était", "etaient", "étaient", "pour", "avec", "ce", "cet", "cette", "ces", "ou", "où", "et", "dans", "svp", "donne", "donnez", "moi", "nous", "vous", "veuillez", "dont", "que", "qu"]
 }

@@ -36,6 +36,8 @@ const nudge: TabularAnswer = {
   availableColumns: ["nom", "montant", "date"],
   exampleColumn: "montant",
   exampleGroup: "nom",
+  filterColumn: null,
+  filterValue: null,
 };
 
 describe("a computed value", () => {
@@ -140,6 +142,39 @@ describe("the nudge", () => {
 
     expect(second.startsWith(first)).toBe(true);
     expect(second).toContain("previous question");
+  });
+
+  it("names the filter it saw and the column it was found in, never a code", () => {
+    const text = formatTabularAnswer(
+      english,
+      {
+        ...nudge,
+        reason: "filter_not_supported",
+        filterColumn: "fournisseur",
+        filterValue: "Alpha",
+      } as TabularAnswer,
+      "en-US",
+    );
+
+    expect(text).toContain("Alpha");
+    expect(text).toContain("fournisseur");
+    expect(text).not.toContain("filter_not_supported");
+  });
+
+  it("omits the column line when none was found", () => {
+    const text = formatTabularAnswer(
+      english,
+      {
+        ...nudge,
+        reason: "filter_not_supported",
+        filterColumn: null,
+        filterValue: "2021",
+      } as TabularAnswer,
+      "en-US",
+    );
+
+    expect(text).toContain("2021");
+    expect(text).not.toContain("was found in the");
   });
 });
 

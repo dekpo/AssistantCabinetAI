@@ -263,7 +263,15 @@ function formatNudge(
   nudge: Extract<TabularAnswer, { kind: "nudge" }>,
   nudgedBefore: boolean,
 ): string {
-  const lines = [t(`tabularAnswer.nudge.${nudge.reason ?? "not_recognised"}`, { file: nudge.file })];
+  const lines = [
+    t(`tabularAnswer.nudge.${nudge.reason ?? "not_recognised"}`, {
+      file: nudge.file,
+      value: nudge.filterValue ?? "",
+    }),
+  ];
+  if (nudge.reason === "filter_not_supported" && nudge.filterColumn !== null) {
+    lines.push(t("tabularAnswer.nudgeFilterColumn", { column: nudge.filterColumn }));
+  }
   if (nudge.availableColumns.length > 0) {
     lines.push(t("tabularAnswer.nudgeColumns", { columns: nudge.availableColumns.join(", ") }));
   }

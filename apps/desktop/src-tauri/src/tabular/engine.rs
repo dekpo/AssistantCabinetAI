@@ -147,6 +147,13 @@ pub enum NotAnswerableReason {
     FormulaCannotBeVerified,
     /// The sheet, or the column within it, has no data rows to compute over.
     EmptySheet,
+    /// The question named a filter this classifier does not apply (`tabular::question`'s
+    /// residual words matching real cell data): never the unfiltered value, whatever the
+    /// recognised operation was (`docs/DECISIONS.md`, session 7's D1). Not constructed by this
+    /// module - `execute` never sees a filter it cannot already resolve - but carried here
+    /// because it is the same "why the engine did not compute a value" vocabulary every other
+    /// nudge reason belongs to.
+    FilterNotSupported,
 }
 
 /// The result of one deterministic question against one workbook.

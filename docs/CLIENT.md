@@ -137,8 +137,11 @@ A conversation with workbooks selected and no document is answered by the tabula
 tier 2 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a computed value or a
 structural fact, cited by **sheet** (and column) where a document answer cites its page, with no
 model involved; or, when the engine cannot answer exactly, a sentence naming the workbook's real
-columns and the operations that work. Documents and workbooks selected together are refused with
-`documents_and_tables_together` for now: combining them is the next session's design.
+columns and the operations that work. A question that carries a filter the classifier does not
+apply (`filter_not_supported`) gets the same nudge, naming the column and value it saw, never the
+unfiltered count or sum (session 9, 30 September 2026). Documents and workbooks selected together
+are refused with `documents_and_tables_together` for now: combining them is the next session's
+design.
 
 ## Why not Open WebUI Computer
 

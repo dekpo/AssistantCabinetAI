@@ -183,6 +183,21 @@ where it is not.
 Tests that keep this true: retrieval quality, source attribution, refusal beyond the sources, and an
 isolation test proving the server retains nothing after a request.
 
+**Tabular reference set.** The deterministic tabular path is measured by a bilingual set of questions,
+each asked once in French and once in English, over fictional workbooks written at test time
+(`apps/desktop/src-tauri/tests/common/tabular_fixtures.rs`, which carries the hand arithmetic behind
+every expected value - never a value produced by the engine). The cases are data, in
+`apps/desktop/src-tauri/tests/tabular_reference_cases.json`; `tests/tabular_reference.rs` analyses the
+Data Folder and asks each one through tier 2, as the app does, and prints passing and known failures
+per gap. A `pass` case must get its expected answer exactly. A `known_failure` case is a gap already
+named (A to E from the tabular continuation plan, plus H, found by the set itself), with the session
+expected to fix it and, when today's answer is a silently wrong value rather than a refusal, that
+wrong value as `current_answer`; it must **not** match its expectation, and its `current_answer` must
+still be what comes back. The promotion rule: a fix is done when its known failures turn green and
+nothing green turns red. A known failure that starts passing fails the run until its status is set to
+`pass`, so no fix goes unrecorded; a `current_answer` that changes without the case passing fails it
+too, because the bug changed shape.
+
 ## What we refuse
 
 - Uploading a case folder into Open WebUI so that everyone benefits.

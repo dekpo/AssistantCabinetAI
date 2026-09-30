@@ -539,8 +539,8 @@ deployment (sprint 4). It is platform work for the next profession — the case 
   and refused for factual answers. No formula evaluation, no Excel engine.
 - Escalation to the model only when the deterministic path cannot answer, carrying the aggregate card as
   structured evidence — never rows. The model's citations are verified against that evidence afterwards.
-- **Tests:** deterministic answers perform zero gateway calls, proved with a provider double that panics
-  when called; every deterministic question still answers with the gateway stopped; the same question
+- **Tests:** deterministic answers perform zero gateway calls, proved with a test double that fails any
+  request it receives; every deterministic question still answers with the gateway stopped; the same question
   returns the same number under a different model alias.
 
 Design, and what is reused from `LocalGridMind` versus what is deliberately not:
@@ -583,7 +583,7 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | French output quality | The model alias is a setting; change the alias, not the code |
 | Drift onto Open WebUI, voice, certificates | Frozen by `.cursor/rules/v0-sprint.mdc` |
 | Tabular work pulled into milestone A | Sprint 2a is documents only. Sprint 2b is dated after milestone B, and the pilot has no spreadsheets |
-| A spreadsheet application grows out of sprint 2b | Nine named operations, data-grid sheets only, no formula evaluation. A tenth operation is a decision, not a configuration |
+| A spreadsheet application grows out of sprint 2b | Named operations and data-grid sheets only, no formula evaluation. Every operation the engine gained past the original nine was added by an owner decision recorded in `docs/DECISIONS.md`, never added quietly |
 
 ## Mapping from the old phases
 

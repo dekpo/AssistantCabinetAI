@@ -137,7 +137,7 @@ mod tests {
                 })
                 .collect(),
         };
-        TabularInventory::build("data.xlsx", "hash-1", TabularFormat::Xlsx, &workbook)
+        TabularInventory::build("data.xlsx", "hash-1", TabularFormat::Xlsx, &workbook, "fr-FR")
     }
 
     #[test]

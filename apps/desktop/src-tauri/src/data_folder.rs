@@ -170,6 +170,7 @@ impl DataFolder {
 pub fn analyse(
     root: &Path,
     index: &mut IndexStore,
+    locale: &str,
     on_progress: &dyn Fn(IndexProgress),
 ) -> Result<IndexSummary, AppError> {
     let workbooks: Vec<discovery::DiscoveredFile> = discovery::discover_all(root)
@@ -186,7 +187,7 @@ pub fn analyse(
     let mut unusable = Vec::new();
     for (position, file) in workbooks.iter().enumerate() {
         let path = Path::new(&file.absolute_path);
-        match tabular::build_inventory(path, &file.relative_path) {
+        match tabular::build_inventory(path, &file.relative_path, locale) {
             Ok(inventory) => {
                 if inventory.has_a_usable_sheet() {
                     usable += 1;
@@ -318,7 +319,7 @@ pub(crate) mod tests {
         );
         write(data.path(), "faux.xlsx", b"not a zip archive at all");
 
-        let summary = analyse(data.path(), &mut index, &|_| {}).unwrap();
+        let summary = analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
         let folder = open(data.path(), &index);
 
         assert_eq!(state(&folder, "factures.csv"), GREEN);
@@ -348,7 +349,7 @@ pub(crate) mod tests {
         let (data, _app, mut index) = setup();
         write(data.path(), "courrier.pdf", b"%PDF-1.4");
 
-        let summary = analyse(data.path(), &mut index, &|_| {}).unwrap();
+        let summary = analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
         let folder = open(data.path(), &index);
 
         assert_eq!(summary.scanned_files, 0);
@@ -359,7 +360,7 @@ pub(crate) mod tests {
     fn a_changed_workbook_goes_back_to_orange_until_the_next_pass() {
         let (data, _app, mut index) = setup();
         write(data.path(), "factures.csv", invoice_csv(12).as_bytes());
-        analyse(data.path(), &mut index, &|_| {}).unwrap();
+        analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
 
         write(data.path(), "factures.csv", invoice_csv(13).as_bytes());
         let folder = open(data.path(), &index);
@@ -370,7 +371,7 @@ pub(crate) mod tests {
         );
         assert!(folder.usable_inventory("factures.csv").is_none());
 
-        analyse(data.path(), &mut index, &|_| {}).unwrap();
+        analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
         assert_eq!(state(&open(data.path(), &index), "factures.csv"), GREEN);
     }
 
@@ -379,10 +380,10 @@ pub(crate) mod tests {
         let (data, _app, mut index) = setup();
         write(data.path(), "factures.csv", invoice_csv(12).as_bytes());
         write(data.path(), "ancien.csv", invoice_csv(10).as_bytes());
-        analyse(data.path(), &mut index, &|_| {}).unwrap();
+        analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
 
         std::fs::remove_file(data.path().join("ancien.csv")).unwrap();
-        let summary = analyse(data.path(), &mut index, &|_| {}).unwrap();
+        let summary = analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
 
         assert_eq!(summary.removed_files, vec!["ancien.csv"]);
         let paths: Vec<String> = index
@@ -423,7 +424,7 @@ pub(crate) mod tests {
         write(data.path(), "b.csv", invoice_csv(9).as_bytes());
         let seen = std::sync::Mutex::new(Vec::new());
 
-        analyse(data.path(), &mut index, &|progress| {
+        analyse(data.path(), &mut index, "fr-FR", &|progress| {
             seen.lock()
                 .unwrap()
                 .push((progress.processed_files, progress.total_files))

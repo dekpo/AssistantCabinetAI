@@ -169,7 +169,7 @@ pub fn answer(
                 .absolute_path(target.record)
                 .ok_or(AppError::ScopeUnavailable)?;
             let (workbook, fresh) =
-                match tabular::load_current(&path, &file, &inventory.workbook_id) {
+                match tabular::load_current(&path, &file, &inventory.workbook_id, locale) {
                     Ok(pair) => pair,
                     Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
                     Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
@@ -193,7 +193,7 @@ pub fn answer(
                 ));
             }
 
-            match engine::execute(&workbook, &fresh, sheet.as_deref(), allowed, &operation) {
+            match engine::execute(&workbook, &fresh, sheet.as_deref(), allowed, &operation, locale) {
                 TabularOutcome::Value {
                     value,
                     locator,
@@ -491,6 +491,7 @@ mod tests {
     use crate::data_folder::{self};
     use crate::index_store::IndexStore;
     use crate::inventory::FileHashCache;
+    use crate::tabular::engine::NumericAggregate;
 
     struct Folder {
         data: tempfile::TempDir,
@@ -506,7 +507,7 @@ mod tests {
             for (path, content) in files {
                 write(data.path(), path, content.as_bytes());
             }
-            data_folder::analyse(data.path(), &mut index, &|_| {}).unwrap();
+            data_folder::analyse(data.path(), &mut index, "en-US", &|_| {}).unwrap();
             Self {
                 data,
                 _app: app,
@@ -573,7 +574,11 @@ mod tests {
         // 1,50 + 2,50 + ... + 12,50
         assert_eq!(
             value,
-            TabularValue::Sum((1..=12).map(|n| n as f64 + 0.5).sum())
+            TabularValue::Sum(NumericAggregate {
+                value: (1..=12).map(|n| n as f64 + 0.5).sum(),
+                unit: None,
+                unparsed: 0,
+            })
         );
         assert_eq!(
             locator.sheet, "factures",
@@ -1072,9 +1077,21 @@ mod tests {
         };
         for value in [
             TabularValue::Count(3),
-            TabularValue::Sum(1.5),
-            TabularValue::Min(1.0),
-            TabularValue::Max(2.0),
+            TabularValue::Sum(NumericAggregate {
+                value: 1.5,
+                unit: None,
+                unparsed: 0,
+            }),
+            TabularValue::Min(NumericAggregate {
+                value: 1.0,
+                unit: None,
+                unparsed: 0,
+            }),
+            TabularValue::Max(NumericAggregate {
+                value: 2.0,
+                unit: Some("\u{20ac}".into()),
+                unparsed: 3,
+            }),
             TabularValue::Distinct(vec!["a".into()]),
             TabularValue::GroupSums(vec![crate::tabular::engine::GroupSum {
                 group: "a".into(),
@@ -1103,8 +1120,19 @@ mod tests {
             assert_eq!(json["kind"], "value");
             assert_eq!(json["locator"]["sheet"], "Facturation");
         }
-        let json = serde_json::to_value(TabularValue::Sum(1.5)).unwrap();
-        assert_eq!(json, serde_json::json!({ "kind": "sum", "value": 1.5 }));
+        let json = serde_json::to_value(TabularValue::Sum(NumericAggregate {
+            value: 1.5,
+            unit: None,
+            unparsed: 0,
+        }))
+        .unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "kind": "sum",
+                "value": { "value": 1.5, "unit": null, "unparsed": 0 }
+            })
+        );
     }
 
     #[test]

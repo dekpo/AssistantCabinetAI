@@ -105,6 +105,18 @@ carries a document-specific field. See `docs/WORK-FOLDER-INVENTORY.md`.
 Spreadsheets are **not** flattened into text chunks to resemble PDFs. They get their own pipeline, their
 own inventory and their own deterministic operations.
 
+Reading a column's own locale (`docs/DECISIONS.md`, D2-D4):
+
+- Decimal and thousands marks are read from a column's own cells, never the operating system's locale.
+- A lone separator no single cell can settle is decided by the rest of its column, or by the interface
+  locale only when the column offers no evidence either way - never guessed from one value.
+- A currency or percent sign travels with the column as a unit; an unparseable cell is counted, never
+  folded silently into a sum. A column is `Numeric` at 95% parse or better.
+- A date is a real calendar value, never a serial number or a locale guess; a day-first column types
+  `Date` only when some cell's day or format rules out the month-first reading, `Categorical` otherwise.
+- The header row is the best-scoring candidate in the first twenty rows - fill, distinct labels, how
+  differently the row beneath reads - never simply the first row of text.
+
 ## OCR is an extraction path, not a second pipeline
 
 A scanned page is a document whose text has to be recovered before anything else can happen to it. That

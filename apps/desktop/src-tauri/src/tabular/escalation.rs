@@ -71,9 +71,9 @@ pub fn format_evidence(outcome: &TabularOutcome) -> Option<String> {
 fn describe_value(value: &TabularValue) -> String {
     match value {
         TabularValue::Count(count) => count.to_string(),
-        TabularValue::Sum(total) => total.to_string(),
-        TabularValue::Min(min) => min.to_string(),
-        TabularValue::Max(max) => max.to_string(),
+        TabularValue::Sum(total) => total.value.to_string(),
+        TabularValue::Min(min) => min.value.to_string(),
+        TabularValue::Max(max) => max.value.to_string(),
         TabularValue::Distinct(values) => values.join(", "),
         TabularValue::GroupSums(sums) => sums
             .iter()
@@ -101,7 +101,9 @@ fn describe_value(value: &TabularValue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tabular::engine::{CellText, NotAnswerableReason, RowValue, TabularLocator};
+    use crate::tabular::engine::{
+        CellText, NotAnswerableReason, NumericAggregate, RowValue, TabularLocator,
+    };
 
     /// The same guard `retrieval::the_retrieval_instruction_stays_neutral_about_who_the_user_is`
     /// and `conversation::the_no_documents_instruction_stays_neutral_about_who_the_user_is`
@@ -117,7 +119,11 @@ mod tests {
 
     fn sum_outcome() -> TabularOutcome {
         TabularOutcome::Value {
-            value: TabularValue::Sum(725.5),
+            value: TabularValue::Sum(NumericAggregate {
+                value: 725.5,
+                unit: None,
+                unparsed: 0,
+            }),
             locator: TabularLocator {
                 sheet: "Feuille1".into(),
                 header_row: Some(0),

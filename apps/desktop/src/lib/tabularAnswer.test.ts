@@ -18,11 +18,11 @@ const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
 const english = createTranslator(reference, reference);
 const french = createTranslator(CATALOGUES["fr-FR"] as Catalogue, reference);
 
-function sum(value: number): TabularAnswer {
+function sum(value: number, unit: string | null = null, unparsed = 0): TabularAnswer {
   return {
     kind: "value",
     file: "factures.csv",
-    value: { kind: "sum", value },
+    value: { kind: "sum", value: { value, unit, unparsed } },
     locator: { sheet: "Facturation", headerRow: 0, column: "montant", rowRange: [0, 11] },
     derivation: { kind: "computed", operation: "sum", row_count: 12 },
   };
@@ -52,6 +52,22 @@ describe("a computed value", () => {
 
   it("keeps every significant digit it was given", () => {
     expect(formatTabularAnswer(english, sum(0.125), "en-US")).toContain("0.125");
+  });
+
+  it("shows the unit beside the value, exactly as the column carried it", () => {
+    expect(formatTabularAnswer(french, sum(1234.5, "€"), "fr-FR")).toMatch(/1\s234,5\s€/u);
+    expect(formatTabularAnswer(english, sum(15, "%"), "en-US")).toContain("15 %");
+  });
+
+  it("says how many cells could not be read as numbers, only when some could not", () => {
+    const clean = formatTabularAnswer(english, sum(100), "en-US");
+    expect(clean).not.toContain("could not be read");
+
+    const withUnparsed = formatTabularAnswer(english, sum(100, null, 3), "en-US");
+    expect(withUnparsed).toContain("3 cells could not be read as numbers.");
+
+    const oneUnparsed = formatTabularAnswer(french, sum(100, null, 1), "fr-FR");
+    expect(oneUnparsed).toContain("1 cellule n'a pas pu être lue comme un nombre.");
   });
 });
 

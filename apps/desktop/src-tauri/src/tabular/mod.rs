@@ -56,9 +56,11 @@ pub enum CellValue {
     Text(String),
     /// An XLSX numeric cell, already typed by the file format itself.
     Number(f64),
-    /// An XLSX date/datetime cell, already typed by the file format itself. Kept as the text the
-    /// format gives rather than a calendar type this crate does not otherwise depend on.
-    Date(String),
+    /// An XLSX date/datetime cell, already typed by the file format itself, read to a real
+    /// calendar date (`calamine`'s `dates` feature, D3) - never the raw serial number the file
+    /// stores, and never a second parse: the adapter is the only place that produces this
+    /// variant, so a comparison against a text date parsed elsewhere reads the same calendar day.
+    Date(chrono::NaiveDate),
     /// A formula cell: the expression the file stores, and the value it last cached, if the
     /// adapter could read one. `cached_value` is never presented as a verified fact.
     Formula {
@@ -104,6 +106,7 @@ pub fn hash_bytes(bytes: &[u8]) -> String {
 pub fn build_inventory(
     path: &Path,
     relative_path: &str,
+    locale: &str,
 ) -> Result<inventory::TabularInventory, TabularError> {
     let bytes = std::fs::read(path).map_err(|_| TabularError::ReadFailed)?;
     let workbook_id = hash_bytes(&bytes);
@@ -129,6 +132,7 @@ pub fn build_inventory(
         &workbook_id,
         format,
         &workbook,
+        locale,
     ))
 }
 
@@ -145,8 +149,9 @@ pub fn load_current(
     path: &Path,
     relative_path: &str,
     expected_workbook_id: &str,
+    locale: &str,
 ) -> Result<(Workbook, inventory::TabularInventory), TabularError> {
-    let inventory = build_inventory(path, relative_path)?;
+    let inventory = build_inventory(path, relative_path, locale)?;
     if inventory.workbook_id != expected_workbook_id {
         return Err(TabularError::WorkbookChanged);
     }
@@ -166,6 +171,8 @@ pub fn load_current(
 mod tests {
     use super::*;
 
+    const TEST_LOCALE: &str = "fr-FR";
+
     #[test]
     fn the_same_bytes_hash_to_the_same_identity() {
         assert_eq!(hash_bytes(b"a,b\n1,2\n"), hash_bytes(b"a,b\n1,2\n"));
@@ -178,7 +185,7 @@ mod tests {
         let path = dir.path().join("archive.zip");
         std::fs::write(&path, b"not tabular").unwrap();
 
-        let result = build_inventory(&path, "archive.zip");
+        let result = build_inventory(&path, "archive.zip", TEST_LOCALE);
 
         assert_eq!(result.unwrap_err(), TabularError::UnsupportedExtension);
     }
@@ -190,13 +197,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("montants.csv");
         std::fs::write(&path, b"nom,montant\nCamille,10\n").unwrap();
-        let original = build_inventory(&path, "montants.csv").unwrap();
+        let original = build_inventory(&path, "montants.csv", TEST_LOCALE).unwrap();
 
         // The file changes underneath the pinned identity - a new export overwriting the old one,
         // for instance - before the next question reads it.
         std::fs::write(&path, b"nom,montant\nCamille,10\nEsaie,20\n").unwrap();
 
-        let result = load_current(&path, "montants.csv", &original.workbook_id);
+        let result = load_current(&path, "montants.csv", &original.workbook_id, TEST_LOCALE);
 
         assert_eq!(result.unwrap_err(), TabularError::WorkbookChanged);
     }
@@ -206,10 +213,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("montants.csv");
         std::fs::write(&path, b"nom,montant\nCamille,10\n").unwrap();
-        let original = build_inventory(&path, "montants.csv").unwrap();
+        let original = build_inventory(&path, "montants.csv", TEST_LOCALE).unwrap();
 
         let (workbook, inventory) =
-            load_current(&path, "montants.csv", &original.workbook_id).unwrap();
+            load_current(&path, "montants.csv", &original.workbook_id, TEST_LOCALE).unwrap();
 
         assert_eq!(inventory, original);
         assert_eq!(workbook.sheets[0].rows.len(), 2);
@@ -220,11 +227,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("montants.csv");
         std::fs::write(&path, b"nom,montant\nCamille,10\n").unwrap();
-        let original = build_inventory(&path, "montants.csv").unwrap();
+        let original = build_inventory(&path, "montants.csv", TEST_LOCALE).unwrap();
 
         std::fs::remove_file(&path).unwrap();
 
-        let result = load_current(&path, "montants.csv", &original.workbook_id);
+        let result = load_current(&path, "montants.csv", &original.workbook_id, TEST_LOCALE);
 
         assert_eq!(result.unwrap_err(), TabularError::ReadFailed);
     }
@@ -235,7 +242,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(name);
         std::fs::write(&path, content.as_bytes()).unwrap();
-        build_inventory(&path, name).expect("a text file always parses as a CSV")
+        build_inventory(&path, name, TEST_LOCALE).expect("a text file always parses as a CSV")
     }
 
     #[test]

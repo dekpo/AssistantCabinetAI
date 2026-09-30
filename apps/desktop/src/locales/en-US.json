@@ -337,6 +337,9 @@
     "groupTotalNote": "This is the total per {group}, added up over every row, not the largest single row.",
     "moreGroups": "…and {count} more groups, not shown.",
     "whichMeasure": "To rank by {group}, several columns in {file} could be added up: {columns}. Name the one you mean, for example “Which {group} has the highest total {first}?”",
-    "moreValues": "…and {count} more values, not shown."
+    "moreValues": "…and {count} more values, not shown.",
+    "unparsedOne": "cell could not be read as a number",
+    "unparsedMany": "cells could not be read as numbers",
+    "unparsedNote": "{count}."
   }
 }

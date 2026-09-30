@@ -820,7 +820,7 @@ mod tests {
                 ],
             }],
         };
-        TabularInventory::build("factures.csv", "hash-1", TabularFormat::Csv, &workbook)
+        TabularInventory::build("factures.csv", "hash-1", TabularFormat::Csv, &workbook, "fr-FR")
     }
 
     fn two_sheets() -> TabularInventory {
@@ -839,7 +839,7 @@ mod tests {
                 },
             ],
         };
-        TabularInventory::build("classeur.xlsx", "hash-2", TabularFormat::Xlsx, &workbook)
+        TabularInventory::build("classeur.xlsx", "hash-2", TabularFormat::Xlsx, &workbook, "fr-FR")
     }
 
     #[test]
@@ -1112,7 +1112,7 @@ mod tests {
             }],
         };
         let inventory =
-            TabularInventory::build("rendez-vous.xlsx", "hash-3", TabularFormat::Xlsx, &workbook);
+            TabularInventory::build("rendez-vous.xlsx", "hash-3", TabularFormat::Xlsx, &workbook, "fr-FR");
 
         assert_eq!(
             classify("Sort by duree_min descending", &inventory, None, "en-US"),

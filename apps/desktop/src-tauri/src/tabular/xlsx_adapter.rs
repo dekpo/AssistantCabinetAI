@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use calamine::{open_workbook_auto, Data, Range, Reader};
+use calamine::{open_workbook_auto, Data, DataType, Range, Reader};
 
 use super::{CellValue, SheetData, TabularDataSource, TabularError, Workbook};
 
@@ -85,17 +85,33 @@ fn formula_expression_at<'a>(
 }
 
 fn convert_cell(data: &Data, formula: Option<&String>) -> CellValue {
-    let value = match data {
-        Data::Empty => CellValue::Empty,
-        Data::String(text) if text.trim().is_empty() => CellValue::Empty,
-        Data::String(text) => CellValue::Text(text.clone()),
-        Data::Float(number) => CellValue::Number(*number),
-        Data::Int(number) => CellValue::Number(*number as f64),
-        Data::Bool(value) => CellValue::Text(value.to_string()),
-        Data::DateTime(datetime) => CellValue::Date(datetime.to_string()),
-        Data::DateTimeIso(text) => CellValue::Date(text.clone()),
-        Data::DurationIso(text) => CellValue::Text(text.clone()),
-        Data::Error(error) => CellValue::Text(format!("#ERROR:{error:?}")),
+    // A real calendar date, read once by calamine's own `dates` feature (chrono) rather than
+    // kept as the raw serial number the file stores or re-parsed from its ISO text a second time
+    // (`docs/DECISIONS.md`, D3). `as_date()` covers both `DateTime` and `DateTimeIso` cells.
+    let value = if data.is_datetime() || data.is_datetime_iso() {
+        match data.as_date() {
+            Some(date) => CellValue::Date(date),
+            // A date-typed cell calamine cannot resolve to a calendar value: shown as whatever
+            // text it does offer rather than silently dropped.
+            None => data
+                .as_string()
+                .map(CellValue::Text)
+                .unwrap_or(CellValue::Empty),
+        }
+    } else {
+        match data {
+            Data::Empty => CellValue::Empty,
+            Data::String(text) if text.trim().is_empty() => CellValue::Empty,
+            Data::String(text) => CellValue::Text(text.clone()),
+            Data::Float(number) => CellValue::Number(*number),
+            Data::Int(number) => CellValue::Number(*number as f64),
+            Data::Bool(value) => CellValue::Text(value.to_string()),
+            Data::DurationIso(text) => CellValue::Text(text.clone()),
+            Data::Error(error) => CellValue::Text(format!("#ERROR:{error:?}")),
+            Data::DateTime(_) | Data::DateTimeIso(_) => {
+                unreachable!("handled by the is_datetime()/is_datetime_iso() branch above")
+            }
+        }
     };
     match formula {
         Some(expression) => CellValue::Formula {
@@ -186,6 +202,11 @@ mod tests {
                         cells.push_str(&format!(
                             r#"<c r="{reference}"><f>{expression}</f><v>0</v></c>"#
                         ));
+                    } else if let Some(iso) = value.strip_prefix('@') {
+                        // `t="d"` (ISO 8601 date/datetime cell type): calamine reads this as
+                        // `Data::DateTimeIso` with no `styles.xml` needed, unlike a numeric-serial
+                        // date cell, which a real workbook's cell style decides.
+                        cells.push_str(&format!(r#"<c r="{reference}" t="d"><v>{iso}</v></c>"#));
                     } else if value.is_empty() {
                         // No cell element at all: an XLSX omits genuinely blank cells.
                     } else if let Ok(number) = value.parse::<f64>() {
@@ -325,5 +346,54 @@ mod tests {
         let workbook = open(&path);
 
         assert_eq!(workbook.sheets[0].rows[1][1], CellValue::Empty);
+    }
+
+    // --- Dates (D3, docs/SESSION-DATA-10-Locale-Parsing.md section 6) ----------------------
+
+    #[test]
+    fn an_iso_date_cell_is_read_to_a_real_calendar_date() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("consultations.xlsx");
+        write_single_sheet_xlsx(
+            &path,
+            "Feuille1",
+            &[&["nom", "consultation"], &["Camille", "@2026-03-12"]],
+        );
+
+        let workbook = open(&path);
+
+        assert_eq!(
+            workbook.sheets[0].rows[1][1],
+            CellValue::Date(chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap())
+        );
+    }
+
+    #[test]
+    fn an_xlsx_date_cell_and_a_csv_dd_mm_yyyy_cell_for_the_same_day_compare_equal() {
+        use crate::tabular::csv_adapter::CsvDataSource;
+        use crate::tabular::TabularDataSource;
+
+        let dir = tempfile::tempdir().unwrap();
+        let xlsx_path = dir.path().join("consultations.xlsx");
+        write_single_sheet_xlsx(
+            &xlsx_path,
+            "Feuille1",
+            &[&["nom", "consultation"], &["Camille", "@2026-03-12"]],
+        );
+        let xlsx = open(&xlsx_path);
+        let CellValue::Date(xlsx_date) = xlsx.sheets[0].rows[1][1] else {
+            panic!("expected a date cell from the xlsx adapter");
+        };
+
+        let csv_path = dir.path().join("consultations.csv");
+        std::fs::write(&csv_path, "nom,consultation\nCamille,12/03/2026\n").unwrap();
+        let csv = CsvDataSource.open(&csv_path).expect("opens the csv fixture");
+        let CellValue::Text(csv_text) = &csv.sheets[0].rows[1][1] else {
+            panic!("expected a text cell from the csv adapter");
+        };
+        let csv_date = chrono::NaiveDate::parse_from_str(csv_text, "%d/%m/%Y")
+            .expect("the csv adapter's own text still parses as dd/mm/yyyy");
+
+        assert_eq!(xlsx_date, csv_date);
     }
 }

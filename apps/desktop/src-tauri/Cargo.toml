@@ -46,10 +46,16 @@ unicode-normalization = "0.1"
 
 # Tabular pipeline (docs/ARCHITECTURE.md): CSV/XLSX are a first-class source with their own
 # adapters, never flattened into text chunks and never routed through document embeddings.
-calamine = "0.26"
+# `dates`: calamine's own date/time conversion (chrono), so an XLSX date or datetime cell reads
+# as a real calendar value instead of the raw serial number the file stores (docs/DECISIONS.md,
+# D3). No system locale involved: both pure Rust, both platforms.
+calamine = { version = "0.26", features = ["dates"] }
 csv = "1"
 # CP1252 decoding for a CSV a French Windows export did not save as UTF-8.
 encoding_rs = "0.8"
+# The one pure-Rust date crate for the tabular pipeline (D3): already resolved transitively
+# through calamine's own `dates` feature, so this is the same version, not a second one.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 
 # Rasterises a PDF page to a bitmap in memory, feeding the OCR port (docs/SPRINT-2.5-ASSESSMENT.md
 # section E). No `#[cfg(windows)]`: the platform difference is which prebuilt pdfium library is

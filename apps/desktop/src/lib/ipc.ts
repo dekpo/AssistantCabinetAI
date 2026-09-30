@@ -271,11 +271,21 @@ export interface TabularRow {
   cells: TabularCell[];
 }
 
+/** A sum, minimum or maximum together with what its column carries beside the number: the unit
+ * read from its cells (`€`, `$`, `%`), when every cell that had one agreed, and how many
+ * non-empty cells could not be read as a number - never folded into `value`, always shown beside
+ * it (`docs/DECISIONS.md`, D2). */
+export interface NumericAggregate {
+  value: number;
+  unit: string | null;
+  unparsed: number;
+}
+
 export type TabularValue =
   | { kind: "count"; value: number }
-  | { kind: "sum"; value: number }
-  | { kind: "min"; value: number }
-  | { kind: "max"; value: number }
+  | { kind: "sum"; value: NumericAggregate }
+  | { kind: "min"; value: NumericAggregate }
+  | { kind: "max"; value: NumericAggregate }
   | { kind: "distinct"; value: string[] }
   | { kind: "group_sums"; value: { group: string; sum: number }[] }
   /** The groups with the largest totals, largest first: a total per group, never one row. */

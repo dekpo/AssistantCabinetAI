@@ -1,5 +1,5 @@
 import type { Translator } from "../i18n/translate";
-import type { StructuralAnswer, TabularAnswer, TabularRow, TabularValue } from "./ipc";
+import type { NumericAggregate, StructuralAnswer, TabularAnswer, TabularRow, TabularValue } from "./ipc";
 import { counted } from "./plural";
 
 /**
@@ -100,6 +100,19 @@ function formatValue(
 ): string {
   const number = (amount: number) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(amount);
+  /** A sum/min/max's own value, formatted in her language and with its unit beside it, exactly
+   * as the column carried it (`docs/DECISIONS.md`, D2) - never translated, never repositioned. */
+  const aggregate = (a: NumericAggregate) => number(a.value) + (a.unit === null ? "" : ` ${a.unit}`);
+  /** "N cells could not be read as numbers", next to a sum/min/max whenever some were left out -
+   * never silently dropped from the total (`docs/DECISIONS.md`, D2). */
+  const unparsedNote = (a: NumericAggregate): string[] =>
+    a.unparsed > 0
+      ? [
+          t("tabularAnswer.unparsedNote", {
+            count: counted(a.unparsed, t("tabularAnswer.unparsedOne"), t("tabularAnswer.unparsedMany")),
+          }),
+        ]
+      : [];
   const rows = counted(derivation.row_count, t("tabularAnswer.rowOne"), t("tabularAnswer.rowMany"));
   const over = t("tabularAnswer.computedOver", { rows });
   const named = column ?? "";
@@ -108,11 +121,26 @@ function formatValue(
     case "count":
       return [t("tabularAnswer.count", { value: number(value.value) }), "", over].join("\n");
     case "sum":
-      return [t("tabularAnswer.sum", { column: named, value: number(value.value) }), "", over].join("\n");
+      return [
+        t("tabularAnswer.sum", { column: named, value: aggregate(value.value) }),
+        "",
+        over,
+        ...unparsedNote(value.value),
+      ].join("\n");
     case "min":
-      return [t("tabularAnswer.min", { column: named, value: number(value.value) }), "", over].join("\n");
+      return [
+        t("tabularAnswer.min", { column: named, value: aggregate(value.value) }),
+        "",
+        over,
+        ...unparsedNote(value.value),
+      ].join("\n");
     case "max":
-      return [t("tabularAnswer.max", { column: named, value: number(value.value) }), "", over].join("\n");
+      return [
+        t("tabularAnswer.max", { column: named, value: aggregate(value.value) }),
+        "",
+        over,
+        ...unparsedNote(value.value),
+      ].join("\n");
     case "distinct":
       return [
         t("tabularAnswer.distinct", {

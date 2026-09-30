@@ -24,7 +24,9 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use super::inventory::{data_rows, numeric_value, text_value, ColumnInventory, ColumnType, SheetInventory, TabularInventory};
+use super::inventory::{
+    self, data_rows, text_value, ColumnInventory, ColumnType, SheetInventory, TabularInventory,
+};
 use super::{CellValue, Workbook};
 use crate::file_reference::fold_text;
 
@@ -96,6 +98,18 @@ pub struct GroupRanking {
 /// How many leading groups a ranking reports: the answer and enough context to read it by.
 pub const TOP_GROUPS: usize = 5;
 
+/// A numeric aggregate together with what its column carries beside the number itself: the unit
+/// read from its cells, when every cell that had one agreed (`\u{20ac}`, `$`, `%`), and how many
+/// non-empty cells could not be read as a number - never folded into `value`, and always shown
+/// beside it (`docs/DECISIONS.md`, D2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NumericAggregate {
+    pub value: f64,
+    pub unit: Option<String>,
+    pub unparsed: usize,
+}
+
 /// What one deterministic operation actually produced. A group **total** and the largest
 /// **single row** are different facts and are always labelled as such (`docs/RETRIEVAL.md`), so
 /// they are different variants rather than one shape read two ways.
@@ -106,9 +120,9 @@ pub const TOP_GROUPS: usize = 5;
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum TabularValue {
     Count(usize),
-    Sum(f64),
-    Min(f64),
-    Max(f64),
+    Sum(NumericAggregate),
+    Min(NumericAggregate),
+    Max(NumericAggregate),
     /// Sorted, so the same column always reports its distinct values in the same order.
     Distinct(Vec<String>),
     GroupSums(Vec<GroupSum>),
@@ -217,12 +231,17 @@ pub enum Operation {
 /// conversation's scope narrowed it (`AnalysisScope::sheet_restrictions`). `sheet_name` is the
 /// sheet the question named, if it named one; with none named, the operation runs against the
 /// single reachable sheet, or refuses as ambiguous when there is more than one.
+///
+/// `locale` is read only where a numeric column's own cells leave a lone separator's role
+/// unsettled (`inventory::resolve_numeric_column`) - the same function, and so the same result,
+/// the inventory already used to type the column in the first place.
 pub fn execute(
     workbook: &Workbook,
     inventory: &TabularInventory,
     sheet_name: Option<&str>,
     allowed_sheets: Option<&[String]>,
     operation: &Operation,
+    locale: &str,
 ) -> TabularOutcome {
     let reachable_names: Vec<String> = reachable_sheets(inventory, allowed_sheets)
         .iter()
@@ -248,7 +267,7 @@ pub fn execute(
             let matched = match filter {
                 None => (0..rows.len()).collect::<Vec<_>>(),
                 Some(spec) => match resolve_filter_column(columns, spec) {
-                    Ok(col) => matching_rows(rows, col, &spec.comparison),
+                    Ok(col) => matching_rows(rows, col, &spec.comparison, locale),
                     Err(reason) => return fail(reason),
                 },
             };
@@ -289,22 +308,30 @@ pub fn execute(
             if rows.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
-            let values: Vec<f64> = rows
-                .iter()
-                .filter_map(|row| row.get(col.index))
-                .filter_map(numeric_value)
-                .collect();
+            let resolved = inventory::resolve_numeric_column(rows, col.index, locale);
+            let values: Vec<f64> = resolved.values.into_iter().flatten().collect();
             if values.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
+            let aggregate = |value: f64| NumericAggregate {
+                value,
+                unit: col.unit.clone(),
+                unparsed: col.unparsed_count,
+            };
             let (value, operation_name) = match operation {
-                Operation::Sum { .. } => (TabularValue::Sum(values.iter().sum()), "sum"),
+                Operation::Sum { .. } => {
+                    (TabularValue::Sum(aggregate(values.iter().sum())), "sum")
+                }
                 Operation::Min { .. } => (
-                    TabularValue::Min(values.iter().cloned().fold(f64::INFINITY, f64::min)),
+                    TabularValue::Min(aggregate(
+                        values.iter().cloned().fold(f64::INFINITY, f64::min),
+                    )),
                     "min",
                 ),
                 Operation::Max { .. } => (
-                    TabularValue::Max(values.iter().cloned().fold(f64::NEG_INFINITY, f64::max)),
+                    TabularValue::Max(aggregate(
+                        values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                    )),
                     "max",
                 ),
                 _ => unreachable!(),
@@ -337,15 +364,14 @@ pub fn execute(
             if rows.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
+            let resolved = inventory::resolve_numeric_column(rows, sum_col.index, locale);
             let mut totals: std::collections::BTreeMap<String, f64> =
                 std::collections::BTreeMap::new();
-            for row in rows {
-                let (Some(group_cell), Some(sum_cell)) =
-                    (row.get(group_col.index), row.get(sum_col.index))
-                else {
+            for (row, amount) in rows.iter().zip(resolved.values.iter()) {
+                let Some(amount) = amount else {
                     continue;
                 };
-                let Some(amount) = numeric_value(sum_cell) else {
+                let Some(group_cell) = row.get(group_col.index) else {
                     continue;
                 };
                 let key = text_value(group_cell);
@@ -393,13 +419,14 @@ pub fn execute(
             if col.inferred_type != ColumnType::Numeric {
                 return fail(NotAnswerableReason::NonNumericColumn);
             }
+            let resolved = inventory::resolve_numeric_column(rows, col.index, locale);
             let mut best: Option<(usize, f64)> = None;
-            for (index, row) in rows.iter().enumerate() {
-                let Some(value) = row.get(col.index).and_then(numeric_value) else {
+            for (index, value) in resolved.values.iter().enumerate() {
+                let Some(value) = value else {
                     continue;
                 };
-                if best.is_none_or(|(_, current)| value > current) {
-                    best = Some((index, value));
+                if best.is_none_or(|(_, current)| *value > current) {
+                    best = Some((index, *value));
                 }
             }
             let Some((row_index, _)) = best else {
@@ -423,7 +450,7 @@ pub fn execute(
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
             };
-            let matched = matching_rows(rows, col, &filter.comparison);
+            let matched = matching_rows(rows, col, &filter.comparison, locale);
             let result_rows: Vec<RowValue> = matched
                 .iter()
                 .map(|&index| RowValue {
@@ -447,10 +474,11 @@ pub fn execute(
             }
             let mut indices: Vec<usize> = (0..rows.len()).collect();
             if col.inferred_type == ColumnType::Numeric {
+                let resolved = inventory::resolve_numeric_column(rows, col.index, locale);
                 indices.sort_by(|&a, &b| {
-                    let va = rows[a].get(col.index).and_then(numeric_value);
-                    let vb = rows[b].get(col.index).and_then(numeric_value);
-                    va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
+                    resolved.values[a]
+                        .partial_cmp(&resolved.values[b])
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 });
             } else {
                 indices.sort_by(|&a, &b| {
@@ -660,7 +688,13 @@ fn matching_rows(
     rows: &[Vec<CellValue>],
     column: &ColumnInventory,
     comparison: &Comparison,
+    locale: &str,
 ) -> Vec<usize> {
+    // Resolved once for the whole column, not per cell, so a comparison agrees with the same
+    // convention the inventory used to type the column in the first place.
+    let numeric = matches!(comparison, Comparison::GreaterThan(_) | Comparison::LessThan(_))
+        .then(|| inventory::resolve_numeric_column(rows, column.index, locale));
+
     rows.iter()
         .enumerate()
         .filter_map(|(index, row)| {
@@ -670,12 +704,14 @@ fn matching_rows(
                 Comparison::Contains(value) => {
                     fold_text(&text_value(cell)).contains(&fold_text(value))
                 }
-                Comparison::GreaterThan(threshold) => {
-                    numeric_value(cell).is_some_and(|value| value > *threshold)
-                }
-                Comparison::LessThan(threshold) => {
-                    numeric_value(cell).is_some_and(|value| value < *threshold)
-                }
+                Comparison::GreaterThan(threshold) => numeric
+                    .as_ref()
+                    .and_then(|resolved| resolved.values[index])
+                    .is_some_and(|value| value > *threshold),
+                Comparison::LessThan(threshold) => numeric
+                    .as_ref()
+                    .and_then(|resolved| resolved.values[index])
+                    .is_some_and(|value| value < *threshold),
             };
             matches.then_some(index)
         })
@@ -720,8 +756,13 @@ mod tests {
 
     fn build(sheets: Vec<SheetData>) -> (Workbook, TabularInventory) {
         let workbook = Workbook { sheets };
-        let inventory =
-            TabularInventory::build("data.csv", "hash-1", TabularFormat::Csv, &workbook);
+        let inventory = TabularInventory::build(
+            "data.csv",
+            "hash-1",
+            TabularFormat::Csv,
+            &workbook,
+            TEST_LOCALE,
+        );
         (workbook, inventory)
     }
 
@@ -739,12 +780,14 @@ mod tests {
         ])
     }
 
+    const TEST_LOCALE: &str = "fr-FR";
+
     fn run(
         workbook: &Workbook,
         inventory: &TabularInventory,
         operation: Operation,
     ) -> TabularOutcome {
-        execute(workbook, inventory, None, None, &operation)
+        execute(workbook, inventory, None, None, &operation, TEST_LOCALE)
     }
 
     // --- Positive paths -----------------------------------------------------------------
@@ -846,7 +889,8 @@ mod tests {
         else {
             panic!("expected a sum");
         };
-        assert!((total - 725.50).abs() < 1e-9);
+        assert!((total.value - 725.50).abs() < 1e-9);
+        assert_eq!(total.unparsed, 0);
         assert_eq!(
             derivation,
             TabularDerivation::Computed {
@@ -876,11 +920,11 @@ mod tests {
 
         assert!(matches!(
             min,
-            TabularOutcome::Value { value: TabularValue::Min(v), .. } if (v - 30.0).abs() < 1e-9
+            TabularOutcome::Value { value: TabularValue::Min(v), .. } if (v.value - 30.0).abs() < 1e-9
         ));
         assert!(matches!(
             max,
-            TabularOutcome::Value { value: TabularValue::Max(v), .. } if (v - 500.0).abs() < 1e-9
+            TabularOutcome::Value { value: TabularValue::Max(v), .. } if (v.value - 500.0).abs() < 1e-9
         ));
     }
 
@@ -1071,6 +1115,7 @@ mod tests {
             Some("Nope"),
             None,
             &Operation::Count { filter: None },
+            TEST_LOCALE,
         );
 
         assert!(matches!(
@@ -1162,7 +1207,7 @@ mod tests {
         );
         assert!(matches!(
             clean,
-            TabularOutcome::Value { value: TabularValue::Sum(v), .. } if (v - 5.0).abs() < 1e-9
+            TabularOutcome::Value { value: TabularValue::Sum(v), .. } if (v.value - 5.0).abs() < 1e-9
         ));
 
         // A plain row lookup may still show the formula's last cached value - it is a row
@@ -1194,6 +1239,7 @@ mod tests {
             Some("facturation"),
             None,
             &Operation::Count { filter: None },
+            TEST_LOCALE,
         );
 
         assert!(matches!(
@@ -1218,6 +1264,7 @@ mod tests {
             None,
             None,
             &Operation::Count { filter: None },
+            TEST_LOCALE,
         );
 
         assert!(matches!(
@@ -1248,6 +1295,7 @@ mod tests {
             "hash-csv",
             TabularFormat::Csv,
             &workbook,
+            TEST_LOCALE,
         );
 
         let outcome = execute(
@@ -1258,11 +1306,12 @@ mod tests {
             &Operation::Sum {
                 column: "montant".into(),
             },
+            TEST_LOCALE,
         );
 
         assert!(matches!(
             outcome,
-            TabularOutcome::Value { value: TabularValue::Sum(v), .. } if (v - 195.50).abs() < 1e-9
+            TabularOutcome::Value { value: TabularValue::Sum(v), .. } if (v.value - 195.50).abs() < 1e-9
         ));
     }
 
@@ -1292,6 +1341,7 @@ mod tests {
             None,
             Some(&allowed),
             &Operation::Count { filter: None },
+            TEST_LOCALE,
         );
 
         match outcome {
@@ -1313,6 +1363,7 @@ mod tests {
             &Operation::Sum {
                 column: "montant".into(),
             },
+            TEST_LOCALE,
         );
 
         // Indistinguishable from a sheet that plainly does not exist - the scope is a real
@@ -1337,6 +1388,7 @@ mod tests {
             Some("Nope"),
             Some(&allowed),
             &Operation::Count { filter: None },
+            TEST_LOCALE,
         );
 
         let TabularOutcome::NotDeterministicallyAnswerable {

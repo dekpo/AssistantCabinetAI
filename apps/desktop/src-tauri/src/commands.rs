@@ -454,10 +454,13 @@ pub fn index_data_folder(
     state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let (data_folder, locale) = state.read(|settings| {
+        (settings.data_folder.clone(), settings.locale.clone())
+    })?;
     let Some(data_folder) = data_folder else {
         return Err(AppError::NoDataFolderSet);
     };
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
 
     // The same rename, the same log and the same guarantees as the Documents Folder's pass
     // (`docs/DECISIONS.md`, "clean file names"): the name only, never the content, never over
@@ -466,9 +469,14 @@ pub fn index_data_folder(
     log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
-    let mut summary = data_folder::analyse(Path::new(&data_folder), &mut index, &|progress| {
-        let _ = on_progress.send(progress);
-    })?;
+    let mut summary = data_folder::analyse(
+        Path::new(&data_folder),
+        &mut index,
+        locale,
+        &|progress| {
+            let _ = on_progress.send(progress);
+        },
+    )?;
     summary.renamed_files = sanitised.renamed;
     summary.rename_failed_files = sanitised.failed;
     Ok(summary)

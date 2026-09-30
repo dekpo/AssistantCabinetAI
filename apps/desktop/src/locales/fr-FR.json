@@ -337,6 +337,9 @@
     "groupTotalNote": "Il s'agit du total par {group}, additionné sur toutes les lignes, pas de la plus grande ligne isolée.",
     "moreGroups": "…et {count} autres groupes, non affichés.",
     "whichMeasure": "Pour classer par {group}, plusieurs colonnes peuvent être additionnées dans {file} : {columns}. Nommez celle que vous voulez, par exemple « Quel {group} a le plus de {first} ? »",
-    "moreValues": "…et {count} autres valeurs, non affichées."
+    "moreValues": "…et {count} autres valeurs, non affichées.",
+    "unparsedOne": "cellule n'a pas pu être lue comme un nombre",
+    "unparsedMany": "cellules n'ont pas pu être lues comme des nombres",
+    "unparsedNote": "{count}."
   }
 }

@@ -197,7 +197,10 @@ impl Folder {
         let app = tempfile::tempdir().unwrap();
         tabular_fixtures::write_all(data.path());
         let mut index = IndexStore::open_at(&app.path().join("index.sqlite3")).unwrap();
-        data_folder::analyse(data.path(), &mut index, &|_| {}).unwrap();
+        // The fixtures' own amounts and dates are unambiguous by shape regardless of locale
+        // (`docs/DECISIONS.md`, D2/D3); each case's own question still reads in `case.locale`
+        // through `tabular_answer::answer`, which re-reads the workbook fresh.
+        data_folder::analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
         Self {
             data,
             _app: app,

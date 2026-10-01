@@ -23,7 +23,7 @@ function sum(value: number, unit: string | null = null, unparsed = 0): TabularAn
     kind: "value",
     file: "factures.csv",
     value: { kind: "sum", value: { value, unit, unparsed } },
-    locator: { sheet: "Facturation", headerRow: 0, column: "montant", rowRange: [0, 11] },
+    locator: { sheet: "Facturation", headerRow: 0, column: "montant", rowRange: [0, 11], filters: [] },
     derivation: { kind: "computed", operation: "sum", row_count: 12 },
   };
 }
@@ -38,6 +38,7 @@ const nudge: TabularAnswer = {
   exampleGroup: "nom",
   filterColumn: null,
   filterValue: null,
+  closeValues: [],
 };
 
 describe("a computed value", () => {
@@ -231,7 +232,7 @@ describe("a sorted listing", () => {
         kind: "value",
         file: "f.csv",
         value: { kind: "rows", value: [row(0, "A|B")] },
-        locator: { sheet: "f", headerRow: 0, column: "montant", rowRange: [0, 0] },
+        locator: { sheet: "f", headerRow: 0, column: "montant", rowRange: [0, 0], filters: [] },
         derivation: { kind: "computed", operation: "sort", row_count: 1 },
       },
       "en-US",
@@ -249,7 +250,7 @@ describe("a sorted listing", () => {
         kind: "value",
         file: "f.csv",
         value: { kind: "rows", value: rows },
-        locator: { sheet: "f", headerRow: 0, column: "montant", rowRange: [0, rows.length - 1] },
+        locator: { sheet: "f", headerRow: 0, column: "montant", rowRange: [0, rows.length - 1], filters: [] },
         derivation: { kind: "computed", operation: "sort", row_count: rows.length },
       },
       "fr-FR",
@@ -267,7 +268,7 @@ describe("which group costs the most", () => {
       kind: "value",
       file: "revenue_sub_agency.csv",
       value: { kind: "largest_group", value: { groupColumn: "agency", top, groupCount: 12 } },
-      locator: { sheet: "revenue_sub_agency", headerRow: 0, column: "amount", rowRange: [0, 99] },
+      locator: { sheet: "revenue_sub_agency", headerRow: 0, column: "amount", rowRange: [0, 99], filters: [] },
       derivation: { kind: "computed", operation: "largest_group", row_count: 100 },
     };
   }
@@ -325,7 +326,7 @@ describe("a list of a column's values", () => {
         kind: "value",
         file: "revenue_sub_agency.csv",
         value: { kind: "distinct", value: values },
-        locator: { sheet: "revenue_sub_agency", headerRow: 0, column: "agency", rowRange: [0, 99] },
+        locator: { sheet: "revenue_sub_agency", headerRow: 0, column: "agency", rowRange: [0, 99], filters: [] },
         derivation: { kind: "computed", operation: "distinct", row_count: 100 },
       },
       "en-US",

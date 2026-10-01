@@ -313,9 +313,12 @@
       "non_numeric_column": "That column of {file} does not hold numbers only: it can be neither added up nor compared.",
       "formula_cannot_be_verified": "That column of {file} holds formulas: their results cannot be verified, so nothing is computed from them.",
       "empty_sheet": "There is no data to compute in {file}.",
-      "filter_not_supported": "Your question names a filter (“{value}”) that this engine cannot apply yet, so nothing is computed unfiltered from {file}."
+      "filter_not_supported": "Your question names a filter (“{value}”) that this engine cannot apply yet, so nothing is computed unfiltered from {file}.",
+      "non_date_column": "That filter names a day, month, year or date range, but that column of {file} is not a recognised date column.",
+      "value_not_found": "“{value}” does not match any real value in {file}."
     },
     "nudgeFilterColumn": "That word was found in the {column} column.",
+    "nudgeCloseValues": "Close values found: {values}.",
     "nudgeColumns": "Its columns are: {columns}.",
     "nudgeSheets": "Its sheets are: {sheets}.",
     "nudgeOperations": "Try asking for a sum, a minimum, a maximum, a number of rows, the list of a column's values, or the group with the largest total.",
@@ -340,6 +343,19 @@
     "moreValues": "…and {count} more values, not shown.",
     "unparsedOne": "cell could not be read as a number",
     "unparsedMany": "cells could not be read as numbers",
-    "unparsedNote": "{count}."
+    "unparsedNote": "{count}.",
+    "whichColumn": "“{value}” exists in several possible columns: {columns}. Name the one you mean, for example {first}.",
+    "understoodAs": "Understood as: {filters}.",
+    "filterEquals": "{column} = {value}",
+    "filterContains": "{column} contains “{value}”",
+    "filterGreaterThan": "{column} > {value}",
+    "filterLessThan": "{column} < {value}",
+    "filterBetween": "{column} between {low} and {high}",
+    "filterWeekday": "{column} on {value}",
+    "filterMonth": "{column} in {value}",
+    "filterYear": "{column} in {value}",
+    "filterDateRange": "{column} between {start} and {end}",
+    "filterIn": "{column} among {value}",
+    "filterAnd": " and "
   }
 }

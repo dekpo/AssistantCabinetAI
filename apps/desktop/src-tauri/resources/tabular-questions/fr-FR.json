@@ -29,5 +29,34 @@
     "not_measures": ["id", "annee", "annees", "année", "années", "code", "postal", "telephone", "téléphone", "numero", "numéro", "num", "mois", "jour", "ref", "reference", "référence", "siret", "siren", "type"]
   },
   "descending": ["decroissant", "décroissant", "descendant"],
-  "filler": ["le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "est", "sont", "etait", "était", "etaient", "étaient", "pour", "avec", "ce", "cet", "cette", "ces", "ou", "où", "et", "dans", "svp", "donne", "donnez", "moi", "nous", "vous", "veuillez", "dont", "que", "qu"]
+  "filler": ["le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "est", "sont", "etait", "était", "etaient", "étaient", "pour", "avec", "ce", "cet", "cette", "ces", "ou", "où", "et", "dans", "svp", "donne", "donnez", "moi", "nous", "vous", "veuillez", "dont", "que", "qu"],
+  "comparisons": {
+    "_comment": "Mots de comparaison de la session 11 (docs/DECISIONS.md) : un mot de comparaison a cote d'un nombre, rattache a une colonne numerique reelle par tabular_answer::detect_filters - jamais devine.",
+    "greater_than": ["plus", "superieur", "supérieur", "superieurs", "supérieurs", "superieure", "supérieure", "superieures", "supérieures"],
+    "less_than": ["moins", "inferieur", "inférieur", "inferieurs", "inférieurs", "inferieure", "inférieure", "inferieures", "inférieures"]
+  },
+  "weekdays": {
+    "1": ["lundi"],
+    "2": ["mardi"],
+    "3": ["mercredi"],
+    "4": ["jeudi"],
+    "5": ["vendredi"],
+    "6": ["samedi"],
+    "7": ["dimanche"]
+  },
+  "months": {
+    "1": ["janvier"],
+    "2": ["fevrier", "février"],
+    "3": ["mars"],
+    "4": ["avril"],
+    "5": ["mai"],
+    "6": ["juin"],
+    "7": ["juillet"],
+    "8": ["aout", "août"],
+    "9": ["septembre"],
+    "10": ["octobre"],
+    "11": ["novembre"],
+    "12": ["decembre", "décembre"]
+  },
+  "between": ["entre"]
 }

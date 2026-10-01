@@ -332,6 +332,39 @@ September tabular engine session's "filter clause is ignored, not mis-parsed" an
 | D3, implemented | **Done, session 10 (30 September 2026).** `chrono` 0.4.45 - already resolved transitively, now a direct dependency - plus calamine's own `dates` feature (also chrono, no second date library) for XLSX cells: `CellValue::Date` holds a real `chrono::NaiveDate` rather than the raw serial number the file stores. Accepts `dd/mm/yyyy`, `dd-mm-yyyy`, `dd.mm.yyyy` and ISO `yyyy-mm-dd` text, checked against a real calendar (`NaiveDate::from_ymd_opt`), not merely plausible ranges. A day-first column types `Date` only when some cell's day exceeds 12, or a cell is ISO, or a cell is a real date cell from the file format - any one of those settles the reading for the whole column; with none, the column stays `Categorical` and carries `ambiguous_date: true` rather than guessing which of `dd/mm` or `mm/dd` the file meant. Weekday, month, year and range filters stay out, owed to session 11 |
 | D4, implemented | **Done, session 10 (30 September 2026).** `detect_header_row` scores every candidate in the first 20 rows - how much of the sheet's widest row it fills, how many of its own labels are distinct, how much of the row beneath it reads as typed data rather than more text - and keeps the highest scorer, rather than accepting the first all-text row. A row with fewer than two filled cells is never a header outright, which is what now lets `factures.csv`'s title row (`Export du 12/03/2026`) be skipped in favour of the real header beneath it and the blank row between them |
 
+## Settled by the deterministic filters and dates session, session 11 (30 September 2026)
+
+Gaps A and B (`docs/SESSION-DATA-REFERENCE-report.md`), closed together because both are "a residual
+word anchored on real data becomes a filter" - A for an equality value, B for a date. Code:
+`tabular::engine` (`Comparison`, `FilterSpec`, `AppliedFilter`, every `Operation` but `Filter` and
+`RowAt` now carrying `filters: Vec<FilterSpec>`), `tabular::inventory::resolve_date_column`,
+`tabular::question::filter_words`, `tabular_answer::detect_filters`. Every gap A and B reference
+case now passes in French and English (`tests/tabular_reference_cases.json`); gap E (mean, median,
+least group, top N, count per group) is untouched, owed to session 12.
+
+The filter grammar - what is recognised, what is asked, what is refused:
+
+| A residual word or phrase | Recognised as | Guard |
+| --- | --- | --- |
+| A value found, whole word, in exactly one reachable column | `Comparison::Equals`, the column's own full value (never a lone word of a multi-word value) | Found in two columns → `TabularAnswer::WhichColumn`, asked, never picked. The question may already have named the column ("where fournisseur is Alpha"); that resolves the ambiguity deterministically rather than asking |
+| A weekday or month-name word (pack vocabulary, `filter_words`) | `Comparison::Weekday`/`Comparison::Month` against the single reachable `Date`-typed column | More than one reachable `Date` column, or none, and the word is not recognised as a filter at all - never guessed |
+| A four-digit year | `Comparison::Year` against the single reachable `Date`-typed column, when equality does not already resolve it against a numeric year-like column (agencies.csv's `year` is `Numeric`, not `Date` - the ordinary equality path reads it) | Same as weekday/month: more than one candidate, or none, and it is not read as a filter |
+| "between X and Y" (pack `between` word) with two real dates in the question's own text | `Comparison::DateRange`, inclusive both ends, against the single reachable `Date` column | Extracted from the question's raw text, not from residual tokens split on `/` - a reconstruction from separated digits would have to guess which triplet paired with which |
+| A comparison word (pack `comparisons.greater_than`/`less_than`) beside a number | `Comparison::GreaterThan`/`LessThan` against the operation's own column when it is numeric, else the single reachable numeric column | No number nearby, or more than one numeric column with none implied: not read as a filter (this is what stops "la salle qui a le moins de duree_min", a superlative group phrase gap E still owes, from being misread as a numeric filter) |
+| An unmatched word that looks like an attempted value (capitalised, and not the question's own first word - a sentence's opening capital is grammar, not a proper noun) | `NotAnswerableReason::ValueNotFound`, with up to five close real values (folded prefix or edit distance ≤ 2) | Never an empty result presented as zero. A lowercase leftover word ("invoices", a pack's filler list is grammar, not a domain dictionary) is silently ignored, as before |
+| A filter naming a column typed `Numeric`/`Date` the wrong way round for its comparison, or a column carrying a formula | `NotAnswerableReason::NonNumericColumn`/`NonDateColumn`/`FormulaCannotBeVerified` | Same refusal an aggregate over the wrong type already gave; a filter is never applied to a column it could not honestly be computed from |
+| Several recognised filters in one question ("Alpha in 2025") | Combined with **AND only** | No OR, no nesting - forbidden outright, per this session's anti-pattern list |
+
+| Subject | Decision |
+| --- | --- |
+| A row-count question with a leftover word ("how many rows does Harbor have") | Deferred from `StructuralQuestion::RowCount` to the ordinary `Count` operation whenever something survives `residual_words` beyond the sheet and column it already resolved - `tabular::question` still never reads a cell value itself, but it can tell whether anything is left over, and hands that case to `tabular_answer::detect_filters`, which can. Fixed LocalGridMind limit 4 (`docs/SESSION-DATA-REFERENCE-report.md`) |
+| `Sort` over a `Date`-typed column | Reads `inventory::resolve_date_column`, exactly as `Numeric` reads `resolve_numeric_column` - the engine session (28 September 2026) only ever wired the numeric branch, so a `dd/mm/yyyy` text column sorted as text, day of month first, for two sessions (live bug B1, fixed) |
+| `TabularLocator.filters: Vec<AppliedFilter>` | Every filtered value's own filters, described as data (`Equals`, `Weekday`, `Month`, `Year`, `DateRange`, `GreaterThan`, `LessThan`, `Between`, `Contains`, `In` - one to one with `Comparison`) - never prose. The interface's "Understood as" line is built from this and the interface locale, the same split every other machine-code-in/sentence-out boundary in this product already keeps |
+| A value found in two reachable columns | `TabularAnswer::WhichColumn { value, candidates }`, a new answer kind - not folded into `Nudge`, because it is not a refusal: the engine could compute either reading, and picking one silently would be exactly the guess this pipeline exists to refuse |
+| Weekday numbering | ISO: 1 = Monday .. 7 = Sunday, computed from `chrono::Weekday::number_from_monday`, never a locale-dependent week start |
+| Filter-word vocabulary (`comparisons`, `weekdays`, `months`, `between`) | Read from the question's own locale pack only (`question::filter_words`, the same `pack_for` fallback chain `classify` uses), **not** merged across every shipped pack the way `column_names` are. A workbook's headers are the export's language; a filter word is the question's own |
+| Numeric `Comparison::Between` | Defined on the engine, alongside the four date comparisons, but `detect_filters` does not yet build one from residual words - only the date range does. Deferred, not scheduled |
+
 ## Known blind spots to keep in mind
 
 - **File actions are the number one business risk.** A bad batch rename over hundreds of documents is far

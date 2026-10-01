@@ -129,6 +129,7 @@ mod tests {
                 header_row: Some(0),
                 column: Some("montant".into()),
                 row_range: Some((0, 3)),
+                filters: Vec::new(),
             },
             derivation: TabularDerivation::Computed {
                 operation: "sum".into(),
@@ -164,6 +165,7 @@ mod tests {
                 header_row: Some(0),
                 column: Some("nom".into()),
                 row_range: Some((0, 0)),
+                filters: Vec::new(),
             },
             derivation: TabularDerivation::Computed {
                 operation: "filter".into(),
@@ -196,6 +198,7 @@ mod tests {
                 header_row: Some(0),
                 column: None,
                 row_range: Some((2, 2)),
+                filters: Vec::new(),
             },
             derivation: TabularDerivation::Computed {
                 operation: "count".into(),

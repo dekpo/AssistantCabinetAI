@@ -137,11 +137,13 @@ A conversation with workbooks selected and no document is answered by the tabula
 tier 2 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a computed value or a
 structural fact, cited by **sheet** (and column) where a document answer cites its page, with no
 model involved; or, when the engine cannot answer exactly, a sentence naming the workbook's real
-columns and the operations that work. A question that carries a filter the classifier does not
-apply (`filter_not_supported`) gets the same nudge, naming the column and value it saw, never the
-unfiltered count or sum (session 9, 30 September 2026). Documents and workbooks selected together
-are refused with `documents_and_tables_together` for now: combining them is the next session's
-design.
+columns and the operations that work. Since session 11 (30 September 2026) a filter anchored on
+real data — a value, a weekday, a month, a year, or a comparison beside a number — is computed, not
+just named: the answer shows an **"Understood as"** line under it, written from the filter the
+engine actually ran, never from the question's own words. A value found in two reachable columns
+is asked about rather than guessed at (`WhichColumn`); a value found in none gets a nudge naming
+close real values instead of a silent zero. Documents and workbooks selected together are refused
+with `documents_and_tables_together` for now: combining them is a later session's design.
 
 ## Why not Open WebUI Computer
 

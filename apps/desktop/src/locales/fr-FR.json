@@ -313,9 +313,12 @@
       "non_numeric_column": "Cette colonne de {file} ne contient pas que des nombres : elle ne peut être ni additionnée ni comparée.",
       "formula_cannot_be_verified": "Cette colonne de {file} contient des formules : leur résultat ne peut pas être vérifié, il n'est donc pas calculé.",
       "empty_sheet": "Il n'y a aucune donnée à calculer dans {file}.",
-      "filter_not_supported": "Votre question contient un filtre (« {value} ») que ce moteur ne sait pas encore appliquer : rien n'est donc calculé sans filtre à partir de {file}."
+      "filter_not_supported": "Votre question contient un filtre (« {value} ») que ce moteur ne sait pas encore appliquer : rien n'est donc calculé sans filtre à partir de {file}.",
+      "non_date_column": "Ce filtre porte sur un jour, un mois, une année ou une période, mais cette colonne de {file} n'est pas une colonne de dates reconnue.",
+      "value_not_found": "« {value} » ne correspond à aucune valeur réelle de {file}."
     },
     "nudgeFilterColumn": "Ce mot a été trouvé dans la colonne {column}.",
+    "nudgeCloseValues": "Valeurs proches trouvées : {values}.",
     "nudgeColumns": "Ses colonnes sont : {columns}.",
     "nudgeSheets": "Ses feuilles sont : {sheets}.",
     "nudgeOperations": "Essayez de demander une somme, un minimum, un maximum, un nombre de lignes, la liste des valeurs d'une colonne, ou le groupe qui a le plus grand total.",
@@ -340,6 +343,19 @@
     "moreValues": "…et {count} autres valeurs, non affichées.",
     "unparsedOne": "cellule n'a pas pu être lue comme un nombre",
     "unparsedMany": "cellules n'ont pas pu être lues comme des nombres",
-    "unparsedNote": "{count}."
+    "unparsedNote": "{count}.",
+    "whichColumn": "« {value} » existe dans plusieurs colonnes possibles : {columns}. Précisez laquelle, par exemple {first}.",
+    "understoodAs": "Compris comme : {filters}.",
+    "filterEquals": "{column} = {value}",
+    "filterContains": "{column} contient « {value} »",
+    "filterGreaterThan": "{column} > {value}",
+    "filterLessThan": "{column} < {value}",
+    "filterBetween": "{column} entre {low} et {high}",
+    "filterWeekday": "{column} un {value}",
+    "filterMonth": "{column} en {value}",
+    "filterYear": "{column} en {value}",
+    "filterDateRange": "{column} entre {start} et {end}",
+    "filterIn": "{column} parmi {value}",
+    "filterAnd": " et "
   }
 }

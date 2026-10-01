@@ -437,6 +437,54 @@ fn parse_iso_date(text: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()
 }
 
+/// The same `dd/mm/yyyy` family `parse_date_text` recognises, checked against a real calendar,
+/// but returning the parsed value itself rather than only whether it settles day-first - what
+/// `resolve_date_column` needs to compare a cell against a weekday, a month, a year or a range
+/// (`docs/DECISIONS.md`, session 11).
+pub(crate) fn parse_date_value(text: &str) -> Option<NaiveDate> {
+    if let Some(date) = parse_iso_date(text) {
+        return Some(date);
+    }
+    for separator in ['/', '-', '.'] {
+        if let Some((day, month, year)) = split_ddmmyyyy(text, separator) {
+            if day == 0 || day > 31 || month == 0 || month > 12 {
+                continue;
+            }
+            if let Some(date) = NaiveDate::from_ymd_opt(year as i32, month, day) {
+                return Some(date);
+            }
+        }
+    }
+    None
+}
+
+fn cell_date_value(cell: &CellValue) -> Option<NaiveDate> {
+    match cell {
+        CellValue::Date(date) => Some(*date),
+        CellValue::Text(text) => parse_date_value(text.trim()),
+        CellValue::Formula { cached_value, .. } => {
+            cached_value.as_deref().and_then(cell_date_value)
+        }
+        CellValue::Empty | CellValue::Number(_) => None,
+    }
+}
+
+/// One column's cells, resolved to calendar dates - the sibling `resolve_numeric_column` did not
+/// yet have (`docs/SESSION-DATA-06-Findings.md` section 5): reads `CellValue::Date` directly and
+/// parses `CellValue::Text` with the same formats `parse_date_text` already recognises, never a
+/// text comparison. `None` for an empty or missing cell, or one that does not parse as a date at
+/// all - a filter over a column this session did not type `Date` refuses before ever calling this
+/// (`tabular::engine::resolve_filter_column`), so every `None` here is an ordinary missing value,
+/// not an ambiguity to guess at.
+pub(crate) fn resolve_date_column(
+    rows: &[Vec<CellValue>],
+    column_index: usize,
+) -> Vec<Option<NaiveDate>> {
+    rows.iter()
+        .map(|row| row.get(column_index).and_then(cell_date_value))
+        .collect()
+}
+
 fn split_ddmmyyyy(text: &str, separator: char) -> Option<(u32, u32, u32)> {
     let parts: Vec<&str> = text.split(separator).collect();
     let [day_text, month_text, year_text] = parts.as_slice() else {

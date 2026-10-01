@@ -54,6 +54,22 @@ struct PatternPack {
     /// D1): a leftover word the classifier does not recognise may still be a filter value, and a
     /// filler word must never be mistaken for one.
     filler: Vec<String>,
+    /// Session 11's filter vocabulary (`docs/DECISIONS.md`): comparison words for a numeric
+    /// filter, a weekday and a month name for a date filter, and the word that introduces a
+    /// date range. Read from the question's own locale pack only (`filter_words`), the same
+    /// pack `residual_words` already used to find the question's leftover words.
+    comparisons: ComparisonWords,
+    /// Keyed `"1"` (Monday) to `"7"` (Sunday), ISO order.
+    weekdays: std::collections::BTreeMap<String, Vec<String>>,
+    /// Keyed `"1"` (January) to `"12"` (December).
+    months: std::collections::BTreeMap<String, Vec<String>>,
+    between: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ComparisonWords {
+    greater_than: Vec<String>,
+    less_than: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -112,6 +128,39 @@ fn pack_for(locale: &str) -> Option<PatternPack> {
     serde_json::from_str(body).ok()
 }
 
+/// Session 11's filter vocabulary, folded and keyed by weekday (1 Monday - 7 Sunday) or month
+/// (1-12): what `tabular_answer::detect_filters` reads to turn a residual word into a weekday,
+/// month, year or numeric-comparison filter. Built from the question's own locale pack, the
+/// fallback chain `pack_for` already uses - not merged across every shipped pack the way
+/// `column_names` are, because a filter word is asked in the question's own language, not read
+/// off a workbook header.
+pub(crate) struct FilterWords {
+    pub greater_than: Vec<String>,
+    pub less_than: Vec<String>,
+    pub between: Vec<String>,
+    pub weekdays: Vec<(u8, Vec<String>)>,
+    pub months: Vec<(u8, Vec<String>)>,
+}
+
+pub(crate) fn filter_words(locale: &str) -> Option<FilterWords> {
+    let pack = pack_for(locale)?;
+    let fold_all = |words: &[String]| words.iter().map(|word| fold_text(word)).collect();
+    let fold_keyed = |map: &std::collections::BTreeMap<String, Vec<String>>| -> Vec<(u8, Vec<String>)> {
+        map.iter()
+            .filter_map(|(key, words)| {
+                key.parse::<u8>().ok().map(|n| (n, fold_all(words)))
+            })
+            .collect()
+    };
+    Some(FilterWords {
+        greater_than: fold_all(&pack.comparisons.greater_than),
+        less_than: fold_all(&pack.comparisons.less_than),
+        between: fold_all(&pack.between),
+        weekdays: fold_keyed(&pack.weekdays),
+        months: fold_keyed(&pack.months),
+    })
+}
+
 /// Where one question was routed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TabularRoute {
@@ -153,11 +202,13 @@ pub fn classify(
 
 /// `classify`, plus the question's own words left over once every recognised route's own
 /// vocabulary - operation, structural and group words, the matched sheet and column names, and
-/// this pack's filler words - is removed. A residual word is not itself proof of anything: this
-/// module never reads a cell value, so it cannot tell a genuine filter ("Alpha") from ordinary
-/// prose the pack's filler list does not happen to name. `tabular_answer`, which does hold the
-/// workbook's real cell values, is the one place that turns a residual word into a refusal
-/// (gap A, `docs/DECISIONS.md`, session 7's D1). Empty whenever `route` is not
+/// this pack's filler words - is removed, plus the column the question itself already named
+/// (`find_column_name`/`named_columns`), whether or not the recognised operation reads it. A
+/// residual word is not itself proof of anything: this module never reads a cell value, so it
+/// cannot tell a genuine filter ("Alpha") from ordinary prose the pack's filler list does not
+/// happen to name. `tabular_answer`, which does hold the workbook's real cell values, is the one
+/// place that turns a residual word into a filter or a refusal (gap A, `docs/DECISIONS.md`,
+/// session 7's D1 and session 11). The residual list is empty whenever `route` is not
 /// `TabularRoute::Operation`: a structural question is exempt (naming a sheet is not a filter),
 /// and nothing else reaches the engine at all.
 pub fn classify_traced(
@@ -165,9 +216,9 @@ pub fn classify_traced(
     inventory: &TabularInventory,
     allowed_sheets: Option<&[String]>,
     locale: &str,
-) -> (TabularRoute, Vec<String>) {
+) -> (TabularRoute, Vec<String>, Option<String>) {
     let Some(first) = pack_for(locale) else {
-        return (TabularRoute::NotRecognised, Vec::new());
+        return (TabularRoute::NotRecognised, Vec::new(), None);
     };
     let others = PACKS
         .iter()
@@ -178,7 +229,7 @@ pub fn classify_traced(
             return outcome;
         }
     }
-    (TabularRoute::NotRecognised, Vec::new())
+    (TabularRoute::NotRecognised, Vec::new(), None)
 }
 
 fn classify_with(
@@ -186,10 +237,10 @@ fn classify_with(
     inventory: &TabularInventory,
     allowed_sheets: Option<&[String]>,
     pack: &PatternPack,
-) -> (TabularRoute, Vec<String>) {
+) -> (TabularRoute, Vec<String>, Option<String>) {
     let tokens = tokenise(question);
     if tokens.is_empty() {
-        return (TabularRoute::NotRecognised, Vec::new());
+        return (TabularRoute::NotRecognised, Vec::new(), None);
     }
 
     let folded_question = fold_text(question);
@@ -222,7 +273,8 @@ fn classify_with(
         .cloned()
         .collect();
 
-    let route = if let Some(structural) = detect_structural(&tokens, pack, &sheet_name, &column_name)
+    let route = if let Some(structural) =
+        detect_structural(question, &tokens, pack, &sheet_name, &column_name)
     {
         TabularRoute::Structural(structural)
     } else if let Some(route) = detect_group(&detection_tokens, pack, question, &columns, &sheet_name)
@@ -243,7 +295,7 @@ fn classify_with(
         }
         _ => Vec::new(),
     };
-    (route, residual)
+    (route, residual, column_name)
 }
 
 /// Every column name an `Operation` actually reads, whether it was found through
@@ -252,21 +304,30 @@ fn classify_with(
 /// from the residual check exactly as a directly named column is.
 fn operation_column_names(operation: &Operation) -> Vec<&str> {
     match operation {
-        Operation::Count { filter } => filter.iter().map(|spec| spec.column.as_str()).collect(),
-        Operation::Distinct { column }
-        | Operation::Sum { column }
-        | Operation::Min { column }
-        | Operation::Max { column }
-        | Operation::Sort { column, .. } => vec![column.as_str()],
-        Operation::LargestRow { by_column } => vec![by_column.as_str()],
+        Operation::Count { filters } => filters.iter().map(|spec| spec.column.as_str()).collect(),
+        Operation::Distinct { column, filters }
+        | Operation::Sum { column, filters }
+        | Operation::Min { column, filters }
+        | Operation::Max { column, filters }
+        | Operation::Sort { column, filters, .. } => std::iter::once(column.as_str())
+            .chain(filters.iter().map(|spec| spec.column.as_str()))
+            .collect(),
+        Operation::LargestRow { by_column, filters } => std::iter::once(by_column.as_str())
+            .chain(filters.iter().map(|spec| spec.column.as_str()))
+            .collect(),
         Operation::GroupSum {
             group_by,
             sum_column,
+            filters,
         }
         | Operation::LargestGroup {
             group_by,
             sum_column,
-        } => vec![group_by.as_str(), sum_column.as_str()],
+            filters,
+        } => [group_by.as_str(), sum_column.as_str()]
+            .into_iter()
+            .chain(filters.iter().map(|spec| spec.column.as_str()))
+            .collect(),
         Operation::Filter { filter } => vec![filter.column.as_str()],
         Operation::RowAt { .. } => Vec::new(),
     }
@@ -336,6 +397,7 @@ fn words_with_original(text: &str) -> Vec<(String, String)> {
 }
 
 fn detect_structural(
+    question: &str,
     tokens: &[String],
     pack: &PatternPack,
     sheet_name: &Option<String>,
@@ -366,11 +428,28 @@ fn detect_structural(
         });
     }
     if has(&pack.structural.rows) {
-        return Some(StructuralQuestion::RowCount {
-            sheet: sheet_name.clone(),
-        });
-    }
-    if has(&pack.structural.columns) {
+        // "How many rows does Harbor have?" is a filtered count, not the sheet's row count
+        // (`docs/DECISIONS.md`, session 11, gap A's row-count case): this module never reads a
+        // cell value, so it cannot tell a real filter from ordinary prose, but it can tell
+        // whether anything is left over once every recognised word, the sheet and the column are
+        // accounted for - and defers to the ordinary `Count` operation when there is, letting
+        // `tabular_answer::detect_filters`, which does hold the real data, decide what the
+        // leftover word means.
+        let leftover = residual_words(
+            question,
+            pack,
+            sheet_name,
+            column_name,
+            &Operation::Count {
+                filters: Vec::new(),
+            },
+        );
+        if leftover.is_empty() {
+            return Some(StructuralQuestion::RowCount {
+                sheet: sheet_name.clone(),
+            });
+        }
+    } else if has(&pack.structural.columns) {
         return Some(StructuralQuestion::ColumnNames {
             sheet: sheet_name.clone(),
         });
@@ -444,11 +523,13 @@ fn detect_group(
             Operation::LargestGroup {
                 group_by,
                 sum_column,
+                filters: Vec::new(),
             }
         } else {
             Operation::GroupSum {
                 group_by,
                 sum_column,
+                filters: Vec::new(),
             }
         },
     })
@@ -650,39 +731,58 @@ fn detect_operation(
     let descending = has(&pack.descending);
 
     if has(&pack.operations.sum) {
-        return column_name
-            .clone()
-            .map(|column| Operation::Sum { column });
+        return column_name.clone().map(|column| Operation::Sum {
+            column,
+            filters: Vec::new(),
+        });
     }
     if has(&pack.operations.min) {
-        return column_name
-            .clone()
-            .map(|column| Operation::Min { column });
+        return column_name.clone().map(|column| Operation::Min {
+            column,
+            filters: Vec::new(),
+        });
     }
     if has(&pack.operations.max) {
-        return column_name
-            .clone()
-            .map(|column| Operation::Max { column });
+        return column_name.clone().map(|column| Operation::Max {
+            column,
+            filters: Vec::new(),
+        });
     }
     if has(&pack.operations.largest_row) {
-        return column_name
-            .clone()
-            .map(|column| Operation::LargestRow { by_column: column });
+        return column_name.clone().map(|column| Operation::LargestRow {
+            by_column: column,
+            filters: Vec::new(),
+        });
     }
     // "List the agencies" is the column's different values, the same operation "which distinct
     // agencies" already reaches.
     if has(&pack.operations.distinct) || has(&pack.operations.list) {
-        return column_name
-            .clone()
-            .map(|column| Operation::Distinct { column });
+        return column_name.clone().map(|column| Operation::Distinct {
+            column,
+            filters: Vec::new(),
+        });
     }
     if has(&pack.operations.sort) {
-        return column_name
-            .clone()
-            .map(|column| Operation::Sort { column, descending });
+        return column_name.clone().map(|column| Operation::Sort {
+            column,
+            descending,
+            filters: Vec::new(),
+        });
     }
     if has(&pack.operations.count) {
-        return Some(Operation::Count { filter: None });
+        return Some(Operation::Count { filters: Vec::new() });
+    }
+    // No operation word at all, but a comparison word ("over", "plus de") beside an actual
+    // number is still a real question - "count", the same default a plain "how many" reaches,
+    // with the comparison itself resolved afterward as a filter against real data
+    // (`tabular_answer::detect_filters`, `docs/DECISIONS.md`, session 11). The number check
+    // matters: "moins"/"plus" alone, with no number in sight, is a superlative group phrase
+    // (which room has the least duree_min) this classifier still does not read (gap E,
+    // session 12), not a numeric filter to guess at.
+    if (has(&pack.comparisons.greater_than) || has(&pack.comparisons.less_than))
+        && tokens.iter().any(|token| token.parse::<f64>().is_ok())
+    {
+        return Some(Operation::Count { filters: Vec::new() });
     }
     None
 }
@@ -937,7 +1037,8 @@ mod tests {
                 TabularRoute::Operation {
                     sheet: None,
                     operation: Operation::Sum {
-                        column: "montant".to_string()
+                        column: "montant".to_string(),
+                        filters: Vec::new(),
                     }
                 },
                 "{question}"
@@ -958,7 +1059,8 @@ mod tests {
             TabularRoute::Operation {
                 sheet: None,
                 operation: Operation::Distinct {
-                    column: "fournisseur".to_string()
+                    column: "fournisseur".to_string(),
+                    filters: Vec::new(),
                 }
             }
         );
@@ -979,6 +1081,7 @@ mod tests {
                 operation: Operation::Sort {
                     column: "montant".to_string(),
                     descending: true,
+                    filters: Vec::new(),
                 }
             }
         );
@@ -989,6 +1092,7 @@ mod tests {
                 operation: Operation::Sort {
                     column: "montant".to_string(),
                     descending: false,
+                    filters: Vec::new(),
                 }
             }
         );
@@ -1006,7 +1110,7 @@ mod tests {
             classify("Give me a count", &inventory, None, "en-US"),
             TabularRoute::Operation {
                 sheet: None,
-                operation: Operation::Count { filter: None }
+                operation: Operation::Count { filters: Vec::new() }
             }
         );
     }
@@ -1073,7 +1177,7 @@ mod tests {
         // assert): the classifier now also reports "Alpha" as residual, so `tabular_answer` can
         // recognise it names real data and refuse rather than silently return the unfiltered
         // count (`docs/DECISIONS.md`, session 7's D1).
-        let (route, residual) = classify_traced(
+        let (route, residual, _column_name) = classify_traced(
             "How many invoices where fournisseur is Alpha?",
             &inventory,
             None,
@@ -1083,7 +1187,7 @@ mod tests {
             route,
             TabularRoute::Operation {
                 sheet: None,
-                operation: Operation::Count { filter: None }
+                operation: Operation::Count { filters: Vec::new() }
             },
             "the filter clause is still ignored rather than mis-parsed; the plain count still resolves"
         );
@@ -1121,6 +1225,7 @@ mod tests {
                 operation: Operation::Sort {
                     column: "duree_min".to_string(),
                     descending: true,
+                    filters: Vec::new(),
                 }
             }
         );
@@ -1132,6 +1237,7 @@ mod tests {
                 sheet: None,
                 operation: Operation::Min {
                     column: "duree_min".to_string(),
+                    filters: Vec::new(),
                 }
             }
         );

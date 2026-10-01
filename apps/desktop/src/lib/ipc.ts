@@ -250,7 +250,26 @@ export type NotAnswerableReason =
   | "non_numeric_column"
   | "formula_cannot_be_verified"
   | "empty_sheet"
-  | "filter_not_supported";
+  | "filter_not_supported"
+  | "non_date_column"
+  | "value_not_found";
+
+/** One filter a value was actually computed under, exactly as `tabular::engine` ran it - data,
+ * never prose (`docs/DECISIONS.md`, session 11): this side writes "fournisseur = Alpha" or "date
+ * in March 2026" from it, in her language, for the "Understood as" line under a filtered answer. */
+export type AppliedFilter =
+  | { kind: "equals"; column: string; value: string }
+  | { kind: "contains"; column: string; value: string }
+  | { kind: "greater_than"; column: string; threshold: number }
+  | { kind: "less_than"; column: string; threshold: number }
+  | { kind: "between"; column: string; low: number; high: number }
+  /** ISO weekday: 1 = Monday .. 7 = Sunday. */
+  | { kind: "weekday"; column: string; weekday: number }
+  | { kind: "month"; column: string; month: number }
+  | { kind: "year"; column: string; year: number }
+  /** Inclusive both ends, ISO 8601 (`yyyy-mm-dd`). */
+  | { kind: "date_range"; column: string; start: string; end: string }
+  | { kind: "in"; column: string; values: string[] };
 
 /** Where inside a workbook a value came from: the tabular sibling of `Evidence.pageNumber`. */
 export interface TabularLocator {
@@ -259,6 +278,9 @@ export interface TabularLocator {
   column: string | null;
   /** 0-indexed, inclusive, into the sheet's data rows. */
   rowRange: [number, number] | null;
+  /** Every filter this value was actually computed under - "what was understood"
+   * (`docs/DECISIONS.md`, session 11). Empty for an unfiltered value. */
+  filters: AppliedFilter[];
 }
 
 export interface TabularCell {
@@ -339,12 +361,17 @@ export type TabularAnswer =
       /** Set only when `reason` is `filter_not_supported`: the column a residual question word
        * was found in, when one was. */
       filterColumn: string | null;
-      /** Set only when `reason` is `filter_not_supported`: the word from the question that named
-       * real data, exactly as typed. */
+      /** Set when `reason` is `filter_not_supported` or `value_not_found`: the word from the
+       * question that named real data, or looked like an attempt to, exactly as typed. */
       filterValue: string | null;
+      /** Set only when `reason` is `value_not_found`: up to five real values close to
+       * `filterValue`, so she can see what the column actually holds. Empty otherwise. */
+      closeValues: string[];
     }
   /** A group question with several columns it could total, none named: asked, never picked. */
   | { kind: "which_measure"; file: string; groupColumn: string; candidates: string[] }
+  /** A residual word named real data in more than one reachable column: asked, never picked. */
+  | { kind: "which_column"; file: string; value: string; candidates: string[] }
   | { kind: "workbook_unreadable"; file: string }
   | { kind: "workbook_not_analysed"; file: string }
   | { kind: "which_workbook"; candidates: string[] }

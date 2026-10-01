@@ -29,5 +29,34 @@
     "not_measures": ["id", "ids", "year", "years", "code", "codes", "zip", "phone", "index", "number", "no", "num", "ref", "reference", "postcode", "month", "day", "type"]
   },
   "descending": ["descending", "desc"],
-  "filler": ["a", "an", "the", "of", "in", "on", "at", "is", "are", "was", "were", "be", "for", "to", "with", "this", "that", "these", "those", "where", "when", "who", "whom", "whose", "and", "or", "please", "kindly", "how", "much", "do", "does", "did", "there", "me"]
+  "filler": ["a", "an", "the", "of", "in", "on", "at", "is", "are", "was", "were", "be", "for", "to", "with", "this", "that", "these", "those", "where", "when", "who", "whom", "whose", "and", "or", "please", "kindly", "how", "much", "do", "does", "did", "there", "me"],
+  "comparisons": {
+    "_comment": "Session 11 filter words (docs/DECISIONS.md): a comparison word beside a number, anchored to a real numeric column by tabular_answer::detect_filters - never a guess.",
+    "greater_than": ["more", "over", "above", "greater", "higher", "exceeding"],
+    "less_than": ["less", "under", "below", "fewer", "lower"]
+  },
+  "weekdays": {
+    "1": ["monday"],
+    "2": ["tuesday"],
+    "3": ["wednesday"],
+    "4": ["thursday"],
+    "5": ["friday"],
+    "6": ["saturday"],
+    "7": ["sunday"]
+  },
+  "months": {
+    "1": ["january"],
+    "2": ["february"],
+    "3": ["march"],
+    "4": ["april"],
+    "5": ["may"],
+    "6": ["june"],
+    "7": ["july"],
+    "8": ["august"],
+    "9": ["september"],
+    "10": ["october"],
+    "11": ["november"],
+    "12": ["december"]
+  },
+  "between": ["between"]
 }

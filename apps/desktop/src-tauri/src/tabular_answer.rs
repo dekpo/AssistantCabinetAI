@@ -14,7 +14,7 @@
 //! `answer` takes no gateway, no model alias and no network client: that the tabular tier cannot
 //! reach a model is a property of its signature, not a promise.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use serde::Serialize;
 
@@ -25,9 +25,12 @@ use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::{fold_text, FileReferenceResolver, ReferenceStatus};
 use crate::inventory::WorkFolderInventory;
 use crate::tabular::engine::{
-    self, NotAnswerableReason, TabularDerivation, TabularLocator, TabularOutcome, TabularValue,
+    self, Comparison, FilterSpec, NotAnswerableReason, Operation, TabularDerivation,
+    TabularLocator, TabularOutcome, TabularValue,
 };
-use crate::tabular::inventory::{data_rows, text_value, SheetInventory, TabularInventory};
+use crate::tabular::inventory::{
+    self, data_rows, text_value, ColumnInventory, ColumnType, SheetInventory, TabularInventory,
+};
 use crate::tabular::question::{self, name_words, TabularRoute};
 use crate::tabular::structural::{self, StructuralAnswer};
 use crate::tabular::{self, TabularError, Workbook};
@@ -74,14 +77,28 @@ pub enum TabularAnswer {
         /// `None` even though `filter_value` is set. `None` for every other nudge
         /// (`docs/DECISIONS.md`, session 7's D1).
         filter_column: Option<String>,
-        /// Set only when `reason` is `FilterNotSupported`: the word from the question that named
-        /// real data, exactly as she typed it. `None` for every other nudge.
+        /// Set when `reason` is `FilterNotSupported` or `ValueNotFound`: the word from the
+        /// question that named real data, or looked like an attempt to, exactly as she typed it.
+        /// `None` for every other nudge.
         filter_value: Option<String>,
+        /// Set only when `reason` is `ValueNotFound`: up to five real values close to
+        /// `filter_value` (folded prefix or edit distance at most two), so she can see what the
+        /// column actually holds instead of being told only that nothing matched
+        /// (`docs/DECISIONS.md`, session 11). Empty for every other nudge.
+        #[serde(default)]
+        close_values: Vec<String>,
     },
     /// A group question with several columns it could total, none named. Asked, never picked.
     WhichMeasure {
         file: String,
         group_column: String,
+        candidates: Vec<String>,
+    },
+    /// A residual word named real data in more than one reachable column - a filter value, never
+    /// picked between silently (`docs/DECISIONS.md`, session 11).
+    WhichColumn {
+        file: String,
+        value: String,
         candidates: Vec<String>,
     },
     /// Analysed, and nothing in it looks like a table (red on the listing). The same honesty an
@@ -141,7 +158,8 @@ pub fn answer(
     };
     let allowed = target.sheets.as_deref();
 
-    let (route, residual) = question::classify_traced(question, inventory, allowed, locale);
+    let (route, residual, named_column) =
+        question::classify_traced(question, inventory, allowed, locale);
     match route {
         TabularRoute::Structural(structural_question) => {
             match structural::answer(inventory, allowed, &structural_question) {
@@ -157,6 +175,7 @@ pub fn answer(
                     Vec::new(),
                     None,
                     None,
+                    Vec::new(),
                 )),
                 answer => Ok(TabularAnswer::Structural { file, answer }),
             }
@@ -175,23 +194,43 @@ pub fn answer(
                     Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
                 };
 
-            // Gap A: a residual word that names real data is the filter this classifier cannot
-            // apply - the answer must name it, never compute the unfiltered value
-            // (`docs/DECISIONS.md`, session 7's D1).
-            if let Some(detected) =
-                detect_filter(&residual, &fresh, &workbook, sheet.as_deref(), allowed)
-            {
-                return Ok(nudge(
-                    file,
-                    &fresh,
-                    allowed,
-                    Some(NotAnswerableReason::FilterNotSupported),
-                    Vec::new(),
-                    Vec::new(),
-                    detected.column,
-                    Some(detected.value),
-                ));
-            }
+            // Session 11: a residual word anchored on real data becomes the filters
+            // `tabular::engine` actually runs under, rather than only naming what was seen
+            // (`docs/DECISIONS.md`).
+            let operation = match detect_filters(
+                question,
+                &residual,
+                &fresh,
+                &workbook,
+                sheet.as_deref(),
+                allowed,
+                operation_column_name(&operation),
+                named_column.as_deref(),
+                locale,
+            ) {
+                FilterDetection::Filters(filters) => with_filters(operation, filters),
+                FilterDetection::WhichColumn { value, candidates } => {
+                    return Ok(TabularAnswer::WhichColumn {
+                        file,
+                        value,
+                        candidates,
+                    });
+                }
+                FilterDetection::ValueNotFound { value, close } => {
+                    return Ok(nudge(
+                        file,
+                        &fresh,
+                        allowed,
+                        Some(NotAnswerableReason::ValueNotFound),
+                        Vec::new(),
+                        Vec::new(),
+                        None,
+                        Some(value),
+                        close,
+                    ));
+                }
+                FilterDetection::None => operation,
+            };
 
             match engine::execute(&workbook, &fresh, sheet.as_deref(), allowed, &operation, locale) {
                 TabularOutcome::Value {
@@ -217,6 +256,7 @@ pub fn answer(
                     available_columns,
                     None,
                     None,
+                    Vec::new(),
                 )),
             }
         }
@@ -231,7 +271,7 @@ pub fn answer(
         TabularRoute::NotRecognised => {
             let sheets = sheet_names(engine::reachable_sheets(inventory, allowed));
             Ok(nudge(
-                file, inventory, allowed, None, sheets, Vec::new(), None, None,
+                file, inventory, allowed, None, sheets, Vec::new(), None, None, Vec::new(),
             ))
         }
     }
@@ -361,6 +401,7 @@ fn nudge(
     available_columns: Vec<String>,
     filter_column: Option<String>,
     filter_value: Option<String>,
+    close_values: Vec<String>,
 ) -> TabularAnswer {
     let reachable = engine::reachable_sheets(inventory, allowed);
     let sheet: Option<&SheetInventory> = if available_columns.is_empty() {
@@ -398,6 +439,7 @@ fn nudge(
         example_group,
         filter_column,
         filter_value,
+        close_values,
     }
 }
 
@@ -413,72 +455,431 @@ fn sheet_names(sheets: Vec<&SheetInventory>) -> Vec<String> {
     sheets.into_iter().map(|sheet| sheet.name.clone()).collect()
 }
 
-/// A residual question word matched against a workbook's real cell data, per `detect_filter`.
-struct DetectedFilter {
-    /// The column whose values contained the word, when it was found that way. `None` for a
-    /// bare number matched by no column's own values.
-    column: Option<String>,
-    /// The word from the question that triggered the match, exactly as she typed it.
-    value: String,
+/// The column an already-classified operation names to read as data, if any - `Operation::Count`
+/// and `Operation::RowAt` name none. Used only to prefer that column as a numeric-comparison
+/// filter's target over an implied single reachable column (`detect_filters`).
+fn operation_column_name(operation: &Operation) -> Option<&str> {
+    match operation {
+        Operation::Sum { column, .. }
+        | Operation::Min { column, .. }
+        | Operation::Max { column, .. }
+        | Operation::Distinct { column, .. }
+        | Operation::Sort { column, .. } => Some(column.as_str()),
+        Operation::LargestRow { by_column, .. } => Some(by_column.as_str()),
+        Operation::GroupSum { sum_column, .. } | Operation::LargestGroup { sum_column, .. } => {
+            Some(sum_column.as_str())
+        }
+        Operation::Count { .. } | Operation::Filter { .. } | Operation::RowAt { .. } => None,
+    }
 }
 
-/// Whether one of `residual`'s words happens to name real data: a value that appears, whole
-/// word, somewhere in a reachable column of the sheet the operation would actually run against
-/// (folded, so an unaccented word in the question still finds an accented real value), or
-/// failing that a plain number. The first match, in the order the words were typed, is the one
-/// reported - never a guess at which of several matches she meant. `None` when the operation's
-/// own sheet cannot be resolved at all: `engine::execute` will refuse it with the correct reason
-/// on its own.
-fn detect_filter(
+/// `operation` with its own `filters` replaced by `filters` - every variant `tabular::question`
+/// can classify carries one (empty until `detect_filters` fills it); `Filter` and `RowAt` are
+/// never reached here and pass through unchanged.
+fn with_filters(operation: Operation, filters: Vec<FilterSpec>) -> Operation {
+    match operation {
+        Operation::Count { .. } => Operation::Count { filters },
+        Operation::Distinct { column, .. } => Operation::Distinct { column, filters },
+        Operation::Sum { column, .. } => Operation::Sum { column, filters },
+        Operation::Min { column, .. } => Operation::Min { column, filters },
+        Operation::Max { column, .. } => Operation::Max { column, filters },
+        Operation::GroupSum {
+            group_by,
+            sum_column,
+            ..
+        } => Operation::GroupSum {
+            group_by,
+            sum_column,
+            filters,
+        },
+        Operation::LargestGroup {
+            group_by,
+            sum_column,
+            ..
+        } => Operation::LargestGroup {
+            group_by,
+            sum_column,
+            filters,
+        },
+        Operation::LargestRow { by_column, .. } => Operation::LargestRow { by_column, filters },
+        Operation::Sort {
+            column, descending, ..
+        } => Operation::Sort {
+            column,
+            descending,
+            filters,
+        },
+        other @ (Operation::Filter { .. } | Operation::RowAt { .. }) => other,
+    }
+}
+
+/// What session 11's residual-word reading actually found (`docs/DECISIONS.md`). Replaces
+/// session 9's `DetectedFilter`, which only named a word and a column: this builds the real
+/// `FilterSpec`s `tabular::engine::execute` runs, or says precisely why it built none.
+enum FilterDetection {
+    /// One or more filters, combined with AND only - never OR, never nested
+    /// (`docs/DECISIONS.md`, session 11's forbidden anti-patterns).
+    Filters(Vec<FilterSpec>),
+    /// A word named real data in more than one reachable column: asked, never picked.
+    WhichColumn { value: String, candidates: Vec<String> },
+    /// A word looked like an attempted filter value (capitalised, the way every fictional value
+    /// in this product's fixtures is) but matched no reachable column's real data.
+    ValueNotFound { value: String, close: Vec<String> },
+    /// Nothing in the residual words reads as a filter at all - an ordinary unfiltered question,
+    /// exactly as before this session.
+    None,
+}
+
+/// Turns `residual`'s words into the filters the question's own recognised operation should run
+/// under. A filter is recognised only when it is anchored on real data: a value found, whole
+/// word, in exactly one reachable column (folded, so an unaccented word in the question still
+/// finds an accented real value); a weekday or month-name word, or a four-digit year, resolved
+/// against the single reachable `Date`-typed column; or a comparison word beside a number,
+/// resolved against `operation_column` when it is numeric, or the single reachable numeric
+/// column otherwise. Several recognised words combine with AND. `None` when the operation's own
+/// sheet cannot be resolved at all: `engine::execute` will refuse it with the correct reason on
+/// its own.
+fn detect_filters(
+    question: &str,
     residual: &[String],
     fresh: &TabularInventory,
     workbook: &Workbook,
     sheet_name: Option<&str>,
     allowed: Option<&[String]>,
-) -> Option<DetectedFilter> {
+    operation_column: Option<&str>,
+    named_column: Option<&str>,
+    locale: &str,
+) -> FilterDetection {
     if residual.is_empty() {
-        return None;
+        return FilterDetection::None;
     }
-    let sheet_inventory = engine::resolve_sheet_inventory(fresh, sheet_name, allowed).ok()?;
-    let sheet_data = workbook
+    let Ok(sheet_inventory) = engine::resolve_sheet_inventory(fresh, sheet_name, allowed) else {
+        return FilterDetection::None;
+    };
+    let Some(sheet_data) = workbook
         .sheets
         .iter()
-        .find(|sheet| sheet.name == sheet_inventory.name)?;
+        .find(|sheet| sheet.name == sheet_inventory.name)
+    else {
+        return FilterDetection::None;
+    };
     let rows = data_rows(sheet_inventory, sheet_data);
+    let columns = &sheet_inventory.columns;
 
-    let columns_words: Vec<(String, HashSet<String>)> = sheet_inventory
-        .columns
+    // Folded word -> the distinct full cell values (original text) it is one word of, per
+    // column - a `Date` column excluded: its own text is `text_value`'s ISO rendering
+    // ("2026-03-02"), whose digit groups would otherwise spuriously "equal" the very day, month
+    // or year number a weekday/month/year filter is trying to read below, over every row that
+    // happens to share the same year. A multi-word real value (a two-word company name, say) is
+    // found by either of its words, but the filter this builds always equals the value's *whole*
+    // text, never one word of it - an `Equals` on a lone word would never match the row it was
+    // found in (`docs/DECISIONS.md`, session 11's "never match a value by substring").
+    let columns_words: Vec<(String, HashMap<String, Vec<String>>)> = columns
         .iter()
+        .filter(|column| column.inferred_type != ColumnType::Date)
         .map(|column| {
-            let mut words = HashSet::new();
+            let mut values: HashMap<String, Vec<String>> = HashMap::new();
             for row in rows {
-                if let Some(cell) = row.get(column.index) {
-                    words.extend(name_words(&text_value(cell)));
+                let Some(cell) = row.get(column.index) else {
+                    continue;
+                };
+                let full = text_value(cell);
+                let trimmed = full.trim().to_string();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                for word in name_words(&full) {
+                    let bucket = values.entry(word).or_default();
+                    if !bucket.contains(&trimmed) {
+                        bucket.push(trimmed.clone());
+                    }
                 }
             }
-            (column.name.clone(), words)
+            (column.name.clone(), values)
         })
         .collect();
+    let all_values: std::collections::BTreeSet<String> = rows
+        .iter()
+        .flat_map(|row| {
+            columns
+                .iter()
+                .filter(|column| column.inferred_type != ColumnType::Date)
+                .filter_map(|column| row.get(column.index))
+        })
+        .map(text_value)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect();
 
-    for word in residual {
-        let folded = fold_text(word);
-        if let Some((column, _)) = columns_words
-            .iter()
-            .find(|(_, words)| words.contains(&folded))
-        {
-            return Some(DetectedFilter {
-                column: Some(column.clone()),
-                value: word.clone(),
+    let date_columns: Vec<&ColumnInventory> = columns
+        .iter()
+        .filter(|column| column.inferred_type == ColumnType::Date)
+        .collect();
+    let numeric_columns: Vec<&ColumnInventory> = columns
+        .iter()
+        .filter(|column| column.inferred_type == ColumnType::Numeric && !column.has_formulas)
+        .collect();
+    let words = question::filter_words(locale);
+
+    let mut filters: Vec<FilterSpec> = Vec::new();
+    let mut consumed = vec![false; residual.len()];
+
+    // --- A comparison word beside a number --------------------------------------------------
+    if let Some(words) = &words {
+        let target = operation_column
+            .and_then(|name| numeric_columns.iter().find(|column| column.name == name))
+            .copied()
+            .or(match numeric_columns.as_slice() {
+                [only] => Some(*only),
+                _ => None,
             });
-        }
-        if word.parse::<f64>().is_ok() {
-            return Some(DetectedFilter {
-                column: None,
-                value: word.clone(),
-            });
+        if let Some(column) = target {
+            for index in 0..residual.len() {
+                if consumed[index] {
+                    continue;
+                }
+                let folded = fold_text(&residual[index]);
+                let greater = words.greater_than.contains(&folded);
+                let less = words.less_than.contains(&folded);
+                if !greater && !less {
+                    continue;
+                }
+                // The shape every shipped pack's phrasing uses is "comparison word, then
+                // number" ("over 1000", "plus de 1000"); a number placed before it is read
+                // too, so a translation that inverts the order is not silently unsupported.
+                let threshold_index = ((index + 1)..residual.len())
+                    .find(|&i| !consumed[i] && residual[i].parse::<f64>().is_ok())
+                    .or_else(|| {
+                        (0..index)
+                            .rev()
+                            .find(|&i| !consumed[i] && residual[i].parse::<f64>().is_ok())
+                    });
+                if let Some(threshold_index) = threshold_index {
+                    if let Ok(threshold) = residual[threshold_index].parse::<f64>() {
+                        consumed[index] = true;
+                        consumed[threshold_index] = true;
+                        filters.push(FilterSpec {
+                            column: column.name.clone(),
+                            comparison: if greater {
+                                Comparison::GreaterThan(threshold)
+                            } else {
+                                Comparison::LessThan(threshold)
+                            },
+                        });
+                    }
+                }
+            }
         }
     }
-    None
+
+    // --- A date range: "between <date> and <date>" ------------------------------------------
+    if let Some(words) = &words {
+        let has_between = residual
+            .iter()
+            .enumerate()
+            .any(|(index, word)| !consumed[index] && words.between.contains(&fold_text(word)));
+        if has_between {
+            if let [start, end] = extract_dates(question).as_slice() {
+                let (start, end) = if start <= end {
+                    (*start, *end)
+                } else {
+                    (*end, *start)
+                };
+                if let [only] = date_columns.as_slice() {
+                    filters.push(FilterSpec {
+                        column: only.name.clone(),
+                        comparison: Comparison::DateRange(start, end),
+                    });
+                    for (index, word) in residual.iter().enumerate() {
+                        if words.between.contains(&fold_text(word)) {
+                            consumed[index] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Equality, weekday, month, year - one not-yet-consumed word at a time ---------------
+    let mut unmatched_value: Option<String> = None;
+    for index in 0..residual.len() {
+        if consumed[index] {
+            continue;
+        }
+        let word = &residual[index];
+        let folded = fold_text(word);
+
+        let matching_columns: Vec<(&str, &Vec<String>)> = columns_words
+            .iter()
+            .filter_map(|(name, words)| words.get(&folded).map(|values| (name.as_str(), values)))
+            .collect();
+        // The question may already have named its column ("where fournisseur is Alpha", "for the
+        // fournisseur Beta") - `classify_with`'s own `column_name`, threaded through here as
+        // `named_column`, regardless of whether the recognised operation reads it. Preferring it
+        // over an ambiguous match is not a guess: she already told us which column, in words this
+        // classifier separately resolved against the workbook's real headers.
+        let resolved = match matching_columns.len() {
+            1 => Some(matching_columns[0]),
+            n if n > 1 => named_column
+                .and_then(|named| matching_columns.iter().find(|(name, _)| *name == named))
+                .copied(),
+            _ => None,
+        };
+        match resolved {
+            Some((column_name, candidate_values)) => {
+                // Several distinct values of this one column share the word: a best-effort
+                // fallback to the word itself, rather than refusing outright - rare in practice
+                // (`docs/SESSION-DATA-06-Findings.md`'s fixtures never exercise it).
+                let value = match candidate_values.as_slice() {
+                    [only] => only.clone(),
+                    _ => word.clone(),
+                };
+                let spec = FilterSpec {
+                    column: column_name.to_string(),
+                    comparison: Comparison::Equals(value),
+                };
+                if !filters.contains(&spec) {
+                    filters.push(spec);
+                }
+                consumed[index] = true;
+                continue;
+            }
+            None if matching_columns.len() > 1 => {
+                return FilterDetection::WhichColumn {
+                    value: word.clone(),
+                    candidates: matching_columns
+                        .into_iter()
+                        .map(|(name, _)| name.to_string())
+                        .collect(),
+                };
+            }
+            None => {}
+        }
+
+        if let (Some(words), [only]) = (&words, date_columns.as_slice()) {
+            if let Some((weekday, _)) = words.weekdays.iter().find(|(_, forms)| forms.contains(&folded)) {
+                filters.push(FilterSpec {
+                    column: only.name.clone(),
+                    comparison: Comparison::Weekday(*weekday),
+                });
+                consumed[index] = true;
+                continue;
+            }
+            if let Some((month, _)) = words.months.iter().find(|(_, forms)| forms.contains(&folded)) {
+                filters.push(FilterSpec {
+                    column: only.name.clone(),
+                    comparison: Comparison::Month(*month),
+                });
+                consumed[index] = true;
+                continue;
+            }
+        }
+
+        if word.chars().count() == 4 {
+            if let (Ok(year @ 1000..=9999), [only]) = (word.parse::<i32>(), date_columns.as_slice()) {
+                filters.push(FilterSpec {
+                    column: only.name.clone(),
+                    comparison: Comparison::Year(year),
+                });
+                consumed[index] = true;
+                continue;
+            }
+        }
+
+        // Every fictional value in this product's fixtures is a proper noun - a supplier, a
+        // client, an agency - and so is typed capitalised; an ordinary residual word left over
+        // from the pack's grammar-only filler list ("invoices", "factures") is not
+        // (`docs/SESSION-DATA-06-Findings.md`). Never a number: a stray digit that matched
+        // nothing is ordinary noise, not a value worth reporting missing. Never the question's
+        // own first word either: English and French both capitalise a sentence's opening word
+        // regardless of what it is ("Give me a count"), so that capital is not evidence of a
+        // proper noun the way every other one in this product's fixtures is.
+        if unmatched_value.is_none()
+            && word.chars().next().is_some_and(|ch| ch.is_uppercase())
+            && Some(word.as_str()) != first_word(question)
+        {
+            unmatched_value = Some(word.clone());
+        }
+    }
+
+    if !filters.is_empty() {
+        return FilterDetection::Filters(filters);
+    }
+    if let Some(value) = unmatched_value {
+        return FilterDetection::ValueNotFound {
+            close: close_values(&value, &all_values),
+            value,
+        };
+    }
+    FilterDetection::None
+}
+
+/// The question's own first alphanumeric word, exactly as typed - the one word whose leading
+/// capital a sentence's grammar explains on its own, never a proper noun the question named.
+fn first_word(question: &str) -> Option<&str> {
+    question
+        .split(|ch: char| !ch.is_alphanumeric())
+        .find(|word| !word.is_empty())
+}
+
+/// Every whitespace-delimited token of `question` that parses as a calendar date. Read from the
+/// question's own text rather than reconstructed from `residual`'s separated digit tokens: the
+/// residual-word split breaks `09/03/2026` into three numbers on its own `/`, which a date range
+/// cannot be rebuilt from without guessing which triplet paired with which.
+fn extract_dates(question: &str) -> Vec<chrono::NaiveDate> {
+    question
+        .split(|ch: char| ch.is_whitespace())
+        .filter_map(|word| {
+            let trimmed = word.trim_matches(|ch: char| !ch.is_ascii_digit());
+            inventory::parse_date_value(trimmed)
+        })
+        .collect()
+}
+
+/// Up to five of `pool`'s values close to `word` - folded prefix match first, then edit distance
+/// at most two - so a `value_not_found` nudge can show what the column actually holds instead of
+/// only that nothing matched (`docs/DECISIONS.md`, session 11). Ties keep `pool`'s own (sorted)
+/// order.
+fn close_values(word: &str, pool: &std::collections::BTreeSet<String>) -> Vec<String> {
+    let folded_word = fold_text(word);
+    let mut scored: Vec<(usize, &String)> = pool
+        .iter()
+        .filter_map(|value| {
+            let folded_value = fold_text(value);
+            if folded_value.starts_with(&folded_word) || folded_word.starts_with(&folded_value) {
+                Some((0, value))
+            } else {
+                let distance = levenshtein(&folded_word, &folded_value);
+                (distance <= 2).then_some((distance + 1, value))
+            }
+        })
+        .collect();
+    scored.sort_by_key(|(distance, _)| *distance);
+    scored
+        .into_iter()
+        .take(5)
+        .map(|(_, value)| value.clone())
+        .collect()
+}
+
+/// The classic edit-distance table, no crate needed for five words at a time.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut previous: Vec<usize> = (0..=b.len()).collect();
+    for (i, &ca) in a.iter().enumerate() {
+        let mut current = vec![i + 1];
+        for (j, &cb) in b.iter().enumerate() {
+            let cost = if ca == cb { 0 } else { 1 };
+            current.push(
+                (previous[j + 1] + 1)
+                    .min(current[j] + 1)
+                    .min(previous[j] + cost),
+            );
+        }
+        previous = current;
+    }
+    previous[b.len()]
 }
 
 /// This module never imports `crate::gateway`, `crate::retrieval` or `crate::conversation`: every
@@ -629,6 +1030,7 @@ mod tests {
                 example_group: Some("fournisseur".into()),
                 filter_column: None,
                 filter_value: None,
+                close_values: Vec::new(),
             }
         );
     }
@@ -1109,6 +1511,7 @@ mod tests {
                     header_row: Some(0),
                     column: Some("montant".into()),
                     row_range: Some((0, 0)),
+                    filters: Vec::new(),
                 },
                 derivation: TabularDerivation::Computed {
                     operation: "sum".into(),
@@ -1146,6 +1549,7 @@ mod tests {
             example_group: None,
             filter_column: None,
             filter_value: None,
+            close_values: Vec::new(),
         })
         .unwrap();
 
@@ -1174,7 +1578,7 @@ mod tests {
     }
 
     #[test]
-    fn a_filter_clause_never_returns_the_unfiltered_count() {
+    fn a_filter_clause_now_returns_the_filtered_count() {
         let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
 
         let result = folder
@@ -1184,44 +1588,46 @@ mod tests {
             )
             .unwrap();
 
-        let TabularAnswer::Nudge {
-            reason,
-            filter_column,
-            filter_value,
+        let TabularAnswer::Value {
+            value: TabularValue::Count(count),
+            locator,
             ..
         } = result
         else {
-            panic!("expected a filter nudge, got {result:?}");
+            panic!("expected the filtered count, got {result:?}");
         };
-        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
-        assert_eq!(filter_column.as_deref(), Some("fournisseur"));
-        assert_eq!(filter_value.as_deref(), Some("Alpha"));
+        // Alpha: i = 0, 3, 6.
+        assert_eq!(count, 3);
+        assert_eq!(
+            locator.filters,
+            vec![crate::tabular::engine::AppliedFilter::Equals {
+                column: "fournisseur".into(),
+                value: "Alpha".into(),
+            }]
+        );
     }
 
     #[test]
-    fn a_filter_clause_never_returns_the_unfiltered_sum() {
+    fn a_filter_clause_now_returns_the_filtered_sum() {
         let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
 
         let result = folder
             .ask("Sum of montant for Beta", &folder.ticked(&["factures.csv"]))
             .unwrap();
 
-        let TabularAnswer::Nudge {
-            reason,
-            filter_column,
-            filter_value,
+        let TabularAnswer::Value {
+            value: TabularValue::Sum(total),
             ..
         } = result
         else {
-            panic!("expected a filter nudge, got {result:?}");
+            panic!("expected the filtered sum, got {result:?}");
         };
-        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
-        assert_eq!(filter_column.as_deref(), Some("fournisseur"));
-        assert_eq!(filter_value.as_deref(), Some("Beta"));
+        // Beta: i = 1, 4, 7 -> 20 + 50 + 80.
+        assert!((total.value - 150.0).abs() < 1e-9);
     }
 
     #[test]
-    fn a_year_number_in_the_question_is_detected_as_a_filter() {
+    fn a_year_number_in_the_question_is_computed_as_a_filter() {
         let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
 
         let result = folder
@@ -1231,18 +1637,68 @@ mod tests {
             )
             .unwrap();
 
-        let TabularAnswer::Nudge {
-            reason,
-            filter_column,
-            filter_value,
+        let TabularAnswer::Value {
+            value: TabularValue::Sum(total),
             ..
         } = result
         else {
-            panic!("expected a filter nudge, got {result:?}");
+            panic!("expected the filtered sum, got {result:?}");
         };
-        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
-        assert_eq!(filter_column.as_deref(), Some("calendar_year"));
-        assert_eq!(filter_value.as_deref(), Some("2021"));
+        // Only the 2021 Transit Bus row: 1000.
+        assert!((total.value - 1000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn two_filters_combine_with_and() {
+        let mut csv = String::from("fournisseur,annee,montant\n");
+        for (supplier, year) in [
+            ("Alpha", 2024),
+            ("Alpha", 2025),
+            ("Beta", 2025),
+            ("Alpha", 2025),
+            ("Gamma", 2024),
+            ("Beta", 2024),
+            ("Gamma", 2025),
+            ("Beta", 2025),
+        ] {
+            csv.push_str(&format!("{supplier},{year},10\n"));
+        }
+        let folder = Folder::with(&[("achats.csv", &csv)]);
+
+        let result = folder
+            .ask(
+                "How many for Alpha in 2025?",
+                &folder.ticked(&["achats.csv"]),
+            )
+            .unwrap();
+
+        assert_eq!(
+            result,
+            TabularAnswer::Value {
+                file: "achats.csv".into(),
+                value: TabularValue::Count(2),
+                locator: TabularLocator {
+                    sheet: "achats".into(),
+                    header_row: Some(0),
+                    column: None,
+                    row_range: Some((1, 3)),
+                    filters: vec![
+                        crate::tabular::engine::AppliedFilter::Equals {
+                            column: "fournisseur".into(),
+                            value: "Alpha".into(),
+                        },
+                        crate::tabular::engine::AppliedFilter::Equals {
+                            column: "annee".into(),
+                            value: "2025".into(),
+                        },
+                    ],
+                },
+                derivation: TabularDerivation::Computed {
+                    operation: "count".into(),
+                    row_count: 2,
+                },
+            }
+        );
     }
 
     #[test]
@@ -1266,7 +1722,7 @@ mod tests {
     }
 
     #[test]
-    fn a_value_absent_from_every_column_leaves_the_answer_unchanged() {
+    fn a_value_absent_from_every_column_is_a_nudge_never_a_silent_zero() {
         let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
 
         let result = folder
@@ -1276,20 +1732,20 @@ mod tests {
             )
             .unwrap();
 
-        assert!(
-            matches!(
-                result,
-                TabularAnswer::Value {
-                    value: TabularValue::Sum(_),
-                    ..
-                }
-            ),
-            "Omega names no real data, so the plain sum still resolves: got {result:?}"
-        );
+        let TabularAnswer::Nudge {
+            reason,
+            filter_value,
+            ..
+        } = result
+        else {
+            panic!("expected a value_not_found nudge, never a value: got {result:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::ValueNotFound));
+        assert_eq!(filter_value.as_deref(), Some("Omega"));
     }
 
     #[test]
-    fn an_accented_value_is_detected_when_the_question_types_it_without_accents() {
+    fn an_accented_multi_word_value_is_matched_by_either_of_its_unaccented_words() {
         let suppliers = ["Alpha", "Soci\u{e9}t\u{e9} G\u{e9}n\u{e9}rale", "Gamma"];
         let mut csv = String::from("date;fournisseur;montant\n");
         for i in 0..9 {
@@ -1309,15 +1765,37 @@ mod tests {
             )
             .unwrap();
 
-        let TabularAnswer::Nudge {
-            reason,
-            filter_column,
+        let TabularAnswer::Value {
+            value: TabularValue::Sum(total),
             ..
         } = result
         else {
-            panic!("expected a filter nudge, got {result:?}");
+            panic!("expected the filtered sum, got {result:?}");
         };
-        assert_eq!(reason, Some(NotAnswerableReason::FilterNotSupported));
-        assert_eq!(filter_column.as_deref(), Some("fournisseur"));
+        // Societe Generale: i = 1, 4, 7 -> 20 + 50 + 80. Both "Societe" and "Generale" name the
+        // same whole value, never a lone-word filter that could not match the full cell.
+        assert!((total.value - 150.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_comparison_word_beside_a_number_filters_the_single_numeric_column() {
+        let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
+
+        let result = folder
+            .ask(
+                "How many invoices with montant over 50?",
+                &folder.ticked(&["factures.csv"]),
+            )
+            .unwrap();
+
+        let TabularAnswer::Value {
+            value: TabularValue::Count(count),
+            ..
+        } = result
+        else {
+            panic!("expected the filtered count, got {result:?}");
+        };
+        // montant: 10, 20, ..., 90 - strictly greater than 50: 60, 70, 80, 90 = 4 rows.
+        assert_eq!(count, 4);
     }
 }

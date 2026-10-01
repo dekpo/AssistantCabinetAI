@@ -1,5 +1,12 @@
 import type { Translator } from "../i18n/translate";
-import type { NumericAggregate, StructuralAnswer, TabularAnswer, TabularRow, TabularValue } from "./ipc";
+import type {
+  AppliedFilter,
+  NumericAggregate,
+  StructuralAnswer,
+  TabularAnswer,
+  TabularRow,
+  TabularValue,
+} from "./ipc";
 import { counted } from "./plural";
 
 /**
@@ -32,7 +39,7 @@ export function formatTabularAnswer(
 ): string {
   switch (answer.kind) {
     case "value":
-      return formatValue(t, answer.value, answer.locator.column, answer.derivation, locale);
+      return formatValue(t, answer.value, answer.locator, answer.derivation, locale);
     case "structural":
       return formatStructural(t, answer.answer);
     case "nudge":
@@ -41,6 +48,12 @@ export function formatTabularAnswer(
       return t("tabularAnswer.whichMeasure", {
         file: answer.file,
         group: answer.groupColumn,
+        columns: answer.candidates.join(", "),
+        first: answer.candidates[0] ?? "",
+      });
+    case "which_column":
+      return t("tabularAnswer.whichColumn", {
+        value: answer.value,
         columns: answer.candidates.join(", "),
         first: answer.candidates[0] ?? "",
       });
@@ -91,13 +104,70 @@ export function tabularSourceLine(t: Translator, source: TabularSource): string 
       });
 }
 
+/** A weekday name (1 Monday .. 7 Sunday) in her language, from a fixed reference Monday - no
+ * catalogue keys needed, `Intl` already knows every shipped locale's weekday names. */
+function weekdayName(weekday: number, locale: string): string {
+  const monday = new Date(Date.UTC(2024, 0, 1));
+  const date = new Date(monday);
+  date.setUTCDate(monday.getUTCDate() + (weekday - 1));
+  return new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(date);
+}
+
+/** A month name (1 January .. 12 December) in her language, the same `Intl` approach. */
+function monthName(month: number, locale: string): string {
+  const date = new Date(Date.UTC(2024, month - 1, 1));
+  return new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(date);
+}
+
+/** One applied filter, written as a short clause ("fournisseur = Alpha") for the "Understood as"
+ * line - structured data in, a sentence in her language out, exactly like every other machine
+ * code this module turns into prose (`docs/DECISIONS.md`, session 11). */
+function describeFilter(t: Translator, filter: AppliedFilter, locale: string): string {
+  const number = (amount: number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(amount);
+  switch (filter.kind) {
+    case "equals":
+      return t("tabularAnswer.filterEquals", { column: filter.column, value: filter.value });
+    case "contains":
+      return t("tabularAnswer.filterContains", { column: filter.column, value: filter.value });
+    case "greater_than":
+      return t("tabularAnswer.filterGreaterThan", { column: filter.column, value: number(filter.threshold) });
+    case "less_than":
+      return t("tabularAnswer.filterLessThan", { column: filter.column, value: number(filter.threshold) });
+    case "between":
+      return t("tabularAnswer.filterBetween", {
+        column: filter.column,
+        low: number(filter.low),
+        high: number(filter.high),
+      });
+    case "weekday":
+      return t("tabularAnswer.filterWeekday", {
+        column: filter.column,
+        value: weekdayName(filter.weekday, locale),
+      });
+    case "month":
+      return t("tabularAnswer.filterMonth", { column: filter.column, value: monthName(filter.month, locale) });
+    case "year":
+      return t("tabularAnswer.filterYear", { column: filter.column, value: String(filter.year) });
+    case "date_range":
+      return t("tabularAnswer.filterDateRange", { column: filter.column, start: filter.start, end: filter.end });
+    case "in":
+      return t("tabularAnswer.filterIn", { column: filter.column, value: filter.values.join(", ") });
+  }
+}
+
+function describeFilters(t: Translator, filters: AppliedFilter[], locale: string): string {
+  return filters.map((filter) => describeFilter(t, filter, locale)).join(t("tabularAnswer.filterAnd"));
+}
+
 function formatValue(
   t: Translator,
   value: TabularValue,
-  column: string | null,
+  locator: { column: string | null; filters: AppliedFilter[] },
   derivation: { operation: string; row_count: number },
   locale: string,
 ): string {
+  const column = locator.column;
   const number = (amount: number) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(amount);
   /** A sum/min/max's own value, formatted in her language and with its unit beside it, exactly
@@ -117,6 +187,7 @@ function formatValue(
   const over = t("tabularAnswer.computedOver", { rows });
   const named = column ?? "";
 
+  const body = ((): string => {
   switch (value.kind) {
     case "count":
       return [t("tabularAnswer.count", { value: number(value.value) }), "", over].join("\n");
@@ -227,6 +298,15 @@ function formatValue(
         ...rowsTable(t, value.value),
       ].join("\n");
   }
+  })();
+
+  // "What was understood": every filter the value was actually computed under, written from
+  // structured data, never invented prose (`docs/DECISIONS.md`, session 11).
+  return locator.filters.length > 0
+    ? [body, "", t("tabularAnswer.understoodAs", { filters: describeFilters(t, locator.filters, locale) })].join(
+        "\n",
+      )
+    : body;
 }
 
 function rowLines(t: Translator, row: TabularRow): string[] {
@@ -299,6 +379,9 @@ function formatNudge(
   ];
   if (nudge.reason === "filter_not_supported" && nudge.filterColumn !== null) {
     lines.push(t("tabularAnswer.nudgeFilterColumn", { column: nudge.filterColumn }));
+  }
+  if (nudge.reason === "value_not_found" && nudge.closeValues.length > 0) {
+    lines.push(t("tabularAnswer.nudgeCloseValues", { values: nudge.closeValues.join(", ") }));
   }
   if (nudge.availableColumns.length > 0) {
     lines.push(t("tabularAnswer.nudgeColumns", { columns: nudge.availableColumns.join(", ") }));

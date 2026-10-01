@@ -22,6 +22,7 @@
 
 use std::collections::BTreeSet;
 
+use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use super::inventory::{
@@ -29,6 +30,52 @@ use super::inventory::{
 };
 use super::{CellValue, Workbook};
 use crate::file_reference::fold_text;
+
+/// One filter as it was actually applied, for the locator to carry as data
+/// (`docs/DECISIONS.md`, session 11): "what was understood". Rust never writes the sentence - the
+/// React catalogues read this and the interface locale to write "fournisseur = Alpha" or "date in
+/// March 2026" in her language. One variant per `Comparison`, so a filter the engine actually ran
+/// can always be described, whatever comparison it used.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AppliedFilter {
+    Equals { column: String, value: String },
+    Contains { column: String, value: String },
+    GreaterThan { column: String, threshold: f64 },
+    LessThan { column: String, threshold: f64 },
+    Between { column: String, low: f64, high: f64 },
+    /// ISO weekday: 1 = Monday .. 7 = Sunday.
+    Weekday { column: String, weekday: u8 },
+    Month { column: String, month: u8 },
+    Year { column: String, year: i32 },
+    /// Inclusive on both ends, ISO 8601 (`docs/DECISIONS.md`, D3).
+    DateRange { column: String, start: String, end: String },
+    In { column: String, values: Vec<String> },
+}
+
+fn describe_filter(filter: &FilterSpec) -> AppliedFilter {
+    let column = filter.column.clone();
+    match &filter.comparison {
+        Comparison::Equals(value) => AppliedFilter::Equals { column, value: value.clone() },
+        Comparison::Contains(value) => AppliedFilter::Contains { column, value: value.clone() },
+        Comparison::GreaterThan(threshold) => AppliedFilter::GreaterThan { column, threshold: *threshold },
+        Comparison::LessThan(threshold) => AppliedFilter::LessThan { column, threshold: *threshold },
+        Comparison::Between(low, high) => AppliedFilter::Between { column, low: *low, high: *high },
+        Comparison::Weekday(weekday) => AppliedFilter::Weekday { column, weekday: *weekday },
+        Comparison::Month(month) => AppliedFilter::Month { column, month: *month },
+        Comparison::Year(year) => AppliedFilter::Year { column, year: *year },
+        Comparison::DateRange(start, end) => AppliedFilter::DateRange {
+            column,
+            start: start.format("%Y-%m-%d").to_string(),
+            end: end.format("%Y-%m-%d").to_string(),
+        },
+        Comparison::In(values) => AppliedFilter::In { column, values: values.clone() },
+    }
+}
+
+fn applied_filters(filters: &[FilterSpec]) -> Vec<AppliedFilter> {
+    filters.iter().map(describe_filter).collect()
+}
 
 /// The tabular form of `Source.locator` (`docs/ARCHITECTURE.md`): `Tabular { sheet, header_row,
 /// column, row_range }`.
@@ -44,6 +91,10 @@ pub struct TabularLocator {
     /// actually read from - the whole data body for an unfiltered aggregate, the min/max of the
     /// matched rows for a filter, one row for a single-row lookup. `None` when nothing matched.
     pub row_range: Option<(usize, usize)>,
+    /// Every filter this value was actually computed under, "what was understood" - data, never
+    /// prose (`docs/DECISIONS.md`, session 11). Empty for an unfiltered value.
+    #[serde(default)]
+    pub filters: Vec<AppliedFilter>,
 }
 
 /// The tabular form of `Source.derivation` (`docs/ARCHITECTURE.md`). Never `ModelAsserted`:
@@ -168,6 +219,17 @@ pub enum NotAnswerableReason {
     /// because it is the same "why the engine did not compute a value" vocabulary every other
     /// nudge reason belongs to.
     FilterNotSupported,
+    /// The operation needs a real calendar column for a weekday, month, year or date-range
+    /// filter, and this column is not `Date`-typed - whether it is plain text, numeric, or a
+    /// day-first column no cell settled (`ColumnInventory::ambiguous_date`). Never guessed at,
+    /// the same refusal `NonNumericColumn` already gives a comparison over a non-numeric column
+    /// (`docs/DECISIONS.md`, session 11).
+    NonDateColumn,
+    /// A residual question word was found in no reachable column's real values, and looked like
+    /// an attempted filter value rather than ordinary prose (`tabular_answer::detect_filters`).
+    /// Not constructed by this module, for the same reason `FilterNotSupported` is carried here
+    /// rather than produced.
+    ValueNotFound,
 }
 
 /// The result of one deterministic question against one workbook.
@@ -191,12 +253,26 @@ pub enum TabularOutcome {
     },
 }
 
+/// `Between`, `Weekday`, `Month`, `Year` and `DateRange` are session 11's (`docs/DECISIONS.md`):
+/// numeric comparisons keep reusing `inventory::resolve_numeric_column` exactly as before, and
+/// the four date variants read a column through the new `inventory::resolve_date_column` - never
+/// a text comparison, so a `dd/mm/yyyy` cell and an XLSX date cell agree once parsed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Comparison {
     Equals(String),
     Contains(String),
     GreaterThan(f64),
     LessThan(f64),
+    /// Inclusive both ends.
+    Between(f64, f64),
+    /// ISO weekday: 1 = Monday .. 7 = Sunday.
+    Weekday(u8),
+    /// 1-12.
+    Month(u8),
+    Year(i32),
+    /// Inclusive both ends.
+    DateRange(NaiveDate, NaiveDate),
+    In(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -208,19 +284,25 @@ pub struct FilterSpec {
 /// The committed deterministic operations, and nothing else (`docs/DECISIONS.md`, "XLSX scope
 /// for the first implementation" and its siblings): no arbitrary expression language, no formula
 /// evaluation, no operation this session did not name.
+///
+/// `filters`, session 11: every aggregate but `Filter` and `RowAt` takes them, empty meaning
+/// today's unfiltered behaviour. Several filters combine with AND only - no OR, no nesting
+/// (`docs/DECISIONS.md`, session 11's anti-patterns).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
-    Count { filter: Option<FilterSpec> },
-    Distinct { column: String },
-    Sum { column: String },
-    Min { column: String },
-    Max { column: String },
-    GroupSum { group_by: String, sum_column: String },
+    Count { filters: Vec<FilterSpec> },
+    Distinct { column: String, filters: Vec<FilterSpec> },
+    Sum { column: String, filters: Vec<FilterSpec> },
+    Min { column: String, filters: Vec<FilterSpec> },
+    Max { column: String, filters: Vec<FilterSpec> },
+    GroupSum { group_by: String, sum_column: String, filters: Vec<FilterSpec> },
     /// The group whose total is largest, with the runners-up.
-    LargestGroup { group_by: String, sum_column: String },
-    LargestRow { by_column: String },
+    LargestGroup { group_by: String, sum_column: String, filters: Vec<FilterSpec> },
+    LargestRow { by_column: String, filters: Vec<FilterSpec> },
+    /// A row listing this one filter alone produces - constructed directly, never reached by
+    /// `tabular::question`'s classifier (`docs/DECISIONS.md`, "the tabular engine session").
     Filter { filter: FilterSpec },
-    Sort { column: String, descending: bool },
+    Sort { column: String, descending: bool, filters: Vec<FilterSpec> },
     /// A direct row lookup by position - not one of the committed analysis operations, but the
     /// same "row outside the workbook's range" refusal every other row-touching operation needs,
     /// exercised on its own.
@@ -263,41 +345,49 @@ pub fn execute(
     };
 
     match operation {
-        Operation::Count { filter } => {
-            let matched = match filter {
-                None => (0..rows.len()).collect::<Vec<_>>(),
-                Some(spec) => match resolve_filter_column(columns, spec) {
-                    Ok(col) => matching_rows(rows, col, &spec.comparison, locale),
-                    Err(reason) => return fail(reason),
-                },
+        Operation::Count { filters } => {
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
             };
             TabularOutcome::Value {
                 value: TabularValue::Count(matched.len()),
-                locator: locator(sheet_inventory, None, range_of(&matched)),
+                locator: locator(sheet_inventory, None, range_of(&matched), applied_filters(filters)),
                 derivation: computed("count", matched.len()),
             }
         }
-        Operation::Distinct { column } => {
+        Operation::Distinct { column, filters } => {
             let col = match resolve_value_column(columns, column) {
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
             };
-            if rows.is_empty() {
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
-            let values: BTreeSet<String> = rows
+            let values: BTreeSet<String> = matched
                 .iter()
-                .filter_map(|row| row.get(col.index))
+                .filter_map(|&index| rows[index].get(col.index))
                 .map(text_value)
                 .filter(|text| !text.trim().is_empty())
                 .collect();
             TabularOutcome::Value {
                 value: TabularValue::Distinct(values.into_iter().collect()),
-                locator: locator(sheet_inventory, Some(&col.name), Some((0, rows.len() - 1))),
-                derivation: computed("distinct", rows.len()),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
+                derivation: computed("distinct", matched.len()),
             }
         }
-        Operation::Sum { column } | Operation::Min { column } | Operation::Max { column } => {
+        Operation::Sum { column, filters }
+        | Operation::Min { column, filters }
+        | Operation::Max { column, filters } => {
             let col = match resolve_value_column(columns, column) {
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
@@ -305,11 +395,21 @@ pub fn execute(
             if col.inferred_type != ColumnType::Numeric {
                 return fail(NotAnswerableReason::NonNumericColumn);
             }
-            if rows.is_empty() {
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
+            // Resolved over the whole column, filters or not: a separator's thousands-vs-decimal
+            // role is corroborated from the column's own cells (`docs/DECISIONS.md`, D2), which a
+            // filtered subset could read differently from the same cells read unfiltered.
             let resolved = inventory::resolve_numeric_column(rows, col.index, locale);
-            let values: Vec<f64> = resolved.values.into_iter().flatten().collect();
+            let values: Vec<f64> = matched
+                .iter()
+                .filter_map(|&index| resolved.values[index])
+                .collect();
             if values.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
@@ -338,17 +438,24 @@ pub fn execute(
             };
             TabularOutcome::Value {
                 value,
-                locator: locator(sheet_inventory, Some(&col.name), Some((0, rows.len() - 1))),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
                 derivation: computed(operation_name, values.len()),
             }
         }
         Operation::GroupSum {
             group_by,
             sum_column,
+            filters,
         }
         | Operation::LargestGroup {
             group_by,
             sum_column,
+            filters,
         } => {
             let group_col = match resolve_value_column(columns, group_by) {
                 Ok(col) => col,
@@ -361,17 +468,21 @@ pub fn execute(
             if sum_col.inferred_type != ColumnType::Numeric {
                 return fail(NotAnswerableReason::NonNumericColumn);
             }
-            if rows.is_empty() {
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
             let resolved = inventory::resolve_numeric_column(rows, sum_col.index, locale);
             let mut totals: std::collections::BTreeMap<String, f64> =
                 std::collections::BTreeMap::new();
-            for (row, amount) in rows.iter().zip(resolved.values.iter()) {
-                let Some(amount) = amount else {
+            for &index in &matched {
+                let Some(amount) = resolved.values[index] else {
                     continue;
                 };
-                let Some(group_cell) = row.get(group_col.index) else {
+                let Some(group_cell) = rows[index].get(group_col.index) else {
                     continue;
                 };
                 let key = text_value(group_cell);
@@ -407,11 +518,16 @@ pub fn execute(
             };
             TabularOutcome::Value {
                 value,
-                locator: locator(sheet_inventory, Some(&sum_col.name), Some((0, rows.len() - 1))),
-                derivation: computed(operation_name, rows.len()),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&sum_col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
+                derivation: computed(operation_name, matched.len()),
             }
         }
-        Operation::LargestRow { by_column } => {
+        Operation::LargestRow { by_column, filters } => {
             let col = match resolve_value_column(columns, by_column) {
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
@@ -419,14 +535,18 @@ pub fn execute(
             if col.inferred_type != ColumnType::Numeric {
                 return fail(NotAnswerableReason::NonNumericColumn);
             }
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
             let resolved = inventory::resolve_numeric_column(rows, col.index, locale);
             let mut best: Option<(usize, f64)> = None;
-            for (index, value) in resolved.values.iter().enumerate() {
-                let Some(value) = value else {
+            for &index in &matched {
+                let Some(value) = resolved.values[index] else {
                     continue;
                 };
-                if best.is_none_or(|(_, current)| *value > current) {
-                    best = Some((index, *value));
+                if best.is_none_or(|(_, current)| value > current) {
+                    best = Some((index, value));
                 }
             }
             let Some((row_index, _)) = best else {
@@ -441,6 +561,7 @@ pub fn execute(
                     sheet_inventory,
                     Some(&col.name),
                     Some((row_index, row_index)),
+                    applied_filters(filters),
                 ),
                 derivation: computed("largest_row", 1),
             }
@@ -450,7 +571,7 @@ pub fn execute(
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
             };
-            let matched = matching_rows(rows, col, &filter.comparison, locale);
+            let matched = matching_rows_for(rows, col, &filter.comparison, locale);
             let result_rows: Vec<RowValue> = matched
                 .iter()
                 .map(|&index| RowValue {
@@ -460,19 +581,32 @@ pub fn execute(
                 .collect();
             TabularOutcome::Value {
                 value: TabularValue::Rows(result_rows),
-                locator: locator(sheet_inventory, Some(&col.name), range_of(&matched)),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&col.name),
+                    range_of(&matched),
+                    applied_filters(std::slice::from_ref(filter)),
+                ),
                 derivation: computed("filter", matched.len()),
             }
         }
-        Operation::Sort { column, descending } => {
+        Operation::Sort {
+            column,
+            descending,
+            filters,
+        } => {
             let col = match resolve_value_column(columns, column) {
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
             };
-            if rows.is_empty() {
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
-            let mut indices: Vec<usize> = (0..rows.len()).collect();
+            let mut indices = matched.clone();
             if col.inferred_type == ColumnType::Numeric {
                 let resolved = inventory::resolve_numeric_column(rows, col.index, locale);
                 indices.sort_by(|&a, &b| {
@@ -480,6 +614,11 @@ pub fn execute(
                         .partial_cmp(&resolved.values[b])
                         .unwrap_or(std::cmp::Ordering::Equal)
                 });
+            } else if col.inferred_type == ColumnType::Date {
+                // A `dd/mm/yyyy` text date must never sort as text - "09/08/2026" would then
+                // read before "28/01/2025" on the day alone (`docs/DECISIONS.md`, live bug B1).
+                let resolved = inventory::resolve_date_column(rows, col.index);
+                indices.sort_by(|&a, &b| resolved[a].cmp(&resolved[b]));
             } else {
                 indices.sort_by(|&a, &b| {
                     let ta = rows[a].get(col.index).map(text_value).unwrap_or_default();
@@ -499,8 +638,13 @@ pub fn execute(
                 .collect();
             TabularOutcome::Value {
                 value: TabularValue::Rows(result_rows),
-                locator: locator(sheet_inventory, Some(&col.name), Some((0, rows.len() - 1))),
-                derivation: computed("sort", rows.len()),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
+                derivation: computed("sort", matched.len()),
             }
         }
         Operation::RowAt { index } => {
@@ -512,7 +656,7 @@ pub fn execute(
                     row_index: *index,
                     cells: row_cells(columns, &rows[*index]),
                 }),
-                locator: locator(sheet_inventory, None, Some((*index, *index))),
+                locator: locator(sheet_inventory, None, Some((*index, *index)), Vec::new()),
                 derivation: computed("row_at", 1),
             }
         }
@@ -535,12 +679,14 @@ fn locator(
     sheet: &SheetInventory,
     column: Option<&str>,
     row_range: Option<(usize, usize)>,
+    filters: Vec<AppliedFilter>,
 ) -> TabularLocator {
     TabularLocator {
         sheet: sheet.name.clone(),
         header_row: sheet.header_row,
         column: column.map(str::to_string),
         row_range,
+        filters,
     }
 }
 
@@ -669,22 +815,64 @@ fn resolve_value_column<'a>(
     Ok(column)
 }
 
+/// Which type a comparison needs its column to already be - never guessed at, the same refusal a
+/// numeric comparison over a text column always gave, extended to the four date comparisons
+/// session 11 adds (`docs/DECISIONS.md`). `Equals`, `Contains` and `In` read any column's text, so
+/// they need no type check of their own.
 fn resolve_filter_column<'a>(
     columns: &'a [ColumnInventory],
     filter: &FilterSpec,
 ) -> Result<&'a ColumnInventory, NotAnswerableReason> {
     let column = resolve_value_column(columns, &filter.column)?;
-    if matches!(
-        filter.comparison,
-        Comparison::GreaterThan(_) | Comparison::LessThan(_)
-    ) && column.inferred_type != ColumnType::Numeric
-    {
-        return Err(NotAnswerableReason::NonNumericColumn);
+    match filter.comparison {
+        Comparison::GreaterThan(_) | Comparison::LessThan(_) | Comparison::Between(_, _) => {
+            if column.inferred_type != ColumnType::Numeric {
+                return Err(NotAnswerableReason::NonNumericColumn);
+            }
+        }
+        Comparison::Weekday(_)
+        | Comparison::Month(_)
+        | Comparison::Year(_)
+        | Comparison::DateRange(_, _) => {
+            if column.inferred_type != ColumnType::Date {
+                return Err(NotAnswerableReason::NonDateColumn);
+            }
+        }
+        Comparison::Equals(_) | Comparison::Contains(_) | Comparison::In(_) => {}
     }
     Ok(column)
 }
 
+/// Every row index every one of `filters` matches, combined with AND only - no OR, no nesting
+/// (`docs/DECISIONS.md`, session 11's anti-patterns). Empty `filters` matches every row, exactly
+/// today's unfiltered behaviour. `Err` the moment one filter names a column the wrong type for its
+/// own comparison, before any row is read.
 fn matching_rows(
+    rows: &[Vec<CellValue>],
+    columns: &[ColumnInventory],
+    filters: &[FilterSpec],
+    locale: &str,
+) -> Result<Vec<usize>, NotAnswerableReason> {
+    if filters.is_empty() {
+        return Ok((0..rows.len()).collect());
+    }
+    let mut matched: Option<BTreeSet<usize>> = None;
+    for filter in filters {
+        let column = resolve_filter_column(columns, filter)?;
+        let indices: BTreeSet<usize> = matching_rows_for(rows, column, &filter.comparison, locale)
+            .into_iter()
+            .collect();
+        matched = Some(match matched {
+            None => indices,
+            Some(existing) => existing.intersection(&indices).copied().collect(),
+        });
+    }
+    Ok(matched.unwrap_or_default().into_iter().collect())
+}
+
+/// One filter's own matches, over the whole column - `matching_rows` intersects these across
+/// several filters combined with AND.
+fn matching_rows_for(
     rows: &[Vec<CellValue>],
     column: &ColumnInventory,
     comparison: &Comparison,
@@ -692,8 +880,16 @@ fn matching_rows(
 ) -> Vec<usize> {
     // Resolved once for the whole column, not per cell, so a comparison agrees with the same
     // convention the inventory used to type the column in the first place.
-    let numeric = matches!(comparison, Comparison::GreaterThan(_) | Comparison::LessThan(_))
-        .then(|| inventory::resolve_numeric_column(rows, column.index, locale));
+    let numeric = matches!(
+        comparison,
+        Comparison::GreaterThan(_) | Comparison::LessThan(_) | Comparison::Between(_, _)
+    )
+    .then(|| inventory::resolve_numeric_column(rows, column.index, locale));
+    let dates = matches!(
+        comparison,
+        Comparison::Weekday(_) | Comparison::Month(_) | Comparison::Year(_) | Comparison::DateRange(_, _)
+    )
+    .then(|| inventory::resolve_date_column(rows, column.index));
 
     rows.iter()
         .enumerate()
@@ -704,6 +900,10 @@ fn matching_rows(
                 Comparison::Contains(value) => {
                     fold_text(&text_value(cell)).contains(&fold_text(value))
                 }
+                Comparison::In(values) => {
+                    let folded_cell = fold_text(&text_value(cell));
+                    values.iter().any(|value| fold_text(value) == folded_cell)
+                }
                 Comparison::GreaterThan(threshold) => numeric
                     .as_ref()
                     .and_then(|resolved| resolved.values[index])
@@ -712,6 +912,26 @@ fn matching_rows(
                     .as_ref()
                     .and_then(|resolved| resolved.values[index])
                     .is_some_and(|value| value < *threshold),
+                Comparison::Between(low, high) => numeric
+                    .as_ref()
+                    .and_then(|resolved| resolved.values[index])
+                    .is_some_and(|value| value >= *low && value <= *high),
+                Comparison::Weekday(weekday) => dates
+                    .as_ref()
+                    .and_then(|resolved| resolved[index])
+                    .is_some_and(|date| date.weekday().number_from_monday() as u8 == *weekday),
+                Comparison::Month(month) => dates
+                    .as_ref()
+                    .and_then(|resolved| resolved[index])
+                    .is_some_and(|date| date.month() as u8 == *month),
+                Comparison::Year(year) => dates
+                    .as_ref()
+                    .and_then(|resolved| resolved[index])
+                    .is_some_and(|date| date.year() == *year),
+                Comparison::DateRange(start, end) => dates
+                    .as_ref()
+                    .and_then(|resolved| resolved[index])
+                    .is_some_and(|date| date >= *start && date <= *end),
             };
             matches.then_some(index)
         })
@@ -795,7 +1015,7 @@ mod tests {
     #[test]
     fn count_reports_every_data_row() {
         let (workbook, inventory) = invoices();
-        let outcome = run(&workbook, &inventory, Operation::Count { filter: None });
+        let outcome = run(&workbook, &inventory, Operation::Count { filters: vec![] });
 
         match outcome {
             TabularOutcome::Value {
@@ -824,10 +1044,10 @@ mod tests {
             &workbook,
             &inventory,
             Operation::Count {
-                filter: Some(FilterSpec {
+                filters: vec![FilterSpec {
                     column: "categorie".into(),
                     comparison: Comparison::Equals("Fournitures".into()),
-                }),
+                }],
             },
         );
 
@@ -840,6 +1060,10 @@ mod tests {
                     header_row: Some(0),
                     column: None,
                     row_range: Some((0, 2)),
+                    filters: vec![AppliedFilter::Equals {
+                        column: "categorie".into(),
+                        value: "Fournitures".into(),
+                    }],
                 },
                 derivation: TabularDerivation::Computed {
                     operation: "count".into(),
@@ -857,6 +1081,7 @@ mod tests {
             &inventory,
             Operation::Distinct {
                 column: "fournisseur".into(),
+                filters: vec![],
             },
         );
 
@@ -878,6 +1103,7 @@ mod tests {
             &inventory,
             Operation::Sum {
                 column: "montant".into(),
+                filters: vec![],
             },
         );
 
@@ -908,6 +1134,7 @@ mod tests {
             &inventory,
             Operation::Min {
                 column: "montant".into(),
+                filters: vec![],
             },
         );
         let max = run(
@@ -915,6 +1142,7 @@ mod tests {
             &inventory,
             Operation::Max {
                 column: "montant".into(),
+                filters: vec![],
             },
         );
 
@@ -937,6 +1165,7 @@ mod tests {
             Operation::GroupSum {
                 group_by: "categorie".into(),
                 sum_column: "montant".into(),
+                filters: vec![],
             },
         );
         let TabularOutcome::Value {
@@ -956,6 +1185,7 @@ mod tests {
             &inventory,
             Operation::LargestRow {
                 by_column: "montant".into(),
+                filters: vec![],
             },
         );
         let TabularOutcome::Value {
@@ -1011,6 +1241,7 @@ mod tests {
             Operation::Sort {
                 column: "montant".into(),
                 descending: false,
+                filters: vec![],
             },
         );
         let TabularOutcome::Value {
@@ -1039,6 +1270,7 @@ mod tests {
             Operation::Sort {
                 column: "montant".into(),
                 descending: true,
+                filters: vec![],
             },
         );
         let TabularOutcome::Value {
@@ -1088,6 +1320,7 @@ mod tests {
             &inventory,
             Operation::Sum {
                 column: "does-not-exist".into(),
+                filters: vec![],
             },
         );
 
@@ -1114,7 +1347,7 @@ mod tests {
             &inventory,
             Some("Nope"),
             None,
-            &Operation::Count { filter: None },
+            &Operation::Count { filters: vec![] },
             TEST_LOCALE,
         );
 
@@ -1149,6 +1382,7 @@ mod tests {
             &inventory,
             Operation::Sum {
                 column: "fournisseur".into(),
+                filters: vec![],
             },
         );
 
@@ -1188,6 +1422,7 @@ mod tests {
             &inventory,
             Operation::Sum {
                 column: "total".into(),
+                filters: vec![],
             },
         );
         assert!(matches!(
@@ -1203,7 +1438,10 @@ mod tests {
         let clean = run(
             &workbook,
             &inventory,
-            Operation::Sum { column: "a".into() },
+            Operation::Sum {
+                column: "a".into(),
+                filters: vec![],
+            },
         );
         assert!(matches!(
             clean,
@@ -1226,6 +1464,51 @@ mod tests {
         );
     }
 
+    /// Session 11's adversarial list (`docs/DECISIONS.md`): a filter naming a formula column is
+    /// refused the same way an aggregate over one already was - `resolve_filter_column` reuses
+    /// `resolve_value_column`, so the two can never disagree.
+    #[test]
+    fn a_filter_on_a_formula_column_refuses_rather_than_reading_it() {
+        let (workbook, inventory) = build_one(vec![
+            text_row(&["a", "b", "total"]),
+            vec![
+                CellValue::Number(1.0),
+                CellValue::Number(2.0),
+                CellValue::Formula {
+                    expression: "A2+B2".into(),
+                    cached_value: Some(Box::new(CellValue::Number(3.0))),
+                },
+            ],
+            vec![
+                CellValue::Number(4.0),
+                CellValue::Number(5.0),
+                CellValue::Formula {
+                    expression: "A3+B3".into(),
+                    cached_value: Some(Box::new(CellValue::Number(9.0))),
+                },
+            ],
+        ]);
+
+        let outcome = run(
+            &workbook,
+            &inventory,
+            Operation::Count {
+                filters: vec![FilterSpec {
+                    column: "total".into(),
+                    comparison: Comparison::GreaterThan(0.0),
+                }],
+            },
+        );
+
+        assert!(matches!(
+            outcome,
+            TabularOutcome::NotDeterministicallyAnswerable {
+                reason: NotAnswerableReason::FormulaCannotBeVerified,
+                ..
+            }
+        ));
+    }
+
     #[test]
     fn two_sheets_with_confusable_names_are_never_chosen_between() {
         let (workbook, inventory) = build(vec![
@@ -1238,7 +1521,7 @@ mod tests {
             &inventory,
             Some("facturation"),
             None,
-            &Operation::Count { filter: None },
+            &Operation::Count { filters: vec![] },
             TEST_LOCALE,
         );
 
@@ -1263,7 +1546,7 @@ mod tests {
             &inventory,
             None,
             None,
-            &Operation::Count { filter: None },
+            &Operation::Count { filters: vec![] },
             TEST_LOCALE,
         );
 
@@ -1305,6 +1588,7 @@ mod tests {
             None,
             &Operation::Sum {
                 column: "montant".into(),
+                filters: vec![],
             },
             TEST_LOCALE,
         );
@@ -1340,7 +1624,7 @@ mod tests {
             &inventory,
             None,
             Some(&allowed),
-            &Operation::Count { filter: None },
+            &Operation::Count { filters: vec![] },
             TEST_LOCALE,
         );
 
@@ -1362,6 +1646,7 @@ mod tests {
             Some(&allowed),
             &Operation::Sum {
                 column: "montant".into(),
+                filters: vec![],
             },
             TEST_LOCALE,
         );
@@ -1387,7 +1672,7 @@ mod tests {
             &inventory,
             Some("Nope"),
             Some(&allowed),
-            &Operation::Count { filter: None },
+            &Operation::Count { filters: vec![] },
             TEST_LOCALE,
         );
 
@@ -1412,6 +1697,7 @@ mod tests {
             Operation::LargestGroup {
                 group_by: "fournisseur".into(),
                 sum_column: "montant".into(),
+                filters: vec![],
             },
         );
 
@@ -1453,6 +1739,7 @@ mod tests {
             Operation::LargestGroup {
                 group_by: "montant".into(),
                 sum_column: "fournisseur".into(),
+                filters: vec![],
             },
         );
 
@@ -1478,6 +1765,7 @@ mod tests {
             &inventory,
             Operation::Sum {
                 column: "montant".into(),
+                filters: vec![],
             },
         );
 

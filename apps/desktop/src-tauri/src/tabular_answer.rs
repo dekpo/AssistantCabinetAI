@@ -12,7 +12,9 @@
 //! writes every sentence, in her language.
 //!
 //! `answer` takes no gateway, no model alias and no network client: that the tabular tier cannot
-//! reach a model is a property of its signature, not a promise.
+//! reach a model is a property of its signature, not a promise. It does read and write the local
+//! `IndexStore` - the typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) - which is
+//! local disk, never the network, and carries no gateway capability with it.
 
 use std::collections::HashMap;
 
@@ -23,6 +25,7 @@ use crate::data_folder::DataFolder;
 use crate::error::AppError;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::{fold_text, FileReferenceResolver, ReferenceStatus};
+use crate::index_store::IndexStore;
 use crate::inventory::WorkFolderInventory;
 use crate::tabular::engine::{
     self, Comparison, FilterSpec, NotAnswerableReason, Operation, TabularDerivation,
@@ -137,6 +140,7 @@ pub fn answer(
     data: &DataFolder,
     selection: &ScopeMode,
     locale: &str,
+    index: &IndexStore,
 ) -> Result<TabularAnswer, AppError> {
     let chosen = chosen_workbooks(data, selection)?;
     if chosen.is_empty() {
@@ -182,13 +186,17 @@ pub fn answer(
         }
         TabularRoute::Operation { sheet, operation } => {
             // Re-read and re-hashed at the moment of computing: a workbook that changed since
-            // its analysis is refused, never computed against a stale inventory.
+            // its analysis is refused, never computed against a stale inventory. The typed
+            // workbook cache (`load_workbook_cached`) skips the read and the hash entirely when
+            // the content behind `inventory.workbook_id` was already cached, but the identity it
+            // trusts is the same one `load_current` would have re-derived (`docs/DECISIONS.md`,
+            // "the typed workbook cache's residual risk").
             let path = data
                 .files()
                 .absolute_path(target.record)
                 .ok_or(AppError::ScopeUnavailable)?;
             let (workbook, fresh) =
-                match tabular::load_current(&path, &file, &inventory.workbook_id, locale) {
+                match load_workbook_cached(index, &path, &file, inventory, locale) {
                     Ok(pair) => pair,
                     Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
                     Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
@@ -275,6 +283,47 @@ pub fn answer(
             ))
         }
     }
+}
+
+/// `tabular::load_current`, with the typed workbook cache tried first
+/// (`docs/SESSION-DATA-13-Column-Cache.md`). `inventory.workbook_id` is the identity the scope
+/// already pinned - `DataFolder::discover` derived it through `FileHashCache`'s own fast check
+/// (file size and modified time unchanged -> the remembered hash is trusted, exactly the "fast
+/// validity check" this session asks for), so a cache row found under that same hash needs no
+/// further read or hash of its own: the file is never touched.
+///
+/// A miss falls back to `tabular::load_current` exactly as before - a full read, a fresh hash,
+/// and `WorkbookChanged` on a mismatch with `inventory.workbook_id` - and a success is cached
+/// under the hash it actually read, so the next question on this workbook is a hit.
+///
+/// The inventory a cache hit returns is rebuilt from the cached cells with today's `locale`, not
+/// reused as-is: `locale` can differ from whatever Analyse last ran under, and a stale-locale
+/// column typing is exactly the bug `tabular::load_current` already existed to avoid. Rebuilding
+/// is in-memory only (no file read, no hash), so this keeps that guarantee at a small, bounded
+/// cost rather than skipping it for speed.
+fn load_workbook_cached(
+    index: &IndexStore,
+    path: &std::path::Path,
+    relative_path: &str,
+    inventory: &TabularInventory,
+    locale: &str,
+) -> Result<(Workbook, TabularInventory), TabularError> {
+    if let Ok(Some(workbook)) = index.tabular_workbook_by_hash(&inventory.workbook_id) {
+        let fresh = TabularInventory::build(
+            relative_path,
+            &inventory.workbook_id,
+            inventory.format,
+            &workbook,
+            locale,
+        );
+        return Ok((workbook, fresh));
+    }
+    let (workbook, fresh) =
+        tabular::load_current(path, relative_path, &inventory.workbook_id, locale)?;
+    // Best-effort: a question is still answered from `workbook` even when the write fails (a
+    // locked or full disk), exactly as a cache miss already would have been.
+    let _ = index.put_tabular_workbook(&fresh.workbook_id, &workbook);
+    Ok((workbook, fresh))
 }
 
 /// The workbooks the selection keeps. "Tous" keeps every green workbook, so an empty result
@@ -972,7 +1021,7 @@ mod tests {
         }
 
         fn ask(&self, question: &str, selection: &ScopeMode) -> Result<TabularAnswer, AppError> {
-            answer(question, &self.open(), selection, "en-US")
+            answer(question, &self.open(), selection, "en-US", &self.index)
         }
     }
 
@@ -1223,6 +1272,149 @@ mod tests {
         );
     }
 
+    // --- The typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) --------------------
+
+    #[test]
+    fn ten_identical_questions_on_an_unchanged_workbook_share_one_cached_entry() {
+        let folder = Folder::with(&[("factures.csv", &invoices())]);
+        let selection = folder.ticked(&["factures.csv"]);
+        let data_folder = folder.open();
+        let hash = data_folder
+            .usable_inventory("factures.csv")
+            .unwrap()
+            .workbook_id
+            .clone();
+        drop(data_folder);
+        assert!(
+            folder
+                .index
+                .tabular_workbook_by_hash(&hash)
+                .unwrap()
+                .is_none(),
+            "nothing is cached before the first question"
+        );
+
+        let mut results = Vec::new();
+        for _ in 0..10 {
+            results.push(
+                folder
+                    .ask("What is the total montant?", &selection)
+                    .unwrap(),
+            );
+        }
+
+        assert!(
+            results.windows(2).all(|pair| pair[0] == pair[1]),
+            "every one of the ten questions gets the same answer"
+        );
+        assert!(
+            folder
+                .index
+                .tabular_workbook_by_hash(&hash)
+                .unwrap()
+                .is_some(),
+            "the first question populates the cache, which the other nine then read"
+        );
+    }
+
+    #[test]
+    fn a_file_removed_from_the_folder_is_refused_and_its_cached_cells_are_gone_after_the_next_analyse(
+    ) {
+        let mut folder = Folder::with(&[("factures.csv", &invoices())]);
+        let selection = folder.ticked(&["factures.csv"]);
+        let data_folder = folder.open();
+        let hash = data_folder
+            .usable_inventory("factures.csv")
+            .unwrap()
+            .workbook_id
+            .clone();
+        drop(data_folder);
+
+        let first = folder.ask("What is the total montant?", &selection);
+        assert!(matches!(first, Ok(TabularAnswer::Value { .. })));
+        assert!(folder
+            .index
+            .tabular_workbook_by_hash(&hash)
+            .unwrap()
+            .is_some());
+
+        std::fs::remove_file(folder.data.path().join("factures.csv")).unwrap();
+        data_folder::analyse(folder.data.path(), &mut folder.index, "en-US", &|_| {}).unwrap();
+
+        let second = folder.ask("What is the total montant?", &selection);
+        assert!(
+            matches!(second, Err(AppError::ScopeUnavailable)),
+            "a removed, selected workbook is refused like a changed one, got {second:?}"
+        );
+        assert_eq!(
+            folder.index.tabular_workbook_by_hash(&hash).unwrap(),
+            None,
+            "the cache entry does not outlive the pass that noticed the removal"
+        );
+    }
+
+    #[test]
+    fn an_overwrite_with_the_same_size_and_a_restored_modified_time_can_serve_a_stale_cached_value()
+    {
+        // Residual risk, accepted deliberately (`docs/DECISIONS.md`, "the typed workbook cache's
+        // residual risk"): the identity this cache trusts, `inventory.workbook_id`, comes from
+        // `FileHashCache`'s own fast path - file size and modified time both still match -> the
+        // remembered hash is trusted with no re-read. A file overwritten with different content
+        // of the exact same byte length, whose modified time is then set back by hand, fools
+        // that check exactly as it already could for the Documents pipeline
+        // (`docs/WORK-FOLDER-INVENTORY.md`, "Known cost"): this is not a new risk the typed
+        // workbook cache introduces, only a second place its consequence is now visible. A real
+        // `FileHashCache` has to persist across questions for this to be observable at all - a
+        // fresh one, as `Folder::open` makes for every other test here, would simply rehash.
+        let folder = Folder::with(&[("factures.csv", &invoices())]);
+        let path = folder.data.path().join("factures.csv");
+        let original_modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+        let cache = FileHashCache::new();
+        let ask = |question: &str| -> TabularAnswer {
+            let data_folder =
+                DataFolder::discover(folder.data.path(), Some(&folder.index), &cache).unwrap();
+            answer(
+                question,
+                &data_folder,
+                &ScopeMode::WholeFolder,
+                "en-US",
+                &folder.index,
+            )
+            .unwrap()
+        };
+
+        let before = ask("What is the total montant?");
+
+        let original = invoices();
+        let replacement = original.replace("1,50", "9,50");
+        assert_eq!(
+            replacement.len(),
+            original.len(),
+            "the overwrite must keep the exact same byte length"
+        );
+        assert_ne!(
+            replacement, original,
+            "the overwrite must actually change the content"
+        );
+        std::fs::write(&path, &replacement).unwrap();
+        // Windows refuses `set_modified` on a handle opened read-only (`PermissionDenied`):
+        // write access is needed only to change the timestamp, not the bytes again.
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(original_modified)
+            .unwrap();
+
+        let after = ask("What is the total montant?");
+
+        assert_eq!(
+            before, after,
+            "known, accepted residual risk: a same-size overwrite with a restored modified \
+             time reads as unchanged"
+        );
+    }
+
     // --- Group questions, on the layout of a real public-revenue export ----------------------
 
     /// `revenue_sub_agency.csv`'s columns, with made-up rows: two text columns to group by, a
@@ -1340,6 +1532,7 @@ mod tests {
             &folder.open(),
             &ScopeMode::WholeFolder,
             "fr-FR",
+            &folder.index,
         )
         .unwrap();
 
@@ -1471,8 +1664,14 @@ mod tests {
                     .replace("{column}", "amount")
                     .replace("{group}", "agency");
 
-                let result = answer(&question, &folder.open(), &ScopeMode::WholeFolder, locale)
-                    .unwrap();
+                let result = answer(
+                    &question,
+                    &folder.open(),
+                    &ScopeMode::WholeFolder,
+                    locale,
+                    &folder.index,
+                )
+                .unwrap();
 
                 assert!(
                     matches!(result, TabularAnswer::Value { .. }),

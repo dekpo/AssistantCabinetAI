@@ -368,6 +368,7 @@ fn every_reference_case_gets_its_expected_answer_or_is_a_recorded_known_failure(
             &folder,
             &selection_of(&folder, &case.file),
             &case.locale,
+            &fixtures.index,
         );
         let actual = observed(&result);
         let met = matches(&case.expect, &actual);
@@ -437,4 +438,42 @@ fn every_reference_case_gets_its_expected_answer_or_is_a_recorded_known_failure(
         problems.len(),
         problems.join("\n\n")
     );
+}
+
+/// The typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) must change nothing the set
+/// expects, whether a case is the first question asked about its file in this run (a cold cache,
+/// `tabular_answer::answer` falling back to a full read) or a later one (warm, served from
+/// `IndexStore::tabular_workbook_by_hash` with no read at all). Every passing case is asked
+/// twice, on the same shared `Folder` the main test leaves warmed by its own earlier cases, so
+/// this run alone already exercises every case cold once and warm at least once.
+#[test]
+fn every_passing_case_still_matches_cold_and_warm() {
+    let fixtures = Folder::build();
+    let folder = fixtures.open();
+    let passing: Vec<Case> = cases()
+        .into_iter()
+        .filter(|case| case.status == Status::Pass)
+        .collect();
+    assert!(!passing.is_empty(), "the set has passing cases to check");
+
+    for pass in ["cold or warm from an earlier case", "warm"] {
+        for case in &passing {
+            let result = tabular_answer::answer(
+                &case.question,
+                &folder,
+                &selection_of(&folder, &case.file),
+                &case.locale,
+                &fixtures.index,
+            );
+            let actual = observed(&result);
+            assert!(
+                matches(&case.expect, &actual),
+                "case {} ({:?}), {pass} pass: expected {}\n  got {}",
+                case.id,
+                case.question,
+                case.expect,
+                actual
+            );
+        }
+    }
 }

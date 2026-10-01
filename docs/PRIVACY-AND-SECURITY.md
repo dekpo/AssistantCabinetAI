@@ -74,6 +74,10 @@ the guarantee is in `apps/desktop/src-tauri/src/work_folder.rs`:
   for a standalone practice PC, and a blocker for a managed one.
 - **Local index placement.** The retrieval index holds chunks of every document, so it lives in
   `%LOCALAPPDATA%` (`app_local_data_dir()`), never in the roaming `%APPDATA%` that holds `settings.json`.
+  The tabular pipeline's typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) is the one place
+  the Data Folder side holds cell values at rest, unlike its structural inventory: it lives in the same
+  `IndexStore` SQLite file, never a file beside the source workbook, is covered by the same workstation
+  disk encryption, and is cleared on every Analyse pass and on the Data Folder's own Reset.
 - **Her existing documents.** `docs/PILOT-GP.md` records that everything she downloads and scans lands in
   My Documents at the root. If OneDrive Backup is enabled on her machine, **her patient reports are
   already in Microsoft's cloud today**, independently of this software. She is the named data controller,

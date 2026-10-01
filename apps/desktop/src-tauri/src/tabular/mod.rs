@@ -23,6 +23,7 @@ pub mod xlsx_adapter;
 
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Copy, thiserror::Error, PartialEq, Eq)]
@@ -47,7 +48,7 @@ pub enum TabularError {
 /// claim the file makes and not a verified fact (`docs/DECISIONS.md`, "a formula's cached
 /// result"). Nothing here evaluates a formula; the adapters only report what the file already
 /// stored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CellValue {
     Empty,
     /// A CSV field, or an XLSX text cell. A CSV number is deliberately **not** represented any
@@ -69,7 +70,7 @@ pub enum CellValue {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SheetData {
     pub name: String,
     /// Row-major. Rows are not padded to a common width: a padded empty cell would be
@@ -79,7 +80,12 @@ pub struct SheetData {
 
 /// What `TabularDataSource::open` returns: every sheet's cells, nothing inferred yet. A CSV file
 /// becomes a single-sheet workbook; an XLSX file keeps every sheet it defines.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `Serialize`/`Deserialize`: the shape the typed workbook cache stores
+/// (`docs/SESSION-DATA-13-Column-Cache.md`) - cell values already typed by the adapter (numbers,
+/// real calendar dates), exactly what `IndexStore::put_tabular_workbook` persists keyed by the
+/// content hash, and what a cache hit hands back with no file read at all.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Workbook {
     pub sheets: Vec<SheetData>,
 }

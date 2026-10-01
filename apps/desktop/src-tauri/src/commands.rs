@@ -521,6 +521,7 @@ pub fn reveal_data_file(state: State<'_, AppState>, relative_path: String) -> Re
 pub fn reset_data_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
     let mut index = open_index(&app)?;
     index.clear_tabular_inventories()?;
+    index.clear_tabular_workbooks()?;
     state.data_file_hashes.forget_all();
     Ok(())
 }
@@ -985,6 +986,7 @@ fn tabular_tier(
         &folder,
         &scope.data_mode,
         locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE),
+        &index,
     )?;
     Ok(AskAnswer {
         answer: String::new(),

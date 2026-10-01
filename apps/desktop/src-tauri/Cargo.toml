@@ -55,7 +55,9 @@ csv = "1"
 encoding_rs = "0.8"
 # The one pure-Rust date crate for the tabular pipeline (D3): already resolved transitively
 # through calamine's own `dates` feature, so this is the same version, not a second one.
-chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+# `serde`: lets a `CellValue::Date` round-trip through the typed workbook cache
+# (`docs/SESSION-DATA-13-Column-Cache.md`) without a second date representation.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 
 # Rasterises a PDF page to a bitmap in memory, feeding the OCR port (docs/SPRINT-2.5-ASSESSMENT.md
 # section E). No `#[cfg(windows)]`: the platform difference is which prebuilt pdfium library is

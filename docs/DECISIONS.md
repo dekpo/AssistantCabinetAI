@@ -366,6 +366,24 @@ The filter grammar - what is recognised, what is asked, what is refused:
 | Filter-word vocabulary (`comparisons`, `weekdays`, `months`, `between`) | Read from the question's own locale pack only (`question::filter_words`, the same `pack_for` fallback chain `classify` uses), **not** merged across every shipped pack the way `column_names` are. A workbook's headers are the export's language; a filter word is the question's own |
 | Numeric `Comparison::Between` | Defined on the engine, alongside the four date comparisons, but `detect_filters` does not yet build one from residual words - only the date range does. Deferred, not scheduled |
 
+## Settled by the typed column cache session, session 13 (1 October 2026)
+
+Measured first (`docs/SESSION-DATA-13-Column-Cache.md`), on the development PC:
+`cargo test --release --test tabular_column_cache_bench -- --ignored --nocapture`, recorded in
+`docs/HARDWARE.md`. A 100,000-row, 8-column CSV costs 819 ms per question; a 50,000-row XLSX, 1.52 s -
+both well over the session's 300 ms budget on the faster of the two machines this product ships to, so
+the cache was built. The 2019 practice PC's own number is still owed (`docs/HARDWARE.md`).
+
+| Subject | Decision |
+| --- | --- |
+| What is cached | The whole parsed `Workbook` (`tabular::CellValue` rows - numbers and real calendar dates for XLSX, decoded text for CSV, exactly what an adapter already produces), not a column-major re-encoding. `tabular::engine` already re-derives numeric/date values from these cells on every call (`inventory::resolve_numeric_column`); session 6's own measurement found that step about 6 % of a question's cost, so rebuilding `engine.rs` around a second, pre-parsed representation would have spent real risk on an already-cheap part, against `AGENTS.md`'s "do not rewrite what works" |
+| Where it lives | `IndexStore`'s own SQLite file (`tabular_workbooks`, beside `tabular_inventories`), never a file beside the source workbook - the existing store, no second database, per the session's anti-patterns |
+| The key | The content SHA-256 (`workbook_id`), not the path - unlike `tabular_inventories`. The same bytes under two names (a rename, `docs/WORK-FOLDER-INVENTORY.md`'s clean file names) share one cache entry, and a changed file is a different key rather than a row to overwrite |
+| The fast validity check | Not reimplemented. `inventory.workbook_id`, by the time `tabular_answer::answer` sees it, has already passed `FileHashCache`'s own size-and-modified-time check (`DataFolder::discover`, every question) - trusted only when both still match, a full read and rehash otherwise. The typed cache is consulted by that same hash; a miss falls back to `tabular::load_current` exactly as before, and `WorkbookChanged` still fires exactly as before (`load_workbook_cached`, `tabular_answer.rs`) |
+| Residual risk accepted | A file overwritten with different content of the exact same byte length, whose modified time is then set back by hand, reads as unchanged and can serve a stale cached value - the same risk `FileHashCache` already carries for the Documents pipeline (`docs/WORK-FOLDER-INVENTORY.md`, "Known cost"), not a new one. Documented and reproduced in `tabular_answer::tests::an_overwrite_with_the_same_size_and_a_restored_modified_time_can_serve_a_stale_cached_value`. Hashing on every question was the alternative this session offered and was not taken: it would have erased the measured gain entirely |
+| Lifecycle | Cleared wholesale (`IndexStore::clear_tabular_workbooks`) at the start of every `data_folder::analyse` pass - covers a changed file, a removed file and a freshly reanalysed one in the one place that already rebuilds `tabular_inventories` unconditionally - and from the Data Folder card's Reset (`commands::reset_data_index`), beside `clear_tabular_inventories`. Nothing is ever written for a red or unanalysed workbook: the cache is only populated from the `Operation` route's own success path, which a red or unanalysed file never reaches |
+| Locale safety | A cache hit still rebuilds `TabularInventory` from the cached cells with the question's current locale (in memory only, no read) rather than reusing a stale-locale inventory - the same guarantee `tabular::load_current` already gave by always re-deriving a "fresh" inventory, kept exactly, not loosened for speed |
+
 ## Known blind spots to keep in mind
 
 - **File actions are the number one business risk.** A bad batch rename over hundreds of documents is far

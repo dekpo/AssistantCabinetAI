@@ -173,6 +173,12 @@ pub fn analyse(
     locale: &str,
     on_progress: &dyn Fn(IndexProgress),
 ) -> Result<IndexSummary, AppError> {
+    // The typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) is forgotten up front,
+    // not selectively: a pass rebuilds every inventory below regardless of whether a file
+    // changed, so a cell cache that survived it could serve bytes this very pass never looked at
+    // again.
+    index.clear_tabular_workbooks()?;
+
     let workbooks: Vec<discovery::DiscoveredFile> = discovery::discover_all(root)
         .into_iter()
         .filter(|file| FileKind::from_extension(&file.extension) == FileKind::TabularCandidate)

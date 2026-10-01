@@ -167,3 +167,34 @@ not expose inference to the whole network.
 
 The Windows PC with a small model (Mistral, already registered) is enough to iterate on the flow. The
 mini is for **quality** and for the multi-model bake-off.
+
+## Client workstation: tabular column cache benchmark (session 13, 1 October 2026)
+
+Not the Mac mini - the **workstation** the Tauri client runs on, measured before deciding whether to
+build the typed column cache `docs/SESSION-DATA-13-Column-Cache.md` scopes (gap F,
+`docs/SESSION-DATA-06-Findings.md` section 10: every tabular question re-reads, re-hashes and
+reparses the whole workbook, `tabular::load_current`). Benchmark:
+`apps/desktop/src-tauri/tests/tabular_column_cache_bench.rs`, run with
+`cargo test --release --test tabular_column_cache_bench -- --ignored --nocapture`.
+
+### Development PC
+
+Intel Core 7 150U (10 cores, 1.8 GHz base), 23.6 GB RAM, NVMe SSD, Windows 11. Release build.
+
+| Workbook | Rows | Bytes on disk | First analysis (`build_inventory`) | One question (`load_current` + `execute`) | Ten questions, total |
+| --- | --- | --- | --- | --- | --- |
+| CSV, 8 columns | 100,000 | 5.55 MB | 537 ms | 819 ms | 10.61 s (1.06 s average) |
+| XLSX, 8 columns | 50,000 | 17.03 MB | 814 ms | 1.52 s | 15.33 s (1.53 s average) |
+
+Well over the session's 300 ms budget for one question, on the faster of the two machines this
+product ships to. **The typed column cache is needed** - the measurement does not stop here.
+Session 6's earlier probe (150 ms at 100,000 rows) used a narrower, 4-column fixture with no dates
+and no locale-formatted numbers; this benchmark's 8 columns, mixed types and locale parsing cost
+far more per row, which is the realistic shape of an export someone actually hands over.
+
+### 2019 practice PC
+
+**Not yet measured.** The owner should run the same command on the pilot's own machine
+(`docs/PILOT-GP.md`) before the cache's lifecycle rules are considered final - a 2019 PC with a
+spinning disk or a slower CPU is expected to be worse, not better, than the number above. Record
+the result here in the same table shape once it exists.

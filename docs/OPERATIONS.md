@@ -79,6 +79,34 @@ Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OL
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.
 
+## Diagnosing the tabular hidden interpreter against a real model
+
+Session 14 (`docs/DECISIONS.md`, "the hidden interpreter session" and its manual validation pass
+entries) added a second gateway-facing script, alongside `measure_context.py`:
+
+```powershell
+cd apps/server
+uv run python scripts/probe_query_plan.py --url http://127.0.0.1:8080 --alias gemma2:2b
+```
+
+Sends the **exact** instruction and schema `tabular::query_plan::build_schema_message` builds
+(copied verbatim into the script, over a small fictional fixture it also carries) to a real model,
+non-streaming, and prints the raw reply - no document, no real workbook, nothing from `fixtures/`.
+`--question <key>` runs one case instead of all six (`--help` lists them); the reply is exactly
+what `tabular::query_plan::parse_response`/`resolve` would be given, so a reply that looks wrong
+here is the same one the product would have received.
+
+**Use this whenever a tabular question that should reach the model-assisted path instead nudges,
+or computes a number that looks wrong, and a real gateway is reachable.** It answers the question
+"did the model write a bad plan, or did Rust misread a good one" directly, without needing to
+reproduce the conversation in the app first. Reading its output against
+`tabular::query_plan::QueryPlan`'s own fields (`src/tabular/query_plan.rs`) usually shows which:
+a reply that is not valid JSON, or whose shape does not match the plan at all, is the model;
+a reply that looks like a sensible plan but still nudged is more likely Rust's - and every
+`query_plan.rs` test named `a_real_<model>_reply_...` started from exactly this script's output,
+captured verbatim, kept as a permanent regression test once the gap it found was fixed. Follow
+that pattern: a new finding from this script is worth its own such test, not only a fix.
+
 ## Why not a native-only install
 
 An Ollama Windows install plus Open WebUI via `pip` works for a demo, but it does not port cleanly to the

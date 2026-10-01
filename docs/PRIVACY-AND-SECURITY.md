@@ -30,6 +30,15 @@ These hold from the prototype, not "later".
 Disk encryption (BitLocker, FileVault) on the workstations **and** the Mac mini is mandatory before any real
 pilot.
 
+**The tabular hidden interpreter's one exception, decided as D6 (`docs/DECISIONS.md`, session 7;
+implemented session 14, `docs/SESSION-DATA-14-Query-Plan.md`).** When a tabular question does not
+classify deterministically, the gateway receives the question's own text plus the workbook's **schema**:
+sheet names, row counts, and each column's name, type, unit and whether it holds formulas. **Never** a
+cell value, a distinct value, a row, or a file path. On the pilot's deployment this schema reaches Ollama
+on her own Mac mini, not a third party, the same destination every other chat turn already reaches. The
+DPIA draft owed before a real workbook is ever pointed at this path must carry this line explicitly:
+column and sheet names, never values, reach the gateway.
+
 ## The workstation is not automatically local
 
 "On her machine" is not the same as "nowhere else". The operating system copies parts of the profile to a

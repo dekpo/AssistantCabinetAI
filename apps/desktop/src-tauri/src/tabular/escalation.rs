@@ -51,10 +51,14 @@ pub fn format_evidence(outcome: &TabularOutcome) -> Option<String> {
     if matches!(value, TabularValue::Rows(_)) {
         return None;
     }
-    let TabularDerivation::Computed {
-        operation,
-        row_count,
-    } = derivation;
+    // `engine::execute` - the only place a `TabularOutcome` is built - only ever produces
+    // `Computed`: `InterpretedByModel` is wrapped on afterward, by `tabular_answer`, once the
+    // outcome has already left this function's caller. Read both the same way regardless, so
+    // this stays correct if that ever changes rather than silently dropping evidence.
+    let (operation, row_count) = match derivation {
+        TabularDerivation::Computed { operation, row_count }
+        | TabularDerivation::InterpretedByModel { operation, row_count, .. } => (operation, row_count),
+    };
     let column = locator
         .column
         .as_deref()

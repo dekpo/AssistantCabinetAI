@@ -701,7 +701,9 @@ async fn sourced_answer(
     match scope.tier() {
         // Not designed yet, so not guessed at: neither engine is chosen for her.
         GroundingTier::DocumentsAndTables => return Err(AppError::DocumentsAndTablesTogether),
-        GroundingTier::TablesOnly => return tabular_tier(app, state, &question, &scope),
+        GroundingTier::TablesOnly => {
+            return tabular_tier(app, state, &question, &scope, skip_deterministic).await
+        }
         GroundingTier::Documents => {}
     }
     let (work_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) = state
@@ -961,17 +963,31 @@ async fn sourced_answer(
 }
 
 /// Tier 2: tables selected, no document. Answered by the tabular engine alone - structural facts,
-/// computed values, or a nudge naming the real columns - with no gateway call, no embedding and no
-/// model, whether or not `skip_deterministic` was asked for: there is no model on this tier to ask
-/// (`tabular_answer`). The conversation history is not needed and not read.
-fn tabular_tier(
+/// computed values, or a nudge naming the real columns - with no gateway call and no embedding for
+/// a question the classifier reads on its own. Two gateway calls are possible, both narrow and
+/// internal to `tabular_answer`, session 14's hidden interpreter, never load-bearing for a
+/// number's correctness: automatically, only when a question does not classify deterministically
+/// at all (gap G); and now, since the manual validation pass that found a classified answer can
+/// still be a *wrong* interpretation (`docs/DECISIONS.md`), on "Demander a l'IA"/"Ask AI"
+/// (`skip_deterministic`) - the tier's own form of the regenerate control every other tier already
+/// offers, asking the model in addition to a classified answer rather than instead of one. The
+/// conversation history is not needed and not read.
+async fn tabular_tier(
     app: &AppHandle,
     state: &AppState,
     question: &str,
     scope: &AnalysisScope,
+    skip_deterministic: bool,
 ) -> Result<AskAnswer, AppError> {
-    let (data_folder, locale) =
-        state.read(|settings| (settings.data_folder.clone(), settings.locale.clone()))?;
+    let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
+        (
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.answer_idle_timeout(),
+        )
+    })?;
     let Some(data_folder) = data_folder else {
         return Err(AppError::NoDataFolderSet);
     };
@@ -981,13 +997,20 @@ fn tabular_tier(
         Some(&index),
         &state.data_file_hashes,
     )?;
-    let answer = tabular_answer::answer(
-        question,
-        &folder,
-        &scope.data_mode,
-        locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE),
-        &index,
-    )?;
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
+    // Two steps, not one `tabular_answer::answer(...)` call: `prepare` is the only place `index`
+    // is read, entirely synchronously, so the `&index` borrow never has to survive the `.await`
+    // on `resolve` - `IndexStore` is not `Sync`, and this command's future must be `Send`
+    // (`tabular_answer`'s own module doc explains why).
+    let pending =
+        tabular_answer::prepare(question, &folder, &scope.data_mode, locale, &index, skip_deterministic)?;
+    let assist = tabular_answer::ModelAssist {
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+    };
+    let answer = tabular_answer::resolve(pending, question, locale, &assist).await;
     Ok(AskAnswer {
         answer: String::new(),
         sources: Vec::new(),

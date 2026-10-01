@@ -302,6 +302,19 @@ export function MessageList({
                   {t(entry.tabular === true ? "chat.deterministicData" : "chat.deterministic")}
                 </p>
               ) : null}
+              {/* A tabular nudge the classifier could not read on its own still tried a model
+                  first (session 14) - a real wait, sometimes a minute or more on a small local
+                  model, that must not disappear behind the line above as though it cost nothing
+                  (`docs/DECISIONS.md`, the session 14 manual validation pass). Joins that line
+                  rather than replacing it: the nudge's own words really are deterministic. */}
+              {entry.modelAttemptAlias !== undefined && entry.modelAttemptDurationMs !== undefined ? (
+                <p className="message__timing">
+                  {t("chat.modelAttempted", {
+                    model: entry.modelAttemptAlias,
+                    duration: formatDuration(entry.modelAttemptDurationMs),
+                  })}
+                </p>
+              ) : null}
               {/* An answer that says "analyse your documents first" is not text to keep or to
                   write again - it is a step she has not taken. Copy and regenerate would both
                   produce the same sentence, so the turn offers the step itself, and asks the
@@ -341,9 +354,14 @@ export function MessageList({
                       On an answer the work folder computed, rerunning would return the same
                       answer byte for byte, so the same control means "ask the model instead" and
                       says so. One button, two honest meanings, rather than a second button. */}
-                  {/* Not on a tabular answer: it would come back byte for byte, and there is no
-                      model on that tier to ask instead. */}
-                  {entry.tabular === true ? null : (
+                  {/* A tabular answer that names a human choice instead of data (which column,
+                      which workbook...) would come back byte for byte - asking the model would
+                      not be a second opinion, it would be a guess this product refuses to make.
+                      A computed value or a nudge is different: `tabularRetryable` marks exactly
+                      those two, and the same control means "Demander a l'IA"/"Ask AI" for them,
+                      found worth adding from a real wrong deterministic answer in a manual
+                      validation pass (`docs/DECISIONS.md`, 1 October 2026). */}
+                  {entry.tabular === true && entry.tabularRetryable !== true ? null : (
                     <button
                       type="button"
                       className="button button--compact"

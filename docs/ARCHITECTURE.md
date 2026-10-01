@@ -154,6 +154,7 @@ Source {
   derivation: Extracted                                    copied from the file's own text
        |      Recognised { engine, confidence }             a machine read a picture of it
        |      Computed { operation, operands, row_count }   we calculated it
+       |      InterpretedByModel { ..Computed, model_alias, plan }  a model chose the plan; we still calculated it
        |      FormulaStored { expression }                  the file says so; we did not verify it
        |      ModelAsserted                                 the model said it
 }
@@ -163,6 +164,12 @@ Source {
 render a computed total differently from a model sentence, and it lets a test assert that nothing
 labelled `Computed` ever passed through an LLM. A citation is never invented: an answer may only cite a
 `Source` that the retrieval or analysis step actually returned.
+
+`InterpretedByModel` is `Computed`'s sibling, not `ModelAsserted`'s: the model never states the number.
+It names which question it understood - sheet, columns, filters, the operation - from the workbook's
+schema alone, and Rust validates and runs that plan through the same engine `Computed` already uses
+(`tabular::query_plan`, session 14's hidden interpreter, `docs/SESSION-DATA-14-Query-Plan.md`). The value
+is always the engine's full-pass arithmetic; the model only ever widened which questions reach one.
 
 `Recognised` is not a flavour of `Extracted`. "The letter says 6.8" and "a machine thinks the letter says
 6.8" are different claims, and collapsing them would let OCR uncertainty arrive at the user as model
@@ -192,6 +199,40 @@ a fact.
 The refusal is part of the contract. When the deterministic engine cannot establish an answer it returns
 `NOT_DETERMINISTICALLY_ANSWERABLE` with what it does have — the available columns, for instance — rather
 than a guess, and when the sources do not carry an answer the product says so rather than generating one.
+
+### The tabular engine's one controlled escalation
+
+The tabular tier's deterministic path (`tabular_answer`) still makes zero gateway calls for any question
+its classifier reads. Only when that classifier returns "not recognised", or a residual word looked like
+an attempted filter value but matched no real data, does a model get a turn — never to answer, only to
+translate the question into a JSON query plan (`tabular::query_plan::QueryPlan`), from the workbook's
+**schema** alone: sheet names, row counts, each column's name, type, unit and whether it holds formulas.
+No cell value, no distinct value, no row, no file path ever leaves the workstation for this.
+
+```text
+question
+  → classify deterministically → answerable   → engine::execute → Computed
+                                → not answerable (unrecognised, or a filter value matching no data)
+      → schema (no values) → model → JSON plan
+      → validate, in order:
+          1. parse strictly (deny_unknown_fields; an unknown field or op is rejected, not ignored)
+          2. sheet reachable under the scope
+          3. every named column exists
+          4. the operation is allowed on that column's type, and not on a formula column
+          5. every eq/in filter value is resolved against the column's real values
+             (folded equality; a miss returns close values, never a silent zero)
+          6. limits within bounds
+      → map to an existing tabular::engine::Operation, run through the unchanged engine
+      → InterpretedByModel, or the ordinary nudge when any step above failed
+```
+
+Steps 2–4 are not duplicated: the plan is mapped to an ordinary `Operation` and handed to
+`tabular::engine::execute`, so a column that does not exist or a formula column is refused by the exact
+same code path a deterministically classified question already goes through. Only step 1 (parsing) and
+step 5 (filter-value resolution) are this module's own. A gateway that is unreachable, too slow, or
+answers invalid JSON degrades to the same nudge an unrecognised question already gave before this
+capability existed — the model widens which questions get an answer, and is never load-bearing for
+whether any answer is correct.
 
 ## Runtimes are adapters, never the home of business logic
 

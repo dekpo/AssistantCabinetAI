@@ -343,11 +343,22 @@ export type TabularValue =
   | { kind: "row"; value: TabularRow }
   | { kind: "rows"; value: TabularRow[] };
 
-export interface TabularDerivation {
-  kind: "computed";
-  operation: string;
-  row_count: number;
-}
+export type TabularDerivation =
+  | { kind: "computed"; operation: string; row_count: number }
+  /** Session 14's hidden interpreter (`docs/SESSION-DATA-14-Query-Plan.md`): the engine still did
+   * every calculation, over a full pass, exactly as `computed` describes - the only difference is
+   * that a model, reading the workbook's schema alone, wrote the plan that chose this operation,
+   * validated by Rust before the engine ever ran it. `plan` is that validated plan, kept so the
+   * same question on the same file can be answered again without asking the model a second time.
+   * Rust's field names, snake_case, as they cross - unlike most of this file's camelCase wire
+   * shapes, this mirrors `tabular::engine::TabularDerivation`'s own untouched field casing. */
+  | {
+      kind: "interpreted_by_model";
+      operation: string;
+      row_count: number;
+      model_alias: string;
+      plan: unknown;
+    };
 
 /** A structural fact read from a workbook's inventory. Rust's field names, as they cross. */
 export type StructuralAnswer =
@@ -391,6 +402,11 @@ export type TabularAnswer =
       /** Set only when `reason` is `value_not_found`: up to five real values close to
        * `filterValue`, so she can see what the column actually holds. Empty otherwise. */
       closeValues: string[];
+      /** Set only when session 14's hidden interpreter actually tried the model for this
+       * question, whatever it came to - a wrong plan, invalid JSON, or a timeout. `null` for a
+       * nudge the classifier gave without ever asking the model: that one really did cost
+       * nothing, and must not claim otherwise. */
+      modelAttempt: { modelAlias: string; durationMs: number } | null;
     }
   /** A group question with several columns it could total, none named: asked, never picked. */
   | { kind: "which_measure"; file: string; groupColumn: string; candidates: string[] }

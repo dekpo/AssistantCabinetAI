@@ -99,14 +99,33 @@ pub struct TabularLocator {
     pub filters: Vec<AppliedFilter>,
 }
 
-/// The tabular form of `Source.derivation` (`docs/ARCHITECTURE.md`). Never `ModelAsserted`:
-/// nothing in this module ever asks a model for a fact. A model only ever sees what this engine
-/// already computed, as evidence (`tabular::escalation`).
+/// The tabular form of `Source.derivation` (`docs/ARCHITECTURE.md`). Never `ModelAsserted`: this
+/// module itself never asks a model for a fact, and neither variant below lets a model's own text
+/// carry the number - `InterpretedByModel` still names an operation `execute` ran over a full pass
+/// of the matched rows, exactly as `Computed` does. The two differ only in who chose *which*
+/// operation to run: the deterministic classifier (`Computed`), or a model reading the workbook's
+/// schema alone, validated by Rust before `execute` ever saw it (`InterpretedByModel`,
+/// `docs/SESSION-DATA-14-Query-Plan.md`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TabularDerivation {
     /// Calculated here, over a full pass of the matched rows - never a sample.
     Computed { operation: String, row_count: usize },
+    /// The same full-pass calculation as `Computed`, but the question did not classify
+    /// deterministically: a model, given only the workbook's schema - sheet and column names,
+    /// types, units, never a cell value - wrote the plan that chose this operation, and Rust
+    /// validated it against the real workbook before `execute` ran it. `model_alias` is shown so
+    /// she can tell which model wrote the plan. `plan` is that validated plan, serialised, kept
+    /// so the exact same question on the exact same file can be answered again by replaying it -
+    /// no model call needed the second time (what a saved conversation will store). An opaque
+    /// JSON value on purpose: this module has no reason to depend on `tabular::query_plan`'s own
+    /// type, only on the fact that the plan is already validated by the time this is built.
+    InterpretedByModel {
+        operation: String,
+        row_count: usize,
+        model_alias: String,
+        plan: serde_json::Value,
+    },
 }
 
 /// One cell of a row result, by column name.

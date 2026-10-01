@@ -1,22 +1,30 @@
 //! Tier 2 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): tables are selected
 //! and no document is. Every question on this tier is answered by `tabular::structural` or
-//! `tabular::engine`, and nothing else - no gateway call, no model, no fallback to open chat.
+//! `tabular::engine` - deterministically, no gateway call - **except** a question neither
+//! recognises at all, or whose only recognisable word named data nothing in the workbook holds.
+//! Only then, since session 14's hidden interpreter (`docs/SESSION-DATA-14-Query-Plan.md`,
+//! decision D6 in `docs/DECISIONS.md`), is a model asked to translate the question into a JSON
+//! query plan from the workbook's schema alone - never a cell value - which Rust validates and
+//! runs through the same unchanged `tabular::engine::execute`. A gateway that is unreachable, too
+//! slow, or answers invalid JSON degrades to exactly the nudge a model-free run would have given.
 //!
-//! When the engine cannot answer exactly, the answer is still useful: a `Nudge` naming the real
-//! sheets and columns of the workbook, so the interface can suggest a question the engine does
-//! answer (`docs/SESSION-DATA-05-TABULAR-UI.md` section 5b). It is built from what the engine and
-//! the cached inventory already hold. An unclassified question, or a
-//! `NOT_DETERMINISTICALLY_ANSWERABLE` outcome, is never sent to a model "to be helpful".
+//! When the engine (or the validated plan) cannot answer exactly, the answer is still useful: a
+//! `Nudge` naming the real sheets and columns of the workbook, so the interface can suggest a
+//! question the engine does answer (`docs/SESSION-DATA-05-TABULAR-UI.md` section 5b). It is built
+//! from what the engine and the cached inventory already hold.
 //!
 //! Machine codes and data only, exactly like `folder_questions::FolderAnswer`: the interface
 //! writes every sentence, in her language.
 //!
-//! `answer` takes no gateway, no model alias and no network client: that the tabular tier cannot
-//! reach a model is a property of its signature, not a promise. It does read and write the local
+//! `answer` takes a `ModelAssist`: the one gateway, server address, model alias and idle timeout
+//! it may call on the narrow path above. It never widens into a second chance for a question the
+//! deterministic path already answered, and it never lets the model's own text carry a number -
+//! every value still comes from `tabular::engine::execute`. It does read and write the local
 //! `IndexStore` - the typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) - which is
-//! local disk, never the network, and carries no gateway capability with it.
+//! local disk, never the network.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -25,6 +33,7 @@ use crate::data_folder::DataFolder;
 use crate::error::AppError;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::{fold_text, FileReferenceResolver, ReferenceStatus};
+use crate::gateway::{ChatTurn, GatewayClient};
 use crate::index_store::IndexStore;
 use crate::inventory::WorkFolderInventory;
 use crate::tabular::engine::{
@@ -34,9 +43,20 @@ use crate::tabular::engine::{
 use crate::tabular::inventory::{
     self, data_rows, text_value, ColumnInventory, ColumnType, SheetInventory, TabularInventory,
 };
+use crate::tabular::query_plan;
 use crate::tabular::question::{self, name_words, TabularRoute};
 use crate::tabular::structural::{self, StructuralAnswer};
 use crate::tabular::{self, TabularError, Workbook};
+
+/// The one gateway capability this tier may reach, and only on the narrow path session 14 adds
+/// (`docs/SESSION-DATA-14-Query-Plan.md`). Borrowed, not owned: `commands::tabular_tier` builds
+/// one from the same settings every other tier already reads.
+pub struct ModelAssist<'a> {
+    pub gateway: &'a GatewayClient,
+    pub server_url: &'a str,
+    pub model_alias: &'a str,
+    pub idle_timeout: Duration,
+}
 
 /// What a question about the selected tables came to. `file` is always the workbook's path
 /// relative to the Data Folder, so the interface can cite it beside the sheet.
@@ -90,6 +110,15 @@ pub enum TabularAnswer {
         /// (`docs/DECISIONS.md`, session 11). Empty for every other nudge.
         #[serde(default)]
         close_values: Vec<String>,
+        /// Set only when the model-assisted path (session 14) was actually tried for this
+        /// question, whatever it came to - a wrong plan the engine then refused, invalid JSON, a
+        /// plan `unsupported` on its own, or the gateway timing out. A manual validation pass (1
+        /// October 2026, `docs/DECISIONS.md`) found a real wait - a minute or more, with a
+        /// spinner, on a small local model - disappearing into a nudge that read "without the AI"
+        /// with nothing to show for the wait. This is never set for a nudge the classifier gave
+        /// without trying the model at all - that nudge really did cost nothing.
+        #[serde(default)]
+        model_attempt: Option<ModelAttempt>,
     },
     /// A group question with several columns it could total, none named. Asked, never picked.
     WhichMeasure {
@@ -135,30 +164,144 @@ struct Chosen<'a> {
 /// Refuses with `ScopeUnavailable` exactly as the document path does when every chosen file is
 /// gone or has changed since it was ticked. A red or unanalysed workbook is never answered from,
 /// whatever the selection says: the interface offers it no checkbox, and this refuses it again.
-pub fn answer(
+/// `IndexStore` holds its SQLite connection behind a `RefCell`, so it is not `Sync`: a reference
+/// to it cannot be held across an `.await` without making the enclosing future un-`Send`, which a
+/// Tauri command's future must be (`commands::ask_with_sources`, at the top of the call chain this
+/// tier sits under). That is why this is **two** public calls rather than one: `prepare` does
+/// every bit of `index`-touching work, entirely synchronously, and hands back either a finished
+/// answer or everything the one model call might need as **owned** data; `resolve` takes that and
+/// awaits the gateway, with no `&IndexStore` anywhere in its own signature, so its future is
+/// `Send` regardless of what `IndexStore` itself is. `commands::tabular_tier` calls them as two
+/// steps for exactly this reason. `answer` below is the single-call convenience the two together
+/// give - fine for a test, or anywhere Send does not have to hold - and must **not** be called
+/// from a Tauri command's own `async fn` body or a future on that path.
+pub async fn answer(
     question: &str,
     data: &DataFolder,
     selection: &ScopeMode,
     locale: &str,
     index: &IndexStore,
+    assist: &ModelAssist<'_>,
 ) -> Result<TabularAnswer, AppError> {
+    // Never forces the model: this convenience wrapper is the ordinary asking path (tests, and
+    // anywhere Send does not have to hold). A caller that wants "Demander a l'IA"'s behaviour -
+    // today, only `commands::tabular_tier` - calls `prepare`/`resolve` itself, as it must anyway
+    // for the `IndexStore`-across-`.await` reason the module doc explains.
+    let pending = prepare(question, data, selection, locale, index, false)?;
+    Ok(resolve(pending, question, locale, assist).await)
+}
+
+/// Every deterministic branch, synchronously - the only place in this tier `index` is read. See
+/// the module-level note above on why this is split from `resolve`.
+///
+/// `force_model` is "Demander a l'IA"/"Ask AI" on a tabular answer, the tier's own form of the
+/// regenerate control every other tier already offers (`skip_deterministic`,
+/// `commands::ask_with_sources`) - set only when she pressed it, never inferred. It only changes
+/// anything for a question the classifier *did* resolve (`TabularRoute::Operation`): the model is
+/// asked in addition, not instead, and the deterministic result becomes the fallback rather than
+/// disappearing. A question gap G already escalates on its own (unrecognised, or a residual word
+/// matching no real data) ignores this flag entirely - it is already asking the model.
+pub fn prepare(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    force_model: bool,
+) -> Result<PendingAnswer, AppError> {
+    answer_sync(question, data, selection, locale, index, force_model)
+}
+
+/// The model-assisted half, with `index` already out of scope: awaits the gateway only for
+/// `PendingAnswer::TryModel`, and never lets the model's own text carry the number - every value
+/// still comes from `tabular::engine::execute`, called inside `prepare` before this was built.
+pub async fn resolve(
+    pending: PendingAnswer,
+    question: &str,
+    locale: &str,
+    assist: &ModelAssist<'_>,
+) -> TabularAnswer {
+    match pending {
+        PendingAnswer::Done(answer) => answer,
+        PendingAnswer::TryModel {
+            file,
+            workbook,
+            inventory,
+            allowed,
+            fallback,
+        } => {
+            let allowed = allowed.as_deref();
+            // Timed around the whole attempt, success or not: a model that took a minute and
+            // could not produce a usable plan still spent that minute, and the nudge it leaves
+            // behind must say so rather than read exactly like one that cost nothing at all
+            // (`docs/DECISIONS.md`, the session 14 manual validation pass).
+            let started = std::time::Instant::now();
+            let plan = ask_model_for_plan(assist, question, &inventory, allowed).await;
+            let elapsed = started.elapsed();
+            let resolved = match &plan {
+                Some(plan) => apply_plan(
+                    plan,
+                    &file,
+                    &workbook,
+                    &inventory,
+                    allowed,
+                    locale,
+                    assist.model_alias,
+                ),
+                None => None,
+            };
+            with_model_attempt(resolved.unwrap_or(fallback), assist.model_alias, elapsed)
+        }
+    }
+}
+
+/// What the deterministic pass came to: a finished answer, or - only for an unrecognised question
+/// or a residual word that named no real data (gap G, `docs/SESSION-DATA-REFERENCE-report.md`
+/// section 4) - everything the model-assisted path needs, already loaded and owned, so `resolve`
+/// never has to take `&IndexStore` across the one `.await` this tier may now reach. Carries no
+/// classifier-chosen sheet: the model picks its own from the schema it was shown (`plan.sheet`),
+/// never constrained by whatever sheet the *original*, now-abandoned classification guessed.
+pub enum PendingAnswer {
+    Done(TabularAnswer),
+    TryModel {
+        file: String,
+        workbook: Workbook,
+        inventory: TabularInventory,
+        allowed: Option<Vec<String>>,
+        /// The nudge a model-free run would have given - used whenever the model cannot help
+        /// either (`docs/SESSION-DATA-14-Query-Plan.md`, "degrades to today's nudge").
+        fallback: TabularAnswer,
+    },
+}
+
+/// Every deterministic branch, synchronously - the only place in this function `index` is read.
+fn answer_sync(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    force_model: bool,
+) -> Result<PendingAnswer, AppError> {
     let chosen = chosen_workbooks(data, selection)?;
     if chosen.is_empty() {
-        return Ok(TabularAnswer::NoUsableTable);
+        return Ok(PendingAnswer::Done(TabularAnswer::NoUsableTable));
     }
 
     let target = match pick_target(question, data, &chosen) {
         Ok(target) => target,
-        Err(answer) => return Ok(answer),
+        Err(answer) => return Ok(PendingAnswer::Done(answer)),
     };
     let file = target.record.relative_path.clone();
     match target.record.processing_status {
         ProcessingStatus::Indexed => {}
-        ProcessingStatus::Failed => return Ok(TabularAnswer::WorkbookUnreadable { file }),
-        _ => return Ok(TabularAnswer::WorkbookNotAnalysed { file }),
+        ProcessingStatus::Failed => {
+            return Ok(PendingAnswer::Done(TabularAnswer::WorkbookUnreadable { file }))
+        }
+        _ => return Ok(PendingAnswer::Done(TabularAnswer::WorkbookNotAnalysed { file })),
     }
     let Some(inventory) = data.usable_inventory(&file) else {
-        return Ok(TabularAnswer::WorkbookNotAnalysed { file });
+        return Ok(PendingAnswer::Done(TabularAnswer::WorkbookNotAnalysed { file }));
     };
     let allowed = target.sheets.as_deref();
 
@@ -166,11 +309,11 @@ pub fn answer(
         question::classify_traced(question, inventory, allowed, locale);
     match route {
         TabularRoute::Structural(structural_question) => {
-            match structural::answer(inventory, allowed, &structural_question) {
+            Ok(PendingAnswer::Done(match structural::answer(inventory, allowed, &structural_question) {
                 StructuralAnswer::NotAnswerable {
                     reason,
                     available_sheets,
-                } => Ok(nudge(
+                } => nudge(
                     file,
                     inventory,
                     allowed,
@@ -180,9 +323,9 @@ pub fn answer(
                     None,
                     None,
                     Vec::new(),
-                )),
-                answer => Ok(TabularAnswer::Structural { file, answer }),
-            }
+                ),
+                answer => TabularAnswer::Structural { file, answer },
+            }))
         }
         TabularRoute::Operation { sheet, operation } => {
             // Re-read and re-hashed at the moment of computing: a workbook that changed since
@@ -199,7 +342,9 @@ pub fn answer(
                 match load_workbook_cached(index, &path, &file, inventory, locale) {
                     Ok(pair) => pair,
                     Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
-                    Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
+                    Err(_) => {
+                        return Ok(PendingAnswer::Done(TabularAnswer::WorkbookUnreadable { file }))
+                    }
                 };
 
             // Session 11: a residual word anchored on real data becomes the filters
@@ -218,15 +363,18 @@ pub fn answer(
             ) {
                 FilterDetection::Filters(filters) => with_filters(operation, filters),
                 FilterDetection::WhichColumn { value, candidates } => {
-                    return Ok(TabularAnswer::WhichColumn {
+                    return Ok(PendingAnswer::Done(TabularAnswer::WhichColumn {
                         file,
                         value,
                         candidates,
-                    });
+                    }));
                 }
                 FilterDetection::ValueNotFound { value, close } => {
-                    return Ok(nudge(
-                        file,
+                    // Gap G: a residual word that looked like an attempted filter but matched no
+                    // real data is exactly the case D6 (`docs/DECISIONS.md`) names - try the model
+                    // next, and only fall back to this nudge when it cannot help either.
+                    let fallback = nudge(
+                        file.clone(),
                         &fresh,
                         allowed,
                         Some(NotAnswerableReason::ValueNotFound),
@@ -235,18 +383,190 @@ pub fn answer(
                         None,
                         Some(value),
                         close,
-                    ));
+                    );
+                    return Ok(PendingAnswer::TryModel {
+                        file,
+                        workbook,
+                        inventory: fresh,
+                        allowed: allowed.map(<[String]>::to_vec),
+                        fallback,
+                    });
                 }
                 FilterDetection::None => operation,
             };
 
-            match engine::execute(&workbook, &fresh, sheet.as_deref(), allowed, &operation, locale) {
+            let computed = match engine::execute(
+                &workbook, &fresh, sheet.as_deref(), allowed, &operation, locale,
+            ) {
                 TabularOutcome::Value {
                     value,
                     locator,
                     derivation,
-                } => Ok(TabularAnswer::Value {
+                } => TabularAnswer::Value {
+                    file: file.clone(),
+                    value,
+                    locator,
+                    derivation,
+                },
+                TabularOutcome::NotDeterministicallyAnswerable {
+                    reason,
+                    available_sheets,
+                    available_columns,
+                } => nudge(
+                    file.clone(),
+                    &fresh,
+                    allowed,
+                    Some(reason),
+                    available_sheets,
+                    available_columns,
+                    None,
+                    None,
+                    Vec::new(),
+                ),
+            };
+            // "Demander a l'IA" on a classified, computed tabular answer: she asked for the
+            // model's own reading of the question anyway, usually because a deterministic
+            // answer - correct arithmetic over a possibly wrong interpretation - looked wrong to
+            // her (session 14's manual validation pass found a real case of exactly that,
+            // `docs/DECISIONS.md`). Reuses the workbook already loaded above, at no extra cost;
+            // `computed` becomes the fallback if the model cannot do any better.
+            if force_model {
+                Ok(PendingAnswer::TryModel {
                     file,
+                    workbook,
+                    inventory: fresh,
+                    allowed: allowed.map(<[String]>::to_vec),
+                    fallback: computed,
+                })
+            } else {
+                Ok(PendingAnswer::Done(computed))
+            }
+        }
+        TabularRoute::WhichMeasure {
+            group_by,
+            candidates,
+        } => Ok(PendingAnswer::Done(TabularAnswer::WhichMeasure {
+            file,
+            group_column: group_by,
+            candidates,
+        })),
+        TabularRoute::NotRecognised => {
+            // Gap G: the classifier found no recognisable operation at all. Before nudging, try
+            // the model-assisted path - loading the workbook only now, since every other branch
+            // above never needed it. A load failure here (including `WorkbookChanged`) falls back
+            // to the ordinary nudge rather than propagating: this branch never errored before this
+            // session, and the nudge is still a correct, honest answer when the model cannot be
+            // asked either.
+            let sheets = sheet_names(engine::reachable_sheets(inventory, allowed));
+            let fallback = nudge(
+                file.clone(),
+                inventory,
+                allowed,
+                None,
+                sheets,
+                Vec::new(),
+                None,
+                None,
+                Vec::new(),
+            );
+            let Some(path) = data.files().absolute_path(target.record) else {
+                return Ok(PendingAnswer::Done(fallback));
+            };
+            match load_workbook_cached(index, &path, &file, inventory, locale) {
+                Ok((workbook, fresh)) => Ok(PendingAnswer::TryModel {
+                    file,
+                    workbook,
+                    inventory: fresh,
+                    allowed: allowed.map(<[String]>::to_vec),
+                    fallback,
+                }),
+                Err(_) => Ok(PendingAnswer::Done(fallback)),
+            }
+        }
+    }
+}
+
+/// Ask the model to translate `question` into a query plan, from `inventory`'s schema alone - no
+/// cell value, no distinct value, no row, no file path (`docs/SESSION-DATA-14-Query-Plan.md`).
+/// `None` for anything that keeps the question from being answered this way: the gateway
+/// unreachable, too slow, or an answer that is not a valid plan - every one of those degrades to
+/// the ordinary nudge, exactly as an unrecognised question already did before this session.
+async fn ask_model_for_plan(
+    assist: &ModelAssist<'_>,
+    question: &str,
+    inventory: &TabularInventory,
+    allowed: Option<&[String]>,
+) -> Option<query_plan::QueryPlan> {
+    let message = query_plan::build_schema_message(question, inventory, allowed);
+    let turns = [ChatTurn {
+        role: "user".to_string(),
+        content: message,
+    }];
+    let raw = assist
+        .gateway
+        .chat(
+            assist.server_url,
+            assist.model_alias,
+            None,
+            &turns,
+            assist.idle_timeout,
+            |_delta| {},
+        )
+        .await
+        .ok()?;
+    query_plan::parse_response(&raw)
+}
+
+/// Validate `plan` against the real workbook and, when it maps to an operation, run it through
+/// the unchanged `tabular::engine::execute` - the same engine every deterministic question runs
+/// through, so the number in the answer is always the engine's. `None` when the plan cannot be
+/// turned into a usable answer at all (`query_plan::PlanResolution::Unsupported`): the caller
+/// falls back to its own nudge. A plan that resolves to a real `NotAnswerableReason` (a column
+/// that does not exist, a formula column, the wrong type) still returns `Some`, carrying that
+/// specific reason - a more informative nudge than the generic one, built the same way an
+/// ordinary engine refusal already is.
+fn apply_plan(
+    plan: &query_plan::QueryPlan,
+    file: &str,
+    workbook: &Workbook,
+    fresh: &TabularInventory,
+    allowed: Option<&[String]>,
+    locale: &str,
+    model_alias: &str,
+) -> Option<TabularAnswer> {
+    match query_plan::resolve(plan, fresh, workbook, allowed) {
+        query_plan::PlanResolution::Operation(operation) => {
+            // `plan.sheet`, never a sheet some earlier, now-abandoned classification guessed: the
+            // model chose this operation against the schema it was shown, and that schema's own
+            // sheet names are the only ones its answer can mean.
+            match engine::execute(workbook, fresh, plan.sheet.as_deref(), allowed, &operation, locale) {
+                TabularOutcome::Value {
+                    value,
+                    locator,
+                    derivation:
+                        TabularDerivation::Computed {
+                            operation,
+                            row_count,
+                        },
+                } => Some(TabularAnswer::Value {
+                    file: file.to_string(),
+                    value,
+                    locator,
+                    derivation: TabularDerivation::InterpretedByModel {
+                        operation,
+                        row_count,
+                        model_alias: model_alias.to_string(),
+                        plan: serde_json::to_value(plan).unwrap_or(serde_json::Value::Null),
+                    },
+                }),
+                // `engine::execute` never actually produces `InterpretedByModel` itself (only
+                // this function wraps it on, after the fact), but the match must be exhaustive.
+                TabularOutcome::Value {
+                    value,
+                    locator,
+                    derivation,
+                } => Some(TabularAnswer::Value {
+                    file: file.to_string(),
                     value,
                     locator,
                     derivation,
@@ -255,9 +575,9 @@ pub fn answer(
                     reason,
                     available_sheets,
                     available_columns,
-                } => Ok(nudge(
-                    file,
-                    &fresh,
+                } => Some(nudge(
+                    file.to_string(),
+                    fresh,
                     allowed,
                     Some(reason),
                     available_sheets,
@@ -268,20 +588,18 @@ pub fn answer(
                 )),
             }
         }
-        TabularRoute::WhichMeasure {
-            group_by,
-            candidates,
-        } => Ok(TabularAnswer::WhichMeasure {
-            file,
-            group_column: group_by,
-            candidates,
-        }),
-        TabularRoute::NotRecognised => {
-            let sheets = sheet_names(engine::reachable_sheets(inventory, allowed));
-            Ok(nudge(
-                file, inventory, allowed, None, sheets, Vec::new(), None, None, Vec::new(),
-            ))
-        }
+        query_plan::PlanResolution::ValueNotFound { value, close } => Some(nudge(
+            file.to_string(),
+            fresh,
+            allowed,
+            Some(NotAnswerableReason::ValueNotFound),
+            Vec::new(),
+            Vec::new(),
+            None,
+            Some(value),
+            close,
+        )),
+        query_plan::PlanResolution::Unsupported => None,
     }
 }
 
@@ -489,6 +807,55 @@ fn nudge(
         filter_column,
         filter_value,
         close_values,
+        // Filled in afterward, by `with_model_attempt`, only at the two call sites that actually
+        // tried the model (`resolve`): every other nudge this helper builds never reached one.
+        model_attempt: None,
+    }
+}
+
+/// What a model-assisted attempt cost, whatever it came to - shown so a real wait is never silent
+/// (`docs/DECISIONS.md`, the session 14 manual validation pass).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelAttempt {
+    pub model_alias: String,
+    pub duration_ms: u64,
+}
+
+/// Stamps `answer` with `model_attempt` when it is a `Nudge` - the only variant a failed
+/// model-assisted attempt can produce (`apply_plan` either returns a `Value` with its own
+/// `InterpretedByModel` provenance, which already names the model, or a `Nudge`). Any other
+/// variant is returned unchanged: this is only ever called with what `apply_plan` returned or
+/// `PendingAnswer::TryModel`'s own `fallback`, both of which are a `Value` or a `Nudge`.
+fn with_model_attempt(answer: TabularAnswer, model_alias: &str, elapsed: Duration) -> TabularAnswer {
+    match answer {
+        TabularAnswer::Nudge {
+            file,
+            reason,
+            available_sheets,
+            available_columns,
+            example_column,
+            example_group,
+            filter_column,
+            filter_value,
+            close_values,
+            model_attempt: _,
+        } => TabularAnswer::Nudge {
+            file,
+            reason,
+            available_sheets,
+            available_columns,
+            example_column,
+            example_group,
+            filter_column,
+            filter_value,
+            close_values,
+            model_attempt: Some(ModelAttempt {
+                model_alias: model_alias.to_string(),
+                duration_ms: elapsed.as_millis() as u64,
+            }),
+        },
+        other => other,
     }
 }
 
@@ -701,6 +1068,15 @@ fn detect_filters(
 
     let mut filters: Vec<FilterSpec> = Vec::new();
     let mut consumed = vec![false; residual.len()];
+    // A comparison word ("more than", "plus de") found with no number this module can read next
+    // to it - a spelled-out number ("fifty"), most often, since this only ever looks for a
+    // parseable digit. Recorded rather than silently dropped: returning the plain unfiltered
+    // operation here would be a wrong answer with nothing to say it might be wrong, which is
+    // worse than a nudge. Gap G already exists for exactly this shape of problem - a filter
+    // clause the classifier cannot resolve on its own - so this reaches the model next
+    // (`docs/SESSION-DATA-14-Query-Plan.md`), which can read "fifty" as 50 the way this
+    // word-for-word scan never will.
+    let mut unresolved_comparison: Option<String> = None;
 
     // --- A comparison word beside a number --------------------------------------------------
     if let Some(words) = &words {
@@ -745,6 +1121,18 @@ fn detect_filters(
                             },
                         });
                     }
+                } else if unresolved_comparison.is_none() {
+                    // A real comparison word, matched against a real numeric column, with no
+                    // parseable digit anywhere beside it - "more than fifty", not "more than 50".
+                    // Never silently answered as if unfiltered. The word actually worth showing
+                    // her is the one that looks like the attempted number, not the comparison
+                    // word itself - the same adjacency search as the threshold lookup above, just
+                    // without requiring the candidate to parse.
+                    let nearby_word = ((index + 1)..residual.len())
+                        .find(|&i| !consumed[i])
+                        .or_else(|| (0..index).rev().find(|&i| !consumed[i]));
+                    unresolved_comparison =
+                        Some(nearby_word.map_or_else(|| residual[index].clone(), |i| residual[i].clone()));
                 }
             }
         }
@@ -889,6 +1277,15 @@ fn detect_filters(
             value,
         };
     }
+    if let Some(value) = unresolved_comparison {
+        // No close values to offer: the word in question names a threshold, not a real cell
+        // value, so searching the workbook's own data for something "close" to it would not mean
+        // anything (`close_values` compares against cell text, not numbers).
+        return FilterDetection::ValueNotFound {
+            close: Vec::new(),
+            value,
+        };
+    }
     FilterDetection::None
 }
 
@@ -960,8 +1357,13 @@ fn levenshtein(a: &str, b: &str) -> usize {
     previous[b.len()]
 }
 
-/// This module never imports `crate::gateway`, `crate::retrieval` or `crate::conversation`: every
-/// test below runs with no server at all, which is the point.
+/// Every test below exercises the deterministic path only, which still - since session 14 - means
+/// `ModelAssist` must point somewhere: `closed_port_url` hands it an address nothing listens on,
+/// so the one new branch that would dial it (`TabularRoute::NotRecognised`, or a residual word
+/// that matched no real data) degrades to exactly the nudge it always gave, proving the fallback
+/// rather than merely assuming it. `ask_sync` is the one place this module creates a Tokio runtime
+/// to drive `answer`'s now-`async` signature, so none of the dozens of tests below have to become
+/// `#[tokio::test]` themselves.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -972,10 +1374,39 @@ mod tests {
     use crate::inventory::FileHashCache;
     use crate::tabular::engine::NumericAggregate;
 
+    /// A URL nothing listens on: binds a free port, then immediately drops the listener, so a
+    /// connection attempt gets an immediate, deterministic refusal rather than racing another
+    /// test for a fixed port or waiting out a timeout.
+    pub(crate) fn closed_port_url() -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("binds a free port");
+        let url = format!("http://{}", listener.local_addr().expect("a local address"));
+        drop(listener);
+        url
+    }
+
+    /// Drives one `answer(...)` future to completion on a throwaway current-thread runtime - the
+    /// deterministic tests below stay `#[test]`, not `#[tokio::test]`, and the one gateway call
+    /// the model-assisted path may make still runs on a real async executor.
+    pub(crate) fn ask_sync(
+        question: &str,
+        data: &DataFolder,
+        selection: &ScopeMode,
+        locale: &str,
+        index: &IndexStore,
+        assist: &ModelAssist<'_>,
+    ) -> Result<TabularAnswer, AppError> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("builds a throwaway runtime")
+            .block_on(answer(question, data, selection, locale, index, assist))
+    }
+
     struct Folder {
         data: tempfile::TempDir,
         _app: tempfile::TempDir,
         index: IndexStore,
+        gateway: GatewayClient,
     }
 
     impl Folder {
@@ -991,6 +1422,7 @@ mod tests {
                 data,
                 _app: app,
                 index,
+                gateway: GatewayClient::new().expect("builds a client"),
             }
         }
 
@@ -1021,7 +1453,14 @@ mod tests {
         }
 
         fn ask(&self, question: &str, selection: &ScopeMode) -> Result<TabularAnswer, AppError> {
-            answer(question, &self.open(), selection, "en-US", &self.index)
+            let url = closed_port_url();
+            let assist = ModelAssist {
+                gateway: &self.gateway,
+                server_url: &url,
+                model_alias: "cabinet-chat",
+                idle_timeout: std::time::Duration::from_millis(200),
+            };
+            ask_sync(question, &self.open(), selection, "en-US", &self.index, &assist)
         }
     }
 
@@ -1097,6 +1536,17 @@ mod tests {
             )
             .unwrap();
 
+        // Unrecognised, so this did try the model (`Folder::ask`'s closed-port gateway fails it
+        // fast) - `model_attempt` is therefore `Some`, with whatever the attempt actually took,
+        // which is why it is checked apart from the rest rather than as a fixed literal.
+        let TabularAnswer::Nudge { model_attempt, .. } = &result else {
+            panic!("expected a nudge, got {result:?}");
+        };
+        assert_eq!(
+            model_attempt.as_ref().map(|attempt| attempt.model_alias.as_str()),
+            Some("cabinet-chat"),
+        );
+
         assert_eq!(
             result,
             TabularAnswer::Nudge {
@@ -1109,6 +1559,7 @@ mod tests {
                 filter_column: None,
                 filter_value: None,
                 close_values: Vec::new(),
+                model_attempt: model_attempt.clone(),
             }
         );
     }
@@ -1370,15 +1821,23 @@ mod tests {
         let path = folder.data.path().join("factures.csv");
         let original_modified = std::fs::metadata(&path).unwrap().modified().unwrap();
         let cache = FileHashCache::new();
+        let url = closed_port_url();
+        let assist = ModelAssist {
+            gateway: &folder.gateway,
+            server_url: &url,
+            model_alias: "cabinet-chat",
+            idle_timeout: std::time::Duration::from_millis(200),
+        };
         let ask = |question: &str| -> TabularAnswer {
             let data_folder =
                 DataFolder::discover(folder.data.path(), Some(&folder.index), &cache).unwrap();
-            answer(
+            ask_sync(
                 question,
                 &data_folder,
                 &ScopeMode::WholeFolder,
                 "en-US",
                 &folder.index,
+                &assist,
             )
             .unwrap()
         };
@@ -1527,12 +1986,20 @@ mod tests {
     fn the_same_question_typed_in_english_on_a_french_interface_is_still_read() {
         let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
 
-        let result = answer(
+        let url = closed_port_url();
+        let assist = ModelAssist {
+            gateway: &folder.gateway,
+            server_url: &url,
+            model_alias: "cabinet-chat",
+            idle_timeout: std::time::Duration::from_millis(200),
+        };
+        let result = ask_sync(
             "Which agency costs the most?",
             &folder.open(),
             &ScopeMode::WholeFolder,
             "fr-FR",
             &folder.index,
+            &assist,
         )
         .unwrap();
 
@@ -1650,6 +2117,13 @@ mod tests {
     #[test]
     fn every_example_the_nudge_offers_is_a_question_the_engine_answers() {
         let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+        let url = closed_port_url();
+        let assist = ModelAssist {
+            gateway: &folder.gateway,
+            server_url: &url,
+            model_alias: "cabinet-chat",
+            idle_timeout: std::time::Duration::from_millis(200),
+        };
         let catalogues = [
             ("en-US", include_str!("../../src/locales/en-US.json")),
             ("fr-FR", include_str!("../../src/locales/fr-FR.json")),
@@ -1664,12 +2138,13 @@ mod tests {
                     .replace("{column}", "amount")
                     .replace("{group}", "agency");
 
-                let result = answer(
+                let result = ask_sync(
                     &question,
                     &folder.open(),
                     &ScopeMode::WholeFolder,
                     locale,
                     &folder.index,
+                    &assist,
                 )
                 .unwrap();
 
@@ -1778,6 +2253,7 @@ mod tests {
             filter_column: None,
             filter_value: None,
             close_values: Vec::new(),
+            model_attempt: None,
         })
         .unwrap();
 
@@ -1785,6 +2261,7 @@ mod tests {
         assert_eq!(json["reason"], "column_not_found");
         assert_eq!(json["availableColumns"], serde_json::json!(["a"]));
         assert_eq!(json["exampleColumn"], serde_json::Value::Null);
+        assert_eq!(json["modelAttempt"], serde_json::Value::Null);
     }
 
     // --- Gap A: a residual word that names real data is a filter this engine cannot apply -----
@@ -2025,6 +2502,31 @@ mod tests {
         };
         // montant: 10, 20, ..., 90 - strictly greater than 50: 60, 70, 80, 90 = 4 rows.
         assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn a_comparison_word_beside_a_spelled_out_number_is_a_nudge_never_the_unfiltered_count() {
+        // Found live (session 14's manual validation pass, `docs/DECISIONS.md`): "how many sales
+        // were worth more than fifty" silently returned every row (9), because the comparison-
+        // word detection above only ever looks for a *parseable digit* next to the word, and
+        // "fifty" is not one - the filter was dropped rather than refused, and the unfiltered
+        // count read as a confident, wrong answer. This must now refuse (or, with a model
+        // available, escalate - proven separately in `tests/tabular_query_plan.rs`) rather than
+        // silently answer unfiltered.
+        let folder = Folder::with(&[("factures.csv", &invoices_with_suppliers())]);
+
+        let result = folder
+            .ask(
+                "How many invoices with montant over fifty?",
+                &folder.ticked(&["factures.csv"]),
+            )
+            .unwrap();
+
+        let TabularAnswer::Nudge { reason, filter_value, .. } = result else {
+            panic!("expected a nudge rather than a silently unfiltered count, got {result:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::ValueNotFound));
+        assert_eq!(filter_value.as_deref(), Some("fifty"));
     }
 
     // --- Session 12's D5: mean, median, least group, top N groups, count per group -----------

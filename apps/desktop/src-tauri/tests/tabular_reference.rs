@@ -5,8 +5,15 @@
 //! The cases are data, in `tests/tabular_reference_cases.json`; the workbooks are written at test
 //! time by `tests/common/tabular_fixtures.rs`, whose comments carry the hand arithmetic behind
 //! every expected value. The Data Folder is analysed by `data_folder::analyse` and asked through
-//! `tabular_answer::answer`, the same path the tier 2 command takes. No gateway exists here: the
-//! tier makes no model call by its signature.
+//! `tabular_answer::answer`, the same path the tier 2 command takes.
+//!
+//! Every case here is a gap A-F reference case - a deterministic phrasing the classifier either
+//! reads or does not - never gap G (session 14's hidden interpreter, `docs/SESSION-DATA-14-Query-
+//! Plan.md`), whose whole point is a question the classifier does *not* read. `ModelAssist` is
+//! still required by `answer`'s signature, so it is given an address nothing listens on
+//! (`closed_gateway_url`): every case here must still answer exactly as it did before that
+//! signature changed, proving the deterministic set makes zero *successful* gateway calls - the
+//! strongest version of "no gateway exists here" this signature change still allows.
 //!
 //! - A `pass` case must match its `expect` exactly.
 //! - A `known_failure` case must **not** match it. When it does, the run fails and says so, so a
@@ -25,13 +32,24 @@ use std::io::Write;
 
 use assistant_cabinet_ai_lib::analysis_scope::{ScopeEntry, ScopeMode};
 use assistant_cabinet_ai_lib::data_folder::{self, DataFolder};
+use assistant_cabinet_ai_lib::gateway::GatewayClient;
 use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::inventory::FileHashCache;
 use assistant_cabinet_ai_lib::tabular::inventory::ColumnType;
-use assistant_cabinet_ai_lib::tabular_answer;
+use assistant_cabinet_ai_lib::tabular_answer::{self, ModelAssist};
 use common::tabular_fixtures;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
+
+/// An address nothing listens on: binds a free port, then immediately drops the listener, so a
+/// connection attempt refuses fast and deterministically rather than racing another test for a
+/// fixed port or waiting out a timeout.
+fn closed_gateway_url() -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("binds a free port");
+    let url = format!("http://{}", listener.local_addr().expect("a local address"));
+    drop(listener);
+    url
+}
 
 const CASES: &str = include_str!("tabular_reference_cases.json");
 const LOCALES: [&str; 2] = ["fr-FR", "en-US"];
@@ -189,6 +207,7 @@ struct Folder {
     data: tempfile::TempDir,
     _app: tempfile::TempDir,
     index: IndexStore,
+    gateway: GatewayClient,
 }
 
 impl Folder {
@@ -205,11 +224,25 @@ impl Folder {
             data,
             _app: app,
             index,
+            gateway: GatewayClient::new().expect("builds a client"),
         }
     }
 
     fn open(&self) -> DataFolder {
         DataFolder::discover(self.data.path(), Some(&self.index), &FileHashCache::new()).unwrap()
+    }
+
+    /// A `ModelAssist` pointing nowhere: every case in this reference set is deterministic, so the
+    /// one gateway call session 14 added must never be reached for a reason that matters - it may
+    /// only be *attempted* and refused, on the same path an unreachable gateway already degrades
+    /// to the ordinary nudge.
+    fn assist<'a>(&'a self, url: &'a str) -> ModelAssist<'a> {
+        ModelAssist {
+            gateway: &self.gateway,
+            server_url: url,
+            model_alias: "cabinet-chat",
+            idle_timeout: std::time::Duration::from_millis(200),
+        }
     }
 }
 
@@ -330,10 +363,12 @@ struct Tally {
     known_failures: usize,
 }
 
-#[test]
-fn every_reference_case_gets_its_expected_answer_or_is_a_recorded_known_failure() {
+#[tokio::test]
+async fn every_reference_case_gets_its_expected_answer_or_is_a_recorded_known_failure() {
     let fixtures = Folder::build();
     let folder = fixtures.open();
+    let url = closed_gateway_url();
+    let assist = fixtures.assist(&url);
     for file in tabular_fixtures::ALL {
         assert!(
             folder.usable_inventory(file).is_some(),
@@ -369,7 +404,9 @@ fn every_reference_case_gets_its_expected_answer_or_is_a_recorded_known_failure(
             &selection_of(&folder, &case.file),
             &case.locale,
             &fixtures.index,
-        );
+            &assist,
+        )
+        .await;
         let actual = observed(&result);
         let met = matches(&case.expect, &actual);
         let note = case
@@ -446,10 +483,12 @@ fn every_reference_case_gets_its_expected_answer_or_is_a_recorded_known_failure(
 /// `IndexStore::tabular_workbook_by_hash` with no read at all). Every passing case is asked
 /// twice, on the same shared `Folder` the main test leaves warmed by its own earlier cases, so
 /// this run alone already exercises every case cold once and warm at least once.
-#[test]
-fn every_passing_case_still_matches_cold_and_warm() {
+#[tokio::test]
+async fn every_passing_case_still_matches_cold_and_warm() {
     let fixtures = Folder::build();
     let folder = fixtures.open();
+    let url = closed_gateway_url();
+    let assist = fixtures.assist(&url);
     let passing: Vec<Case> = cases()
         .into_iter()
         .filter(|case| case.status == Status::Pass)
@@ -464,7 +503,9 @@ fn every_passing_case_still_matches_cold_and_warm() {
                 &selection_of(&folder, &case.file),
                 &case.locale,
                 &fixtures.index,
-            );
+                &assist,
+            )
+            .await;
             let actual = observed(&result);
             assert!(
                 matches(&case.expect, &actual),

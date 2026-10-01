@@ -264,8 +264,16 @@ Recorded now so Sprint 2b starts from it rather than inventing it under pressure
 The case of tables and **no** documents is tier 2 of `## The grounding priority chain`, above - built, and
 answered by the engine, with a model turn only to interpret a question the classifier itself cannot read
 (session 14's hidden interpreter), never to compute. The case below, both selected, is the one the chain
-does not cover on its own and needs the design that follows; until then it is refused explicitly
-(`documents_and_tables_together`) rather than routed to one side.
+does not cover on its own and needs the design that follows.
+
+**Session 15 took its first, low-risk step** (D7 in `docs/DECISIONS.md`): with both selected, a question
+that is clearly and only about the data - the tabular classifier recognises it and nothing is left over but
+filler and the filter words it applied - is now routed straight to tier 2's own engine, before any document
+is read for retrieval and with no gateway call, exactly as if tables alone were selected. Every other
+question - a content question, a question mixing the two, or one the classifier cannot read at all - still
+keeps the explicit refusal (`documents_and_tables_together`) rather than being routed to one side or the
+other. The design below, where the engines compute and the model writes across both at once, is session 16's
+own and still not built.
 
 - **Each engine alone, never carrying the other's material.** Tables selected and no documents: the tabular
   engine runs, with no excerpt. Documents selected and no tables: the document engine runs, with no data and

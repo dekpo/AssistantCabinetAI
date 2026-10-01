@@ -302,6 +302,14 @@ export function MessageList({
                   {t(entry.tabular === true ? "chat.deterministicData" : "chat.deterministic")}
                 </p>
               ) : null}
+              {/* Documents and tables were both selected, and this question was clearly and only
+                  about the data: the tabular engine answered it alone, and the documents selected
+                  alongside it were never read (`docs/SESSION-DATA-15-Mixed-Routing.md`). Joins the
+                  line above rather than replacing it: the answer really is the deterministic
+                  tabular one, this just says why no document was needed for it. */}
+              {entry.documentsNotNeeded === true ? (
+                <p className="message__timing">{t("chat.documentsNotNeeded")}</p>
+              ) : null}
               {/* A tabular nudge the classifier could not read on its own still tried a model
                   first (session 14) - a real wait, sometimes a minute or more on a small local
                   model, that must not disappear behind the line above as though it cost nothing

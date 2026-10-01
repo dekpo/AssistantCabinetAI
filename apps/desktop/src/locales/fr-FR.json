@@ -78,7 +78,8 @@
     "clearBody": "Toutes les questions et réponses affichées seront oubliées. Vos documents et leur analyse ne sont pas concernés.",
     "sourceItemSheet": "{path}, feuille {sheet}",
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
-    "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA."
+    "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA.",
+    "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires."
   },
   "workFolder": {
     "title": "Dossier des documents",
@@ -275,7 +276,7 @@
     "work_folder_path_not_absolute": "Le chemin de ce dossier est incomplet ({path}).",
     "work_folder_selection_cancelled": "Aucun dossier n'a été choisi.",
     "work_folder_unc_not_supported": "Un dossier réseau ne peut pas encore être le dossier de documents ({path}).",
-    "documents_and_tables_together": "Des documents et des données sont sélectionnés en même temps. Les deux ne peuvent pas encore être combinés dans une même réponse : décochez l'une des deux listes."
+    "documents_and_tables_together": "Des documents et des données sont sélectionnés en même temps. Une question portant uniquement sur vos données est désormais répondue depuis vos tableaux ; combiner les deux dans une même réponse viendra plus tard. En attendant, décochez l'une des deux listes pour toute autre question."
   },
   "tabularAnswer": {
     "rowOne": "ligne",

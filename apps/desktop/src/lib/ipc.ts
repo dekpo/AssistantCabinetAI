@@ -437,6 +437,9 @@ export interface AskAnswer {
   /** Set when tables were selected and no document: the tabular engine answered it. `answer` is
    * then empty. */
   tabularAnswer: TabularAnswer | null;
+  /** Documents and tables were both selected, but this question was clearly and only about the
+   * data, so the tabular engine answered it alone and the selected documents were never read. */
+  documentsNotNeeded: boolean;
 }
 
 /**

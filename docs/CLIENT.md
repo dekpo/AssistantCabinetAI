@@ -142,8 +142,10 @@ real data — a value, a weekday, a month, a year, or a comparison beside a numb
 just named: the answer shows an **"Understood as"** line under it, written from the filter the
 engine actually ran, never from the question's own words. A value found in two reachable columns
 is asked about rather than guessed at (`WhichColumn`); a value found in none gets a nudge naming
-close real values instead of a silent zero. Documents and workbooks selected together are refused
-with `documents_and_tables_together` for now: combining them is a later session's design.
+close real values instead of a silent zero. Documents and workbooks selected together: a question
+that is clearly and only about the data is routed straight to the tabular engine, exactly as above
+(session 15, D7 in `docs/DECISIONS.md`); every other question is still refused with
+`documents_and_tables_together` — combining both sides in one answer is a later session's design.
 
 ## Why not Open WebUI Computer
 

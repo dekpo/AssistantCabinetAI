@@ -78,7 +78,8 @@
     "clearBody": "Every question and answer on screen will be forgotten. Your documents and their analysis are not affected.",
     "sourceItemSheet": "{path}, sheet {sheet}",
     "sourceItemSheetColumn": "{path}, sheet {sheet}, column {column}",
-    "deterministicData": "Answer computed from your data folder, without the AI."
+    "deterministicData": "Answer computed from your data folder, without the AI.",
+    "documentsNotNeeded": "Answered from your tables; the selected documents were not needed."
   },
   "workFolder": {
     "title": "Documents folder",
@@ -275,7 +276,7 @@
     "work_folder_path_not_absolute": "This folder path is incomplete ({path}).",
     "work_folder_selection_cancelled": "No folder was chosen.",
     "work_folder_unc_not_supported": "A network folder cannot be the documents folder yet ({path}).",
-    "documents_and_tables_together": "Documents and data are both selected. The two cannot yet be combined in one answer: untick one of the two lists."
+    "documents_and_tables_together": "Documents and data are both selected. A question that is only about your data is now answered from your tables; combining both in one answer is coming later. Until then, untick one of the two lists for any other question."
   },
   "tabularAnswer": {
     "rowOne": "row",

@@ -567,6 +567,12 @@ pub struct AskAnswer {
     /// Present when tables were selected and no document: the tabular engine answered, with no
     /// gateway call. `answer` is then empty, as for `folder_answer`.
     pub tabular_answer: Option<TabularAnswer>,
+    /// Documents and tables were both selected, but this question was clearly and only about the
+    /// data - the tabular classifier recognised it and nothing was left over - so the tabular
+    /// engine answered it alone, exactly as tier 2 (`docs/SESSION-DATA-15-Mixed-Routing.md`). The
+    /// documents selected alongside the table were never read: no retrieval, no gateway call.
+    /// Always false outside that one path.
+    pub documents_not_needed: bool,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -699,8 +705,16 @@ async fn sourced_answer(
     // Which tier this question is on, decided from the two selections before anything is read
     // (`docs/SELECTION-AND-MEMORY.md`, the grounding priority chain).
     match scope.tier() {
-        // Not designed yet, so not guessed at: neither engine is chosen for her.
-        GroundingTier::DocumentsAndTables => return Err(AppError::DocumentsAndTablesTogether),
+        // D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): a question
+        // that is clearly and only about the data is answered by the tabular engine alone, before
+        // any file content is read for retrieval. Everything else keeps the refusal below: mixed
+        // and content questions are not designed yet, so neither engine is guessed at for her.
+        GroundingTier::DocumentsAndTables => {
+            match mixed_data_only_tier(app, state, &question, &scope).await? {
+                Some(answer) => return Ok(answer),
+                None => return Err(AppError::DocumentsAndTablesTogether),
+            }
+        }
         GroundingTier::TablesOnly => {
             return tabular_tier(app, state, &question, &scope, skip_deterministic).await
         }
@@ -807,6 +821,7 @@ async fn sourced_answer(
                 scope_outdated,
                 without_documents: false,
                 tabular_answer: None,
+                documents_not_needed: false,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -837,6 +852,7 @@ async fn sourced_answer(
             scope_outdated: Vec::new(),
             without_documents: true,
             tabular_answer: None,
+            documents_not_needed: false,
         });
     }
 
@@ -959,6 +975,7 @@ async fn sourced_answer(
         scope_outdated,
         without_documents: false,
         tabular_answer: None,
+        documents_not_needed: false,
     })
 }
 
@@ -1020,7 +1037,65 @@ async fn tabular_tier(
         scope_outdated: Vec::new(),
         without_documents: false,
         tabular_answer: Some(answer),
+        documents_not_needed: false,
     })
+}
+
+/// The first, low-risk step of D7 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`):
+/// documents and tables are both selected. Reads the same settings and opens the same Data Folder
+/// as `tabular_tier`, then the same `prepare`/`resolve` split, for the same `IndexStore`-across-
+/// `.await` reason (`tabular_answer`'s own module doc): `prepare_if_data_only` is the only place
+/// `index` is read, entirely synchronously, and already carries the precondition that keeps gap G
+/// from ever reaching `resolve` on this path (`None` here means the caller keeps its own
+/// mixed-selection refusal).
+async fn mixed_data_only_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+) -> Result<Option<AskAnswer>, AppError> {
+    let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
+        (
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.answer_idle_timeout(),
+        )
+    })?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let index = open_index(app)?;
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
+    let Some(pending) =
+        tabular_answer::prepare_if_data_only(question, &folder, &scope.data_mode, locale, &index)?
+    else {
+        return Ok(None);
+    };
+    let assist = tabular_answer::ModelAssist {
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+    };
+    let answer = tabular_answer::resolve(pending, question, locale, &assist).await;
+    Ok(Some(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated: Vec::new(),
+        without_documents: false,
+        tabular_answer: Some(answer),
+        documents_not_needed: true,
+    }))
 }
 
 /// Sidecar discovery: look next to the executable, a few ancestors up (so `tauri dev` can see

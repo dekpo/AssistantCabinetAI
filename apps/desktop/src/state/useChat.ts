@@ -106,6 +106,11 @@ export interface ChatEntry extends ChatTurn {
    * "without the AI" with nothing to show for it. */
   modelAttemptAlias?: string;
   modelAttemptDurationMs?: number;
+  /** Documents and tables were both selected, but this question was clearly and only about the
+   * data, so the tabular engine answered it alone and the documents selected alongside it were
+   * never read - no retrieval, no gateway call (`docs/SESSION-DATA-15-Mixed-Routing.md`). Said
+   * under the answer, beside the ordinary "without the AI" line a tabular answer already gets. */
+  documentsNotNeeded?: true;
 }
 
 export interface ChatState {
@@ -310,6 +315,7 @@ export function useChat(
                     ...(retryable ? { tabularRetryable: true as const } : {}),
                     ...(source === null ? {} : { tabularSource: source }),
                     ...(nudge ? { tabularNudge: true as const } : {}),
+                    ...(result.documentsNotNeeded ? { documentsNotNeeded: true as const } : {}),
                   }
                 : entry,
             ),

@@ -212,6 +212,40 @@ pub fn prepare(
     answer_sync(question, data, selection, locale, index, force_model)
 }
 
+/// D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): documents and tables
+/// are both selected (`AnalysisScope::tier` returning `GroundingTier::DocumentsAndTables`). Before
+/// any document is read for retrieval, the classifier is run over the selected tables alone
+/// (`prepare`'s own `force_model: false` - forcing the model on a mixed question is session 16's
+/// own decision). `Some` only for a question that is clearly and only about the data - recognised,
+/// with nothing left over, `PendingAnswer::Done` - to be finished with `resolve` exactly as tier 2.
+/// `None` for every other question (`PendingAnswer::TryModel`); the caller keeps its own
+/// mixed-selection refusal rather than this module guessing between the two engines.
+///
+/// Synchronous, like `prepare` itself, and for the same reason this module's own split exists:
+/// whether this question ever reaches `resolve` at all is exactly what this answers, so it must
+/// return *before* the one `.await` this tier may now reach, with `index` already out of scope by
+/// then (`commands::sourced_answer`'s own router calls this, then `resolve`, as two separate
+/// steps - the same split `commands::tabular_tier` already uses, for the same reason).
+///
+/// Gap G's automatic escalation (`docs/SESSION-DATA-14-Query-Plan.md`) cannot fire for a mixed
+/// selection, by construction, not by a special guard: its only trigger, `PendingAnswer::TryModel`
+/// - built for `TabularRoute::NotRecognised` or `FilterDetection::ValueNotFound`, the same two
+/// cases that make a question *not* "clearly and only about the data" - is matched below and
+/// returned as `None`, which the caller must never hand to `resolve`: that is what keeps the
+/// gateway from ever being dialled on this path.
+pub fn prepare_if_data_only(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+) -> Result<Option<PendingAnswer>, AppError> {
+    match prepare(question, data, selection, locale, index, false)? {
+        done @ PendingAnswer::Done(_) => Ok(Some(done)),
+        PendingAnswer::TryModel { .. } => Ok(None),
+    }
+}
+
 /// The model-assisted half, with `index` already out of scope: awaits the gateway only for
 /// `PendingAnswer::TryModel`, and never lets the model's own text carry the number - every value
 /// still comes from `tabular::engine::execute`, called inside `prepare` before this was built.

@@ -463,13 +463,19 @@ fn operation_column_name(operation: &Operation) -> Option<&str> {
         Operation::Sum { column, .. }
         | Operation::Min { column, .. }
         | Operation::Max { column, .. }
+        | Operation::Mean { column, .. }
+        | Operation::Median { column, .. }
         | Operation::Distinct { column, .. }
         | Operation::Sort { column, .. } => Some(column.as_str()),
         Operation::LargestRow { by_column, .. } => Some(by_column.as_str()),
-        Operation::GroupSum { sum_column, .. } | Operation::LargestGroup { sum_column, .. } => {
-            Some(sum_column.as_str())
-        }
-        Operation::Count { .. } | Operation::Filter { .. } | Operation::RowAt { .. } => None,
+        Operation::GroupSum { sum_column, .. }
+        | Operation::LargestGroup { sum_column, .. }
+        | Operation::LeastGroup { sum_column, .. }
+        | Operation::TopGroups { sum_column, .. } => Some(sum_column.as_str()),
+        Operation::Count { .. }
+        | Operation::CountPerGroup { .. }
+        | Operation::Filter { .. }
+        | Operation::RowAt { .. } => None,
     }
 }
 
@@ -483,6 +489,8 @@ fn with_filters(operation: Operation, filters: Vec<FilterSpec>) -> Operation {
         Operation::Sum { column, .. } => Operation::Sum { column, filters },
         Operation::Min { column, .. } => Operation::Min { column, filters },
         Operation::Max { column, .. } => Operation::Max { column, filters },
+        Operation::Mean { column, .. } => Operation::Mean { column, filters },
+        Operation::Median { column, .. } => Operation::Median { column, filters },
         Operation::GroupSum {
             group_by,
             sum_column,
@@ -501,6 +509,27 @@ fn with_filters(operation: Operation, filters: Vec<FilterSpec>) -> Operation {
             sum_column,
             filters,
         },
+        Operation::LeastGroup {
+            group_by,
+            sum_column,
+            ..
+        } => Operation::LeastGroup {
+            group_by,
+            sum_column,
+            filters,
+        },
+        Operation::TopGroups {
+            group_by,
+            sum_column,
+            n,
+            ..
+        } => Operation::TopGroups {
+            group_by,
+            sum_column,
+            n,
+            filters,
+        },
+        Operation::CountPerGroup { group_by, .. } => Operation::CountPerGroup { group_by, filters },
         Operation::LargestRow { by_column, .. } => Operation::LargestRow { by_column, filters },
         Operation::Sort {
             column, descending, ..
@@ -1797,5 +1826,172 @@ mod tests {
         };
         // montant: 10, 20, ..., 90 - strictly greater than 50: 60, 70, 80, 90 = 4 rows.
         assert_eq!(count, 4);
+    }
+
+    // --- Session 12's D5: mean, median, least group, top N groups, count per group -----------
+
+    fn least_ranking(result: &TabularAnswer) -> &crate::tabular::engine::GroupRanking {
+        match result {
+            TabularAnswer::Value {
+                value: TabularValue::LeastGroup(ranking),
+                ..
+            } => ranking,
+            other => panic!("expected a least-group ranking, got {other:?}"),
+        }
+    }
+
+    fn top_groups(result: &TabularAnswer) -> &crate::tabular::engine::TopGroups {
+        match result {
+            TabularAnswer::Value {
+                value: TabularValue::TopGroups(top),
+                ..
+            } => top,
+            other => panic!("expected a top-groups ranking, got {other:?}"),
+        }
+    }
+
+    fn counts_per_group(result: &TabularAnswer) -> &[crate::tabular::engine::GroupCount] {
+        match result {
+            TabularAnswer::Value {
+                value: TabularValue::CountPerGroup(counts),
+                ..
+            } => counts,
+            other => panic!("expected counts per group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn which_agency_costs_the_least_is_answered_with_the_total_per_agency() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let result = folder
+            .ask(
+                "Which agency costs the least?",
+                &folder.ticked(&["revenue_sub_agency.csv"]),
+            )
+            .unwrap();
+
+        let least = least_ranking(&result);
+        assert_eq!(least.group_column, "agency");
+        assert_eq!(least.group_count, 4);
+        assert_eq!(least.top[0].group, "Health");
+        assert!((least.top[0].sum - 750.0).abs() < 1e-9);
+        let TabularAnswer::Value { locator, .. } = &result else {
+            unreachable!()
+        };
+        assert_eq!(locator.column.as_deref(), Some("amount"));
+    }
+
+    #[test]
+    fn top_n_agencies_by_amount_is_ranked_largest_first() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let result = folder
+            .ask("Top 2 agency by amount", &ScopeMode::WholeFolder)
+            .unwrap();
+
+        let top = top_groups(&result);
+        assert_eq!(top.requested, 2);
+        assert!(!top.capped);
+        assert_eq!(top.group_count, 4);
+        assert_eq!(top.top.len(), 2);
+        assert_eq!(top.top[0].group, "Transit");
+        assert_eq!(top.top[1].group, "Parks");
+    }
+
+    #[test]
+    fn how_many_rows_per_agency_counts_every_group_largest_first() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let result = folder
+            .ask("How many rows per agency?", &ScopeMode::WholeFolder)
+            .unwrap();
+
+        let counts = counts_per_group(&result);
+        // Transit has 3 rows; Health, Parks and Water have 2 each - a tie, kept alphabetical.
+        assert_eq!(counts[0].group, "Transit");
+        assert_eq!(counts[0].count, 3);
+        let tied: Vec<&str> = counts[1..].iter().map(|c| c.group.as_str()).collect();
+        assert_eq!(tied, vec!["Health", "Parks", "Water"]);
+        assert!(counts[1..].iter().all(|c| c.count == 2));
+    }
+
+    #[test]
+    fn the_average_and_median_amount_are_recognised() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let mean = folder
+            .ask("What is the average amount?", &ScopeMode::WholeFolder)
+            .unwrap();
+        let TabularAnswer::Value {
+            value: TabularValue::Mean(v),
+            ..
+        } = mean
+        else {
+            panic!("expected a mean, got {mean:?}");
+        };
+        assert!((v.value - 12250.75 / 9.0).abs() < 1e-6);
+
+        let median = folder
+            .ask("What is the median amount?", &ScopeMode::WholeFolder)
+            .unwrap();
+        let TabularAnswer::Value {
+            value: TabularValue::Median(v),
+            ..
+        } = median
+        else {
+            panic!("expected a median, got {median:?}");
+        };
+        // Sorted: 100, 300, 450, 800, 900, 1000, 1200.50, 2500.25, 5000 - the middle of 9 is 900.
+        assert!((v.value - 900.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn least_group_top_groups_and_count_per_group_each_take_a_session_11_filter() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let least = folder
+            .ask("Which agency has the least amount in 2020?", &ScopeMode::WholeFolder)
+            .unwrap();
+        let ranking = least_ranking(&least);
+        // 2020: Parks 800, Transit 2 500.25, Health 450, Water 100 - Water is least.
+        assert_eq!(ranking.top[0].group, "Water");
+        assert!((ranking.top[0].sum - 100.0).abs() < 1e-9);
+
+        let top = folder
+            .ask("Top 2 agency by amount in 2019", &ScopeMode::WholeFolder)
+            .unwrap();
+        let top = top_groups(&top);
+        // 2019: Parks 1 200.50, Transit 5 000, Health 300, Water 900.
+        assert_eq!(top.top[0].group, "Transit");
+        assert_eq!(top.top[1].group, "Parks");
+
+        let per_group = folder
+            .ask("How many rows per agency in 2020?", &ScopeMode::WholeFolder)
+            .unwrap();
+        let counts = counts_per_group(&per_group);
+        // Every agency has exactly one 2020 row: a four-way tie, kept alphabetical.
+        assert_eq!(counts.len(), 4);
+        assert!(counts.iter().all(|c| c.count == 1));
+        assert_eq!(
+            counts.iter().map(|c| c.group.as_str()).collect::<Vec<_>>(),
+            vec!["Health", "Parks", "Transit", "Water"]
+        );
+    }
+
+    #[test]
+    fn a_top_groups_request_beyond_fifty_is_capped_in_the_answer() {
+        let folder = Folder::with(&[("revenue_sub_agency.csv", &revenue())]);
+
+        let result = folder
+            .ask("Top 80 agency by amount", &ScopeMode::WholeFolder)
+            .unwrap();
+
+        let top = top_groups(&result);
+        assert_eq!(top.requested, 80);
+        assert!(top.capped);
+        // Only 4 agencies exist, so the cap never bites against the available data - `requested`
+        // alone says what was actually asked for.
+        assert_eq!(top.top.len(), 4);
     }
 }

@@ -1,7 +1,9 @@
-//! The deterministic tabular engine: `count`, `distinct`, `sum`, `min`, `max`, group sum, the
-//! largest single row, `filter`, `sort` - the committed set from `docs/BRIEF-SPRINT-2.5-OCR.md`'s
-//! sibling brief for Sprint 2b, and nothing else. Every operation here makes zero model or
-//! gateway calls: it reads `Workbook` cells and `TabularInventory` structure, computes, and
+//! The deterministic tabular engine: `count`, `distinct`, `sum`, `min`, `max`, `mean`, `median`,
+//! group sum, the largest group, the least group, the top N groups, rows per group, the largest
+//! single row, `filter`, `sort` - the committed set from `docs/BRIEF-SPRINT-2.5-OCR.md`'s sibling
+//! brief for Sprint 2b plus decision D5 (`docs/DECISIONS.md`), and nothing else. Every operation
+//! here makes zero model or gateway calls: it reads `Workbook` cells and `TabularInventory`
+//! structure, computes, and
 //! returns a `TabularOutcome` carrying its own provenance. When it cannot establish an answer
 //! deterministically it returns `NOT_DETERMINISTICALLY_ANSWERABLE` with what it does know - the
 //! available sheets and columns - never a guess (`docs/ARCHITECTURE.md`, "deterministic before
@@ -149,6 +151,36 @@ pub struct GroupRanking {
 /// How many leading groups a ranking reports: the answer and enough context to read it by.
 pub const TOP_GROUPS: usize = 5;
 
+/// The groups a `TopGroups` question actually got, together with what she asked for - so the
+/// interface can say "top 80" was honoured as the top 50 rather than silently answering a
+/// different question (`docs/SESSION-DATA-12-More-Aggregates.md`, "a larger N is capped").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopGroups {
+    pub group_column: String,
+    /// At most `requested`, and at most `MAX_TOP_GROUPS`; largest total first, ties keep
+    /// alphabetical order.
+    pub top: Vec<GroupSum>,
+    pub group_count: usize,
+    /// The N she actually asked for, uncapped - so "top 80" still says 80 even though `top` holds
+    /// at most 50.
+    pub requested: usize,
+    pub capped: bool,
+}
+
+/// The hard ceiling on a `TopGroups` question's N (`docs/DECISIONS.md`, D5): a larger request is
+/// honoured as this many, stated rather than refused.
+pub const MAX_TOP_GROUPS: usize = 50;
+
+/// One group's row count, largest first: "how many rows does each agency have". A **count**, never
+/// a sum - `CountPerGroup` is the row-counting sibling of `GroupSum`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupCount {
+    pub group: String,
+    pub count: usize,
+}
+
 /// A numeric aggregate together with what its column carries beside the number itself: the unit
 /// read from its cells, when every cell that had one agreed (`\u{20ac}`, `$`, `%`), and how many
 /// non-empty cells could not be read as a number - never folded into `value`, and always shown
@@ -174,10 +206,25 @@ pub enum TabularValue {
     Sum(NumericAggregate),
     Min(NumericAggregate),
     Max(NumericAggregate),
+    /// The arithmetic mean, over the same formula-free numeric cells a `Sum` would read
+    /// (`docs/SESSION-DATA-12-More-Aggregates.md`, D5). Never labelled a total: its own `kind`,
+    /// never folded into `Sum`.
+    Mean(NumericAggregate),
+    /// The middle value of the full sorted column (session 12's D5) - the mean of the two middle
+    /// values on an even count, never a shortcut over group means.
+    Median(NumericAggregate),
     /// Sorted, so the same column always reports its distinct values in the same order.
     Distinct(Vec<String>),
     GroupSums(Vec<GroupSum>),
     LargestGroup(GroupRanking),
+    /// The mirror of `LargestGroup`: smallest total first, never the smallest single row
+    /// (`docs/DECISIONS.md`, D5).
+    LeastGroup(GroupRanking),
+    /// The top N groups by total, N capped at `MAX_TOP_GROUPS` and the cap stated
+    /// (`docs/DECISIONS.md`, D5).
+    TopGroups(TopGroups),
+    /// Rows per group, largest first - a count, never a sum (`docs/DECISIONS.md`, D5).
+    CountPerGroup(Vec<GroupCount>),
     LargestRow(RowValue),
     /// A single row looked up directly, by position - not a maximum.
     Row(RowValue),
@@ -295,9 +342,26 @@ pub enum Operation {
     Sum { column: String, filters: Vec<FilterSpec> },
     Min { column: String, filters: Vec<FilterSpec> },
     Max { column: String, filters: Vec<FilterSpec> },
+    /// Session 12's D5 (`docs/DECISIONS.md`): the arithmetic mean over the matched rows' numeric
+    /// cells, unparsed cells excluded and counted exactly as `Sum` excludes and counts them.
+    Mean { column: String, filters: Vec<FilterSpec> },
+    /// The median of the matched rows' numeric cells, computed over the full sorted list - never a
+    /// shortcut such as averaging group medians (session 12's anti-patterns).
+    Median { column: String, filters: Vec<FilterSpec> },
     GroupSum { group_by: String, sum_column: String, filters: Vec<FilterSpec> },
     /// The group whose total is largest, with the runners-up.
     LargestGroup { group_by: String, sum_column: String, filters: Vec<FilterSpec> },
+    /// The mirror of `LargestGroup`: smallest total first.
+    LeastGroup { group_by: String, sum_column: String, filters: Vec<FilterSpec> },
+    /// The top `n` groups by total, `n` capped at `MAX_TOP_GROUPS` and the cap reported.
+    TopGroups {
+        group_by: String,
+        sum_column: String,
+        n: usize,
+        filters: Vec<FilterSpec>,
+    },
+    /// Rows per group, largest first - no sum column, since it counts rather than totals.
+    CountPerGroup { group_by: String, filters: Vec<FilterSpec> },
     LargestRow { by_column: String, filters: Vec<FilterSpec> },
     /// A row listing this one filter alone produces - constructed directly, never reached by
     /// `tabular::question`'s classifier (`docs/DECISIONS.md`, "the tabular engine session").
@@ -387,7 +451,9 @@ pub fn execute(
         }
         Operation::Sum { column, filters }
         | Operation::Min { column, filters }
-        | Operation::Max { column, filters } => {
+        | Operation::Max { column, filters }
+        | Operation::Mean { column, filters }
+        | Operation::Median { column, filters } => {
             let col = match resolve_value_column(columns, column) {
                 Ok(col) => col,
                 Err(reason) => return fail(reason),
@@ -434,6 +500,21 @@ pub fn execute(
                     )),
                     "max",
                 ),
+                Operation::Mean { .. } => {
+                    let mean = values.iter().sum::<f64>() / values.len() as f64;
+                    (TabularValue::Mean(aggregate(mean)), "mean")
+                }
+                Operation::Median { .. } => {
+                    let mut sorted = values.clone();
+                    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    let middle = sorted.len() / 2;
+                    let median = if sorted.len() % 2 == 0 {
+                        (sorted[middle - 1] + sorted[middle]) / 2.0
+                    } else {
+                        sorted[middle]
+                    };
+                    (TabularValue::Median(aggregate(median)), "median")
+                }
                 _ => unreachable!(),
             };
             TabularOutcome::Value {
@@ -456,6 +537,11 @@ pub fn execute(
             group_by,
             sum_column,
             filters,
+        }
+        | Operation::LeastGroup {
+            group_by,
+            sum_column,
+            filters,
         } => {
             let group_col = match resolve_value_column(columns, group_by) {
                 Ok(col) => col,
@@ -475,26 +561,7 @@ pub fn execute(
             if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
-            let resolved = inventory::resolve_numeric_column(rows, sum_col.index, locale);
-            let mut totals: std::collections::BTreeMap<String, f64> =
-                std::collections::BTreeMap::new();
-            for &index in &matched {
-                let Some(amount) = resolved.values[index] else {
-                    continue;
-                };
-                let Some(group_cell) = rows[index].get(group_col.index) else {
-                    continue;
-                };
-                let key = text_value(group_cell);
-                if key.trim().is_empty() {
-                    continue;
-                }
-                *totals.entry(key).or_insert(0.0) += amount;
-            }
-            let group_sums: Vec<GroupSum> = totals
-                .into_iter()
-                .map(|(group, sum)| GroupSum { group, sum })
-                .collect();
+            let group_sums = group_sums_for(rows, &matched, group_col, sum_col, locale);
             if group_sums.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
@@ -514,6 +581,22 @@ pub fn execute(
                         "largest_group",
                     )
                 }
+                Operation::LeastGroup { .. } => {
+                    let group_count = group_sums.len();
+                    let mut top = group_sums;
+                    // Stable: equal totals keep the alphabetical order the map gave them, exactly
+                    // as `LargestGroup` does for its own ties.
+                    top.sort_by(|a, b| a.sum.partial_cmp(&b.sum).unwrap_or(std::cmp::Ordering::Equal));
+                    top.truncate(TOP_GROUPS);
+                    (
+                        TabularValue::LeastGroup(GroupRanking {
+                            group_column: group_col.name.clone(),
+                            top,
+                            group_count,
+                        }),
+                        "least_group",
+                    )
+                }
                 _ => (TabularValue::GroupSums(group_sums), "group_sum"),
             };
             TabularOutcome::Value {
@@ -525,6 +608,101 @@ pub fn execute(
                     applied_filters(filters),
                 ),
                 derivation: computed(operation_name, matched.len()),
+            }
+        }
+        Operation::TopGroups {
+            group_by,
+            sum_column,
+            n,
+            filters,
+        } => {
+            let group_col = match resolve_value_column(columns, group_by) {
+                Ok(col) => col,
+                Err(reason) => return fail(reason),
+            };
+            let sum_col = match resolve_value_column(columns, sum_column) {
+                Ok(col) => col,
+                Err(reason) => return fail(reason),
+            };
+            if sum_col.inferred_type != ColumnType::Numeric {
+                return fail(NotAnswerableReason::NonNumericColumn);
+            }
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let group_sums = group_sums_for(rows, &matched, group_col, sum_col, locale);
+            if group_sums.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let group_count = group_sums.len();
+            let mut top = group_sums;
+            top.sort_by(|a, b| b.sum.partial_cmp(&a.sum).unwrap_or(std::cmp::Ordering::Equal));
+            let requested = (*n).max(1);
+            let capped = requested > MAX_TOP_GROUPS;
+            top.truncate(requested.min(MAX_TOP_GROUPS));
+            TabularOutcome::Value {
+                value: TabularValue::TopGroups(TopGroups {
+                    group_column: group_col.name.clone(),
+                    top,
+                    group_count,
+                    requested,
+                    capped,
+                }),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&sum_col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
+                derivation: computed("top_n", matched.len()),
+            }
+        }
+        Operation::CountPerGroup { group_by, filters } => {
+            let group_col = match resolve_value_column(columns, group_by) {
+                Ok(col) => col,
+                Err(reason) => return fail(reason),
+            };
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let mut counts: std::collections::BTreeMap<String, usize> =
+                std::collections::BTreeMap::new();
+            for &index in &matched {
+                let Some(cell) = rows[index].get(group_col.index) else {
+                    continue;
+                };
+                let key = text_value(cell);
+                if key.trim().is_empty() {
+                    continue;
+                }
+                *counts.entry(key).or_insert(0) += 1;
+            }
+            if counts.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let mut group_counts: Vec<GroupCount> = counts
+                .into_iter()
+                .map(|(group, count)| GroupCount { group, count })
+                .collect();
+            // Stable: equal counts keep the alphabetical order the map gave them.
+            group_counts.sort_by(|a, b| b.count.cmp(&a.count));
+            TabularOutcome::Value {
+                value: TabularValue::CountPerGroup(group_counts),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&group_col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
+                derivation: computed("count_per_group", matched.len()),
             }
         }
         Operation::LargestRow { by_column, filters } => {
@@ -935,6 +1113,37 @@ fn matching_rows_for(
             };
             matches.then_some(index)
         })
+        .collect()
+}
+
+/// Every matched row's `sum_col` value, totalled by its `group_col` text - shared by `GroupSum`,
+/// `LargestGroup`, `LeastGroup` and `TopGroups`, which differ only in how they sort and truncate
+/// the result.
+fn group_sums_for(
+    rows: &[Vec<CellValue>],
+    matched: &[usize],
+    group_col: &ColumnInventory,
+    sum_col: &ColumnInventory,
+    locale: &str,
+) -> Vec<GroupSum> {
+    let resolved = inventory::resolve_numeric_column(rows, sum_col.index, locale);
+    let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+    for &index in matched {
+        let Some(amount) = resolved.values[index] else {
+            continue;
+        };
+        let Some(group_cell) = rows[index].get(group_col.index) else {
+            continue;
+        };
+        let key = text_value(group_cell);
+        if key.trim().is_empty() {
+            continue;
+        }
+        *totals.entry(key).or_insert(0.0) += amount;
+    }
+    totals
+        .into_iter()
+        .map(|(group, sum)| GroupSum { group, sum })
         .collect()
 }
 
@@ -1776,5 +1985,345 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    // --- Session 12's D5: mean, median, least group, top N groups, count per group ----------
+
+    #[test]
+    fn mean_and_median_handle_even_and_odd_counts() {
+        // An even count (4 values: 10, 20, 30, 40): mean 25, median the average of the two
+        // middle values (20, 30) = 25. Two columns, since a one-cell header row is never one
+        // (`docs/DECISIONS.md`, D4).
+        let (workbook, inventory) = build_one(vec![
+            text_row(&["id", "montant"]),
+            text_row(&["1", "10"]),
+            text_row(&["2", "20"]),
+            text_row(&["3", "30"]),
+            text_row(&["4", "40"]),
+        ]);
+        let mean = run(
+            &workbook,
+            &inventory,
+            Operation::Mean {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        assert!(matches!(
+            mean,
+            TabularOutcome::Value { value: TabularValue::Mean(v), .. } if (v.value - 25.0).abs() < 1e-9
+        ));
+        let median = run(
+            &workbook,
+            &inventory,
+            Operation::Median {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        assert!(matches!(
+            median,
+            TabularOutcome::Value { value: TabularValue::Median(v), .. } if (v.value - 25.0).abs() < 1e-9
+        ));
+
+        // An odd count (5 values: 10, 20, 30, 40, 50): mean 30, median the single middle value
+        // (30) - never an average of two.
+        let (workbook, inventory) = build_one(vec![
+            text_row(&["id", "montant"]),
+            text_row(&["1", "10"]),
+            text_row(&["2", "20"]),
+            text_row(&["3", "30"]),
+            text_row(&["4", "40"]),
+            text_row(&["5", "50"]),
+        ]);
+        let mean = run(
+            &workbook,
+            &inventory,
+            Operation::Mean {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        assert!(matches!(
+            mean,
+            TabularOutcome::Value { value: TabularValue::Mean(v), .. } if (v.value - 30.0).abs() < 1e-9
+        ));
+        let median = run(
+            &workbook,
+            &inventory,
+            Operation::Median {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        assert!(matches!(
+            median,
+            TabularOutcome::Value { value: TabularValue::Median(v), .. } if (v.value - 30.0).abs() < 1e-9
+        ));
+    }
+
+    #[test]
+    fn mean_and_median_exclude_unparsed_cells_and_count_them() {
+        // 39 clean values (1 to 39) plus one cell that is not shaped like a number at all
+        // ("n/a"): the column is still 97.5% numeric, well over the 95% a column needs to type
+        // `Numeric` at all (`docs/DECISIONS.md`, D2), so the mean and median are computed over
+        // the 39 readable cells, and the one unreadable cell is reported, never silently
+        // dropped.
+        let mut rows = vec![text_row(&["id", "montant"])];
+        for i in 1..=39 {
+            let montant = if i == 20 { "n/a".to_string() } else { i.to_string() };
+            rows.push(vec![CellValue::Number(i as f64), CellValue::Text(montant)]);
+        }
+        let (workbook, inventory) = build_one(rows);
+
+        let mean = run(
+            &workbook,
+            &inventory,
+            Operation::Mean {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        let TabularOutcome::Value {
+            value: TabularValue::Mean(v),
+            derivation,
+            ..
+        } = mean
+        else {
+            panic!("expected a mean, got {mean:?}");
+        };
+        // 1..=39 without 20: sum = (1+..+39) - 20 = 780 - 20 = 760, over 38 values = 20.
+        assert!((v.value - 20.0).abs() < 1e-9, "mean over the 38 readable cells only");
+        assert_eq!(v.unparsed, 1);
+        assert_eq!(
+            derivation,
+            TabularDerivation::Computed { operation: "mean".into(), row_count: 38 }
+        );
+
+        let median = run(
+            &workbook,
+            &inventory,
+            Operation::Median {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        let TabularOutcome::Value {
+            value: TabularValue::Median(v),
+            ..
+        } = median
+        else {
+            panic!("expected a median, got {median:?}");
+        };
+        // 38 sorted values (1..=19, 21..=39): the two middle ones are 19 and 21, average 20.
+        assert!((v.value - 20.0).abs() < 1e-9);
+        assert_eq!(v.unparsed, 1);
+    }
+
+    #[test]
+    fn least_group_is_a_total_per_group_different_from_the_smallest_single_row() {
+        let (workbook, inventory) = invoices();
+
+        let least = run(
+            &workbook,
+            &inventory,
+            Operation::LeastGroup {
+                group_by: "fournisseur".into(),
+                sum_column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        let TabularOutcome::Value {
+            value: TabularValue::LeastGroup(ranking),
+            ..
+        } = least
+        else {
+            panic!("expected a least-group ranking, got {least:?}");
+        };
+        // Beta: 75,00 (one row) is the smallest total, and also happens to be a single row here -
+        // but Alpha (150,50 over two rows) must never be reported as smaller than Beta's own
+        // smallest single row (30,00) would suggest: the ranking is a total per group throughout.
+        assert_eq!(ranking.group_column, "fournisseur");
+        assert_eq!(
+            ranking.top,
+            vec![
+                GroupSum { group: "Beta".into(), sum: 75.0 },
+                GroupSum { group: "Alpha".into(), sum: 150.5 },
+                GroupSum { group: "Gamma".into(), sum: 500.0 },
+            ]
+        );
+
+        // The smallest single row (Alpha, 30,00) is a different fact, reached only through
+        // `Min`/`Sort`, never through `LeastGroup`.
+        let min = run(
+            &workbook,
+            &inventory,
+            Operation::Min {
+                column: "montant".into(),
+                filters: vec![],
+            },
+        );
+        assert!(matches!(
+            min,
+            TabularOutcome::Value { value: TabularValue::Min(v), .. } if (v.value - 30.0).abs() < 1e-9
+        ));
+    }
+
+    #[test]
+    fn a_top_groups_request_within_fifty_is_not_capped() {
+        let (workbook, inventory) = invoices();
+
+        let outcome = run(
+            &workbook,
+            &inventory,
+            Operation::TopGroups {
+                group_by: "fournisseur".into(),
+                sum_column: "montant".into(),
+                n: 2,
+                filters: vec![],
+            },
+        );
+        let TabularOutcome::Value {
+            value: TabularValue::TopGroups(top),
+            ..
+        } = outcome
+        else {
+            panic!("expected a top-groups ranking, got {outcome:?}");
+        };
+        assert_eq!(top.requested, 2);
+        assert!(!top.capped);
+        assert_eq!(
+            top.top,
+            vec![
+                GroupSum { group: "Gamma".into(), sum: 500.0 },
+                GroupSum { group: "Alpha".into(), sum: 150.5 },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_top_groups_request_beyond_fifty_is_capped_and_says_so() {
+        // 60 distinct one-row groups, so the request for the top 100 has real data to be capped
+        // against: the answer still holds only 50, with `requested` kept at 100 so the interface
+        // can say the cap was applied, not merely that fewer than 100 groups exist.
+        let mut rows = vec![text_row(&["groupe", "montant"])];
+        for index in 0..60 {
+            rows.push(vec![
+                CellValue::Text(format!("G{index:02}")),
+                CellValue::Number((index + 1) as f64),
+            ]);
+        }
+        let (workbook, inventory) = build_one(rows);
+
+        let outcome = run(
+            &workbook,
+            &inventory,
+            Operation::TopGroups {
+                group_by: "groupe".into(),
+                sum_column: "montant".into(),
+                n: 100,
+                filters: vec![],
+            },
+        );
+        let TabularOutcome::Value {
+            value: TabularValue::TopGroups(top),
+            ..
+        } = outcome
+        else {
+            panic!("expected a top-groups ranking, got {outcome:?}");
+        };
+        assert_eq!(top.requested, 100);
+        assert!(top.capped);
+        assert_eq!(top.group_count, 60);
+        assert_eq!(top.top.len(), MAX_TOP_GROUPS);
+        // Largest total first: G59 (montant 60) leads.
+        assert_eq!(top.top[0].group, "G59");
+    }
+
+    #[test]
+    fn count_per_group_counts_rows_largest_first_with_ties_kept_alphabetical() {
+        let (workbook, inventory) = invoices();
+
+        let outcome = run(
+            &workbook,
+            &inventory,
+            Operation::CountPerGroup {
+                group_by: "fournisseur".into(),
+                filters: vec![],
+            },
+        );
+        let TabularOutcome::Value {
+            value: TabularValue::CountPerGroup(counts),
+            locator,
+            derivation,
+        } = outcome
+        else {
+            panic!("expected counts per group, got {outcome:?}");
+        };
+        // Alpha has 2 rows; Beta and Gamma have 1 each - a tie, kept alphabetical.
+        assert_eq!(
+            counts,
+            vec![
+                GroupCount { group: "Alpha".into(), count: 2 },
+                GroupCount { group: "Beta".into(), count: 1 },
+                GroupCount { group: "Gamma".into(), count: 1 },
+            ]
+        );
+        assert_eq!(locator.column.as_deref(), Some("fournisseur"));
+        assert_eq!(
+            derivation,
+            TabularDerivation::Computed { operation: "count_per_group".into(), row_count: 4 }
+        );
+    }
+
+    #[test]
+    fn a_formula_column_cannot_be_grouped_or_totalled_by_mean_median_least_or_top() {
+        let (workbook, inventory) = build_one(vec![
+            text_row(&["a", "b", "total"]),
+            vec![
+                CellValue::Number(1.0),
+                CellValue::Number(2.0),
+                CellValue::Formula {
+                    expression: "A2+B2".into(),
+                    cached_value: Some(Box::new(CellValue::Number(3.0))),
+                },
+            ],
+            vec![
+                CellValue::Number(4.0),
+                CellValue::Number(5.0),
+                CellValue::Formula {
+                    expression: "A3+B3".into(),
+                    cached_value: Some(Box::new(CellValue::Number(9.0))),
+                },
+            ],
+        ]);
+
+        for operation in [
+            Operation::Mean { column: "total".into(), filters: vec![] },
+            Operation::Median { column: "total".into(), filters: vec![] },
+            Operation::LeastGroup {
+                group_by: "a".into(),
+                sum_column: "total".into(),
+                filters: vec![],
+            },
+            Operation::TopGroups {
+                group_by: "a".into(),
+                sum_column: "total".into(),
+                n: 5,
+                filters: vec![],
+            },
+        ] {
+            let outcome = run(&workbook, &inventory, operation.clone());
+            assert!(
+                matches!(
+                    outcome,
+                    TabularOutcome::NotDeterministicallyAnswerable {
+                        reason: NotAnswerableReason::FormulaCannotBeVerified,
+                        ..
+                    }
+                ),
+                "{operation:?} should refuse a formula column, got {outcome:?}"
+            );
+        }
     }
 }

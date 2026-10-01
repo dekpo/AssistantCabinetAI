@@ -64,6 +64,10 @@ struct PatternPack {
     /// Keyed `"1"` (January) to `"12"` (December).
     months: std::collections::BTreeMap<String, Vec<String>>,
     between: Vec<String>,
+    /// Session 12's D5 (`docs/DECISIONS.md`): number words one to ten, keyed `"1"` to `"10"`, for
+    /// reading a `top_n` question's N without ever guessing a digit from the question's own
+    /// vocabulary words. A larger N is always typed as a digit, which `extract_n` reads directly.
+    numbers: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -77,6 +81,11 @@ struct GroupWords {
     which: Vec<String>,
     most: Vec<String>,
     per: Vec<String>,
+    /// Session 12's D5: "which agency costs the **least**" - the mirror of `most`.
+    least: Vec<String>,
+    /// Session 12's D5: "**top** 3 agencies by amount" - independent of `which`/`most`, since a
+    /// top-N question is not phrased as a superlative.
+    top: Vec<String>,
 }
 
 /// Words found inside a column's own name, not in a question. Read from every pack at once
@@ -102,6 +111,10 @@ struct OperationWords {
     distinct: Vec<String>,
     list: Vec<String>,
     sum: Vec<String>,
+    /// Session 12's D5: "average" / "mean".
+    mean: Vec<String>,
+    /// Session 12's D5.
+    median: Vec<String>,
     min: Vec<String>,
     max: Vec<String>,
     largest_row: Vec<String>,
@@ -309,6 +322,8 @@ fn operation_column_names(operation: &Operation) -> Vec<&str> {
         | Operation::Sum { column, filters }
         | Operation::Min { column, filters }
         | Operation::Max { column, filters }
+        | Operation::Mean { column, filters }
+        | Operation::Median { column, filters }
         | Operation::Sort { column, filters, .. } => std::iter::once(column.as_str())
             .chain(filters.iter().map(|spec| spec.column.as_str()))
             .collect(),
@@ -324,8 +339,22 @@ fn operation_column_names(operation: &Operation) -> Vec<&str> {
             group_by,
             sum_column,
             filters,
+        }
+        | Operation::LeastGroup {
+            group_by,
+            sum_column,
+            filters,
+        }
+        | Operation::TopGroups {
+            group_by,
+            sum_column,
+            filters,
+            ..
         } => [group_by.as_str(), sum_column.as_str()]
             .into_iter()
+            .chain(filters.iter().map(|spec| spec.column.as_str()))
+            .collect(),
+        Operation::CountPerGroup { group_by, filters } => std::iter::once(group_by.as_str())
             .chain(filters.iter().map(|spec| spec.column.as_str()))
             .collect(),
         Operation::Filter { filter } => vec![filter.column.as_str()],
@@ -357,6 +386,8 @@ fn residual_words(
     fold_into(&mut consumed, &pack.operations.distinct);
     fold_into(&mut consumed, &pack.operations.list);
     fold_into(&mut consumed, &pack.operations.sum);
+    fold_into(&mut consumed, &pack.operations.mean);
+    fold_into(&mut consumed, &pack.operations.median);
     fold_into(&mut consumed, &pack.operations.min);
     fold_into(&mut consumed, &pack.operations.max);
     fold_into(&mut consumed, &pack.operations.largest_row);
@@ -364,6 +395,8 @@ fn residual_words(
     fold_into(&mut consumed, &pack.groups.which);
     fold_into(&mut consumed, &pack.groups.most);
     fold_into(&mut consumed, &pack.groups.per);
+    fold_into(&mut consumed, &pack.groups.least);
+    fold_into(&mut consumed, &pack.groups.top);
     fold_into(&mut consumed, &pack.descending);
     if let Some(name) = sheet_name {
         consumed.extend(name_words(name));
@@ -373,6 +406,16 @@ fn residual_words(
     }
     for name in operation_column_names(operation) {
         consumed.extend(name_words(name));
+    }
+    // `TopGroups`'s own N is part of the operation's identity, exactly like the group words above
+    // - never a candidate filter value `tabular_answer::detect_filters` could misread.
+    if let Operation::TopGroups { .. } = operation {
+        if let Some(token) = tokenise(question)
+            .iter()
+            .find(|token| extract_n(std::slice::from_ref(token), pack).is_some())
+        {
+            consumed.insert(fold_text(token));
+        }
     }
 
     words_with_original(question)
@@ -427,7 +470,11 @@ fn detect_structural(
             sheet: sheet_name.clone(),
         });
     }
-    if has(&pack.structural.rows) {
+    // "How many rows per agency?" is `CountPerGroup`, not the sheet's row count - checked before
+    // the leftover-word heuristic below, because `per` is itself recognised group vocabulary and
+    // would otherwise leave nothing residual, reading as an honest unfiltered row count
+    // (`docs/SESSION-DATA-12-More-Aggregates.md`, gap E).
+    if has(&pack.structural.rows) && !has(&pack.groups.per) {
         // "How many rows does Harbor have?" is a filtered count, not the sheet's row count
         // (`docs/DECISIONS.md`, session 11, gap A's row-count case): this module never reads a
         // cell value, so it cannot tell a real filter from ordinary prose, but it can tell
@@ -457,9 +504,11 @@ fn detect_structural(
     None
 }
 
-/// "Which agency costs the most" and "total amount per agency": one group column the question
-/// names, and a column to total - the one it names, or the one that reads as an amount. `None`
-/// when the question is not shaped like either, so the ordinary operations still get their turn.
+/// "Which agency costs the most", "which agency costs the least" (session 12's D5), "top 3
+/// agencies by amount" (D5), "total amount per agency", and "how many rows per agency" (D5): one
+/// group column the question names, and - except for the last one, which only counts rows - a
+/// column to total: the one it names, or the one that reads as an amount. `None` when the
+/// question is not shaped like any of these, so the ordinary operations still get their turn.
 fn detect_group(
     tokens: &[String],
     pack: &PatternPack,
@@ -469,8 +518,12 @@ fn detect_group(
 ) -> Option<TabularRoute> {
     let has = |words: &[String]| tokens.iter().any(|token| contains(words, token));
     let largest = has(&pack.groups.which) && has(&pack.groups.most);
-    let per_group = has(&pack.operations.sum) && has(&pack.groups.per);
-    if !largest && !per_group {
+    let least = has(&pack.groups.which) && has(&pack.groups.least);
+    let per_sum = has(&pack.operations.sum) && has(&pack.groups.per);
+    let per_count = has(&pack.operations.count) && has(&pack.groups.per);
+    let requested_n = extract_n(tokens, pack);
+    let top_n = has(&pack.groups.top) && requested_n.is_some();
+    if !largest && !least && !per_sum && !per_count && !top_n {
         return None;
     }
 
@@ -483,6 +536,19 @@ fn detect_group(
     let [group] = groups.as_slice() else {
         return None;
     };
+
+    // "How many rows per agency" needs no measure column at all - it only counts. Resolved before
+    // anything below, which exists only to find a column worth adding up.
+    if per_count && !largest && !least && !per_sum && !top_n {
+        return Some(TabularRoute::Operation {
+            sheet: sheet_name.clone(),
+            operation: Operation::CountPerGroup {
+                group_by: group.name.clone(),
+                filters: Vec::new(),
+            },
+        });
+    }
+
     let named_measures: Vec<&ColumnInventory> = named
         .iter()
         .copied()
@@ -517,21 +583,54 @@ fn detect_group(
         }
     };
     let group_by = group.name.clone();
+    let operation = if top_n {
+        Operation::TopGroups {
+            group_by,
+            sum_column,
+            n: requested_n.expect("top_n is true only when extract_n found one"),
+            filters: Vec::new(),
+        }
+    } else if least {
+        Operation::LeastGroup {
+            group_by,
+            sum_column,
+            filters: Vec::new(),
+        }
+    } else if largest {
+        Operation::LargestGroup {
+            group_by,
+            sum_column,
+            filters: Vec::new(),
+        }
+    } else {
+        Operation::GroupSum {
+            group_by,
+            sum_column,
+            filters: Vec::new(),
+        }
+    };
     Some(TabularRoute::Operation {
         sheet: sheet_name.clone(),
-        operation: if largest {
-            Operation::LargestGroup {
-                group_by,
-                sum_column,
-                filters: Vec::new(),
-            }
-        } else {
-            Operation::GroupSum {
-                group_by,
-                sum_column,
-                filters: Vec::new(),
-            }
-        },
+        operation,
+    })
+}
+
+/// The N a `top_n` question asked for: a digit token of any size (so "top 80" still reads 80, for
+/// the engine to cap and report), or one of the pack's own number words, one to ten
+/// (`docs/SESSION-DATA-12-More-Aggregates.md`: "the N is read only from digits or from number
+/// words listed in the packs"). `None` when neither is present - never a guess.
+fn extract_n(tokens: &[String], pack: &PatternPack) -> Option<usize> {
+    if let Some(n) = tokens.iter().find_map(|token| token.parse::<usize>().ok()) {
+        if n >= 1 {
+            return Some(n);
+        }
+    }
+    pack.numbers.iter().find_map(|(key, words)| {
+        let n = key.parse::<usize>().ok()?;
+        tokens
+            .iter()
+            .any(|token| words.iter().any(|word| word == token))
+            .then_some(n)
     })
 }
 
@@ -732,6 +831,18 @@ fn detect_operation(
 
     if has(&pack.operations.sum) {
         return column_name.clone().map(|column| Operation::Sum {
+            column,
+            filters: Vec::new(),
+        });
+    }
+    if has(&pack.operations.mean) {
+        return column_name.clone().map(|column| Operation::Mean {
+            column,
+            filters: Vec::new(),
+        });
+    }
+    if has(&pack.operations.median) {
+        return column_name.clone().map(|column| Operation::Median {
             column,
             filters: Vec::new(),
         });
@@ -1044,6 +1155,126 @@ mod tests {
                 "{question}"
             );
         }
+    }
+
+    #[test]
+    fn mean_and_median_questions_resolve_over_the_named_column() {
+        let inventory = invoices();
+        assert_eq!(
+            classify("What is the average montant?", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::Mean {
+                    column: "montant".to_string(),
+                    filters: Vec::new(),
+                }
+            }
+        );
+        assert_eq!(
+            classify("What is the median montant?", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::Median {
+                    column: "montant".to_string(),
+                    filters: Vec::new(),
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn which_agency_costs_the_least_is_a_group_question_mirroring_the_most() {
+        let workbook = Workbook {
+            sheets: vec![SheetData {
+                name: "Data".to_string(),
+                rows: vec![
+                    text_row(&["agency", "amount"]),
+                    text_row(&["Alpha", "100"]),
+                    text_row(&["Beta", "10"]),
+                ],
+            }],
+        };
+        let inventory = TabularInventory::build("costs.csv", "hash-4", TabularFormat::Csv, &workbook, "en-US");
+
+        assert_eq!(
+            classify("Which agency costs the least?", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::LeastGroup {
+                    group_by: "agency".to_string(),
+                    sum_column: "amount".to_string(),
+                    filters: Vec::new(),
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn top_n_reads_the_requested_count_from_a_digit_or_a_pack_number_word() {
+        let workbook = Workbook {
+            sheets: vec![SheetData {
+                name: "Data".to_string(),
+                rows: vec![
+                    text_row(&["agency", "amount"]),
+                    text_row(&["Alpha", "100"]),
+                    text_row(&["Beta", "10"]),
+                ],
+            }],
+        };
+        let inventory = TabularInventory::build("costs.csv", "hash-5", TabularFormat::Csv, &workbook, "en-US");
+
+        assert_eq!(
+            classify("Top 3 agency by amount", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::TopGroups {
+                    group_by: "agency".to_string(),
+                    sum_column: "amount".to_string(),
+                    n: 3,
+                    filters: Vec::new(),
+                }
+            }
+        );
+        assert_eq!(
+            classify("Top three agency by amount", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::TopGroups {
+                    group_by: "agency".to_string(),
+                    sum_column: "amount".to_string(),
+                    n: 3,
+                    filters: Vec::new(),
+                }
+            },
+            "a pack number word, one to ten, reads exactly like its digit"
+        );
+    }
+
+    #[test]
+    fn how_many_rows_per_agency_is_count_per_group_not_a_sheet_wide_row_count() {
+        let workbook = Workbook {
+            sheets: vec![SheetData {
+                name: "Data".to_string(),
+                rows: vec![
+                    text_row(&["agency", "amount"]),
+                    text_row(&["Alpha", "100"]),
+                    text_row(&["Beta", "10"]),
+                ],
+            }],
+        };
+        let inventory = TabularInventory::build("costs.csv", "hash-6", TabularFormat::Csv, &workbook, "en-US");
+
+        assert_eq!(
+            classify("How many rows per agency?", &inventory, None, "en-US"),
+            TabularRoute::Operation {
+                sheet: None,
+                operation: Operation::CountPerGroup {
+                    group_by: "agency".to_string(),
+                    filters: Vec::new(),
+                }
+            },
+            "'per' makes this a group question even though 'rows' is also this pack's structural word"
+        );
     }
 
     #[test]

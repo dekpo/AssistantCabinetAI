@@ -289,6 +289,8 @@
     "sum": "Sum of {column}: **{value}**.",
     "min": "Smallest value of {column}: **{value}**.",
     "max": "Largest value of {column}: **{value}**.",
+    "mean": "Average of {column}: **{value}**.",
+    "median": "Median of {column}: **{value}**.",
     "distinct": "The {count} found in {column}:",
     "groupSums": "Totals of {column}, by group:",
     "largestRow": "The row where {column} is largest:",
@@ -356,6 +358,12 @@
     "filterYear": "{column} in {value}",
     "filterDateRange": "{column} between {start} and {end}",
     "filterIn": "{column} among {value}",
-    "filterAnd": " and "
+    "filterAnd": " and ",
+    "leastGroup": "Smallest total {column} by {group}: **{leader}**, with **{value}**.",
+    "leastGroupTie": "Tie for the smallest total {column} by {group}: **{leaders}**, with **{value}** each.",
+    "groupTotalNoteLeast": "This is the total per {group}, added up over every row, not the single smallest row.",
+    "topGroups": "The {count} {group} with the largest total {column}:",
+    "topGroupsCapped": "The requested top {requested} was capped at 50.",
+    "countPerGroup": "Number of rows per {group}:"
   }
 }

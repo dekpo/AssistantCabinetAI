@@ -528,8 +528,11 @@ deployment (sprint 4). It is platform work for the next profession — the case 
 - Workbook inventory persisted locally, keyed by relative path and SHA-256: sheets, dimensions, columns,
   inferred types, row counts, header row, date and numeric and categorical columns, formula presence,
   supported capabilities. No copy of the source file.
-- Deterministic operations: count, distinct, sum, min, max, group sum, largest single row, filter, sort.
-  A group **total** and the largest **single row** are different facts and are labelled as such.
+- Deterministic operations: count, distinct, sum, min, max, mean, median, group sum, the largest group,
+  the least group, the top N groups, rows per group, largest single row, filter, sort - mean, median,
+  least group, top N and rows-per-group added by decision D5 (`docs/DECISIONS.md`), implemented session
+  12. A group **total** and the largest **single row** are different facts and are labelled as such. A
+  new operation is never added quietly: it needs an owner decision recorded in `docs/DECISIONS.md`.
 - Question classification from a **locale pattern pack** (data, not Rust literals). The operations are
   language-neutral; the sentence comes from the React catalogues. Changing the locale cannot change a
   number.

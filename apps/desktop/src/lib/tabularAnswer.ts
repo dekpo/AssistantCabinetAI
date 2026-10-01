@@ -212,6 +212,20 @@ function formatValue(
         over,
         ...unparsedNote(value.value),
       ].join("\n");
+    case "mean":
+      return [
+        t("tabularAnswer.mean", { column: named, value: aggregate(value.value) }),
+        "",
+        over,
+        ...unparsedNote(value.value),
+      ].join("\n");
+    case "median":
+      return [
+        t("tabularAnswer.median", { column: named, value: aggregate(value.value) }),
+        "",
+        over,
+        ...unparsedNote(value.value),
+      ].join("\n");
     case "distinct":
       return [
         t("tabularAnswer.distinct", {
@@ -280,6 +294,81 @@ function formatValue(
       lines.push("", over);
       return lines.join("\n");
     }
+    case "least_group": {
+      const { groupColumn, top, groupCount } = value.value;
+      const best = top[0];
+      if (best === undefined) {
+        return over;
+      }
+      const leaders = top.filter((group) => group.sum === best.sum);
+      const headline =
+        leaders.length > 1
+          ? t("tabularAnswer.leastGroupTie", {
+              column: named,
+              group: groupColumn,
+              leaders: leaders.map((group) => group.group).join(", "),
+              value: number(best.sum),
+            })
+          : t("tabularAnswer.leastGroup", {
+              column: named,
+              group: groupColumn,
+              leader: best.group,
+              value: number(best.sum),
+            });
+      /* Said every time: "which agency costs the least" is a total per agency, and a reader who
+         expected the smallest single payment must not mistake one for the other. */
+      const lines = [headline, "", t("tabularAnswer.groupTotalNoteLeast", { group: groupColumn })];
+      if (top.length > 1) {
+        lines.push(
+          "",
+          t("tabularAnswer.groupRanking", {
+            groups: counted(groupCount, t("tabularAnswer.groupOne"), t("tabularAnswer.groupMany")),
+          }),
+          "",
+          ...top.map(
+            (group) => `- ${t("tabularAnswer.pair", { name: group.group, value: number(group.sum) })}`,
+          ),
+        );
+      }
+      lines.push("", over);
+      return lines.join("\n");
+    }
+    case "top_groups": {
+      const { groupColumn, top, groupCount, requested, capped } = value.value;
+      const lines = [
+        t("tabularAnswer.topGroups", {
+          column: named,
+          group: groupColumn,
+          count: counted(top.length, t("tabularAnswer.groupOne"), t("tabularAnswer.groupMany")),
+        }),
+        "",
+        ...top.map((group) => `- ${t("tabularAnswer.pair", { name: group.group, value: number(group.sum) })}`),
+      ];
+      if (capped) {
+        lines.push("", t("tabularAnswer.topGroupsCapped", { requested: String(requested) }));
+      }
+      lines.push(
+        "",
+        t("tabularAnswer.groupRanking", {
+          groups: counted(groupCount, t("tabularAnswer.groupOne"), t("tabularAnswer.groupMany")),
+        }),
+      );
+      lines.push("", over);
+      return lines.join("\n");
+    }
+    case "count_per_group":
+      return [
+        t("tabularAnswer.countPerGroup", { group: named }),
+        "",
+        ...value.value
+          .slice(0, MAX_ROWS_SHOWN)
+          .map((item) => `- ${t("tabularAnswer.pair", { name: item.group, value: number(item.count) })}`),
+        ...(value.value.length > MAX_ROWS_SHOWN
+          ? ["", t("tabularAnswer.moreGroups", { count: value.value.length - MAX_ROWS_SHOWN })]
+          : []),
+        "",
+        over,
+      ].join("\n");
     case "largest_row":
       return [t("tabularAnswer.largestRow", { column: named }), "", ...rowLines(t, value.value)].join(
         "\n",

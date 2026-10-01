@@ -289,6 +289,8 @@
     "sum": "Somme de {column} : **{value}**.",
     "min": "Plus petite valeur de {column} : **{value}**.",
     "max": "Plus grande valeur de {column} : **{value}**.",
+    "mean": "Moyenne de {column} : **{value}**.",
+    "median": "Médiane de {column} : **{value}**.",
     "distinct": "{count} différentes dans {column} :",
     "groupSums": "Totaux de {column}, par groupe :",
     "largestRow": "La ligne où {column} est le plus grand :",
@@ -356,6 +358,12 @@
     "filterYear": "{column} en {value}",
     "filterDateRange": "{column} entre {start} et {end}",
     "filterIn": "{column} parmi {value}",
-    "filterAnd": " et "
+    "filterAnd": " et ",
+    "leastGroup": "Plus petit total {column} par {group} : **{leader}**, avec **{value}**.",
+    "leastGroupTie": "Égalité pour le plus petit total {column} par {group} : **{leaders}**, avec **{value}** chacun.",
+    "groupTotalNoteLeast": "Il s'agit du total par {group}, additionné sur toutes les lignes, pas de la plus petite ligne isolée.",
+    "topGroups": "Les {count} {group} ayant le plus grand total de {column} :",
+    "topGroupsCapped": "Le top {requested} demandé a été limité à 50.",
+    "countPerGroup": "Nombre de lignes par {group} :"
   }
 }

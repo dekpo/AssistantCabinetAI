@@ -317,6 +317,190 @@ describe("which group costs the most", () => {
   });
 });
 
+describe("a mean or a median", () => {
+  function mean(value: number): TabularAnswer {
+    return {
+      kind: "value",
+      file: "rendez-vous.xlsx",
+      value: { kind: "mean", value: { value, unit: null, unparsed: 0 } },
+      locator: { sheet: "Planning", headerRow: 0, column: "duree_min", rowRange: [0, 39], filters: [] },
+      derivation: { kind: "computed", operation: "mean", row_count: 40 },
+    };
+  }
+
+  function median(value: number): TabularAnswer {
+    return {
+      kind: "value",
+      file: "rendez-vous.xlsx",
+      value: { kind: "median", value: { value, unit: null, unparsed: 0 } },
+      locator: { sheet: "Planning", headerRow: 0, column: "duree_min", rowRange: [0, 39], filters: [] },
+      derivation: { kind: "computed", operation: "median", row_count: 40 },
+    };
+  }
+
+  it("is never labelled a total", () => {
+    const text = formatTabularAnswer(english, mean(29.375), "en-US");
+
+    expect(text).toContain("Average of duree_min");
+    expect(text).toContain("29.375");
+    expect(text).not.toContain("Sum of");
+    expect(text).toContain("40 rows");
+  });
+
+  it("writes a median with its own sentence", () => {
+    const text = formatTabularAnswer(french, median(22.5), "fr-FR");
+
+    expect(text).toContain("Médiane de duree_min");
+    expect(text).toContain("22,5");
+  });
+});
+
+describe("which group costs the least", () => {
+  function least(top: { group: string; sum: number }[]): TabularAnswer {
+    return {
+      kind: "value",
+      file: "rendez-vous.xlsx",
+      value: { kind: "least_group", value: { groupColumn: "salle", top, groupCount: 4 } },
+      locator: { sheet: "Planning", headerRow: 0, column: "duree_min", rowRange: [0, 39], filters: [] },
+      derivation: { kind: "computed", operation: "least_group", row_count: 40 },
+    };
+  }
+
+  it("names the smallest total, says it is a total per group, and never the largest-group wording", () => {
+    const text = formatTabularAnswer(
+      english,
+      least([
+        { group: "Iris", sum: 225 },
+        { group: "Cedre", sum: 250 },
+      ]),
+      "en-US",
+    );
+
+    expect(text).toContain("Smallest total duree_min by salle: **Iris**, with **225**.");
+    expect(text).toContain("not the single smallest row");
+    expect(text).not.toContain("Largest total");
+    expect(text).not.toContain("not the largest single row");
+    expect(text).toContain("4 groups");
+    expect(text).toContain("- Cedre: 250");
+  });
+
+  it("calls a tie a tie rather than picking one", () => {
+    const text = formatTabularAnswer(
+      french,
+      least([
+        { group: "Iris", sum: 10 },
+        { group: "Cedre", sum: 10 },
+        { group: "Azur", sum: 50 },
+      ]),
+      "fr-FR",
+    );
+
+    expect(text).toContain("Égalité");
+    expect(text).toContain("**Iris, Cedre**");
+  });
+});
+
+describe("the top N groups", () => {
+  function topGroups(
+    top: { group: string; sum: number }[],
+    requested: number,
+    capped: boolean,
+  ): TabularAnswer {
+    return {
+      kind: "value",
+      file: "rendez-vous.xlsx",
+      value: {
+        kind: "top_groups",
+        value: { groupColumn: "salle", top, groupCount: 4, requested, capped },
+      },
+      locator: { sheet: "Planning", headerRow: 0, column: "duree_min", rowRange: [0, 39], filters: [] },
+      derivation: { kind: "computed", operation: "top_n", row_count: 40 },
+    };
+  }
+
+  it("lists the requested groups, largest first", () => {
+    const text = formatTabularAnswer(
+      english,
+      topGroups(
+        [
+          { group: "Azur", sum: 400 },
+          { group: "Lotus", sum: 300 },
+          { group: "Cedre", sum: 250 },
+        ],
+        3,
+        false,
+      ),
+      "en-US",
+    );
+
+    expect(text).toContain("- Azur: 400");
+    expect(text).toContain("- Lotus: 300");
+    expect(text).toContain("- Cedre: 250");
+    expect(text).not.toContain("capped");
+  });
+
+  it("says when a larger N was capped", () => {
+    const text = formatTabularAnswer(
+      french,
+      topGroups(
+        [
+          { group: "Azur", sum: 400 },
+          { group: "Lotus", sum: 300 },
+          { group: "Cedre", sum: 250 },
+          { group: "Iris", sum: 225 },
+        ],
+        80,
+        true,
+      ),
+      "fr-FR",
+    );
+
+    expect(text).toContain("80");
+    expect(text).toContain("limité à 50");
+  });
+});
+
+describe("rows per group", () => {
+  function countPerGroup(value: { group: string; count: number }[]): TabularAnswer {
+    return {
+      kind: "value",
+      file: "rendez-vous.xlsx",
+      value: { kind: "count_per_group", value },
+      locator: { sheet: "Planning", headerRow: 0, column: "salle", rowRange: [0, 39], filters: [] },
+      derivation: { kind: "computed", operation: "count_per_group", row_count: 40 },
+    };
+  }
+
+  it("lists every group's row count, as the engine ordered them", () => {
+    const text = formatTabularAnswer(
+      english,
+      countPerGroup([
+        { group: "Azur", count: 20 },
+        { group: "Cedre", count: 10 },
+        { group: "Iris", count: 5 },
+        { group: "Lotus", count: 5 },
+      ]),
+      "en-US",
+    );
+
+    expect(text).toContain("Number of rows per salle");
+    expect(text).toContain("- Azur: 20");
+    expect(text).toContain("- Lotus: 5");
+  });
+
+  it("counts the rest once more than fifty groups exist", () => {
+    const groups = Array.from({ length: MAX_ROWS_SHOWN + 2 }, (_, index) => ({
+      group: `Salle ${index}`,
+      count: MAX_ROWS_SHOWN - index,
+    }));
+    const text = formatTabularAnswer(french, countPerGroup(groups), "fr-FR");
+
+    expect(text).toContain(`Salle ${MAX_ROWS_SHOWN - 1}`);
+    expect(text).not.toContain(`Salle ${MAX_ROWS_SHOWN}`);
+    expect(text).toContain("2 autres groupes");
+  });
+});
+
 describe("a list of a column's values", () => {
   it("lists every value, and counts what does not fit", () => {
     const values = Array.from({ length: 53 }, (_, index) => `Agency ${index}`);

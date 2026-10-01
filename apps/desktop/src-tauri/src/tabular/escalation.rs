@@ -74,16 +74,29 @@ fn describe_value(value: &TabularValue) -> String {
         TabularValue::Sum(total) => total.value.to_string(),
         TabularValue::Min(min) => min.value.to_string(),
         TabularValue::Max(max) => max.value.to_string(),
+        TabularValue::Mean(mean) => mean.value.to_string(),
+        TabularValue::Median(median) => median.value.to_string(),
         TabularValue::Distinct(values) => values.join(", "),
         TabularValue::GroupSums(sums) => sums
             .iter()
             .map(|group| format!("{}: {}", group.group, group.sum))
             .collect::<Vec<_>>()
             .join("; "),
-        TabularValue::LargestGroup(ranking) => ranking
+        TabularValue::LargestGroup(ranking) | TabularValue::LeastGroup(ranking) => ranking
             .top
             .iter()
             .map(|group| format!("{} {}: {}", ranking.group_column, group.group, group.sum))
+            .collect::<Vec<_>>()
+            .join("; "),
+        TabularValue::TopGroups(top) => top
+            .top
+            .iter()
+            .map(|group| format!("{} {}: {}", top.group_column, group.group, group.sum))
+            .collect::<Vec<_>>()
+            .join("; "),
+        TabularValue::CountPerGroup(counts) => counts
+            .iter()
+            .map(|group| format!("{}: {}", group.group, group.count))
             .collect::<Vec<_>>()
             .join("; "),
         TabularValue::LargestRow(row) | TabularValue::Row(row) => row

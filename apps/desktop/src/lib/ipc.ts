@@ -308,6 +308,11 @@ export type TabularValue =
   | { kind: "sum"; value: NumericAggregate }
   | { kind: "min"; value: NumericAggregate }
   | { kind: "max"; value: NumericAggregate }
+  /** The arithmetic mean, over the same formula-free numeric cells a `sum` would read
+   * (`docs/DECISIONS.md`, D5). Never labelled a total. */
+  | { kind: "mean"; value: NumericAggregate }
+  /** The middle value of the full sorted column, never a shortcut over group medians. */
+  | { kind: "median"; value: NumericAggregate }
   | { kind: "distinct"; value: string[] }
   | { kind: "group_sums"; value: { group: string; sum: number }[] }
   /** The groups with the largest totals, largest first: a total per group, never one row. */
@@ -315,6 +320,25 @@ export type TabularValue =
       kind: "largest_group";
       value: { groupColumn: string; top: { group: string; sum: number }[]; groupCount: number };
     }
+  /** The mirror of `largest_group`: smallest total first, never the smallest single row. */
+  | {
+      kind: "least_group";
+      value: { groupColumn: string; top: { group: string; sum: number }[]; groupCount: number };
+    }
+  /** The top N groups by total, N capped at 50 and the cap reported (`docs/DECISIONS.md`, D5). */
+  | {
+      kind: "top_groups";
+      value: {
+        groupColumn: string;
+        top: { group: string; sum: number }[];
+        groupCount: number;
+        /** What she actually asked for, uncapped - `top.length` is at most 50. */
+        requested: number;
+        capped: boolean;
+      };
+    }
+  /** Rows per group, largest first - a count, never a sum. */
+  | { kind: "count_per_group"; value: { group: string; count: number }[] }
   | { kind: "largest_row"; value: TabularRow }
   | { kind: "row"; value: TabularRow }
   | { kind: "rows"; value: TabularRow[] };

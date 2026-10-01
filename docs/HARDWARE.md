@@ -3,7 +3,8 @@
 Engineering sizing for the inference machine. The v0 plan puts this Mac mini **at the GP's practice**
 as the AI server, reached by the workstation through the gateway (`docs/ARCHITECTURE.md`,
 `docs/ROADMAP.md`). Purchase, pricing, retail and financing logistics live in
-`docs/private/HARDWARE-PURCHASE.md`.
+`docs/private/HARDWARE-PURCHASE.md`. Server hardware options for a *later* cabinet (the Mac mini is
+not the only box this stack can run on) and the full deployment runbook: `docs/DEPLOYMENT.md`.
 
 ## Verdict
 

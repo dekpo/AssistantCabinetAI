@@ -493,9 +493,10 @@ Deliverable: the software installs and runs at her practice.
 - **A step-by-step runbook for deploying the server side** (gateway, Ollama, Open WebUI, their configuration)
   to a separate **server device**, written for any such device rather than for one Mac mini, since the stack
   will be replicated on other hardware. Recorded on 27 September 2026, while the stack still runs on the same
-  machine as the desktop app and the Mac mini has not arrived. It needs design as well as steps: today
-  everything is published on `127.0.0.1`, and the user device must reach the gateway - and only the gateway -
-  over the practice network, behind a firewall rule and an access key. After the move, run
+  machine as the desktop app and the Mac mini has not arrived. **Written 1 October 2026, ahead of this
+  window: `docs/DEPLOYMENT.md`.** The LAN exposure it designs - today everything is published on
+  `127.0.0.1`, and the user device must reach the gateway - and only the gateway - over the practice network,
+  behind a firewall rule and an access key - is still to build, tracked there. After the move, run
   `apps/server/scripts/measure_context.py` there and set `MODEL_CONTEXT_WINDOWS` from what it measures.
 - Security checks: path allow-list, context cap, per-person access key, no clear text on the network.
 - `docs/user/`: installation and getting started, **in French**, written for her.

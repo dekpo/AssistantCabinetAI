@@ -187,3 +187,6 @@ Delegating a real scan is still processing health data, so it waits for the DPIA
 The Mac mini is the practice's model server. Assistant Cabinet AI installs on **each** workstation. They are
 not the same machine, and patient files are never copied to the mini to "use its power" — that would turn it
 into a health-record store.
+
+The full runbook — client and server hardware requirements, the LAN topology, the beta rollout checklist for
+this cabinet and the template for the next one — is `docs/DEPLOYMENT.md`.

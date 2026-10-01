@@ -162,11 +162,11 @@ Same repository, same `compose.yaml`, a new `.env`. Run `docker compose up -d`, 
 account, recreate the instructions from `prompts/`. Do **not** carry the Windows `data/` over: it is a test
 account, not a recipe.
 
-**Pending, recorded 27 September 2026: a step-by-step runbook for a separate server device.** Today the
-gateway, Ollama and Open WebUI run on the same machine as the desktop app. The target is a **server device**
-(the Mac mini first, other hardware later - the runbook must not assume one machine) and a **user device**
-(the desktop app, its index and OCR). Beyond the steps above it has to settle what the constraint "no inference
-port exposed on the LAN" becomes: the user device must reach the gateway over the practice network, so the
-gateway alone is published there - never Ollama, never Open WebUI - behind a firewall rule and a per-person
-access key (Sprint 4). Then run `scripts/measure_context.py` on that device and set `MODEL_CONTEXT_WINDOWS`
-from what it measures. Tracked in `docs/ROADMAP.md`, Sprint 4.
+**The step-by-step runbook for a separate server device** (recorded as pending on 27 September 2026,
+written on 1 October 2026 ahead of Sprint 4) is `docs/DEPLOYMENT.md`. Today the gateway, Ollama and
+Open WebUI still run on the same machine as the desktop app in development; that document covers
+the target shape - a **server device** (the Mac mini first, other hardware later for other
+cabinets) separate from each **user device** (the desktop app, its index and OCR) - the beta
+rollout checklist, and what "no inference port exposed on the LAN" becomes once the gateway alone
+is published on the practice network, behind a firewall rule and a per-person access key
+(Sprint 4, still to build). Tracked in `docs/ROADMAP.md`, Sprint 4.

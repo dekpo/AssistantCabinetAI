@@ -542,6 +542,16 @@ deployment (sprint 4). It is platform work for the next profession — the case 
 - **Tests:** deterministic answers perform zero gateway calls, proved with a test double that fails any
   request it receives; every deterministic question still answers with the gateway stopped; the same question
   returns the same number under a different model alias.
+- **Human acceptance pass, after the last tabular session (currently session 16) closes.** `cargo test`
+  and `pnpm test` green is not the same as seeing it work: before Sprint 2b is called done, run the
+  built app, by hand, against real example CSV/XLSX files, asking it the precise questions the
+  sessions 9-16 reference sets already cover (filters, dates, weekdays, months, group rankings,
+  mean/median, mixed documents-and-tables) plus whatever a person tries that the fixtures did not
+  think of. The point is to demonstrate the deterministic engine actually working end to end in the
+  interface, not only in a test harness, and to catch anything the reference set's own fixtures
+  happened not to exercise. Not scheduled as its own numbered session yet; add one (or fold it into
+  session 16's existing "manual validation" step, widened to the whole engine) when the last session
+  in the sequence is reached.
 
 Design, and what is reused from `LocalGridMind` versus what is deliberately not:
 `docs/SPRINT-2-ASSESSMENT.md`.

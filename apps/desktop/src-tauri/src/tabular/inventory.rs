@@ -106,7 +106,16 @@ pub struct SheetInventory {
 /// `src/core/stats.py` (`TABULAR_MIN_ROWS`, `TABULAR_MIN_COLUMNS`, `TABULAR_MAX_FORMULA_RATIO`),
 /// tuned there against real spreadsheets. Numbers only: no code is shared
 /// (`docs/DECISIONS.md`, "external reference: LocalGridMind").
-const USABLE_MIN_ROWS: usize = 8;
+///
+/// `USABLE_MIN_ROWS` was 8 before `docs/DECISIONS.md` "a short real export stays usable": a real
+/// workstation export this small (a handful of clients, a day's invoices) is common and every bit
+/// as real as a thousand-row one, and a high floor refused it outright with no way around it. The
+/// note-versus-table problem the floor was guarding against is `USABLE_MIN_COLUMNS`'s job, not
+/// this one's: a prose note renamed `.csv` finds no consistent delimiter and parses as one column
+/// regardless of how many lines it has, so it stays red on columns alone
+/// (`a_note_renamed_to_csv_parses_but_is_not_a_usable_table`). One data row, beside a real header,
+/// is enough to call a sheet a table.
+const USABLE_MIN_ROWS: usize = 1;
 const USABLE_MIN_COLUMNS: usize = 2;
 /// Formula cells, as a share of the sheet's data rows.
 const USABLE_MAX_FORMULA_RATIO: f64 = 0.05;

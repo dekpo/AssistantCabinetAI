@@ -271,7 +271,10 @@ mod tests {
     }
 
     #[test]
-    fn a_real_but_tiny_table_is_not_offered_as_queryable() {
+    fn a_real_but_tiny_table_is_offered_as_queryable() {
+        // A short real export - a handful of clients, a day's invoices - is every bit as real as
+        // a thousand-row one (`docs/DECISIONS.md`, "a short real export stays usable"). What kept
+        // the note above red was its single column, not its length.
         let parsed = inventory_of(
             "trois.csv",
             "nom;montant\nAlpha;10,50\nBeta;20,00\nGamma;30,00\n",
@@ -279,7 +282,15 @@ mod tests {
 
         assert_eq!(parsed.sheets[0].column_count, 2);
         assert_eq!(parsed.sheets[0].row_count, 3);
-        assert!(!parsed.has_a_usable_sheet());
+        assert!(parsed.has_a_usable_sheet());
+    }
+
+    #[test]
+    fn a_single_data_row_beside_a_real_header_is_still_a_usable_table() {
+        let parsed = inventory_of("one-row.csv", "name;amount\nAlpha;10,50\n");
+
+        assert_eq!(parsed.sheets[0].row_count, 1);
+        assert!(parsed.has_a_usable_sheet());
     }
 
     #[test]

@@ -234,6 +234,46 @@ answers invalid JSON degrades to the same nudge an unrecognised question already
 capability existed — the model widens which questions get an answer, and is never load-bearing for
 whether any answer is correct.
 
+### The mixed tier: the engines compute, the model only writes
+
+Documents and tables both selected (`GroundingTier::DocumentsAndTables`) is still routed in two steps
+(`docs/SESSION-DATA-15-Mixed-Routing.md`, `docs/SESSION-DATA-16-Mixed-Tier.md`). A question that is
+clearly and only about the data is answered by the tabular engine alone, before anything else is read —
+unchanged since session 15. Everything else reaches `mixed_answer::answer`, a Tauri-free module
+`commands::mixed_tier` calls into with an already-classified `tabular_answer::PendingAnswer` and whatever
+retrieval already found, for the same `IndexStore`-is-not-`Sync` reason `tabular_answer`'s own
+`prepare`/`resolve` split exists: neither the tabular classification nor retrieval's embed-then-search
+sequence may hold a reference to the index across a gateway `.await`, so both happen in `commands.rs`,
+owning the index, before `mixed_answer::answer` is ever called.
+
+```text
+question (documents and tables both selected)
+  → tabular classifier, over the tables alone → clearly data-only → tier 2's own engine, unchanged (session 15)
+  → otherwise: retrieval over the selected documents
+  → tabular_answer::prepare's own PendingAnswer:
+      Done(value | structural | a human choice)  → that is the whole answer; no generation, no model
+      TryModel (operation recognised, no filter resolved from the question's own words)
+          → entity linking: a retrieved excerpt's word anchored against the table's real column
+            values (`mixed_answer::entity_link`) — ambiguous between two columns → asked, nothing
+            computed; unique → the table's own filter, computed, no model
+          → neither: session 14's hidden interpreter, unchanged
+  → a computed Value (or no data question at all) and the document excerpts: one turn, two labelled
+    blocks ("Document excerpts", "Table results"), MIXED_INSTRUCTION — forbids computing, forbids
+    swapping one block for the other
+  → the model writes; every number it wrote is checked against the table's own value or an excerpt's
+    verbatim text afterward (`mixed_answer::verify_numbers`), and every bracketed citation against what
+    was actually supplied (`reject_citations`) — a mismatch is appended, never silently rewritten
+  → either side missing (no data question, or no document evidence, or the gateway unreachable for
+    generation) degrades to the side that still has something, with no gateway call when that is the
+    table alone
+```
+
+The model never receives a cell value or a row here either: the table block is built from
+`tabular::escalation::format_evidence`, the exact function tier 2 keeps unsent for this session, which
+already refuses to turn a row list into evidence. A mixed answer's `Source`-shaped half is `Computed`
+(the table) beside `Extracted`/`Recognised` (the documents) — never `ModelAsserted`: the model's prose is
+checked against both, not trusted as a third kind of fact.
+
 ## Runtimes are adapters, never the home of business logic
 
 Tooling (Open WebUI Tools, MCP, Hermes, OpenClaw, whatever comes next) will change faster than the need. We

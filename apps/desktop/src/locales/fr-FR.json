@@ -79,7 +79,19 @@
     "sourceItemSheet": "{path}, feuille {sheet}",
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
     "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA.",
-    "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires."
+    "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
+    "mixedTableUnavailable": {
+      "not_asked_about": "Cette question ne portait sur aucune de vos tables.",
+      "no_evidence": "Rien dans vos tables ne répond à cette partie.",
+      "gateway_unavailable": "L'IA n'a pas pu être contactée pour interpréter la partie données."
+    },
+    "mixedDocumentsUnavailable": {
+      "not_asked_about": "Cette question ne portait sur aucun de vos documents.",
+      "no_evidence": "Rien dans vos documents ne répond à cette partie.",
+      "gateway_unavailable": "L'IA n'a pas pu être contactée pour rédiger la partie document."
+    },
+    "mixedCorrection": "La table indique {correct}, et non {claimed}.",
+    "mixedRejectedCitation": "Une citation ({citation}) ne correspond à aucune source fournie et a été signalée."
   },
   "workFolder": {
     "title": "Dossier des documents",
@@ -276,7 +288,7 @@
     "work_folder_path_not_absolute": "Le chemin de ce dossier est incomplet ({path}).",
     "work_folder_selection_cancelled": "Aucun dossier n'a été choisi.",
     "work_folder_unc_not_supported": "Un dossier réseau ne peut pas encore être le dossier de documents ({path}).",
-    "documents_and_tables_together": "Des documents et des données sont sélectionnés en même temps. Une question portant uniquement sur vos données est désormais répondue depuis vos tableaux ; combiner les deux dans une même réponse viendra plus tard. En attendant, décochez l'une des deux listes pour toute autre question."
+    "documents_and_tables_together": "Des documents et des données sont sélectionnés en même temps. Toute question est désormais répondue en croisant les deux, calculée depuis vos tableaux et citée depuis vos documents."
   },
   "tabularAnswer": {
     "rowOne": "ligne",

@@ -97,8 +97,9 @@ pub enum GroundingTier {
     Documents,
     /// At least one table chosen and no document: tier 2, the tabular engine, no model.
     TablesOnly,
-    /// Both. Refused explicitly (`AppError::DocumentsAndTablesTogether`) until combining the two
-    /// is designed; never silently routed to one side.
+    /// Both: session 15's router answers a clearly data-only question from tier 2 alone; session
+    /// 16's mixed tier (`commands::mixed_tier`, `mixed_answer.rs`) answers everything else, never
+    /// silently routed to one side (`docs/SESSION-DATA-16-Mixed-Tier.md`).
     DocumentsAndTables,
 }
 

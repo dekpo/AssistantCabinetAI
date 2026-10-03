@@ -20,6 +20,9 @@ import {
   type EvidenceCoverage,
   type CombinedScope,
   type FolderAnswer,
+  type MixedPartUnavailable,
+  type NumericCorrection,
+  type TabularAnswer,
 } from "../lib/ipc";
 import { truncateForRegenerate, truncateForResend } from "../lib/turns";
 
@@ -111,6 +114,24 @@ export interface ChatEntry extends ChatTurn {
    * never read - no retrieval, no gateway call (`docs/SESSION-DATA-15-Mixed-Routing.md`). Said
    * under the answer, beside the ordinary "without the AI" line a tabular answer already gets. */
   documentsNotNeeded?: true;
+  /** Documents and tables were both selected, and the mixed tier answered across both
+   * (`docs/SESSION-DATA-16-Mixed-Tier.md`): the engines computed and cited, the model only wrote.
+   * Present exactly when the question reached that tier. */
+  mixed?: true;
+  /** The table's own part of a mixed answer - a computed value, a structural fact, a
+   * disambiguation, or a nudge, formatted the same way tier 2's own answers are. `undefined` when
+   * the question had no data component at all (`mixedTableUnavailable` is then set instead). */
+  mixedTable?: TabularAnswer;
+  /** Where the table part came from: the workbook and sheet, for its own "based on" line beside
+   * the document sources' one. */
+  mixedTableSource?: TabularSource;
+  mixedTableUnavailable?: MixedPartUnavailable;
+  mixedDocumentsUnavailable?: MixedPartUnavailable;
+  /** A number the model wrote that did not match the table or any excerpt - appended under the
+   * answer, which is never rewritten. */
+  mixedCorrections?: NumericCorrection[];
+  /** A bracketed citation the model wrote that did not resolve to any supplied document excerpt. */
+  mixedRejectedCitations?: string[];
 }
 
 export interface ChatState {
@@ -266,6 +287,45 @@ export function useChat(
           conversationHistory(baseEntries),
         );
         const outdated = result.scopeOutdated.length > 0 ? result.scopeOutdated : undefined;
+        if (result.mixedAnswer !== null) {
+          /* Session 16: documents and tables both selected, answered across both
+             (`docs/SESSION-DATA-16-Mixed-Tier.md`). `mixed.answer` already streamed in through
+             `onDelta`/`onSources` above when generation happened - the content set here is only
+             for the degraded case, where no model was asked at all and the table's own value (or
+             disambiguation) is the whole answer, formatted the same way tier 2's own is. */
+          const mixed = result.mixedAnswer;
+          const source = mixed.table === null ? null : tabularSourceOf(mixed.table);
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    ...(mixed.answer === "" && mixed.table !== null
+                      ? {
+                          content: formatTabularAnswer(t, mixed.table, locale),
+                          deterministic: true as const,
+                        }
+                      : { durationMs: performance.now() - startedAt, modelAlias }),
+                    ...(outdated === undefined ? {} : { scopeOutdated: outdated }),
+                    mixed: true as const,
+                    ...(mixed.table === null ? {} : { mixedTable: mixed.table }),
+                    ...(source === null ? {} : { mixedTableSource: source }),
+                    ...(mixed.tableUnavailable === null
+                      ? {}
+                      : { mixedTableUnavailable: mixed.tableUnavailable }),
+                    ...(mixed.documentsUnavailable === null
+                      ? {}
+                      : { mixedDocumentsUnavailable: mixed.documentsUnavailable }),
+                    ...(mixed.corrections.length > 0 ? { mixedCorrections: mixed.corrections } : {}),
+                    ...(mixed.rejectedCitations.length > 0
+                      ? { mixedRejectedCitations: mixed.rejectedCitations }
+                      : {}),
+                  }
+                : entry,
+            ),
+          );
+          return;
+        }
         if (result.tabularAnswer !== null) {
           /* The tabular engine answered: tables were selected, no document. Written here, in her
              language, from facts - except for a value the engine computed from a model-written

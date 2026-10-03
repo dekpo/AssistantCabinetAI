@@ -39,6 +39,17 @@ on her own Mac mini, not a third party, the same destination every other chat tu
 DPIA draft owed before a real workbook is ever pointed at this path must carry this line explicitly:
 column and sheet names, never values, reach the gateway.
 
+**The mixed tier (session 16, `docs/SESSION-DATA-16-Mixed-Tier.md`), documents and tables both selected.**
+The gateway receives exactly what tier 1 already sends for the document half (retrieved excerpts, capped
+to this tier's own share of the budget) plus one computed line for the table half
+(`tabular::escalation::format_evidence`: the sheet, the column, the operation and its result - never a raw
+row, never a cell value outside the one number the engine computed). Entity linking, the step that matches
+a word found in a retrieved excerpt against the workbook's real column values to build a filter, happens
+entirely in Rust, before anything is sent: the gateway never sees the candidate word or the column it
+matched, only the already-filtered, already-computed result if one was found. Numeric verification and
+citation checking, after the model writes, read the model's own reply and the evidence already sent -
+nothing new leaves the workstation for either check.
+
 ## The workstation is not automatically local
 
 "On her machine" is not the same as "nowhere else". The operating system copies parts of the profile to a

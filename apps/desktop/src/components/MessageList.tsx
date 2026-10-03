@@ -38,7 +38,7 @@ export function MessageList({
   /** Whether the shared analysis pass is running, wherever it was started from. */
   analysing: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const messages = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const turnCount = useRef(0);
@@ -244,6 +244,18 @@ export function MessageList({
                   </ul>
                 </details>
               )}
+              {/* A mixed answer's own table "based on" line, its own disclosure beside the document
+                  sources' one above - two labelled groups, pages and sheets/columns, so she can
+                  always tell which engine each fact came from (`docs/SESSION-DATA-16-Mixed-Tier.md`,
+                  mechanism 5). */}
+              {entry.mixedTableSource === undefined ? null : (
+                <details className="message__sources">
+                  <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
+                  <ul className="message__sources-list">
+                    <li className="message__source">{tabularSourceLine(t, entry.mixedTableSource)}</li>
+                  </ul>
+                </details>
+              )}
               {/* How much of the folder this answer rests on, for a question that asked about
                   every document. Written beside the answer rather than inside it, so the model
                   cannot leave it out (`docs/WORK-FOLDER-INVENTORY.md`). */}
@@ -310,6 +322,37 @@ export function MessageList({
               {entry.documentsNotNeeded === true ? (
                 <p className="message__timing">{t("chat.documentsNotNeeded")}</p>
               ) : null}
+              {/* The mixed tier's own partial-refusal lines (mechanism 6): which side, if either,
+                  could not be established, said plainly rather than left for her to notice from an
+                  absent "based on" line. */}
+              {entry.mixedTableUnavailable === undefined ? null : (
+                <p className="message__timing">
+                  {t(`chat.mixedTableUnavailable.${entry.mixedTableUnavailable}`)}
+                </p>
+              )}
+              {entry.mixedDocumentsUnavailable === undefined ? null : (
+                <p className="message__timing">
+                  {t(`chat.mixedDocumentsUnavailable.${entry.mixedDocumentsUnavailable}`)}
+                </p>
+              )}
+              {/* Appended, never silent (mechanism 5): the model's draft stays exactly as written
+                  above, and every number it wrote that did not match the table or an excerpt is
+                  corrected here instead. */}
+              {entry.mixedCorrections?.map((correction, index) => (
+                <p className="message__timing" key={`correction-${index}`}>
+                  {t("chat.mixedCorrection", {
+                    claimed: correction.claimed,
+                    correct: new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(
+                      correction.correct,
+                    ),
+                  })}
+                </p>
+              ))}
+              {entry.mixedRejectedCitations?.map((citation) => (
+                <p className="message__timing" key={`citation-${citation}`}>
+                  {t("chat.mixedRejectedCitation", { citation })}
+                </p>
+              ))}
               {/* A tabular nudge the classifier could not read on its own still tried a model
                   first (session 14) - a real wait, sometimes a minute or more on a small local
                   model, that must not disappear behind the line above as though it cost nothing

@@ -24,6 +24,7 @@ use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderInventory};
+use crate::mixed_answer;
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{self, PageRasterizer, Rasterizer};
@@ -573,6 +574,11 @@ pub struct AskAnswer {
     /// documents selected alongside the table were never read: no retrieval, no gateway call.
     /// Always false outside that one path.
     pub documents_not_needed: bool,
+    /// Documents and tables were both selected, and this question was neither answered by tier 2
+    /// alone nor refused: the mixed tier decomposed it, computed and cited across both sides, and
+    /// checked the model's prose against what it was actually given
+    /// (`docs/SESSION-DATA-16-Mixed-Tier.md`). `None` on every other path.
+    pub mixed_answer: Option<mixed_answer::MixedAnswer>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -707,12 +713,13 @@ async fn sourced_answer(
     match scope.tier() {
         // D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): a question
         // that is clearly and only about the data is answered by the tabular engine alone, before
-        // any file content is read for retrieval. Everything else keeps the refusal below: mixed
-        // and content questions are not designed yet, so neither engine is guessed at for her.
+        // any file content is read for retrieval - kept exactly as session 15 left it, and still
+        // tried first. Session 16's own mixed tier (`mixed_tier`, `mixed_answer.rs`) starts
+        // exactly at its `None`: everything that question did not already answer.
         GroundingTier::DocumentsAndTables => {
             match mixed_data_only_tier(app, state, &question, &scope).await? {
                 Some(answer) => return Ok(answer),
-                None => return Err(AppError::DocumentsAndTablesTogether),
+                None => return mixed_tier(app, state, &question, &scope, &history, on_event).await,
             }
         }
         GroundingTier::TablesOnly => {
@@ -822,6 +829,7 @@ async fn sourced_answer(
                 without_documents: false,
                 tabular_answer: None,
                 documents_not_needed: false,
+                mixed_answer: None,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -853,6 +861,7 @@ async fn sourced_answer(
             without_documents: true,
             tabular_answer: None,
             documents_not_needed: false,
+            mixed_answer: None,
         });
     }
 
@@ -976,6 +985,7 @@ async fn sourced_answer(
         without_documents: false,
         tabular_answer: None,
         documents_not_needed: false,
+        mixed_answer: None,
     })
 }
 
@@ -1038,6 +1048,7 @@ async fn tabular_tier(
         without_documents: false,
         tabular_answer: Some(answer),
         documents_not_needed: false,
+        mixed_answer: None,
     })
 }
 
@@ -1095,7 +1106,168 @@ async fn mixed_data_only_tier(
         without_documents: false,
         tabular_answer: Some(answer),
         documents_not_needed: true,
+        mixed_answer: None,
     }))
+}
+
+/// Session 16 (`docs/SESSION-DATA-16-Mixed-Tier.md`): documents and tables are both selected, and
+/// `mixed_data_only_tier` already decided this question is not clearly and only about the data.
+/// Reads the same two folders `tabular_tier`/`mixed_data_only_tier` already do, resolves the
+/// document selection exactly as tier 1 does, then hands everything to `mixed_answer::answer` -
+/// the Tauri-free module that actually decomposes, links an entity, computes, generates and
+/// checks. This function is the thin wrapper around it: settings, the local index, and forwarding
+/// `mixed_answer::answer`'s two callbacks to the real `Channel`.
+async fn mixed_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+    history: &[ChatTurn],
+    on_event: &Channel<ChatStreamEvent>,
+) -> Result<AskAnswer, AppError> {
+    let (work_folder, data_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) =
+        state.read(|settings| {
+            (
+                settings.work_folder.clone(),
+                settings.data_folder.clone(),
+                settings.server_url.clone(),
+                settings.model_alias.clone(),
+                settings.embedding_alias.clone(),
+                settings.locale.clone(),
+                settings.answer_idle_timeout(),
+            )
+        })?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+
+    // `index` stays owned, never borrowed into a struct held across an `.await`, for the same
+    // `IndexStore`-is-not-`Sync` reason `tabular_answer`'s own module doc gives - the exact pattern
+    // `sourced_answer`'s tier 1 arm already uses below (`open_index`, then a plain local, borrowed
+    // only in the synchronous stretches between awaits).
+    let index = open_index(app)?;
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
+
+    // The tabular part, classified against the selected tables alone - entirely synchronous, so
+    // `&index` never has to survive an `.await` to produce it (`tabular_answer::prepare`,
+    // `force_model: false`: forcing the model is "Demander a l'IA", not this tier's own
+    // decomposition).
+    let pending = tabular_answer::prepare(question, &folder, &scope.data_mode, &locale, &index, false)?;
+
+    // The document selection, resolved exactly as tier 1 does: a selection whose files are all
+    // gone or changed is refused rather than quietly answered from nothing, the same guarantee
+    // `sourced_answer`'s own documents-tier arm already gives.
+    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let resolution = scope.resolve(&full_inventory);
+    let scope_outdated: Vec<String> = resolution
+        .missing
+        .iter()
+        .cloned()
+        .chain(resolution.changed.iter().cloned())
+        .collect();
+    let document_paths: Vec<String> = resolution
+        .inventory
+        .indexed_files()
+        .into_iter()
+        .map(|file| file.relative_path.clone())
+        .collect();
+    if resolution.narrowed && document_paths.is_empty() && !scope_outdated.is_empty() {
+        return Err(AppError::ScopeUnavailable);
+    }
+
+    // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
+    // search held to the document selection - `index` borrowed only in the synchronous stretch
+    // right after the embed `.await`, exactly as tier 1's own retrieval already is.
+    let (document_sources, documents_unavailable) = if document_paths.is_empty()
+        || !matches!(index.chunk_count(), Ok(count) if count > 0)
+    {
+        (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence))
+    } else {
+        let search_text = conversation::retrieval_query(question, history);
+        match state
+            .gateway
+            .embed(&server_url, &embedding_alias, std::slice::from_ref(&search_text))
+            .await
+        {
+            Ok(vectors) => {
+                let query_embedding = vectors.into_iter().next().unwrap_or_default();
+                match retrieval::search_scoped(
+                    &index,
+                    &search_text,
+                    &query_embedding,
+                    RetrievalScope::Files(&document_paths),
+                ) {
+                    Ok(found) if !found.is_empty() => (found, None),
+                    _ => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence)),
+                }
+            }
+            Err(_) => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::GatewayUnavailable)),
+        }
+    };
+
+    let budget = state
+        .model_budgets
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .for_alias(&model_alias);
+    let context = mixed_answer::MixedContext {
+        locale: &locale,
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+        history,
+        budget,
+    };
+
+    // Nothing below touches `index`, `folder` or the document inventory again: everything either
+    // function needs from here on is owned data already extracted above
+    // (`mixed_answer::MixedContext`'s own doc explains why that boundary matters).
+    let (result, generated) = mixed_answer::answer(
+        question,
+        pending,
+        document_sources,
+        documents_unavailable,
+        &context,
+        |sources| {
+            let _ = on_event.send(ChatStreamEvent::Sources {
+                sources: sources.to_vec(),
+                coverage: None,
+            });
+        },
+        |delta| {
+            let _ = on_event.send(ChatStreamEvent::Delta {
+                text: delta.to_string(),
+            });
+        },
+    )
+    .await?;
+    if generated {
+        let _ = on_event.send(ChatStreamEvent::Completed {
+            text: result.answer.clone(),
+        });
+    }
+
+    Ok(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated,
+        without_documents: false,
+        tabular_answer: None,
+        documents_not_needed: false,
+        mixed_answer: Some(result),
+    })
 }
 
 /// Sidecar discovery: look next to the executable, a few ancestors up (so `tauri dev` can see

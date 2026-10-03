@@ -79,7 +79,19 @@
     "sourceItemSheet": "{path}, sheet {sheet}",
     "sourceItemSheetColumn": "{path}, sheet {sheet}, column {column}",
     "deterministicData": "Answer computed from your data folder, without the AI.",
-    "documentsNotNeeded": "Answered from your tables; the selected documents were not needed."
+    "documentsNotNeeded": "Answered from your tables; the selected documents were not needed.",
+    "mixedTableUnavailable": {
+      "not_asked_about": "This question had nothing for your tables.",
+      "no_evidence": "Nothing in your tables answered this part.",
+      "gateway_unavailable": "The AI could not be reached to interpret the data part."
+    },
+    "mixedDocumentsUnavailable": {
+      "not_asked_about": "This question had nothing for your documents.",
+      "no_evidence": "Nothing in your documents answered this part.",
+      "gateway_unavailable": "The AI could not be reached to write the document part."
+    },
+    "mixedCorrection": "The table gives {correct}, not {claimed}.",
+    "mixedRejectedCitation": "A citation ({citation}) did not match a supplied source and was flagged."
   },
   "workFolder": {
     "title": "Documents folder",
@@ -276,7 +288,7 @@
     "work_folder_path_not_absolute": "This folder path is incomplete ({path}).",
     "work_folder_selection_cancelled": "No folder was chosen.",
     "work_folder_unc_not_supported": "A network folder cannot be the documents folder yet ({path}).",
-    "documents_and_tables_together": "Documents and data are both selected. A question that is only about your data is now answered from your tables; combining both in one answer is coming later. Until then, untick one of the two lists for any other question."
+    "documents_and_tables_together": "Documents and data are both selected. Every question is now answered across both, computed from your tables and cited from your documents."
   },
   "tabularAnswer": {
     "rowOne": "row",

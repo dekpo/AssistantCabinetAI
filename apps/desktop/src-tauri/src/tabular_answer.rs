@@ -46,7 +46,7 @@ use crate::tabular::inventory::{
 use crate::tabular::query_plan;
 use crate::tabular::question::{self, name_words, TabularRoute};
 use crate::tabular::structural::{self, StructuralAnswer};
-use crate::tabular::{self, TabularError, Workbook};
+use crate::tabular::{self, SheetData, TabularError, Workbook};
 
 /// The one gateway capability this tier may reach, and only on the narrow path session 14 adds
 /// (`docs/SESSION-DATA-14-Query-Plan.md`). Borrowed, not owned: `commands::tabular_tier` builds
@@ -931,8 +931,10 @@ fn operation_column_name(operation: &Operation) -> Option<&str> {
 
 /// `operation` with its own `filters` replaced by `filters` - every variant `tabular::question`
 /// can classify carries one (empty until `detect_filters` fills it); `Filter` and `RowAt` are
-/// never reached here and pass through unchanged.
-fn with_filters(operation: Operation, filters: Vec<FilterSpec>) -> Operation {
+/// never reached here and pass through unchanged. `pub(crate)` since `mixed_answer` reruns a
+/// classified operation with an entity-linked filter of its own
+/// (`docs/SESSION-DATA-16-Mixed-Tier.md`).
+pub(crate) fn with_filters(operation: Operation, filters: Vec<FilterSpec>) -> Operation {
     match operation {
         Operation::Count { .. } => Operation::Count { filters },
         Operation::Distinct { column, .. } => Operation::Distinct { column, filters },
@@ -1009,6 +1011,43 @@ enum FilterDetection {
     None,
 }
 
+/// Every reachable non-date column's real distinct values, indexed by each value's own folded
+/// words - extracted from `detect_filters`'s own anchoring logic (below) so that
+/// `mixed_answer::entity_link` can anchor a word found in a *retrieved excerpt* against real data
+/// the same way, rather than reimplementing the scan (`docs/SESSION-DATA-16-Mixed-Tier.md`).
+/// `pub(crate)`, not `pub`: the mixed tier is the only other reader, and it is in this crate.
+pub(crate) fn column_value_words(
+    sheet_inventory: &SheetInventory,
+    sheet_data: &SheetData,
+) -> Vec<(String, HashMap<String, Vec<String>>)> {
+    let rows = data_rows(sheet_inventory, sheet_data);
+    sheet_inventory
+        .columns
+        .iter()
+        .filter(|column| column.inferred_type != ColumnType::Date)
+        .map(|column| {
+            let mut values: HashMap<String, Vec<String>> = HashMap::new();
+            for row in rows {
+                let Some(cell) = row.get(column.index) else {
+                    continue;
+                };
+                let full = text_value(cell);
+                let trimmed = full.trim().to_string();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                for word in name_words(&full) {
+                    let bucket = values.entry(word).or_default();
+                    if !bucket.contains(&trimmed) {
+                        bucket.push(trimmed.clone());
+                    }
+                }
+            }
+            (column.name.clone(), values)
+        })
+        .collect()
+}
+
 /// Turns `residual`'s words into the filters the question's own recognised operation should run
 /// under. A filter is recognised only when it is anchored on real data: a value found, whole
 /// word, in exactly one reachable column (folded, so an unaccented word in the question still
@@ -1053,30 +1092,7 @@ fn detect_filters(
     // found by either of its words, but the filter this builds always equals the value's *whole*
     // text, never one word of it - an `Equals` on a lone word would never match the row it was
     // found in (`docs/DECISIONS.md`, session 11's "never match a value by substring").
-    let columns_words: Vec<(String, HashMap<String, Vec<String>>)> = columns
-        .iter()
-        .filter(|column| column.inferred_type != ColumnType::Date)
-        .map(|column| {
-            let mut values: HashMap<String, Vec<String>> = HashMap::new();
-            for row in rows {
-                let Some(cell) = row.get(column.index) else {
-                    continue;
-                };
-                let full = text_value(cell);
-                let trimmed = full.trim().to_string();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                for word in name_words(&full) {
-                    let bucket = values.entry(word).or_default();
-                    if !bucket.contains(&trimmed) {
-                        bucket.push(trimmed.clone());
-                    }
-                }
-            }
-            (column.name.clone(), values)
-        })
-        .collect();
+    let columns_words = column_value_words(sheet_inventory, sheet_data);
     let all_values: std::collections::BTreeSet<String> = rows
         .iter()
         .flat_map(|row| {

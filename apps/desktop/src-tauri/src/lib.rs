@@ -21,6 +21,7 @@ pub mod gateway;
 pub mod index_store;
 pub mod indexing;
 pub mod inventory;
+pub mod mixed_answer;
 pub mod ocr;
 pub mod raster;
 pub mod retrieval;

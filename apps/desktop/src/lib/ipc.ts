@@ -420,6 +420,40 @@ export type TabularAnswer =
   | { kind: "no_matching_file"; query: string }
   | { kind: "no_usable_table" };
 
+/** Why one side of a mixed answer has nothing to show (`docs/SESSION-DATA-16-Mixed-Tier.md`,
+ * mechanism 6: partial refusal). */
+export type MixedPartUnavailable = "not_asked_about" | "no_evidence" | "gateway_unavailable";
+
+/** One number the model wrote that matched neither the table's own value nor any excerpt's text
+ * verbatim - appended, never silently rewritten into the answer. */
+export interface NumericCorrection {
+  /** The number exactly as the model wrote it. */
+  claimed: string;
+  /** The table's real value, raw - the interface formats it in her language. */
+  correct: number;
+}
+
+/** Documents and tables both selected, and the question was neither clearly data-only nor a pure
+ * refusal: the mixed tier decomposed it, computed and cited across both sides, and checked the
+ * model's prose against what it was actually given. */
+export interface MixedAnswer {
+  /** The model's prose. Empty when generation was never attempted - the table answered alone,
+   * with no gateway call, because the document side had nothing to add. */
+  answer: string;
+  /** The tabular part's own computed value, when the question had one. */
+  table: TabularAnswer | null;
+  tableUnavailable: MixedPartUnavailable | null;
+  /** The document excerpts the model was actually sent. */
+  documentSources: Evidence[];
+  documentsUnavailable: MixedPartUnavailable | null;
+  /** Appended, never silent: a number the model wrote that did not match the table or any
+   * excerpt. */
+  corrections: NumericCorrection[];
+  /** A bracketed citation (`"[3]"`) the model wrote that does not resolve to any of
+   * `documentSources`. */
+  rejectedCitations: string[];
+}
+
 export interface AskAnswer {
   answer: string;
   sources: Evidence[];
@@ -440,6 +474,9 @@ export interface AskAnswer {
   /** Documents and tables were both selected, but this question was clearly and only about the
    * data, so the tabular engine answered it alone and the selected documents were never read. */
   documentsNotNeeded: boolean;
+  /** Documents and tables were both selected, and the mixed tier answered across both
+   * (`docs/SESSION-DATA-16-Mixed-Tier.md`). */
+  mixedAnswer: MixedAnswer | null;
 }
 
 /**

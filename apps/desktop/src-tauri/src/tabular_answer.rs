@@ -99,9 +99,11 @@ pub enum TabularAnswer {
         /// A text column to group by, for a second example ("which agency has the most
         /// amount"). `None` when the sheet has none, or no column to total.
         example_group: Option<String>,
-        /// Set only when `reason` is `FilterNotSupported`: the column a residual question word
+        /// Set when `reason` is `FilterNotSupported`: the column a residual question word
         /// was found in, when one was - a bare number with no matching column leaves this
-        /// `None` even though `filter_value` is set. `None` for every other nudge
+        /// `None` even though `filter_value` is set. Also set when `reason` is
+        /// `NonNumericColumn` or `FormulaCannotBeVerified`: the column the engine refused to
+        /// read. `None` for every other nudge
         /// (`docs/DECISIONS.md`, session 7's D1).
         filter_column: Option<String>,
         /// Set when `reason` is `FilterNotSupported` or `ValueNotFound`: the word from the
@@ -495,17 +497,28 @@ fn answer_sync(
                     reason,
                     available_sheets,
                     available_columns,
-                } => nudge(
-                    file.clone(),
-                    &fresh,
-                    allowed,
-                    Some(reason),
-                    available_sheets,
-                    available_columns,
-                    None,
-                    None,
-                    Vec::new(),
-                ),
+                } => {
+                    // A refusal about a column's content says which column: "this column cannot be
+                    // added" is no help when the question named two (HAP-1, Q24, BUG-13).
+                    let refused_column = match reason {
+                        NotAnswerableReason::NonNumericColumn
+                        | NotAnswerableReason::FormulaCannotBeVerified => {
+                            operation_column_name(&operation).map(str::to_string)
+                        }
+                        _ => None,
+                    };
+                    nudge(
+                        file.clone(),
+                        &fresh,
+                        allowed,
+                        Some(reason),
+                        available_sheets,
+                        available_columns,
+                        refused_column,
+                        None,
+                        Vec::new(),
+                    )
+                }
             };
             // "Demander a l'IA" on a classified, computed tabular answer: she asked for the
             // model's own reading of the question anyway, usually because a deterministic

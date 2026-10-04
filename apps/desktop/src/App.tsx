@@ -130,7 +130,11 @@ export default function App() {
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />
             ))}
-            {healthError === null ? null : <ErrorBanner error={healthError} onRetry={refresh} />}
+            {healthError === null ? null : (
+              <div className="app__pinned">
+                <ErrorBanner error={healthError} onRetry={refresh} />
+              </div>
+            )}
           </aside>
           <ChatPanel
             onFailure={refresh}

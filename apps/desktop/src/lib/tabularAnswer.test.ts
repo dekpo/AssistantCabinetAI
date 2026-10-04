@@ -611,3 +611,36 @@ describe("a threshold on a group's total", () => {
     expect(formatTabularAnswer(english, refused, "en-US")).toContain("compares a threshold to a group's total");
   });
 });
+
+describe("a refusal about a column's content", () => {
+  it("names the column it refused, so a question that named two is not a mystery", () => {
+    const refused: TabularAnswer = {
+      ...nudge,
+      reason: "non_numeric_column",
+      filterColumn: "fournisseur",
+    } as TabularAnswer;
+    expect(formatTabularAnswer(french, refused, "fr-FR")).toContain("Colonne concernée : fournisseur.");
+    expect(formatTabularAnswer(english, refused, "en-US")).toContain("Column concerned: fournisseur.");
+  });
+});
+
+describe("a filter on one day", () => {
+  it("is shown as a day, not as a range that starts and ends the same day", () => {
+    const answer: TabularAnswer = {
+      kind: "value",
+      file: "f.csv",
+      value: { kind: "count", value: 0 },
+      locator: {
+        sheet: "f",
+        headerRow: 0,
+        column: null,
+        rowRange: [0, 7],
+        filters: [{ kind: "date_range", column: "date", start: "2026-01-23", end: "2026-01-23" }],
+      },
+      derivation: { kind: "computed", operation: "count", row_count: 0 },
+    };
+    const text = formatTabularAnswer(french, answer, "fr-FR");
+    expect(text).toContain("date = 2026-01-23");
+    expect(text).not.toContain("entre 2026-01-23 et 2026-01-23");
+  });
+});

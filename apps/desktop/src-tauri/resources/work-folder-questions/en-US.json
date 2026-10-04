@@ -1,6 +1,7 @@
 {
   "locale": "en-US",
   "_comment": "Vocabulary for recognising a question the Work Folder inventory can answer on its own, with no gateway call. Data, never literals in Rust (docs/DECISIONS.md, docs/WORK-FOLDER-INVENTORY.md). A question is treated as a filesystem question only when every one of its words appears somewhere below, which is what keeps 'how many documents mention metformin' out of the deterministic path. Adding a phrasing means adding a word here.",
+  "max_unknown_words": 2,
   "filler": [
     "a",
     "able",

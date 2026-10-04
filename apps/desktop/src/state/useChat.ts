@@ -8,6 +8,7 @@ import {
   type GenerationPhase,
   type StopOutcome,
 } from "../lib/generation";
+import { choicesFromFolder, choicesFromTabular, type Choice } from "../lib/choices";
 import { formatFolderAnswer } from "../lib/folderAnswer";
 import { conversationHistory } from "../lib/history";
 import { formatTabularAnswer, tabularSourceOf, type TabularSource } from "../lib/tabularAnswer";
@@ -111,6 +112,9 @@ export interface ChatEntry extends ChatTurn {
   modelAttemptDurationMs?: number;
   /** The attempt was on a question the engine had already computed: the computed answer stays. */
   modelAttemptKept?: true;
+  /** A "which file?" answer, as data: one button per candidate, each one resending her question with
+   * that file written into it (HAP-1, UX-1). */
+  choices?: Choice[];
   /** Documents and tables were both selected, but this question was clearly and only about the
    * data, so the tabular engine answered it alone and the documents selected alongside it were
    * never read - no retrieval, no gateway call (`docs/SESSION-DATA-15-Mixed-Routing.md`). Said
@@ -260,10 +264,16 @@ export function useChat(
          (`docs/WORK-FOLDER-INVENTORY.md`). */
       const onFolderAnswer = (folderAnswer: FolderAnswer) => {
         const text = formatFolderAnswer(t, folderAnswer);
+        const choices = choicesFromFolder(folderAnswer);
         setEntries((current) =>
           current.map((entry) =>
             entry.id === answerId
-              ? { ...entry, content: text, deterministic: true as const }
+              ? {
+                  ...entry,
+                  content: text,
+                  deterministic: true as const,
+                  ...(choices.length > 0 ? { choices } : {}),
+                }
               : entry,
           ),
         );
@@ -380,6 +390,9 @@ export function useChat(
                           // this question into something computable" (HAP-1, BUG-18).
                           ...(tabularAnswer.kind === "value" ? { modelAttemptKept: true as const } : {}),
                         }),
+                    ...(choicesFromTabular(tabularAnswer).length > 0
+                      ? { choices: choicesFromTabular(tabularAnswer) }
+                      : {}),
                     ...(retryable ? { tabularRetryable: true as const } : {}),
                     ...(source === null ? {} : { tabularSource: source }),
                     ...(nudge ? { tabularNudge: true as const } : {}),

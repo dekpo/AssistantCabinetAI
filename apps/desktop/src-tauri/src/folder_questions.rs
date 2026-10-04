@@ -47,6 +47,14 @@ const FALLBACK_LOCALE: &str = "fr-FR";
 
 #[derive(Debug, Clone, Deserialize)]
 struct PatternPack {
+    /// How many words that are neither vocabulary nor in the documents a listing question may
+    /// carry. A real request for the files has one or two at most ("show me every readable
+    /// file"); a sentence with five unrelated words is a question about something else that
+    /// happens to share a subject word with a listing ("what is the legal retention period of
+    /// medical records"), and answering it from the inventory is a confident answer to a question
+    /// nobody asked (HAP-1, BUG-07).
+    #[serde(default = "default_max_unknown_words")]
+    max_unknown_words: usize,
     filler: Vec<String>,
     /// Words that mean "tell me what is inside". They disqualify the deterministic path outright,
     /// whatever else the sentence contains: "give me a summary of each document" shares every
@@ -62,6 +70,10 @@ struct PatternPack {
     distributive: Vec<String>,
     subjects: Subjects,
     extensions: HashMap<String, Vec<String>>,
+}
+
+fn default_max_unknown_words() -> usize {
+    2
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -410,6 +422,7 @@ fn folder_answer(
     let mut counts = false;
     let mut subject: Option<Subject> = None;
     let mut extension: Option<String> = None;
+    let mut unknown_words = 0usize;
 
     for token in &tokens {
         if contains(&pack.operations.count, token) {
@@ -443,6 +456,10 @@ fn folder_answer(
         if corpus.contains(token) {
             return None;
         }
+        unknown_words += 1;
+    }
+    if unknown_words > pack.max_unknown_words {
+        return None;
     }
 
     // An extension on its own ("how many PDFs?") is a subject; with one named, it wins over a

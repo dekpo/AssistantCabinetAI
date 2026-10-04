@@ -129,6 +129,15 @@ body {
   overflow-y: auto;
 }
 
+/* The connection banner stays in view when both folder lists are open and push it below the fold:
+   it reports a state that is still true and that every answer depends on (HAP-1, UX-4). */
+.app__pinned {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
 .card,
 .chat,
 .dialog {

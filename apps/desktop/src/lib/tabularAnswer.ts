@@ -151,7 +151,10 @@ function describeFilter(t: Translator, filter: AppliedFilter, locale: string): s
     case "year":
       return t("tabularAnswer.filterYear", { column: filter.column, value: String(filter.year) });
     case "date_range":
-      return t("tabularAnswer.filterDateRange", { column: filter.column, start: filter.start, end: filter.end });
+      // One day is written "date = 2026-01-23", not as a range that starts and ends the same day.
+      return filter.start === filter.end
+        ? t("tabularAnswer.filterEquals", { column: filter.column, value: filter.start })
+        : t("tabularAnswer.filterDateRange", { column: filter.column, start: filter.start, end: filter.end });
     case "in":
       return t("tabularAnswer.filterIn", { column: filter.column, value: filter.values.join(", ") });
   }
@@ -485,6 +488,12 @@ function formatNudge(
   ];
   if (nudge.reason === "filter_not_supported" && nudge.filterColumn !== null) {
     lines.push(t("tabularAnswer.nudgeFilterColumn", { column: nudge.filterColumn }));
+  }
+  if (
+    (nudge.reason === "non_numeric_column" || nudge.reason === "formula_cannot_be_verified") &&
+    nudge.filterColumn !== null
+  ) {
+    lines.push(t("tabularAnswer.nudgeRefusedColumn", { column: nudge.filterColumn }));
   }
   if (nudge.reason === "value_not_found" && nudge.closeValues.length > 0) {
     lines.push(t("tabularAnswer.nudgeCloseValues", { values: nudge.closeValues.join(", ") }));

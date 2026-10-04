@@ -96,6 +96,15 @@
     "mixedCorrection": "La table indique {correct}, et non {claimed}.",
     "mixedRejectedCitation": "Une citation ({citation}) ne correspond à aucune source fournie et a été signalée."
   },
+  "choices": {
+    "hint": "Cliquez sur un fichier pour poser la question à son sujet.",
+    "appendFile": " (fichier : {path})",
+    "appendWorkbook": " dans {path}"
+  },
+  "names": {
+    "documentsFolder": "Dossier des documents",
+    "dataFolder": "Dossier des données"
+  },
   "workFolder": {
     "title": "Dossier des documents",
     "descriptionFull": "Le dossier des textes PDF, DOCX, même JPEG... Choisissez un dossier dédié, pas la totalité de vos documents, et jamais un dossier recopié vers un service en ligne.",
@@ -338,6 +347,7 @@
       "group_threshold_not_supported": "Votre question compare un seuil au total d'un groupe (par exemple un fournisseur). Ce calcul n'est pas encore disponible dans {file} : compter les lignes au-dessus du seuil répondrait à une autre question, rien n'est donc calculé. Vous pouvez demander le total par groupe, ou les lignes au-dessus d'un seuil.",
       "value_not_found": "« {value} » ne correspond à aucune valeur réelle de {file}."
     },
+    "nudgeRefusedColumn": "Colonne concernée : {column}.",
     "nudgeFilterColumn": "Ce mot a été trouvé dans la colonne {column}.",
     "nudgeCloseValues": "Valeurs proches trouvées : {values}.",
     "nudgeColumns": "Ses colonnes sont : {columns}.",

@@ -430,3 +430,21 @@ async fn a_failed_ask_ai_keeps_the_computed_value_and_says_the_model_was_asked()
     assert_eq!(sum_of(value), 2215.0);
     assert_eq!(model_attempt.as_ref().map(|attempt| attempt.model_alias.as_str()), Some("cabinet-chat"));
 }
+
+// --- BUG-13: a refusal about a column's content names the column ---------------------------
+
+#[tokio::test]
+async fn adding_up_a_text_column_is_refused_and_names_that_column() {
+    let folder = Folder::build();
+    for (question, locale) in [
+        ("Quelle est la somme de fournisseur ?", "fr-FR"),
+        ("What is the sum of fournisseur?", "en-US"),
+    ] {
+        let answer = folder.ask(question, locale, &[INVOICES]).await;
+        let TabularAnswer::Nudge { reason, filter_column, .. } = answer else {
+            panic!("{question:?}: expected a refusal, got {answer:?}");
+        };
+        assert_eq!(reason, Some(NotAnswerableReason::NonNumericColumn), "{question:?}");
+        assert_eq!(filter_column.as_deref(), Some("fournisseur"), "{question:?}");
+    }
+}

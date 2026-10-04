@@ -23,6 +23,8 @@ Reference name: **HAP-1**. Use it in chat, in commit messages and in `docs/DECIS
 | [04-improvement-plan.md](04-improvement-plan.md) | The same findings ordered from the cheapest and safest fix to the most expensive, with what to re-test after each |
 | [05-analysis-notes.md](05-analysis-notes.md) | Answers to the owner's open questions: model size and family, memory versus scope, the leaked internal label, the gateway timeout, the clickable-choices proposal, what the mixed tier did and did not do |
 | [06-retest-lot-a.md](06-retest-lot-a.md) | Replay of five checks after the lot A fixes (4 October 2026): verdicts, the four Q23 conversations, a verification of the "history" hypothesis, new findings BUG-16, OBS-7, UX-4, updated bug status, a re-run recipe |
+| [07-retest-lot-b.md](07-retest-lot-b.md) | Replay of the lot B checks (4 October 2026): verdicts verified against the fixtures, the Q19 root cause (BUG-17), BUG-18, OBS-8, updated bug status, replay list |
+| [08-lot-c-plan.md](08-lot-c-plan.md) | The plan for lot C (C-a interface and routing, C-b conversation memory), written from the owner decisions of 4 October 2026, with the BUG-10 audit of internal names, the BUG-09 proposal awaiting approval, exit criteria and replay list |
 | [screenshots/INDEX.md](screenshots/INDEX.md) | The 51 screenshots (`S01.png`..`S51.png`, chronological), what each one shows, and the concordance with the numbers the owner wrote in the original notes |
 | [fixtures/README.md](fixtures/README.md) | The 6 documents and 2 workbooks used, copied from `C:\Users\elise\AssistantCabinetAI\{Docs,Data}\Test`, with their full text and the numbers computed by hand |
 

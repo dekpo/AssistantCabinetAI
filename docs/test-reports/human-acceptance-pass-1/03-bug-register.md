@@ -26,9 +26,13 @@ Effort: **XS** (a few lines), **S** (a function plus tests), **M** (a design dec
 | BUG-13 | S4 | XS-S | Nudge wording: misleading advice, generic columns, unnamed column, model text shown as the user's | Q19, Q21, Q24 |
 | BUG-14 | S3 | L | The query-plan vocabulary has no per-group threshold ("any supplier above N") | Q19 |
 | BUG-15 | S4 | S | The engine asks which workbook although only one holds the named column | Q9 |
+| BUG-17 | S2 | S | French "plus de N" / "moins de N" never becomes a filter; the unfiltered count is answered (added 4 Oct, lot B retest) | Q19 |
+| BUG-18 | S3 | S | "Demander à l'IA" on a computed answer silently returns the same answer when the model cannot do better (added 4 Oct) | Q19 conv 2, 3 |
+| BUG-19 | S4 | M | A threshold written in words ("cinq mille") is refused, not read (added 4 Oct, B2 replay) | Q19 variant |
 | UX-1 | - | S | Disambiguation choices are not clickable | Q4, Q9 |
 | UX-2 | S4 | XS | Error banner overflows the sidebar height | Q26, S43 |
 | UX-3 | S4 | XS | Stray `extrait.` and `[extrait 2]` markers in model text | Q8-e, Q8-f |
+| UX-5 | S4 | XS | A single day is displayed "date entre X et X" (added 4 Oct) | `Combien de factures le 23/01/2026 ?` |
 
 ---
 
@@ -400,6 +404,66 @@ billed corresponds to the quote" (table 1 450, quote 1 200,00 HT) in two of four
 in the answer data but not displayed beside the model's prose, and numeric verification flags only a number that
 contradicts the table. Candidate fixes in 06. Related: OBS-7 (a small model can answer in English), UX-4 (pin the
 connection banner), and BUG-13's remaining items (Q24 column name, "Quel salle").
+
+## BUG-17 (added 4 October 2026) - French "plus de N" / "moins de N" never becomes a filter (S2)
+
+Found in the lot B retest ([07-retest-lot-b.md](07-retest-lot-b.md), Q19). `Est-ce qu'on a dépensé plus de 5000 euros
+avec un seul fournisseur ce trimestre ?` and, in isolation, `Les factures de plus de 500 euros ?` both return
+`Count(8)` (every row) with `filters: []`.
+
+**Cause (reproduced by running the engine, read in the code).**
+
+- `tabular/question.rs`, `detect_operation`: "plus"/"moins" followed by a number is read as an implicit `Count`,
+  "with the comparison itself resolved afterward as a filter" by `tabular_answer::detect_filters`.
+- `residual_words` removes every word of the pack before `detect_filters` runs, and "plus"/"moins" are *also*
+  superlative vocabulary (`groups.most`, `groups.least`), so they never reach the residual. `detect_filters`
+  looks for its comparison words only in the residual, so no `GreaterThan`/`LessThan` is built, and the number is
+  silently dropped.
+- With nothing left over, no model escalation fires either: the unfiltered count is a finished answer.
+- English works because "over" is not group vocabulary. French "supérieur(e)(s)" works; "plus de" and "moins de",
+  the usual phrasing, never have since session 11. Lot B did not cause it: removing the invented year (BUG-02)
+  only removed the line that used to betray it.
+
+**Candidate fix.** In `detect_filters`, look for a comparison word in the *question's own tokens* rather than the
+residual, accepting only the shape "comparison word, optional filler or one-letter connector, number"
+("plus de 500", "plus que 500", "supérieur à 500"), so a superlative ("le plus de montant en 2026") is never read
+as a threshold; then consume the number from the residual. If a comparison word and a number are present and no
+numeric column can be targeted, refuse or escalate rather than answer unfiltered. Tests in French and English,
+plus a check that "Quelle salle a le plus de duree_min ?" stays a group ranking.
+
+## BUG-18 (added 4 October 2026) - A forced model attempt that fails leaves no trace (S3)
+
+Q19 conversations 2 and 3 (the "Demander à l'IA" button with `gemma2:2b` and `ministral-3:3b`) show the exact
+text of conversation 1. `answer_sync` with `force_model` returns `PendingAnswer::TryModel { fallback: computed }`;
+when the model's plan is unusable `resolve` returns the fallback, and `with_model_attempt` decorates only a
+`Nudge` (it carries `model_attempt`). A computed `Value` carries no such field, so the user cannot tell whether
+the model was asked, failed or was ignored. Candidate fix: carry the attempt (model alias, duration) on a
+`Value` as well and render a one-line note ("Le modèle n'a pas pu proposer une lecture plus précise ; la
+réponse calculée est conservée"), user-visible text only, no model-facing change. Related: BUG-12.
+
+## OBS-8 (added 4 October 2026) - The structural route ignores the rest of the question
+
+`Que contient la colonne détails de la facture de 2026-01-22 ?` is answered "Colonnes de la feuille Factures :
+date, fournisseur, montant." The words "contient"/"colonne" route it to the structural path, which never looks at
+the leftover words ("détails", the date). Coherent here, but the same family as BUG-17 (part of the sentence
+dropped without saying so). It matters for lot D, whose data-only precondition assumes that a structural answer
+means "clearly and only about the data".
+
+**Status 4 October 2026 (lot B2, replayed by the owner, see 07):** BUG-17 closed and confirmed live; the Q19
+group-threshold refusal confirmed live; BUG-12 closed for a value with no close match (Alfa, live) and open for a
+missing sheet; BUG-18 fixed in code, not yet seen live.
+
+## BUG-19 (added 4 October 2026) - A threshold written in words is not read (S4)
+
+`Est-ce qu'on a dépensé plus de cinq mille euros avec un seul fournisseur ... ?` is refused ("Je ne peux pas
+répondre directement ...") with both models: the classifier reads digits only and the model plan cannot express it
+(OBS-6). The refusal is honest. A fix would parse number words in the locale pack (the pack already has words
+for one to ten, `numbers`); nothing in lots C, D or E depends on it.
+
+## UX-5 (added 4 October 2026) - One day shown as a range
+
+A single written date is filtered as the range of that day and displayed "date entre 2026-01-23 et 2026-01-23".
+Copy-only fix: when the two ends are equal, show "date = 2026-01-23" (a new catalogue key in both languages).
 
 ## UX-1 - Clickable disambiguation (proposal)
 

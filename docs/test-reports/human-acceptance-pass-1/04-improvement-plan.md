@@ -87,3 +87,58 @@ larger models (7-14B class) before judging model-related findings (OBS-1..6) as 
 
 All PASS entries of [02-results.md](02-results.md) stay PASS. FAIL entries may change, but never to a
 different wrong answer. Any new "Compris comme" line must describe only conditions that are in the question.
+
+---
+
+## Triage after the lot B retest (4 October 2026)
+
+Source: [07-retest-lot-b.md](07-retest-lot-b.md). The question asked of every open finding is: **does a later
+fix stack on it?** If yes, fixing it later means building on a wrong result, so it is fixed now; if no, it stays
+in its planned lot.
+
+| Finding | Do later work rely on it? | Decision |
+| --- | --- | --- |
+| BUG-17 French "plus de N" dropped (Q19) | **Yes.** Lot D tightens the data-only precondition on the idea that a recognised question with nothing left over is "clearly about the data": an unfiltered count wrongly passes that test, also with documents ticked. Lot E (per-group threshold, row lookup) extends the very filter code that does not work in French. Every reference case added from now on would encode the bug | **Fix now, as lot B2** (same branch or a stacked one), S effort, S2 severity |
+| BUG-18 silent forced model attempt | No. It is local to the tier 2 "Demander à l'IA" path; the mixed tier has its own degrade lines. It shares its cause with BUG-12 (the model is consulted for questions the data settles) | Lot C, with BUG-12 and the interface fixes; copy and one field only, no model-facing text |
+| BUG-06 entity linking, BUG-16 hidden computed figure (Q24, Q23 conv 1) | Lot D is the lot that fixes them. Lot E's template filling needs the document entity linked to the table row, so D must precede E. Nothing in B2 or C depends on them | Stay in lot D. Do not add more mixed-tier behaviour before D |
+| Q24 gate (document-reference phrases) | Lot D will redesign the gate (decision 4, still open). The phrase list is data and can be replaced | Keep as is; revisit in D |
+| OBS-8 structural route ignores leftover words | Lot D's precondition. The same class as BUG-17, but it was coherent in the one case seen | Stays open; re-examine inside lot D together with the precondition |
+| BUG-15 remainder, UX-1 (Q14 with both ticked) | No. Asking which workbook is the safe behaviour; UX-1 only removes the retyping | Lot C or later; no dependency |
+| BUG-12 | Interacts with BUG-18. Contradicts D6 (the model is the interpreter of last resort) | Owner decision first |
+| Not verified live: 0-row note, BUG-11, BUG-05 on a live question | Nothing stacks on them | Replay with the questions of the replay list in 07 and in 06 |
+
+Conclusion: **only BUG-17 must be fixed before moving on.** The mixed-tier failures of Q24 are real but are the
+reason lot D exists; fixing them earlier would mean patching the same entry gate twice.
+
+---
+
+## Triage after the lot B2 replay (4 October 2026)
+
+Source: [07-retest-lot-b.md](07-retest-lot-b.md), replay of 4 October. Fifteen checks, no regression, all lot B
+and B2 targets confirmed live except BUG-18's new line (unit-tested only). Open items and whether a later fix
+stacks on them:
+
+| Open item | Does later work rely on it? | Decision |
+| --- | --- | --- |
+| Q24 gives the quote's 1 200,00 instead of 1 450 | Lot D owns it; lots C and E do not read the table block. Lot E (template filling) needs the same entity linking, so D precedes E | Stays in D |
+| BUG-19 spelled-out threshold | No | Backlog |
+| UX-5 single-day wording | No | Lot C-a, copy only |
+| BUG-18 line not seen live | No | Lot C-a replay |
+| BUG-12 missing sheet (Q20) | No | Backlog |
+| BUG-16 hidden computed figure | Lot D | Stays in D |
+
+**Nothing blocks lot C.** Lot C is split into C-a (no model-facing change) and C-b (conversation memory, needs
+approval); C-b precedes lot D. Plan: [08-lot-c-plan.md](08-lot-c-plan.md).
+
+## Owner decisions of 4 October 2026
+
+These close the "Decisions to take" list above. Recorded in `docs/DECISIONS.md` too.
+
+| # | Decision |
+| --- | --- |
+| 1. BUG-10 | An internal name shown to the user is replaced by the name the application already uses: "Dossier des documents" / "Documents folder" for `WORK_FOLDER_CONTEXT`, and the equivalent for data-side labels, **on display only; the code identifiers do not change**. The audit asked for on the data folder is in 08 (C-a1) |
+| 2. BUG-09 | The memory of the conversation does not depend on which documents are ticked. Sources (document texts, table data) **outrank** the memory, formally, for every model and above all the smallest: a small model remembers the sources first, then at most the previous question. Limit what is sent to small-context models. **Any change to prompts or to what the model reads is announced with its plan before it is tried** |
+| 3. Router order | With documents and tables both ticked, "data only first" is not the default; the mixed tier is. Whether the order in which files are cited in the sentence can drive the router: see 08, "Looking ahead" |
+| 4. Models | Development must not depend on the capabilities of the models on this machine ("who can do more can do less"): get acceptable results with very small models first. The pilot server will be much more powerful. `llama3.2:3b` is installed here and untested: to be tried at the end of the fixes. Other models, installable thanks to the modular configuration, will be tested in later phases |
+| BUG-12 | (4 October, earlier) Refuse at once when the data settles it (value with no close match); D6 narrowed |
+| Q19 | (4 October, earlier) Refuse a threshold on a group's total while the capability does not exist |

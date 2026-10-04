@@ -602,6 +602,31 @@ private to `pub(crate)` for this session's own reuse). Prompt: `docs/SESSION-DAT
 | `IndexStore` across the mixed tier's own `.await`s | `mixed_answer.rs` takes no `IndexStore` at all, on purpose: both the tabular classification and retrieval's embed-then-search sequence run in `commands::mixed_tier` instead, owning the index for the stretch that needs it, never borrowing it into a struct held across a gateway call - the same reason `tabular_answer`'s own `prepare`/`resolve` split exists, applied one level up |
 | `documents_and_tables_together` | No longer returned by any question: session 15's router tries the data-only case first: and this session's mixed tier answers everything session 15 left refused, degrading to a partial answer rather than an outright refusal whenever anything on either side could be established. A question with nothing to say on either side returns the ordinary `insufficient_evidence` instead. The catalogue string is kept (both languages) and describes the current capability rather than a historical refusal, in case a future caller ever reaches it, but no code path constructs this error any more |
 
+## Settled by the HAP-1 fixes, lot B and B2 (4 October 2026)
+
+Found in the first human acceptance pass (`docs/test-reports/human-acceptance-pass-1/`, HAP-1) and its two
+retests; each row names the bug it closes.
+
+| Subject | Decision |
+| --- | --- |
+| A threshold is read from the question's own words (BUG-17) | "plus de N" / "moins de N" and their English and French variants become a greater-than / less-than filter on the numeric column, only in the shape *comparison word, connectors, number*. Connectors and modifiers are data in the locale packs (`comparisons.connectors`, `comparisons.modifiers`). A modifier ("au moins", "pas plus de"), an ambiguous number ("1,500") or no numeric column to anchor it is **never dropped**: it is refused or escalated like any filter the engine cannot apply, because an unfiltered count presented as the answer is worse than a refusal |
+| A group's total against a threshold is refused (BUG-14, until it exists) | A plain count under a row threshold, in a question that names a text column and gives no value for it ("a supplier above 5000"), answers `group_threshold_not_supported`. A row count of 0 can be read as "no supplier" while a supplier's total is above the threshold. The real capability is lot E |
+| The model is not asked for a refusal the data already settles (BUG-12) | A proper noun that matches no real value and has **no close value** is refused at once (`PendingAnswer::TryModel { skip_model: true }`, read by `resolve` only). The model sees column names and never values, so it cannot find such a value; the wait of 17 s to 1 min 25 bought nothing. **This narrows D6** (the model as interpreter of last resort): D6 still applies to every unrecognised question, to a threshold the classifier could not read, and to any value that has a close match, and the "Ask AI" button still asks the model. A sheet that does not exist is not covered: it is known to be missing only after the model's plan names it |
+| A failed "Ask AI" leaves a trace (BUG-18) | A computed value kept after a forced model attempt carries `modelAttempt` and the interface says the model was asked and the computed answer is kept |
+| A question about a document is not a data-only question (Q24) | `question::refers_to_a_document` (phrases in the locale packs, `document_references`) keeps such a question out of the data-only router, and in the mixed tier a whole-table value for it is withheld (`not_linked`): the model is told "Table results: none." with the existing wording, and the user is told why. Tying the document's entity to a table row is lot D |
+| Zero rows | A filtered value computed over no row says so and points at the "Understood as" line |
+
+## Owner decisions after the HAP-1 retests (4 October 2026)
+
+Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
+
+| Subject | Decision |
+| --- | --- |
+| Internal names shown to the user (BUG-10) | A block or label name the model may echo (`WORK_FOLDER_CONTEXT`, `Table results`, `Document excerpts`) is replaced, **at display time only**, by the name the application already uses: "Dossier des documents" / "Documents folder" and "Dossier des données" / "Data folder". The identifiers in the code and in what the model reads do not change. **This is a narrow exception** to "the model's draft is never rewritten" (session 16, `docs/SELECTION-AND-MEMORY.md`): a substitution of internal identifiers in the presentation layer, never of a sentence, a number or a citation; the stored message and the history sent back to the model are untouched |
+| Memory versus sources (BUG-09) | Confirms "Grounding outranks memory" (27 September 2026): document texts and table data outrank the memory of the exchanges, above all for small models. The memory does not depend on which documents are ticked. A cap on what is sent to small-context models is planned (`08-lot-c-plan.md`, C-b) and is **announced to the owner with exact numbers before any change to what a model reads** |
+| Router with both kinds ticked | The data-only router is no longer the default for a question that crosses information; the mixed tier is. The direction replaces the "data first" default of session 15 once lot D lands; until then the Q24 gate keeps document references out of the data-only router |
+| Model policy | Development does not rely on the capabilities of the models on the development machine: results must be acceptable with very small models first. Larger models on the pilot server are a bonus, not a premise. `llama3.2:3b` is to be tried after the fixes; other models later through the modular configuration |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

@@ -717,6 +717,12 @@ async fn sourced_answer(
         // tried first. Session 16's own mixed tier (`mixed_tier`, `mixed_answer.rs`) starts
         // exactly at its `None`: everything that question did not already answer.
         GroundingTier::DocumentsAndTables => {
+            // "Demander a l'IA" (`skip_deterministic`) asks for the model's reading instead of the
+            // engine's alone, so the data-only shortcut is skipped and the mixed tier answers; it
+            // was ignored here until HAP-1 (BUG-04), which left the button doing nothing.
+            if skip_deterministic {
+                return mixed_tier(app, state, &question, &scope, &history, on_event).await;
+            }
             match mixed_data_only_tier(app, state, &question, &scope).await? {
                 Some(answer) => return Ok(answer),
                 None => return mixed_tier(app, state, &question, &scope, &history, on_event).await,

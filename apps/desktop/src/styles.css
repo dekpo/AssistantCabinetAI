@@ -110,6 +110,10 @@ body {
 .app__main {
   display: grid;
   grid-template-columns: minmax(240px, 300px) 1fr;
+  /* One row exactly as tall as the window allows, never as tall as its tallest column: a sidebar
+     with both folder lists open and a connection banner scrolls inside itself instead of making
+     the whole page scroll (HAP-1, UX-2). */
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   padding: 16px 20px 20px;
   min-height: 0;
@@ -121,6 +125,8 @@ body {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .card,

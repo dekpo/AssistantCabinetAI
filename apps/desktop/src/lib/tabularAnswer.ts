@@ -499,7 +499,9 @@ function formatNudge(
     }
   }
   if (nudgedBefore) {
-    lines.push(t("tabularAnswer.nudgeAgain"));
+    // The advice depends on what went wrong: a value that matches nothing is fixed by spelling it as
+    // the file does, not by naming a column (HAP-1, BUG-13).
+    lines.push(t(nudge.reason === "value_not_found" ? "tabularAnswer.nudgeAgainValue" : "tabularAnswer.nudgeAgain"));
   }
   return lines.join("\n\n");
 }

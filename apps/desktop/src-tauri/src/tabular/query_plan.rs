@@ -347,7 +347,17 @@ fn resolve_one_filter(
             }
         }
         // No sheet, or no such column: pass the raw value through so `engine::execute` can
-        // refuse with `SheetNotFound`/`ColumnNotFound`, the more specific reason.
+        // refuse with `SheetNotFound`/`ColumnNotFound`, the more specific reason. Built here rather
+        // than in `comparison_from`: a model that names a column the workbook lacks is an ordinary
+        // outcome, and must end in that refusal, never in a panic (HAP-1, BUG-01).
+        return unresolved_equality(filter)
+            .map(|comparison| {
+                Some(FilterSpec {
+                    column: filter.column.clone(),
+                    comparison,
+                })
+            })
+            .ok_or(PlanResolution::Unsupported);
     }
     comparison_from(filter.op, &filter.value)
         .map(|comparison| {
@@ -357,6 +367,29 @@ fn resolve_one_filter(
             })
         })
         .ok_or(PlanResolution::Unsupported)
+}
+
+/// An `eq`/`in` filter whose column could not be found, as the comparison `engine::execute` will then
+/// refuse with the specific reason (`ColumnNotFound`, `SheetNotFound`). `None` when the value's shape
+/// does not match its op, which is `Unsupported` like every other malformed plan.
+fn unresolved_equality(filter: &PlanFilter) -> Option<Comparison> {
+    let strings = |value: &serde_json::Value| -> Option<Vec<String>> {
+        match value {
+            serde_json::Value::String(text) => Some(vec![text.clone()]),
+            serde_json::Value::Array(items) => items
+                .iter()
+                .map(|item| item.as_str().map(str::to_string))
+                .collect(),
+            _ => None,
+        }
+    };
+    match filter.op {
+        PlanFilterOp::Eq => filter.value.as_str().map(|text| Comparison::Equals(text.to_string())),
+        PlanFilterOp::In => strings(&filter.value)
+            .filter(|values| !values.is_empty())
+            .map(Comparison::In),
+        _ => None,
+    }
 }
 
 fn find_column<'a>(columns: &'a [ColumnInventory], name: &str) -> Option<&'a ColumnInventory> {
@@ -485,9 +518,9 @@ fn comparison_from(op: PlanFilterOp, value: &serde_json::Value) -> Option<Compar
         Some((a.as_f64()?, b.as_f64()?))
     };
     match op {
-        PlanFilterOp::Eq | PlanFilterOp::In => {
-            unreachable!("eq/in are resolved against real data, not reached here")
-        }
+        // Resolved against real data by `resolve_one_filter`, never here; refused rather than
+        // guessed if a caller ever gets this far.
+        PlanFilterOp::Eq | PlanFilterOp::In => None,
         PlanFilterOp::Contains => value.as_str().map(|text| Comparison::Contains(text.to_string())),
         PlanFilterOp::Gt => value.as_f64().map(Comparison::GreaterThan),
         PlanFilterOp::Lt => value.as_f64().map(Comparison::LessThan),
@@ -952,5 +985,54 @@ mod tests {
         };
         let (workbook, inventory) = fixture();
         assert!(matches!(resolve(&plan, &inventory, &workbook, None), PlanResolution::Unsupported));
+    }
+
+    #[test]
+    fn a_filter_on_a_column_the_workbook_lacks_is_refused_not_a_panic() {
+        // HAP-1, BUG-01: the plan a real model wrote for "how many invoices for supplier MedSupply"
+        // against an appointments workbook. It panicked in `comparison_from`.
+        let workbook = Workbook {
+            sheets: vec![SheetData {
+                name: "RDV".to_string(),
+                rows: {
+                    let mut rows = vec![text_row(&["date", "salle", "patient", "duree_min"])];
+                    for index in 0..10 {
+                        rows.push(text_row(&["2026-03-02", "Salle 1", "Dupont J", &format!("{}", 20 + index)]));
+                    }
+                    rows
+                },
+            }],
+        };
+        let inventory =
+            TabularInventory::build("rdv.csv", "hash-rdv", TabularFormat::Csv, &workbook, "fr-FR");
+        for op in [PlanFilterOp::Eq, PlanFilterOp::In] {
+            let plan = QueryPlan {
+                sheet: None,
+                filters: vec![PlanFilter {
+                    column: "fournisseur".to_string(),
+                    op,
+                    value: serde_json::json!("MedSupply"),
+                }],
+                group_by: None,
+                aggregate: Some(PlanAggregate { op: PlanAggregateOp::Count, column: None }),
+                sort: None,
+                limit: None,
+                unsupported: false,
+            };
+            let PlanResolution::Operation(operation) = resolve(&plan, &inventory, &workbook, None) else {
+                panic!("expected an operation for {op:?}");
+            };
+            let outcome = engine::execute(&workbook, &inventory, None, None, &operation, "fr-FR");
+            assert!(
+                matches!(
+                    outcome,
+                    crate::tabular::engine::TabularOutcome::NotDeterministicallyAnswerable {
+                        reason: crate::tabular::engine::NotAnswerableReason::ColumnNotFound,
+                        ..
+                    }
+                ),
+                "{op:?}: expected a ColumnNotFound refusal, got {outcome:?}"
+            );
+        }
     }
 }

@@ -43,6 +43,16 @@ export function normaliseError(raw: unknown): AppError {
 }
 
 export function errorMessage(t: Translator, error: AppError): string {
+  // A code may carry a `reason` that deserves its own sentence (`provider_error` + `timeout`: the
+  // model was still loading, not broken). Without a catalogue entry for the pair, the code's own
+  // sentence applies, exactly as before.
+  const reason = error.data.reason;
+  if (typeof reason === "string") {
+    const specific = t(`errors.${error.code}_${reason}`, error.data);
+    if (specific !== `errors.${error.code}_${reason}`) {
+      return specific;
+    }
+  }
   const message = t(`errors.${error.code}`, error.data);
   // A code with no catalogue entry would otherwise show the key itself.
   return message === `errors.${error.code}` ? t(`errors.${UNKNOWN_ERROR_CODE}`) : message;

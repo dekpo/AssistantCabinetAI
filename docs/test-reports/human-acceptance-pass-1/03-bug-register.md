@@ -502,3 +502,12 @@ excerpt labels the product gave it. Fixing the label format in the evidence bloc
 - Q21: the dataset has no "Alpha", so the close-value suggestion could not be exercised.
 - Q22 was not run; Q25 is not a user action; Q26 reused the Q24 phrasing and could not reach the mixed tier.
 - The owner's screenshot numbers shifted by up to two between Q10 and Q18 (see `screenshots/INDEX.md`).
+
+---
+
+## Status after lot C-a (4 October 2026, coded, awaiting live replay)
+
+BUG-07, BUG-08 (design fix, cause not reproduced), BUG-10 (display side), BUG-13 remainder, UX-1, UX-4 and UX-5
+are implemented on `fix/lot-c-interface-and-routing`; see [08-lot-c-plan.md](08-lot-c-plan.md) for the change per
+item and the replay steps. BUG-09 (memory) waits for the owner's approval of the C-b numbers; BUG-18 and BUG-11
+await a live proof.

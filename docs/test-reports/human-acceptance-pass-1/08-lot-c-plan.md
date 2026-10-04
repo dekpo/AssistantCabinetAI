@@ -182,3 +182,35 @@ Y"). Findings, to be confirmed in lot D:
   no model when both kinds are ticked (the owner liked this in the lot B replay), or always through the mixed tier
   (the owner's reading of decision 3: ticking both kinds means "cross the information")? The recommendation is the
   first for a question with no document reference and no writing intent, the mixed tier for everything else.
+
+---
+
+## Implementation status of C-a (4 October 2026, branch `fix/lot-c-interface-and-routing`)
+
+Coded and covered by tests (vitest 305, cargo all green, no warning); **awaiting the owner's live replay**.
+C-b (memory) is not started: it waits for the owner's approval of the numbers.
+
+| Item | What was done | Tests |
+| --- | --- | --- |
+| C-a1 internal names | `src/lib/displayNames.ts`, applied at render time and to the copy button of an assistant message; catalogue keys `names.documentsFolder` / `names.dataFolder` in both languages. The stored message and the history are untouched | `displayNames.test.ts`: variants, ordinary text untouched, and a **guard** that fails when an upper-case identifier in the model-facing strings has no display name |
+| C-a2 Q28 | `max_unknown_words` (2) in `resources/work-folder-questions/*.json`, read by `folder_questions::folder_answer`: more unrelated words than that and the question is not answered from the inventory | `tests/work_folder_inventory.rs`: Q28 in French and English as negative cases; proven to fail without the bound; all existing positive cases unchanged |
+| C-a3 scroll | `lib/scroll.ts::nextFollowing`: the view stops following only for a scroll she caused (wheel, touch, scroll key, pointer within 600 ms); a `ResizeObserver` on each turn follows late growth; one more scroll when an answer finishes. **The cause was a hypothesis and was not reproduced with a log**: this is a design that removes the suspected mechanism, so the replay is the proof | `scroll.test.ts` for the decision function |
+| C-a4 UX-1 | `lib/choices.ts` and buttons under a "which file?" answer (documents: ambiguous name; tables: ambiguous name or which workbook). A click replaces her question in place (the edit-and-resend path) with the path written into it | `choices.test.ts`, both languages |
+| UX-5 | One day is shown "date = 2026-01-23" | `tabularAnswer.test.ts` |
+| BUG-13 remainder | A refusal about a column's content names the column ("Colonne concernée : fournisseur.") | `tests/tabular_hap1.rs`, `tabularAnswer.test.ts` |
+| UX-4 | The connection banner is sticky at the bottom of the sidebar | none (CSS); replay |
+
+Not done in C-a: BUG-18 and BUG-11 live proofs (owner replay recipes below).
+
+### C-a replay list (exact steps)
+
+1. **Internal names.** Documents selected without the quote, ask `Quel est le prix de l'imprimante dans le devis MedSupply ?` several times with each model; whenever the answer names where it looked, it must read "Dossier des documents", never `WORK_FOLDER_CONTEXT`. With the quote and the invoices ticked, Q24 with `ministral-3:3b` must not show "Table results" (it shows "Dossier des données" if the model echoes it). The Copy button copies the displayed words.
+2. **Q28.** Nothing selected: `Quel est le délai légal de conservation des dossiers médicaux en France ?` must reach the model (answer with the "no documents" notice) and not say "Aucun document sélectionné". Then Q1, Q2, Q3 of the protocol unchanged.
+3. **Scroll.** Q3, Q4, Q21, Q27 and a long streamed answer: the end of the answer must be visible without scrolling by hand; scrolling up while an answer streams must keep you where you are; scrolling back to the bottom must resume the follow.
+4. **Buttons.** All documents ticked, `Que dit neurologie.pdf ?` (Q4): one button per file; a click replaces the question and answers about that file. Both workbooks ticked, `Combien de lignes ?`: one button per workbook; a click answers for that workbook.
+5. **One day.** Invoices only, `Combien de factures le 23/01/2026 ?`: "Compris comme : date = 2026-01-23".
+6. **Refused column.** Invoices only, `Quelle est la somme de fournisseur ?`: the refusal names "Colonne concernée : fournisseur."
+7. **Banner.** Both folder lists expanded, gateway stopped: the red banner stays visible at the bottom of the sidebar while the sidebar scrolls.
+8. **BUG-18 (live proof).** Invoices only, ask `Quelle est la somme des montant ?` (answer: "Somme de montant : 2 215", computed). Under that answer press "Demander à l'IA". Two outcomes are correct: (a) the model proposes nothing usable: the same answer stays and a line says "... a été interrogé, pendant X, mais n'a pas proposé de lecture plus précise de cette question : la réponse calculée ci-dessus est conservée." (b) the model proposes a valid reading: the answer is shown as "interprétée par le modèle". It must never be a silent identical answer.
+9. **BUG-11 (live proof, optional).** Start the server with `LLM_REQUEST_TIMEOUT_SECONDS=5`, ask any question with `ministral-3:3b`: the dedicated "trop de temps à démarrer" sentence must appear instead of the generic failure; restore the value afterwards.
+10. **No regression.** The B2 replay list in [07-retest-lot-b.md](07-retest-lot-b.md), at least rows 1, 6, 7, 9, 11 and 12.

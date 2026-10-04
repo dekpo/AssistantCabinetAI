@@ -627,6 +627,16 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | Router with both kinds ticked | The data-only router is no longer the default for a question that crosses information; the mixed tier is. The direction replaces the "data first" default of session 15 once lot D lands; until then the Q24 gate keeps document references out of the data-only router |
 | Model policy | Development does not rely on the capabilities of the models on the development machine: results must be acceptable with very small models first. Larger models on the pilot server are a bonus, not a premise. `llama3.2:3b` is to be tried after the fixes; other models later through the modular configuration |
 
+## Settled by lot C-a of the HAP-1 fixes (4 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| The folder router refuses a sentence of unrelated words (BUG-07) | `max_unknown_words` (2, per locale pack): a question with more words that are neither vocabulary nor in the documents is not a request for the inventory, even when it shares a list word and a subject word with one. It reaches retrieval or the model. Q28 (legal retention period of medical records) is the negative case |
+| Following the end of an answer (BUG-08) | The view stops following only for a scroll the user caused (wheel, touch, scroll key, pointer); content growth never stops it, and it follows late growth and the end of an answer. The earlier rule read every scroll event, including the one caused by growth |
+| "Which file?" answers are buttons (UX-1) | Each candidate resends the user's question in place with the chosen path written into it, through the existing edit-and-resend path; the clarification leaves the memory. The question text is built from her own words and the file path only |
+| Display names (BUG-10) | Implemented in `src/lib/displayNames.ts` at render time and copy; see "Owner decisions after the HAP-1 retests". A guard test fails when a name the model reads has no display name |
+| A column refused for its content is named (BUG-13) | `non_numeric_column` and `formula_cannot_be_verified` nudges carry the column |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

@@ -109,6 +109,8 @@ export interface ChatEntry extends ChatTurn {
    * "without the AI" with nothing to show for it. */
   modelAttemptAlias?: string;
   modelAttemptDurationMs?: number;
+  /** The attempt was on a question the engine had already computed: the computed answer stays. */
+  modelAttemptKept?: true;
   /** Documents and tables were both selected, but this question was clearly and only about the
    * data, so the tabular engine answered it alone and the documents selected alongside it were
    * never read - no retrieval, no gateway call (`docs/SESSION-DATA-15-Mixed-Routing.md`). Said
@@ -346,7 +348,10 @@ export function useChat(
           // A nudge is still entirely deterministic text - no model wrote a word of it - but one
           // that followed a real, failed model attempt still cost real time, and that must not
           // vanish (`docs/DECISIONS.md`, the session 14 manual validation pass).
-          const modelAttempt = tabularAnswer.kind === "nudge" ? tabularAnswer.modelAttempt : null;
+          const modelAttempt =
+            tabularAnswer.kind === "nudge" || tabularAnswer.kind === "value"
+              ? (tabularAnswer.modelAttempt ?? null)
+              : null;
           const retryable = tabularAnswer.kind === "value" || tabularAnswer.kind === "nudge";
           setEntries((current) =>
             current.map((entry) =>
@@ -371,6 +376,9 @@ export function useChat(
                       : {
                           modelAttemptAlias: modelAttempt.modelAlias,
                           modelAttemptDurationMs: modelAttempt.durationMs,
+                          // A kept computed value: the line says so, instead of "could not turn
+                          // this question into something computable" (HAP-1, BUG-18).
+                          ...(tabularAnswer.kind === "value" ? { modelAttemptKept: true as const } : {}),
                         }),
                     ...(retryable ? { tabularRetryable: true as const } : {}),
                     ...(source === null ? {} : { tabularSource: source }),

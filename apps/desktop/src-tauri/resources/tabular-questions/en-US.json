@@ -37,7 +37,9 @@
   "comparisons": {
     "_comment": "Session 11 filter words (docs/DECISIONS.md): a comparison word beside a number, anchored to a real numeric column by tabular_answer::detect_filters - never a guess.",
     "greater_than": ["more", "over", "above", "greater", "higher", "exceeding"],
-    "less_than": ["less", "under", "below", "fewer", "lower"]
+    "less_than": ["less", "under", "below", "fewer", "lower"],
+    "connectors": ["than", "to", "of"],
+    "modifiers": ["at", "not"]
   },
   "weekdays": {
     "1": ["monday"],
@@ -62,6 +64,7 @@
     "11": ["november"],
     "12": ["december"]
   },
+  "document_references": ["this letter", "the letter", "this quote", "the quote", "this document", "the document", "this pdf", "this email", "this e-mail", "this contract", "this report", "this note", "mentioned in", "named in"],
   "between": ["between"],
   "numbers": {
     "1": ["one"],

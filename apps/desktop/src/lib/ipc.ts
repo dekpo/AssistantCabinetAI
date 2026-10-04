@@ -252,7 +252,8 @@ export type NotAnswerableReason =
   | "empty_sheet"
   | "filter_not_supported"
   | "non_date_column"
-  | "value_not_found";
+  | "value_not_found"
+  | "group_threshold_not_supported";
 
 /** One filter a value was actually computed under, exactly as `tabular::engine` ran it - data,
  * never prose (`docs/DECISIONS.md`, session 11): this side writes "fournisseur = Alpha" or "date
@@ -380,6 +381,8 @@ export type TabularAnswer =
       value: TabularValue;
       locator: TabularLocator;
       derivation: TabularDerivation;
+      /** Set when the model was asked ("Ask AI"), could not do better, and this computed value was kept. */
+      modelAttempt?: { modelAlias: string; durationMs: number } | null;
     }
   | { kind: "structural"; file: string; answer: StructuralAnswer }
   | {
@@ -422,7 +425,11 @@ export type TabularAnswer =
 
 /** Why one side of a mixed answer has nothing to show (`docs/SESSION-DATA-16-Mixed-Tier.md`,
  * mechanism 6: partial refusal). */
-export type MixedPartUnavailable = "not_asked_about" | "no_evidence" | "gateway_unavailable";
+export type MixedPartUnavailable =
+  | "not_asked_about"
+  | "no_evidence"
+  | "gateway_unavailable"
+  | "not_linked";
 
 /** One number the model wrote that matched neither the table's own value nor any excerpt's text
  * verbatim - appended, never silently rewritten into the answer. */

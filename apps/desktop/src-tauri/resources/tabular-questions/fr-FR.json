@@ -37,7 +37,9 @@
   "comparisons": {
     "_comment": "Mots de comparaison de la session 11 (docs/DECISIONS.md) : un mot de comparaison a cote d'un nombre, rattache a une colonne numerique reelle par tabular_answer::detect_filters - jamais devine.",
     "greater_than": ["plus", "superieur", "supérieur", "superieurs", "supérieurs", "superieure", "supérieure", "superieures", "supérieures"],
-    "less_than": ["moins", "inferieur", "inférieur", "inferieurs", "inférieurs", "inferieure", "inférieure", "inferieures", "inférieures"]
+    "less_than": ["moins", "inferieur", "inférieur", "inferieurs", "inférieurs", "inferieure", "inférieure", "inferieures", "inférieures"],
+    "connectors": ["de", "du", "que", "a", "à", "d", "qu"],
+    "modifiers": ["au", "pas"]
   },
   "weekdays": {
     "1": ["lundi"],
@@ -62,6 +64,7 @@
     "11": ["novembre"],
     "12": ["decembre", "décembre"]
   },
+  "document_references": ["cette lettre", "la lettre", "ce courrier", "le courrier", "ce devis", "le devis", "ce document", "le document", "ce pdf", "ce mail", "cet email", "cet e-mail", "ce contrat", "ce rapport", "cette note", "mentionne dans", "mentionnee dans", "mentionnes dans", "mentionnees dans", "cité dans", "cite dans"],
   "between": ["entre"],
   "numbers": {
     "1": ["un", "une"],

@@ -74,6 +74,10 @@ pub enum TabularAnswer {
         value: TabularValue,
         locator: TabularLocator,
         derivation: TabularDerivation,
+        /// Set only when the model was asked for its own reading (the "Ask AI" button), could not
+        /// do better, and this computed value was kept: without it the answer is identical to the
+        /// one she doubted and nothing says the model was ever consulted (HAP-1, BUG-18).
+        model_attempt: Option<ModelAttempt>,
     },
     /// A structural fact read from the inventory: sheets, rows, columns, formulas.
     Structural {
@@ -240,6 +244,12 @@ pub fn prepare_if_data_only(
     locale: &str,
     index: &IndexStore,
 ) -> Result<Option<PendingAnswer>, AppError> {
+    // A question that points at a document ("... mentioned in this letter") is not about the data
+    // alone: the table cannot say which supplier the letter names, so the whole table's figure
+    // would be presented as the answer. The mixed tier reads the document first (HAP-1, Q24).
+    if crate::tabular::question::refers_to_a_document(question, locale) {
+        return Ok(None);
+    }
     match prepare(question, data, selection, locale, index, false)? {
         done @ PendingAnswer::Done(_) => Ok(Some(done)),
         PendingAnswer::TryModel { .. } => Ok(None),
@@ -263,7 +273,11 @@ pub async fn resolve(
             inventory,
             allowed,
             fallback,
+            skip_model,
         } => {
+            if skip_model {
+                return fallback;
+            }
             let allowed = allowed.as_deref();
             // Timed around the whole attempt, success or not: a model that took a minute and
             // could not produce a usable plan still spent that minute, and the nudge it leaves
@@ -305,6 +319,12 @@ pub enum PendingAnswer {
         /// The nudge a model-free run would have given - used whenever the model cannot help
         /// either (`docs/SESSION-DATA-14-Query-Plan.md`, "degrades to today's nudge").
         fallback: TabularAnswer,
+        /// The deterministic pass already knows the model cannot help (a proper noun that matches
+        /// no real value and has no close one: the model sees column names, never values), so
+        /// `resolve` returns `fallback` at once instead of making her wait for a refusal. Read by
+        /// `resolve` only; the mixed tier and the data-only router keep treating this as
+        /// `TryModel` (HAP-1, BUG-12).
+        skip_model: bool,
     },
 }
 
@@ -395,7 +415,29 @@ fn answer_sync(
                 named_column.as_deref(),
                 locale,
             ) {
-                FilterDetection::Filters(filters) => with_filters(operation, filters),
+                FilterDetection::Filters(filters) => {
+                    if let Some(threshold) = group_threshold(
+                        &operation,
+                        &filters,
+                        named_column.as_deref(),
+                        &fresh,
+                        sheet.as_deref(),
+                        allowed,
+                    ) {
+                        return Ok(PendingAnswer::Done(nudge(
+                            file,
+                            &fresh,
+                            allowed,
+                            Some(NotAnswerableReason::GroupThresholdNotSupported),
+                            Vec::new(),
+                            Vec::new(),
+                            None,
+                            Some(threshold),
+                            Vec::new(),
+                        )));
+                    }
+                    with_filters(operation, filters)
+                }
                 FilterDetection::WhichColumn { value, candidates } => {
                     return Ok(PendingAnswer::Done(TabularAnswer::WhichColumn {
                         file,
@@ -403,10 +445,15 @@ fn answer_sync(
                         candidates,
                     }));
                 }
-                FilterDetection::ValueNotFound { value, close } => {
+                FilterDetection::ValueNotFound {
+                    value,
+                    close,
+                    threshold,
+                } => {
                     // Gap G: a residual word that looked like an attempted filter but matched no
                     // real data is exactly the case D6 (`docs/DECISIONS.md`) names - try the model
                     // next, and only fall back to this nudge when it cannot help either.
+                    let skip_model = close.is_empty() && !threshold;
                     let fallback = nudge(
                         file.clone(),
                         &fresh,
@@ -424,6 +471,7 @@ fn answer_sync(
                         inventory: fresh,
                         allowed: allowed.map(<[String]>::to_vec),
                         fallback,
+                        skip_model,
                     });
                 }
                 FilterDetection::None => operation,
@@ -441,6 +489,7 @@ fn answer_sync(
                     value,
                     locator,
                     derivation,
+                    model_attempt: None,
                 },
                 TabularOutcome::NotDeterministicallyAnswerable {
                     reason,
@@ -471,6 +520,7 @@ fn answer_sync(
                     inventory: fresh,
                     allowed: allowed.map(<[String]>::to_vec),
                     fallback: computed,
+                    skip_model: false,
                 })
             } else {
                 Ok(PendingAnswer::Done(computed))
@@ -508,6 +558,7 @@ fn answer_sync(
             };
             match load_workbook_cached(index, &path, &file, inventory, locale) {
                 Ok((workbook, fresh)) => Ok(PendingAnswer::TryModel {
+                    skip_model: false,
                     file,
                     workbook,
                     inventory: fresh,
@@ -592,6 +643,7 @@ fn apply_plan(
                         model_alias: model_alias.to_string(),
                         plan: serde_json::to_value(plan).unwrap_or(serde_json::Value::Null),
                     },
+                    model_attempt: None,
                 }),
                 // `engine::execute` never actually produces `InterpretedByModel` itself (only
                 // this function wraps it on, after the fact), but the match must be exhaustive.
@@ -604,6 +656,7 @@ fn apply_plan(
                     value,
                     locator,
                     derivation,
+                    model_attempt: None,
                 }),
                 TabularOutcome::NotDeterministicallyAnswerable {
                     reason,
@@ -775,12 +828,30 @@ fn pick_target<'c, 'a>(
                 .iter()
                 .filter(|each| each.record.processing_status == ProcessingStatus::Indexed)
                 .collect();
-            match usable.len() {
-                1 => Ok(usable[0]),
+            // A question that names a column only one of the workbooks has ("sum of amount"
+            // when only the invoices have an amount column) already says which one it means (HAP-1,
+            // BUG-15). Several naming it, or none, is still a question to ask.
+            let folded_words: std::collections::HashSet<String> =
+                name_words(question).into_iter().collect();
+            let naming: Vec<&Chosen> = usable
+                .iter()
+                .copied()
+                .filter(|each| {
+                    data.usable_inventory(&each.record.relative_path)
+                        .is_some_and(|inventory| names_a_column(inventory, &folded_words))
+                })
+                .collect();
+            let candidates = if !naming.is_empty() && naming.len() < usable.len() {
+                naming
+            } else {
+                usable
+            };
+            match candidates.len() {
+                1 => Ok(candidates[0]),
                 // Nothing chosen is usable: the first one tells her why.
                 0 => Ok(&chosen[0]),
                 _ => Err(TabularAnswer::WhichWorkbook {
-                    candidates: usable
+                    candidates: candidates
                         .iter()
                         .map(|each| each.record.relative_path.clone())
                         .collect(),
@@ -788,6 +859,15 @@ fn pick_target<'c, 'a>(
             }
         }
     }
+}
+
+/// Whether the question (as its whole words) names a column of any sheet of `inventory`: every word
+/// of the column's own name is one of the question's words.
+fn names_a_column(inventory: &TabularInventory, question_words: &std::collections::HashSet<String>) -> bool {
+    inventory.sheets.iter().flat_map(|sheet| sheet.columns.iter()).any(|column| {
+        let words = name_words(&column.name);
+        !words.is_empty() && words.iter().all(|word| question_words.contains(word))
+    })
 }
 
 /// A refusal turned into a next step. The columns come from the engine when it resolved a sheet,
@@ -889,8 +969,61 @@ fn with_model_attempt(answer: TabularAnswer, model_alias: &str, elapsed: Duratio
                 duration_ms: elapsed.as_millis() as u64,
             }),
         },
+        TabularAnswer::Value {
+            file,
+            value,
+            locator,
+            derivation: derivation @ TabularDerivation::Computed { .. },
+            model_attempt: _,
+        } => TabularAnswer::Value {
+            file,
+            value,
+            locator,
+            derivation,
+            model_attempt: Some(ModelAttempt {
+                model_alias: model_alias.to_string(),
+                duration_ms: elapsed.as_millis() as u64,
+            }),
+        },
         other => other,
     }
+}
+
+/// The threshold of a question that compares a group's total to a number, when the operation
+/// cannot do that: a plain count under a "greater/less than" row filter, in a question that names
+/// a text column and gives no value for it ("any supplier above 5000"). Counting the rows above the
+/// threshold would answer a different question, and a "0" read as "no supplier" is wrong whenever
+/// the group's total is above it while no single row is (HAP-1, Q19, BUG-14). `None` for every
+/// question that is a legitimate row filter: a value given for the column, a group operation, or
+/// a numeric column named.
+fn group_threshold(
+    operation: &Operation,
+    filters: &[FilterSpec],
+    named_column: Option<&str>,
+    inventory: &TabularInventory,
+    sheet: Option<&str>,
+    allowed: Option<&[String]>,
+) -> Option<String> {
+    if !matches!(operation, Operation::Count { .. }) {
+        return None;
+    }
+    let threshold = filters.iter().find_map(|spec| match spec.comparison {
+        Comparison::GreaterThan(value) | Comparison::LessThan(value) => Some(value),
+        _ => None,
+    })?;
+    if filters
+        .iter()
+        .any(|spec| matches!(spec.comparison, Comparison::Equals(_) | Comparison::In(_)))
+    {
+        return None;
+    }
+    let named = named_column?;
+    let sheet_inventory = engine::resolve_sheet_inventory(inventory, sheet, allowed).ok()?;
+    let column = sheet_inventory
+        .columns
+        .iter()
+        .find(|column| column.name == named)?;
+    (column.inferred_type == ColumnType::Categorical).then(|| threshold.to_string())
 }
 
 fn column_names(sheet: &SheetInventory) -> Vec<String> {
@@ -1005,7 +1138,13 @@ enum FilterDetection {
     WhichColumn { value: String, candidates: Vec<String> },
     /// A word looked like an attempted filter value (capitalised, the way every fictional value
     /// in this product's fixtures is) but matched no reachable column's real data.
-    ValueNotFound { value: String, close: Vec<String> },
+    ValueNotFound {
+        value: String,
+        close: Vec<String>,
+        /// The word is a threshold the engine could not apply, not a name that matched nothing: a
+        /// model can still read "fifty" as 50, so this one is never short-circuited.
+        threshold: bool,
+    },
     /// Nothing in the residual words reads as a filter at all - an ordinary unfiltered question,
     /// exactly as before this session.
     None,
@@ -1118,6 +1257,16 @@ fn detect_filters(
 
     let mut filters: Vec<FilterSpec> = Vec::new();
     let mut consumed = vec![false; residual.len()];
+    // The digits of a date the question wrote ("09/03/2026" splits into 09, 03 and 2026) belong to
+    // that date. Left in the residual they were read again as a year, and as a value equal to a
+    // numeric cell ("duree_min = 15"), which emptied the result (HAP-1, BUG-02, Q14).
+    let written_dates = extract_dates(question);
+    let date_parts = date_digit_groups(question);
+    for (index, word) in residual.iter().enumerate() {
+        if date_parts.iter().any(|part| part == word) {
+            consumed[index] = true;
+        }
+    }
     // A comparison word ("more than", "plus de") found with no number this module can read next
     // to it - a spelled-out number ("fifty"), most often, since this only ever looks for a
     // parseable digit. Recorded rather than silently dropped: returning the plain unfiltered
@@ -1129,14 +1278,14 @@ fn detect_filters(
     let mut unresolved_comparison: Option<String> = None;
 
     // --- A comparison word beside a number --------------------------------------------------
+    let target = operation_column
+        .and_then(|name| numeric_columns.iter().find(|column| column.name == name))
+        .copied()
+        .or(match numeric_columns.as_slice() {
+            [only] => Some(*only),
+            _ => None,
+        });
     if let Some(words) = &words {
-        let target = operation_column
-            .and_then(|name| numeric_columns.iter().find(|column| column.name == name))
-            .copied()
-            .or(match numeric_columns.as_slice() {
-                [only] => Some(*only),
-                _ => None,
-            });
         if let Some(column) = target {
             for index in 0..residual.len() {
                 if consumed[index] {
@@ -1188,6 +1337,67 @@ fn detect_filters(
         }
     }
 
+    // --- A comparison word the group vocabulary already took ("plus de 500") -----------------
+    // "plus" and "moins" are also the words of "which room has the most", so the classifier's
+    // vocabulary removes them before the residual words are built and the loop above never sees
+    // them: the number was dropped and the unfiltered answer given as if it answered the question
+    // (HAP-1 retest of lot B, BUG-17). Read from the question's own words instead, and only in the
+    // shape "comparison word, connectors, number": "most of <column> in 2026" is a superlative,
+    // never a threshold.
+    if let Some(words) = &words {
+        let plain: Vec<String> = question
+            .split_whitespace()
+            .flat_map(|word| word.split(['\'', '\u{2019}']))
+            .map(|word| word.trim_matches(|ch: char| !ch.is_alphanumeric()).to_string())
+            .filter(|word| !word.is_empty())
+            .collect();
+        for (index, word) in plain.iter().enumerate() {
+            let folded = fold_text(word);
+            let greater = words.greater_than.contains(&folded);
+            let less = words.less_than.contains(&folded);
+            if !greater && !less {
+                continue;
+            }
+            let mut next = index + 1;
+            while plain
+                .get(next)
+                .is_some_and(|candidate| words.connectors.contains(&fold_text(candidate)))
+            {
+                next += 1;
+            }
+            let Some(read) = read_number(&plain, next) else {
+                continue;
+            };
+            let modified = index > 0 && words.modifiers.contains(&fold_text(&plain[index - 1]));
+            let (Some(column), NumberRead::Clean { value: threshold, text }, false) =
+                (target, &read, modified)
+            else {
+                // "at least 500", "pas plus de 500", "1,500", or no numeric column to anchor it
+                // to: a threshold this module cannot apply as written is never dropped.
+                if unresolved_comparison.is_none() {
+                    unresolved_comparison = Some(read.text().to_string());
+                }
+                continue;
+            };
+            let spec = FilterSpec {
+                column: column.name.clone(),
+                comparison: if greater {
+                    Comparison::GreaterThan(*threshold)
+                } else {
+                    Comparison::LessThan(*threshold)
+                },
+            };
+            if !filters.contains(&spec) {
+                filters.push(spec);
+            }
+            for group in text.split(|ch: char| !ch.is_alphanumeric()).filter(|g| !g.is_empty()) {
+                if let Some(at) = (0..residual.len()).find(|&i| !consumed[i] && residual[i] == group) {
+                    consumed[at] = true;
+                }
+            }
+        }
+    }
+
     // --- A date range: "between <date> and <date>" ------------------------------------------
     if let Some(words) = &words {
         let has_between = residual
@@ -1216,6 +1426,16 @@ fn detect_filters(
         }
     }
 
+    // --- One written date: that day, exactly -------------------------------------------------
+    if let ([day], [only]) = (written_dates.as_slice(), date_columns.as_slice()) {
+        if !filters.iter().any(|spec| matches!(spec.comparison, Comparison::DateRange(..))) {
+            filters.push(FilterSpec {
+                column: only.name.clone(),
+                comparison: Comparison::DateRange(*day, *day),
+            });
+        }
+    }
+
     // --- Equality, weekday, month, year - one not-yet-consumed word at a time ---------------
     let mut unmatched_value: Option<String> = None;
     for index in 0..residual.len() {
@@ -1224,6 +1444,12 @@ fn detect_filters(
         }
         let word = &residual[index];
         let folded = fold_text(word);
+        // A one-letter word is a particle of the sentence, never a cell value: a one-letter verb
+        // form in a question equalled the patient "Martin A" (HAP-1, BUG-02, Q16). A
+        // single digit is still allowed ("Salle 3" style values).
+        if folded.chars().count() < 2 && !folded.chars().all(|ch| ch.is_ascii_digit()) {
+            continue;
+        }
 
         let matching_columns: Vec<(&str, &Vec<String>)> = columns_words
             .iter()
@@ -1274,29 +1500,40 @@ fn detect_filters(
 
         if let (Some(words), [only]) = (&words, date_columns.as_slice()) {
             if let Some((weekday, _)) = words.weekdays.iter().find(|(_, forms)| forms.contains(&folded)) {
-                filters.push(FilterSpec {
-                    column: only.name.clone(),
-                    comparison: Comparison::Weekday(*weekday),
-                });
+                push_unique(
+                    &mut filters,
+                    FilterSpec {
+                        column: only.name.clone(),
+                        comparison: Comparison::Weekday(*weekday),
+                    },
+                );
                 consumed[index] = true;
                 continue;
             }
             if let Some((month, _)) = words.months.iter().find(|(_, forms)| forms.contains(&folded)) {
-                filters.push(FilterSpec {
-                    column: only.name.clone(),
-                    comparison: Comparison::Month(*month),
-                });
+                push_unique(
+                    &mut filters,
+                    FilterSpec {
+                        column: only.name.clone(),
+                        comparison: Comparison::Month(*month),
+                    },
+                );
                 consumed[index] = true;
                 continue;
             }
         }
 
         if word.chars().count() == 4 {
-            if let (Ok(year @ 1000..=9999), [only]) = (word.parse::<i32>(), date_columns.as_slice()) {
-                filters.push(FilterSpec {
-                    column: only.name.clone(),
-                    comparison: Comparison::Year(year),
-                });
+            // A plausible calendar year only: "plus de 5000 euros" is an amount, not the year 5000
+            // (HAP-1, BUG-02, Q19).
+            if let (Ok(year @ 1900..=2100), [only]) = (word.parse::<i32>(), date_columns.as_slice()) {
+                push_unique(
+                    &mut filters,
+                    FilterSpec {
+                        column: only.name.clone(),
+                        comparison: Comparison::Year(year),
+                    },
+                );
                 consumed[index] = true;
                 continue;
             }
@@ -1319,12 +1556,20 @@ fn detect_filters(
     }
 
     if !filters.is_empty() {
+        if let Some(value) = unresolved_comparison {
+            return FilterDetection::ValueNotFound {
+                close: Vec::new(),
+                value,
+                threshold: true,
+            };
+        }
         return FilterDetection::Filters(filters);
     }
     if let Some(value) = unmatched_value {
         return FilterDetection::ValueNotFound {
             close: close_values(&value, &all_values),
             value,
+            threshold: false,
         };
     }
     if let Some(value) = unresolved_comparison {
@@ -1334,9 +1579,66 @@ fn detect_filters(
         return FilterDetection::ValueNotFound {
             close: Vec::new(),
             value,
+            threshold: true,
         };
     }
     FilterDetection::None
+}
+
+/// A number written in a question, read the way a person writes it.
+enum NumberRead {
+    /// "500", "1,5", "5 000": one value, with the words it was written in.
+    Clean { value: f64, text: String },
+    /// "1,500" or "1.500": a decimal in one language and a thousand in the other. Never guessed.
+    Ambiguous { text: String },
+}
+
+impl NumberRead {
+    fn text(&self) -> &str {
+        match self {
+            NumberRead::Clean { text, .. } | NumberRead::Ambiguous { text } => text,
+        }
+    }
+}
+
+/// The number starting at `words[at]`, when there is one. A space-separated group of three digits
+/// after a number of one to three digits belongs to it ("5 000" is five thousand).
+fn read_number(words: &[String], at: usize) -> Option<NumberRead> {
+    let first = words.get(at)?;
+    let is_number = |word: &str| {
+        word.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+            && word.chars().all(|ch| ch.is_ascii_digit() || ch == '.' || ch == ',')
+    };
+    if !is_number(first) {
+        return None;
+    }
+    let separators = first.chars().filter(|ch| *ch == '.' || *ch == ',').count();
+    if separators > 1 {
+        return Some(NumberRead::Ambiguous { text: first.clone() });
+    }
+    if separators == 1 {
+        let after = first.split(['.', ',']).nth(1).unwrap_or("");
+        if after.len() == 3 {
+            return Some(NumberRead::Ambiguous { text: first.clone() });
+        }
+        return first
+            .replace(',', ".")
+            .parse::<f64>()
+            .ok()
+            .map(|value| NumberRead::Clean { value, text: first.clone() });
+    }
+    let mut digits = first.clone();
+    let mut next = at + 1;
+    while digits.len() <= 3
+        && words
+            .get(next)
+            .is_some_and(|word| word.len() == 3 && word.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        digits.push_str(&words[next]);
+        next += 1;
+    }
+    let text = words[at..next].join(" ");
+    digits.parse::<f64>().ok().map(|value| NumberRead::Clean { value, text })
 }
 
 /// The question's own first alphanumeric word, exactly as typed - the one word whose leading
@@ -1345,6 +1647,31 @@ fn first_word(question: &str) -> Option<&str> {
     question
         .split(|ch: char| !ch.is_alphanumeric())
         .find(|word| !word.is_empty())
+}
+
+/// A filter once: the same weekday, month or year read twice from one question is still one condition.
+fn push_unique(filters: &mut Vec<FilterSpec>, spec: FilterSpec) {
+    if !filters.contains(&spec) {
+        filters.push(spec);
+    }
+}
+
+/// The digit groups of every date written in `question` ("09/03/2026" gives "09", "03", "2026"),
+/// so that `detect_filters` can tell the digits of a date from a number the question meant on its own.
+fn date_digit_groups(question: &str) -> Vec<String> {
+    question
+        .split(|ch: char| ch.is_whitespace())
+        .filter_map(|word| {
+            let trimmed = word.trim_matches(|ch: char| !ch.is_ascii_digit());
+            inventory::parse_date_value(trimmed).map(|_| trimmed.to_string())
+        })
+        .flat_map(|date| {
+            date.split(|ch: char| !ch.is_ascii_digit())
+                .filter(|part| !part.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 /// Every whitespace-delimited token of `question` that parses as a calendar date. Read from the
@@ -2270,6 +2597,7 @@ mod tests {
                     operation: "sum".into(),
                     row_count: 1,
                 },
+                model_attempt: None,
             };
             let json = serde_json::to_value(&answer)
                 .unwrap_or_else(|error| panic!("{value:?} did not serialise: {error}"));
@@ -2452,6 +2780,7 @@ mod tests {
                     operation: "count".into(),
                     row_count: 2,
                 },
+                model_attempt: None,
             }
         );
     }

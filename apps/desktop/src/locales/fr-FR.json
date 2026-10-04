@@ -66,6 +66,7 @@
     "coverageFileOne": "fichier",
     "coverageFileMany": "fichiers",
     "generatedBy": "Généré par {model} en {duration}",
+    "modelAttemptedKept": "{model} a été interrogé, pendant {duration}, mais n'a pas proposé de lecture plus précise de cette question : la réponse calculée ci-dessus est conservée.",
     "modelAttempted": "{model} a été interrogé, pendant {duration}, mais n'a pas réussi à transformer cette question en quelque chose que le moteur pouvait calculer.",
     "deterministic": "Réponse établie depuis votre dossier de documents, sans l'IA.",
     "withoutDocuments": "Réponse sans vos documents.",
@@ -83,12 +84,14 @@
     "mixedTableUnavailable": {
       "not_asked_about": "Cette question ne portait sur aucune de vos tables.",
       "no_evidence": "Rien dans vos tables ne répond à cette partie.",
-      "gateway_unavailable": "L'IA n'a pas pu être contactée pour interpréter la partie données."
+      "gateway_unavailable": "L'IA n'a pas pu être contactée pour interpréter la partie données.",
+      "not_linked": "Le total de vos tables n'a pas pu être rattaché à ce que dit le document (par exemple le fournisseur cité) : aucun total global n'est affiché, il ne répondrait pas à votre question."
     },
     "mixedDocumentsUnavailable": {
       "not_asked_about": "Cette question ne portait sur aucun de vos documents.",
       "no_evidence": "Rien dans vos documents ne répond à cette partie.",
-      "gateway_unavailable": "L'IA n'a pas pu être contactée pour rédiger la partie document."
+      "gateway_unavailable": "L'IA n'a pas pu être contactée pour rédiger la partie document.",
+      "not_linked": "Cette partie n'a pas pu être rattachée à vos tables."
     },
     "mixedCorrection": "La table indique {correct}, et non {claimed}.",
     "mixedRejectedCitation": "Une citation ({citation}) ne correspond à aucune source fournie et a été signalée."
@@ -332,6 +335,7 @@
       "empty_sheet": "Il n'y a aucune donnée à calculer dans {file}.",
       "filter_not_supported": "Votre question contient un filtre (« {value} ») que ce moteur ne sait pas encore appliquer : rien n'est donc calculé sans filtre à partir de {file}.",
       "non_date_column": "Ce filtre porte sur un jour, un mois, une année ou une période, mais cette colonne de {file} n'est pas une colonne de dates reconnue.",
+      "group_threshold_not_supported": "Votre question compare un seuil au total d'un groupe (par exemple un fournisseur). Ce calcul n'est pas encore disponible dans {file} : compter les lignes au-dessus du seuil répondrait à une autre question, rien n'est donc calculé. Vous pouvez demander le total par groupe, ou les lignes au-dessus d'un seuil.",
       "value_not_found": "« {value} » ne correspond à aucune valeur réelle de {file}."
     },
     "nudgeFilterColumn": "Ce mot a été trouvé dans la colonne {column}.",
@@ -349,7 +353,7 @@
     "notSelected": "{query} se trouve dans votre dossier des données mais n'est pas sélectionné pour cette conversation. Cochez-le dans la liste des données pour l'utiliser.",
     "noMatch": "Aucun fichier nommé {query} ne se trouve dans votre dossier des données.",
     "noUsableTable": "Aucun tableur de votre dossier des données ne contient de tableau exploitable. Lancez l'analyse, ou ajoutez un fichier CSV ou XLSX.",
-    "nudgeExampleGroup": "Ou : « Quel {group} a le plus de {column} ? »",
+    "nudgeExampleGroup": "Ou : « Quel(le) {group} a le plus de {column} ? »",
     "largestGroup": "Plus grand total de {column} par {group} : **{leader}**, avec **{value}**.",
     "largestGroupTie": "Égalité pour le plus grand total de {column} par {group} : **{leaders}**, avec **{value}** chacun.",
     "groupRanking": "Les premiers, sur {groups} en tout :",
@@ -357,13 +361,14 @@
     "groupMany": "groupes",
     "groupTotalNote": "Il s'agit du total par {group}, additionné sur toutes les lignes, pas de la plus grande ligne isolée.",
     "moreGroups": "…et {count} autres groupes, non affichés.",
-    "whichMeasure": "Pour classer par {group}, plusieurs colonnes peuvent être additionnées dans {file} : {columns}. Nommez celle que vous voulez, par exemple « Quel {group} a le plus de {first} ? »",
+    "whichMeasure": "Pour classer par {group}, plusieurs colonnes peuvent être additionnées dans {file} : {columns}. Nommez celle que vous voulez, par exemple « Quel(le) {group} a le plus de {first} ? »",
     "moreValues": "…et {count} autres valeurs, non affichées.",
     "unparsedOne": "cellule n'a pas pu être lue comme un nombre",
     "unparsedMany": "cellules n'ont pas pu être lues comme des nombres",
     "unparsedNote": "{count}.",
     "whichColumn": "« {value} » existe dans plusieurs colonnes possibles : {columns}. Précisez laquelle, par exemple {first}.",
     "understoodAs": "Compris comme : {filters}.",
+    "noRowMatched": "Aucune ligne ne correspond à ces critères. Vérifiez la ligne « Compris comme » ci-dessus : si elle ne reflète pas votre question, reformulez-la.",
     "interpretedRephrase": "La question elle-même a été comprise par le modèle avant que le moteur ne calcule cette valeur. Si ce n'est pas ce que vous vouliez dire, reformulez votre question.",
     "filterEquals": "{column} = {value}",
     "filterContains": "{column} contient « {value} »",

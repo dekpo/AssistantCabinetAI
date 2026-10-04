@@ -360,7 +360,7 @@ export function MessageList({
                   rather than replacing it: the nudge's own words really are deterministic. */}
               {entry.modelAttemptAlias !== undefined && entry.modelAttemptDurationMs !== undefined ? (
                 <p className="message__timing">
-                  {t("chat.modelAttempted", {
+                  {t(entry.modelAttemptKept === true ? "chat.modelAttemptedKept" : "chat.modelAttempted", {
                     model: entry.modelAttemptAlias,
                     duration: formatDuration(entry.modelAttemptDurationMs),
                   })}

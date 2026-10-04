@@ -475,3 +475,30 @@ fn table_value(answer: &TabularAnswer) -> TabularValue {
         other => panic!("expected a computed value, got {other:?}"),
     }
 }
+
+// --- HAP-1, Q24: a whole-table figure is not the figure for "the supplier named in the letter" ---
+
+#[tokio::test]
+async fn a_question_about_the_document_s_entity_never_shows_the_whole_table_total() {
+    for (question, locale) in [
+        ("What is the total montant for the supplier mentioned in this letter?", "en-US"),
+        ("Quel est le montant total pour le fournisseur mentionn\u{e9} dans cette lettre ?", "fr-FR"),
+    ] {
+        let folder = Folder::build();
+        let pending = folder.prepare(question, locale);
+        // The excerpt names no real table value, so nothing ties the letter to a row.
+        let sources = vec![evidence("The letter concerns an order placed in January.")];
+        let gateway = start_fake_gateway(|_| "The letter does not name a supplier.".to_string());
+
+        let (result, generated) = run(pending, sources, None, question, locale, &gateway.url, "cabinet-chat").await;
+
+        assert!(generated, "{question:?}: the document half is still written");
+        assert!(result.table.is_none(), "{question:?}: no unfiltered total: {:?}", result.table);
+        assert_eq!(result.table_unavailable, Some(MixedPartUnavailable::NotLinked), "{question:?}");
+        let requests = gateway.requests.lock().unwrap();
+        assert!(
+            requests.iter().all(|request| !request.contains("1840") && request.contains("Table results: none.")),
+            "{question:?}: the model must not be handed the whole-table figure"
+        );
+    }
+}

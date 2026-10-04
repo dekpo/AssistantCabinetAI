@@ -73,6 +73,11 @@ pub enum MixedPartUnavailable {
     /// computed table value, still answers on its own - the same "zero gateway calls for a
     /// deterministic answer" guarantee a mixed question now keeps too.
     GatewayUnavailable,
+    /// The question points at a document ("the supplier named in this letter") and no entity of
+    /// that document could be tied to a table row, so the only value the engine could give is the
+    /// whole table's figure. That figure answers a different question, and is withheld rather
+    /// than shown as if it were the one asked for (HAP-1, Q24; the real linking is lot D).
+    NotLinked,
 }
 
 /// One number the model wrote that matched neither the table's own value nor any excerpt's text
@@ -161,7 +166,12 @@ pub async fn answer(
         .or_else(|| document_sources.is_empty().then_some(MixedPartUnavailable::NoEvidence));
 
     // The tabular part, finished now that the excerpts exist to link an entity against.
-    let (table, mut table_unavailable) = resolve_table(pending, question, context, &document_sources).await;
+    let (table, table_unavailable) = resolve_table(pending, question, context, &document_sources).await;
+    let (table, mut table_unavailable) = if points_at_a_document(question, context.locale, &table) {
+        (None, Some(MixedPartUnavailable::NotLinked))
+    } else {
+        (table, table_unavailable)
+    };
 
     // Anything other than a computed value is a human choice or a refusal the interface already
     // renders for tier 2 - never combined with a generated answer (mechanism 6's "nothing
@@ -275,6 +285,16 @@ pub async fn answer(
     ))
 }
 
+/// A question that points at a document whose table result carries no filter at all: a computed
+/// whole-table value cannot be the figure for "the supplier named in this letter".
+fn points_at_a_document(question: &str, locale: &str, table: &Option<TabularAnswer>) -> bool {
+    matches!(
+        table,
+        Some(TabularAnswer::Value { locator, derivation: engine::TabularDerivation::Computed { .. }, .. })
+            if locator.filters.is_empty()
+    ) && crate::tabular::question::refers_to_a_document(question, locale)
+}
+
 /// The tabular part, from a classifier result that session 15's own router already decided it
 /// could not answer alone. `PendingAnswer::Done` is kept as is - whatever it is, computed value or
 /// disambiguation; `PendingAnswer::TryModel` is where this session's own work happens: a question
@@ -297,6 +317,7 @@ async fn resolve_table(
             inventory,
             allowed,
             fallback,
+            skip_model: _,
         } => {
             if matches!(fallback, TabularAnswer::Nudge { reason: None, .. }) {
                 return (None, Some(MixedPartUnavailable::NotAskedAbout));
@@ -325,6 +346,7 @@ async fn resolve_table(
                             inventory,
                             allowed,
                             fallback,
+                            skip_model: false,
                         },
                         question,
                         context.locale,
@@ -520,6 +542,7 @@ fn outcome_to_answer(file: &str, outcome: engine::TabularOutcome) -> TabularAnsw
             value,
             locator,
             derivation,
+            model_attempt: None,
         },
         engine::TabularOutcome::NotDeterministicallyAnswerable {
             reason,

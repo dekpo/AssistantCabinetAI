@@ -64,6 +64,11 @@ struct PatternPack {
     /// Keyed `"1"` (January) to `"12"` (December).
     months: std::collections::BTreeMap<String, Vec<String>>,
     between: Vec<String>,
+    /// Phrases that point at a document the question is *about* ("this letter", "mentioned in"):
+    /// with documents and tables both selected, such a question needs the document read before the
+    /// table is, so the data-only router leaves it to the mixed tier (`refers_to_a_document`).
+    #[serde(default)]
+    document_references: Vec<String>,
     /// Session 12's D5 (`docs/DECISIONS.md`): number words one to ten, keyed `"1"` to `"10"`, for
     /// reading a `top_n` question's N without ever guessing a digit from the question's own
     /// vocabulary words. A larger N is always typed as a digit, which `extract_n` reads directly.
@@ -74,6 +79,13 @@ struct PatternPack {
 struct ComparisonWords {
     greater_than: Vec<String>,
     less_than: Vec<String>,
+    /// Words allowed between a comparison word and its number ("more *than* 500", "plus *de* 500").
+    #[serde(default)]
+    connectors: Vec<String>,
+    /// Words just before a comparison word that change its meaning ("*at* least 500", "*pas* plus
+    /// de 500"): the strict greater/less filter would be wrong, so the question is not filtered.
+    #[serde(default)]
+    modifiers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,6 +163,8 @@ pub(crate) struct FilterWords {
     pub greater_than: Vec<String>,
     pub less_than: Vec<String>,
     pub between: Vec<String>,
+    pub connectors: Vec<String>,
+    pub modifiers: Vec<String>,
     pub weekdays: Vec<(u8, Vec<String>)>,
     pub months: Vec<(u8, Vec<String>)>,
 }
@@ -169,9 +183,41 @@ pub(crate) fn filter_words(locale: &str) -> Option<FilterWords> {
         greater_than: fold_all(&pack.comparisons.greater_than),
         less_than: fold_all(&pack.comparisons.less_than),
         between: fold_all(&pack.between),
+        connectors: fold_all(&pack.comparisons.connectors),
+        modifiers: fold_all(&pack.comparisons.modifiers),
         weekdays: fold_keyed(&pack.weekdays),
         months: fold_keyed(&pack.months),
     })
+}
+
+/// Lowercase, accents removed, every run of non-alphanumerics reduced to one space, and padded with
+/// a space on both sides: the form `refers_to_a_document` compares whole phrases in.
+fn spaced_words(text: &str) -> String {
+    let mut out = String::from(" ");
+    for ch in fold_text(text).chars() {
+        if ch.is_alphanumeric() {
+            out.push(ch);
+        } else if !out.ends_with(' ') {
+            out.push(' ');
+        }
+    }
+    if !out.ends_with(' ') {
+        out.push(' ');
+    }
+    out
+}
+
+/// True when the question points at a document it is about ("the supplier mentioned in this
+/// letter"), judged from the locale's own pack. Whole phrases only: a column that happens to be
+/// called like a document noun does not match, because the phrase needs its demonstrative.
+pub(crate) fn refers_to_a_document(question: &str, locale: &str) -> bool {
+    let Some(pack) = pack_for(locale) else {
+        return false;
+    };
+    let question = spaced_words(question);
+    pack.document_references
+        .iter()
+        .any(|phrase| question.contains(&spaced_words(phrase)))
 }
 
 /// Where one question was routed.
@@ -286,6 +332,10 @@ fn classify_with(
         .cloned()
         .collect();
 
+    // "total <amount> for the <supplier> ..." names a text column and an amount: an aggregate is
+    // computed over the amount, never over the longest name (HAP-1, BUG-05, Q24).
+    let measure_name = find_measure_column(&columns, &folded_question);
+
     let route = if let Some(structural) =
         detect_structural(question, &tokens, pack, &sheet_name, &column_name)
     {
@@ -293,7 +343,9 @@ fn classify_with(
     } else if let Some(route) = detect_group(&detection_tokens, pack, question, &columns, &sheet_name)
     {
         route
-    } else if let Some(operation) = detect_operation(&detection_tokens, pack, &column_name) {
+    } else if let Some(operation) =
+        detect_operation(&detection_tokens, pack, &column_name, &measure_name)
+    {
         TabularRoute::Operation {
             sheet: sheet_name.clone(),
             operation,
@@ -825,42 +877,46 @@ fn detect_operation(
     tokens: &[String],
     pack: &PatternPack,
     column_name: &Option<String>,
+    measure_name: &Option<String>,
 ) -> Option<Operation> {
     let has = |words: &[String]| tokens.iter().any(|token| contains(words, token));
     let descending = has(&pack.descending);
+    // The column an aggregate reads: the one numeric column the question names when there is
+    // exactly one, otherwise whatever single column it named.
+    let aggregated = measure_name.as_ref().or(column_name.as_ref()).cloned();
 
     if has(&pack.operations.sum) {
-        return column_name.clone().map(|column| Operation::Sum {
+        return aggregated.clone().map(|column| Operation::Sum {
             column,
             filters: Vec::new(),
         });
     }
     if has(&pack.operations.mean) {
-        return column_name.clone().map(|column| Operation::Mean {
+        return aggregated.clone().map(|column| Operation::Mean {
             column,
             filters: Vec::new(),
         });
     }
     if has(&pack.operations.median) {
-        return column_name.clone().map(|column| Operation::Median {
+        return aggregated.clone().map(|column| Operation::Median {
             column,
             filters: Vec::new(),
         });
     }
     if has(&pack.operations.min) {
-        return column_name.clone().map(|column| Operation::Min {
+        return aggregated.clone().map(|column| Operation::Min {
             column,
             filters: Vec::new(),
         });
     }
     if has(&pack.operations.max) {
-        return column_name.clone().map(|column| Operation::Max {
+        return aggregated.clone().map(|column| Operation::Max {
             column,
             filters: Vec::new(),
         });
     }
     if has(&pack.operations.largest_row) {
-        return column_name.clone().map(|column| Operation::LargestRow {
+        return aggregated.clone().map(|column| Operation::LargestRow {
             by_column: column,
             filters: Vec::new(),
         });
@@ -966,6 +1022,26 @@ fn find_column_name(columns: &[&ColumnInventory], folded_question: &str) -> Opti
     }
 }
 
+/// The one numeric, formula-free column whose name appears in the question, when exactly one does.
+/// `None` when none or several do: the caller then falls back to the plain column reference, and
+/// the engine refuses a text column rather than summing it.
+fn find_measure_column(columns: &[&ColumnInventory], folded_question: &str) -> Option<String> {
+    let named: Vec<&&ColumnInventory> = columns
+        .iter()
+        .filter(|column| {
+            let folded = fold_text(&column.name);
+            column.inferred_type == ColumnType::Numeric
+                && !column.has_formulas
+                && !folded.is_empty()
+                && folded_question.contains(&folded)
+        })
+        .collect();
+    match named.as_slice() {
+        [only] => Some(only.name.clone()),
+        _ => None,
+    }
+}
+
 fn contains(words: &[String], token: &str) -> bool {
     words.iter().any(|word| word == token)
 }
@@ -983,6 +1059,25 @@ fn tokenise(question: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_question_pointing_at_a_document_is_recognised_in_english() {
+        for (question, locale) in [
+            ("What is the total for the supplier mentioned in this letter?", "en-US"),
+            ("Total for the supplier named in the quote?", "en-US"),
+        ] {
+            assert!(refers_to_a_document(question, locale), "{question}");
+        }
+    }
+
+    #[test]
+    fn a_question_about_the_table_alone_is_not_taken_for_a_document_one() {
+        for (question, locale) in [
+            ("How many quotes are there?", "en-US"),
+        ] {
+            assert!(!refers_to_a_document(question, locale), "{question}");
+        }
+    }
     use crate::tabular::inventory::TabularFormat;
     use crate::tabular::{CellValue, SheetData, Workbook};
 
@@ -1080,7 +1175,7 @@ mod tests {
     }
 
     #[test]
-    fn sheet_names_is_recognised_in_both_languages() {
+    fn sheet_names_is_recognised_in_english() {
         let inventory = two_sheets();
         for locale in ["en-US", "fr-FR"] {
             let question = question(locale, "sheet_names");

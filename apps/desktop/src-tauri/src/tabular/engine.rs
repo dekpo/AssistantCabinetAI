@@ -296,6 +296,11 @@ pub enum NotAnswerableReason {
     /// Not constructed by this module, for the same reason `FilterNotSupported` is carried here
     /// rather than produced.
     ValueNotFound,
+    /// The question compares a *group's total* to a threshold ("any supplier above 5000") and this
+    /// engine only filters single rows by a threshold. A row filter would answer a different
+    /// question with a confident number, so it is refused until the capability exists
+    /// (HAP-1, BUG-14).
+    GroupThresholdNotSupported,
 }
 
 /// The result of one deterministic question against one workbook.

@@ -158,7 +158,7 @@ describe("the nudge", () => {
     expect(text).toContain("factures.csv");
     expect(text).toContain("nom, montant, date");
     expect(text).toContain("somme de montant");
-    expect(text).toContain("Quel nom a le plus de montant");
+    expect(text).toContain("Quel(le) nom a le plus de montant");
     expect(text).not.toContain("not_recognised");
   });
 
@@ -352,7 +352,7 @@ describe("which group costs the most", () => {
     );
 
     expect(text).toContain("amount, fee");
-    expect(text).toContain("« Quel agency a le plus de amount ? »");
+    expect(text).toContain("« Quel(le) agency a le plus de amount ? »");
   });
 });
 
@@ -559,5 +559,55 @@ describe("a list of a column's values", () => {
     expect(text).toContain("- Agency 0");
     expect(text).not.toContain("- Agency 50");
     expect(text).toContain("3 more values");
+  });
+});
+
+describe("a filtered value over no row", () => {
+  const empty: TabularAnswer = {
+    kind: "value",
+    file: "rdv.xlsx",
+    value: { kind: "count", value: 0 },
+    locator: {
+      sheet: "rdv",
+      headerRow: 0,
+      column: null,
+      rowRange: [0, 9],
+      filters: [{ kind: "equals", column: "patient", value: "Martin A" }],
+    },
+    derivation: { kind: "computed", operation: "count", row_count: 0 },
+  };
+
+  it("says the selection is empty and points at the line that shows what was understood", () => {
+    expect(formatTabularAnswer(english, empty, "en-US")).toContain("No row matches these criteria.");
+    expect(formatTabularAnswer(french, empty, "fr-FR")).toContain("Aucune ligne ne correspond");
+  });
+
+  it("is silent when there is no filter, or when rows matched", () => {
+    expect(formatTabularAnswer(english, sum(10), "en-US")).not.toContain("No row matches");
+    const unfiltered: TabularAnswer = { ...empty, locator: { ...empty.locator, filters: [] } };
+    expect(formatTabularAnswer(english, unfiltered, "en-US")).not.toContain("No row matches");
+  });
+});
+
+describe("a threshold on a group's total", () => {
+  const refused: TabularAnswer = {
+    kind: "nudge",
+    file: "factures.csv",
+    reason: "group_threshold_not_supported",
+    availableSheets: ["factures"],
+    availableColumns: ["nom", "montant", "date"],
+    exampleColumn: "montant",
+    exampleGroup: "nom",
+    filterColumn: null,
+    filterValue: "5000",
+    closeValues: [],
+    modelAttempt: null,
+  };
+
+  it("is refused in plain words in both languages, never shown as a raw code", () => {
+    const text = formatTabularAnswer(french, refused, "fr-FR");
+    expect(text).toContain("seuil au total d'un groupe");
+    expect(text).not.toContain("group_threshold_not_supported");
+    expect(formatTabularAnswer(english, refused, "en-US")).toContain("compares a threshold to a group's total");
   });
 });

@@ -392,11 +392,17 @@ function formatValue(
 
   // "What was understood": every filter the value was actually computed under, written from
   // structured data, never invented prose (`docs/DECISIONS.md`, session 11).
-  const withFilters = locator.filters.length > 0
+  const understood = locator.filters.length > 0
     ? [body, "", t("tabularAnswer.understoodAs", { filters: describeFilters(t, locator.filters, locale) })].join(
         "\n",
       )
     : body;
+  // A filtered figure over no row at all is the shape of a misread filter (HAP-1, Q14): say that
+  // the selection is empty rather than present a zero as a finding.
+  const withFilters =
+    locator.filters.length > 0 && derivation.row_count === 0
+      ? [understood, "", t("tabularAnswer.noRowMatched")].join("\n")
+      : understood;
 
   // Session 14's hidden interpreter (`docs/SESSION-DATA-14-Query-Plan.md`): a value from a plan
   // the classifier itself did not write is already shown as a model answer, not a deterministic

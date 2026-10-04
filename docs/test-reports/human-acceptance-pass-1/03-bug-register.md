@@ -393,6 +393,14 @@ selected workbooks that have that column; ask only if several remain. Keep askin
 
 ---
 
+## BUG-16 (added 4 October 2026) - Mixed answer prose is unchecked and the computed figure is hidden (S2)
+
+Found in the lot A retest ([06-retest-lot-a.md](06-retest-lot-a.md), A2): `gemma2:2b` answered "the total
+billed corresponds to the quote" (table 1 450, quote 1 200,00 HT) in two of four runs. The table figure is kept
+in the answer data but not displayed beside the model's prose, and numeric verification flags only a number that
+contradicts the table. Candidate fixes in 06. Related: OBS-7 (a small model can answer in English), UX-4 (pin the
+connection banner), and BUG-13's remaining items (Q24 column name, "Quel salle").
+
 ## UX-1 - Clickable disambiguation (proposal)
 
 See 05-analysis-notes.md section 5 for the recommended design: render each candidate as a button that sends a

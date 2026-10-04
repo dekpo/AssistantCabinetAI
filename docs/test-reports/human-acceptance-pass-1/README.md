@@ -22,6 +22,7 @@ Reference name: **HAP-1**. Use it in chat, in commit messages and in `docs/DECIS
 | [03-bug-register.md](03-bug-register.md) | BUG-01..BUG-15 and UX-1..UX-3: evidence, root cause found by reading the code (read-only), candidate fixes. **No code was changed in this pass** |
 | [04-improvement-plan.md](04-improvement-plan.md) | The same findings ordered from the cheapest and safest fix to the most expensive, with what to re-test after each |
 | [05-analysis-notes.md](05-analysis-notes.md) | Answers to the owner's open questions: model size and family, memory versus scope, the leaked internal label, the gateway timeout, the clickable-choices proposal, what the mixed tier did and did not do |
+| [06-retest-lot-a.md](06-retest-lot-a.md) | Replay of five checks after the lot A fixes (4 October 2026): verdicts, the four Q23 conversations, a verification of the "history" hypothesis, new findings BUG-16, OBS-7, UX-4, updated bug status, a re-run recipe |
 | [screenshots/INDEX.md](screenshots/INDEX.md) | The 51 screenshots (`S01.png`..`S51.png`, chronological), what each one shows, and the concordance with the numbers the owner wrote in the original notes |
 | [fixtures/README.md](fixtures/README.md) | The 6 documents and 2 workbooks used, copied from `C:\Users\elise\AssistantCabinetAI\{Docs,Data}\Test`, with their full text and the numbers computed by hand |
 

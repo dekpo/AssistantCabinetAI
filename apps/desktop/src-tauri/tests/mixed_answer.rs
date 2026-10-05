@@ -126,9 +126,13 @@ struct Folder {
 
 impl Folder {
     fn build() -> Self {
+        Self::build_with(factures_csv())
+    }
+
+    fn build_with(csv: &str) -> Self {
         let data = tempfile::tempdir().unwrap();
         let app = tempfile::tempdir().unwrap();
-        std::fs::write(data.path().join("factures.csv"), factures_csv()).unwrap();
+        std::fs::write(data.path().join("factures.csv"), csv).unwrap();
         let mut index = IndexStore::open_at(&app.path().join("index.sqlite3")).unwrap();
         data_folder::analyse(data.path(), &mut index, "en-US", &|_| {}).unwrap();
         Self {
@@ -144,6 +148,13 @@ impl Folder {
 
     /// The tabular decomposition tier 2's own classifier already gives - exactly what
     /// `commands::mixed_tier` passes into `mixed_answer::answer` in production.
+    /// What `commands::mixed_tier` really calls: the same decomposition, plus handing back a
+    /// question that points at a document unfinished so the excerpts can be linked to a row.
+    fn prepare_mixed(&self, question: &str, locale: &str) -> PendingAnswer {
+        tabular_answer::prepare_for_mixed(question, &self.open(), &ScopeMode::WholeFolder, locale, &self.index)
+            .unwrap()
+    }
+
     fn prepare(&self, question: &str, locale: &str) -> PendingAnswer {
         tabular_answer::prepare(question, &self.open(), &ScopeMode::WholeFolder, locale, &self.index, false)
             .unwrap()
@@ -485,7 +496,7 @@ async fn a_question_about_the_document_s_entity_never_shows_the_whole_table_tota
         ("Quel est le montant total pour le fournisseur mentionn\u{e9} dans cette lettre ?", "fr-FR"),
     ] {
         let folder = Folder::build();
-        let pending = folder.prepare(question, locale);
+        let pending = folder.prepare_mixed(question, locale);
         // The excerpt names no real table value, so nothing ties the letter to a row.
         let sources = vec![evidence("The letter concerns an order placed in January.")];
         let gateway = start_fake_gateway(|_| "The letter does not name a supplier.".to_string());
@@ -501,4 +512,79 @@ async fn a_question_about_the_document_s_entity_never_shows_the_whole_table_tota
             "{question:?}: the model must not be handed the whole-table figure"
         );
     }
+}
+
+// --- Lot D, Q24: the document's entity is tied to a row, so the right total is computed -------
+
+const REFERENTIAL: &str = "What is the total montant for the supplier mentioned in this letter?";
+const REFERENTIAL_FR: &str = "Quel est le montant total pour le fournisseur mentionn\u{e9} dans cette lettre ?";
+
+fn total_of(result: &MixedAnswer) -> Option<f64> {
+    match &result.table {
+        Some(TabularAnswer::Value { value: TabularValue::Sum(aggregate), .. }) => Some(aggregate.value),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn the_supplier_a_letter_names_gives_that_suppliers_total_not_the_whole_table() {
+    for (question, locale) in [(REFERENTIAL, "en-US"), (REFERENTIAL_FR, "fr-FR")] {
+        let folder = Folder::build();
+        let pending = folder.prepare_mixed(question, locale);
+        let sources = vec![evidence("BETA SUPPLY quote no. 17, valid for 30 days.")];
+        let gateway = start_fake_gateway(|_| "The letter is from Beta.".to_string());
+
+        let (result, generated) = run(pending, sources, None, question, locale, &gateway.url, "cabinet-chat").await;
+
+        assert!(generated, "{question:?}");
+        assert_eq!(total_of(&result), Some(650.0), "{question:?}: Beta's own row, not the 1840 of the whole table");
+        assert_eq!(result.table_unavailable, None, "{question:?}");
+        let Some(TabularAnswer::Value { locator, .. }) = &result.table else { unreachable!() };
+        assert_eq!(locator.filters.len(), 1, "{question:?}: the link is shown as a filter, \"Understood as\"");
+    }
+}
+
+#[tokio::test]
+async fn a_number_written_in_the_document_is_never_taken_for_a_name() {
+    // 650 is Beta's amount. A quote that says "650 euros" names nobody.
+    let folder = Folder::build();
+    let pending = folder.prepare_mixed(REFERENTIAL, "en-US");
+    let sources = vec![evidence("The quote totals 650 euros, valid for 30 days.")];
+    let gateway = start_fake_gateway(|_| "No supplier is named.".to_string());
+
+    let (result, _) = run(pending, sources, None, REFERENTIAL, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert!(result.table.is_none(), "{:?}", result.table);
+    assert_eq!(result.table_unavailable, Some(MixedPartUnavailable::NotLinked));
+}
+
+#[tokio::test]
+async fn a_document_naming_two_suppliers_links_nothing_rather_than_choosing() {
+    let folder = Folder::build();
+    let pending = folder.prepare_mixed(REFERENTIAL, "en-US");
+    let sources = vec![evidence("Comparison of the offers of Beta and Gamma for the printer.")];
+    let gateway = start_fake_gateway(|_| "Two suppliers are named.".to_string());
+
+    let (result, _) = run(pending, sources, None, REFERENTIAL, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert!(result.table.is_none(), "{:?}", result.table);
+    assert_eq!(result.table_unavailable, Some(MixedPartUnavailable::NotLinked));
+}
+
+#[tokio::test]
+async fn a_whole_value_wins_over_a_word_it_shares_with_another_value() {
+    // "Fournitures Dupont" and "Fournitures Martin" share a word; the letter names MedSupply, whose
+    // heading happens to contain that word. The whole value decides, not the shared word.
+    let csv = "fournisseur,montant\n\
+         MedSupply,450\n\
+         Fournitures Dupont,180\n\
+         Fournitures Martin,95\n";
+    let folder = Folder::build_with(csv);
+    let pending = folder.prepare_mixed(REFERENTIAL, "en-US");
+    let sources = vec![evidence("MEDSUPPLY FOURNITURES MEDICALES - quote DV-0117, valid for 30 days.")];
+    let gateway = start_fake_gateway(|_| "The quote is from MedSupply.".to_string());
+
+    let (result, _) = run(pending, sources, None, REFERENTIAL, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert_eq!(total_of(&result), Some(450.0), "{:?}", result.table);
 }

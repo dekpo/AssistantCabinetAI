@@ -131,6 +131,12 @@ body {
 
 /* The connection banner stays in view when both folder lists are open and push it below the fold:
    it reports a state that is still true and that every answer depends on (HAP-1, UX-4). */
+.message__computed {
+  border-left: 3px solid var(--accent);
+  margin: 8px 0;
+  padding: 2px 0 2px 10px;
+}
+
 .app__pinned {
   position: sticky;
   bottom: 0;

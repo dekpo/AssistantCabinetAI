@@ -448,3 +448,24 @@ async fn adding_up_a_text_column_is_refused_and_names_that_column() {
         assert_eq!(filter_column.as_deref(), Some("fournisseur"), "{question:?}");
     }
 }
+
+// --- Lot D: a request to write is not a data-only question ---------------------------------
+
+#[test]
+fn a_request_to_write_something_is_left_to_the_tier_that_reads_both_sources() {
+    let folder = Folder::build();
+    let data = folder.open();
+    let scope = folder.ticked(&[INVOICES]);
+    let data_only = |question: &str, locale: &str| {
+        tabular_answer::prepare_if_data_only(question, &data, &scope, locale, &folder.index)
+            .unwrap()
+            .is_some()
+    };
+    assert!(!data_only("G\u{e9}n\u{e8}re un courrier avec le montant total des factures", "fr-FR"));
+    assert!(!data_only("R\u{e9}dige un r\u{e9}sum\u{e9} de la somme des montant", "fr-FR"));
+    assert!(!data_only("Write a letter with the total montant", "en-US"));
+    assert!(!data_only("Draft a summary of the sum of montant", "en-US"));
+    // A plain question about the data stays instant, with no model.
+    assert!(data_only("Quelle est la somme des montant ?", "fr-FR"));
+    assert!(data_only("What is the sum of montant?", "en-US"));
+}

@@ -64,6 +64,7 @@
     "11": ["november"],
     "12": ["december"]
   },
+  "writing_intents": ["write", "draft", "compose", "generate", "prepare", "produce", "create"],
   "document_references": ["this letter", "the letter", "this quote", "the quote", "this document", "the document", "this pdf", "this email", "this e-mail", "this contract", "this report", "this note", "mentioned in", "named in"],
   "between": ["between"],
   "numbers": {

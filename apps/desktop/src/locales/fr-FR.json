@@ -81,6 +81,7 @@
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
     "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
+    "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
     "mixedTableUnavailable": {
       "not_asked_about": "Cette question ne portait sur aucune de vos tables.",
       "no_evidence": "Rien dans vos tables ne répond à cette partie.",

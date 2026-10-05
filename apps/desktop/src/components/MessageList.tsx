@@ -7,7 +7,7 @@ import { coverageLine } from "../lib/coverage";
 import { formatDuration } from "../lib/duration";
 import { counted } from "../lib/plural";
 import { groupSources } from "../lib/sourceGroups";
-import { tabularSourceLine } from "../lib/tabularAnswer";
+import { formatTabularAnswer, tabularSourceLine } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
 import {
   isNearBottom,
@@ -312,6 +312,16 @@ export function MessageList({
                   sources' one above - two labelled groups, pages and sheets/columns, so she can
                   always tell which engine each fact came from (`docs/SESSION-DATA-16-Mixed-Tier.md`,
                   mechanism 5). */}
+              {/* The figure the engine computed, shown beside the model's prose, always (HAP-1,
+                  BUG-16): the prose may be wrong or terse, and the reader must have the number to check
+                  it against, with the filters it was computed under. Not repeated when the table's
+                  own sentence is already the whole answer. */}
+              {entry.mixedTable?.kind === "value" && entry.deterministic !== true ? (
+                <div className="message__computed">
+                  <p className="message__timing">{t("chat.mixedComputedTitle")}</p>
+                  <Markdown text={formatTabularAnswer(t, entry.mixedTable, locale)} />
+                </div>
+              ) : null}
               {entry.mixedTableSource === undefined ? null : (
                 <details className="message__sources">
                   <summary className="disclosure">{t("chat.sourcesToggle")}</summary>

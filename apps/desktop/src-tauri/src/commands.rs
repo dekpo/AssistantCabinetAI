@@ -1169,7 +1169,7 @@ async fn mixed_tier(
     // `&index` never has to survive an `.await` to produce it (`tabular_answer::prepare`,
     // `force_model: false`: forcing the model is "Demander a l'IA", not this tier's own
     // decomposition).
-    let pending = tabular_answer::prepare(question, &folder, &scope.data_mode, &locale, &index, false)?;
+    let pending = tabular_answer::prepare_for_mixed(question, &folder, &scope.data_mode, &locale, &index)?;
 
     // The document selection, resolved exactly as tier 1 does: a selection whose files are all
     // gone or changed is refused rather than quietly answered from nothing, the same guarantee

@@ -215,7 +215,23 @@ pub fn prepare(
     index: &IndexStore,
     force_model: bool,
 ) -> Result<PendingAnswer, AppError> {
-    answer_sync(question, data, selection, locale, index, force_model)
+    answer_sync(question, data, selection, locale, index, force_model, false)
+}
+
+/// `prepare` for the mixed tier (documents and tables both selected). Same classification, plus
+/// one thing: a question that points at a document ("the supplier named in this letter") and
+/// whose own words filter nothing is returned as `TryModel` with its computed whole-table value
+/// as the fallback and `skip_model` set, so that `mixed_answer` can try to tie the document's
+/// entity to a row before that whole-table figure is ever shown (HAP-1, Q24). The model is never
+/// asked for it: the entity comes from the retrieved excerpts, not from a query plan.
+pub fn prepare_for_mixed(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+) -> Result<PendingAnswer, AppError> {
+    answer_sync(question, data, selection, locale, index, false, true)
 }
 
 /// D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): documents and tables
@@ -250,6 +266,11 @@ pub fn prepare_if_data_only(
     // alone: the table cannot say which supplier the letter names, so the whole table's figure
     // would be presented as the answer. The mixed tier reads the document first (HAP-1, Q24).
     if crate::tabular::question::refers_to_a_document(question, locale) {
+        return Ok(None);
+    }
+    // A request to write something is not a data-only question either: the table feeds it and the
+    // model writes it, so it belongs to the tier that reads both (owner decision of 4 October 2026).
+    if crate::tabular::question::has_writing_intent(question, locale) {
         return Ok(None);
     }
     match prepare(question, data, selection, locale, index, false)? {
@@ -338,6 +359,7 @@ fn answer_sync(
     locale: &str,
     index: &IndexStore,
     force_model: bool,
+    link_documents: bool,
 ) -> Result<PendingAnswer, AppError> {
     let chosen = chosen_workbooks(data, selection)?;
     if chosen.is_empty() {
@@ -406,6 +428,7 @@ fn answer_sync(
             // Session 11: a residual word anchored on real data becomes the filters
             // `tabular::engine` actually runs under, rather than only naming what was seen
             // (`docs/DECISIONS.md`).
+            let mut filtered_by_the_question = false;
             let operation = match detect_filters(
                 question,
                 &residual,
@@ -418,6 +441,7 @@ fn answer_sync(
                 locale,
             ) {
                 FilterDetection::Filters(filters) => {
+                    filtered_by_the_question = true;
                     if let Some(threshold) = group_threshold(
                         &operation,
                         &filters,
@@ -520,6 +544,23 @@ fn answer_sync(
                     )
                 }
             };
+            // A question that points at a document and whose own words filter nothing: its computed
+            // value covers the whole table. Handed back unfinished so the mixed tier can tie the
+            // document's entity to a row first (`prepare_for_mixed`).
+            if link_documents
+                && !filtered_by_the_question
+                && matches!(computed, TabularAnswer::Value { .. })
+                && question::refers_to_a_document(question, locale)
+            {
+                return Ok(PendingAnswer::TryModel {
+                    file,
+                    workbook,
+                    inventory: fresh,
+                    allowed: allowed.map(<[String]>::to_vec),
+                    fallback: computed,
+                    skip_model: true,
+                });
+            }
             // "Demander a l'IA" on a classified, computed tabular answer: she asked for the
             // model's own reading of the question anyway, usually because a deterministic
             // answer - correct arithmetic over a possibly wrong interpretation - looked wrong to

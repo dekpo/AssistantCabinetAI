@@ -31,7 +31,7 @@ use crate::file_reference::fold_text;
 use crate::gateway::{ChatTurn, GatewayClient};
 use crate::retrieval::Evidence;
 use crate::tabular::engine::{self, FilterSpec, TabularValue};
-use crate::tabular::inventory::TabularInventory;
+use crate::tabular::inventory::{ColumnType, TabularInventory};
 use crate::tabular::question::{self, TabularRoute};
 use crate::tabular::Workbook;
 use crate::tabular_answer::{self, PendingAnswer, TabularAnswer};
@@ -319,7 +319,7 @@ async fn resolve_table(
             inventory,
             allowed,
             fallback,
-            skip_model: _,
+            skip_model,
         } => {
             if matches!(fallback, TabularAnswer::Nudge { reason: None, .. }) {
                 return (None, Some(MixedPartUnavailable::NotAskedAbout));
@@ -348,7 +348,7 @@ async fn resolve_table(
                             inventory,
                             allowed,
                             fallback,
-                            skip_model: false,
+                            skip_model,
                         },
                         question,
                         context.locale,
@@ -434,20 +434,73 @@ enum EntityLink {
     Ambiguous { value: String, candidates: Vec<String> },
 }
 
-/// Scans `evidence`'s text, word by word, for the first word that is a real distinct value of
-/// some reachable column of `sheet`/`sheet_data` - mirroring `tabular_answer::detect_filters`'s own
-/// anchoring rule (a value found, whole word, folded so an unaccented excerpt word still finds an
-/// accented real value), but over retrieved document text instead of the question's own residual
-/// words, which `detect_filters` already tried and did not resolve before this is ever called.
-/// Several excerpts, and several words within one, may each hold a candidate: the first one found,
-/// in excerpt order, decides the outcome - an excerpt ranked higher by retrieval is more likely to
-/// be the one the question is actually about.
+/// Ties what the retrieved excerpts name to a real value of a text column of `sheet`/`sheet_data`.
+///
+/// Only text columns are linked: a number written in a document ("1 200", "2026") is not a name,
+/// and matching it to an amount in the table would pick a row by accident. Two passes:
+///
+/// 1. **A whole value** that appears in the excerpts as the whole phrase ("MedSupply", "Fournitures
+///    Dupont"). Exactly one such value links; the same value in two columns is asked about; two
+///    different values (a document naming two suppliers) link nothing, rather than choosing one.
+///    This pass is why "FOURNITURES MEDICALES" in a quote about MedSupply does not link to
+///    "Fournitures Dupont" through the word they share (HAP-1, Q24).
+/// 2. **A word of a value**, the older rule mirroring `tabular_answer::detect_filters`: the first
+///    word found, in excerpt order, that is a word of a real value, folded so an unaccented
+///    excerpt word still finds an accented real value. Used only when no whole value was found.
 fn entity_link(
     evidence: &[Evidence],
     sheet: &crate::tabular::inventory::SheetInventory,
     sheet_data: &crate::tabular::SheetData,
 ) -> EntityLink {
-    let columns_words = tabular_answer::column_value_words(sheet, sheet_data);
+    let text_columns: HashSet<&str> = sheet
+        .columns
+        .iter()
+        .filter(|column| column.inferred_type == ColumnType::Categorical)
+        .map(|column| column.name.as_str())
+        .collect();
+    let columns_words: Vec<_> = tabular_answer::column_value_words(sheet, sheet_data)
+        .into_iter()
+        .filter(|(column, _)| text_columns.contains(column.as_str()))
+        .collect();
+
+    let haystack: String = evidence
+        .iter()
+        .map(|item| question::spaced_words(&item.text))
+        .collect::<Vec<_>>()
+        .join(" ");
+    // (folded value) -> (original value, the columns holding it), for every value that appears whole.
+    let mut whole: Vec<(String, String, Vec<String>)> = Vec::new();
+    for (column, words) in &columns_words {
+        let mut seen: HashSet<&String> = HashSet::new();
+        for value in words.values().flatten() {
+            if !seen.insert(value) || !haystack.contains(&question::spaced_words(value)) {
+                continue;
+            }
+            let folded = fold_text(value);
+            match whole.iter_mut().find(|(known, _, _)| *known == folded) {
+                Some((_, _, columns)) => columns.push(column.clone()),
+                None => whole.push((folded, value.clone(), vec![column.clone()])),
+            }
+        }
+    }
+    match whole.as_slice() {
+        [] => {}
+        [(_, value, columns)] => {
+            return match columns.as_slice() {
+                [column] => EntityLink::Filter(FilterSpec {
+                    column: column.clone(),
+                    comparison: engine::Comparison::Equals(value.clone()),
+                }),
+                many => EntityLink::Ambiguous {
+                    value: value.clone(),
+                    candidates: many.to_vec(),
+                },
+            };
+        }
+        // A document naming two different values: nothing is chosen for her.
+        _ => return EntityLink::None,
+    }
+
     for item in evidence {
         // Raw words, original case kept - `question::name_words` folds (lowercases, strips
         // accents) for matching purposes, which is right for the lookup below but would report a

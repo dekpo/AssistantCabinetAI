@@ -69,6 +69,11 @@ struct PatternPack {
     /// table is, so the data-only router leaves it to the mixed tier (`refers_to_a_document`).
     #[serde(default)]
     document_references: Vec<String>,
+    /// Verbs that ask for a document to be written ("write", "generate", "draft"). A question with
+    /// one is not a question about the data alone, even when it names no document: the table feeds
+    /// the writing, so it goes to the tier that reads both (`has_writing_intent`).
+    #[serde(default)]
+    writing_intents: Vec<String>,
     /// Session 12's D5 (`docs/DECISIONS.md`): number words one to ten, keyed `"1"` to `"10"`, for
     /// reading a `top_n` question's N without ever guessing a digit from the question's own
     /// vocabulary words. A larger N is always typed as a digit, which `extract_n` reads directly.
@@ -192,7 +197,7 @@ pub(crate) fn filter_words(locale: &str) -> Option<FilterWords> {
 
 /// Lowercase, accents removed, every run of non-alphanumerics reduced to one space, and padded with
 /// a space on both sides: the form `refers_to_a_document` compares whole phrases in.
-fn spaced_words(text: &str) -> String {
+pub(crate) fn spaced_words(text: &str) -> String {
     let mut out = String::from(" ");
     for ch in fold_text(text).chars() {
         if ch.is_alphanumeric() {
@@ -218,6 +223,19 @@ pub(crate) fn refers_to_a_document(question: &str, locale: &str) -> bool {
     pack.document_references
         .iter()
         .any(|phrase| question.contains(&spaced_words(phrase)))
+}
+
+/// True when the question asks for something to be written ("generate the letter", "write a
+/// summary of the invoices"), judged from the locale's own pack, by whole words. Such a question
+/// crosses the sources: the facts come from the table, the writing is the model's.
+pub(crate) fn has_writing_intent(question: &str, locale: &str) -> bool {
+    let Some(pack) = pack_for(locale) else {
+        return false;
+    };
+    let question = spaced_words(question);
+    pack.writing_intents
+        .iter()
+        .any(|word| question.contains(&spaced_words(word)))
 }
 
 /// Where one question was routed.

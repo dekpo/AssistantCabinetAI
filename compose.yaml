@@ -69,6 +69,9 @@ services:
       # The counterpart: how long an answer may be. Not a tuning knob - without it a model that
       # falls into a repetition loop writes until a client gives up (docs/TROUBLESHOOTING.md).
       MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-2048}
+      # The longest silence tolerated from the model, before the first word and between chunks.
+      # Forwarded so that it can be set in .env: the gateway otherwise keeps its built-in 180 s.
+      LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-180}
       # How much one request may hold, conversation memory included. Never left to the runtime's
       # default, which silently dropped the oldest messages (docs/SELECTION-AND-MEMORY.md).
       DEFAULT_CONTEXT_WINDOW: ${DEFAULT_CONTEXT_WINDOW:-8192}

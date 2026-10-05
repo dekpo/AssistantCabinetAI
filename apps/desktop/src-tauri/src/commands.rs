@@ -977,6 +977,9 @@ async fn sourced_answer(
         work_folder_context::build_system_turn(retrieval::RETRIEVAL_INSTRUCTION, &folder_context),
         retrieval::format_evidence(&evidence)
     );
+    // Sources outrank memory (BUG-09): beside excerpts, a small window remembers fewer and shorter
+    // earlier exchanges (`conversation::history_beside_sources`).
+    let history = conversation::history_beside_sources(&history, writer.budget);
     let answer = writer
         .write(grounding, &history, question, on_event)
         .await?;

@@ -103,6 +103,8 @@
   },
   "names": {
     "documentsFolder": "Dossier des documents",
+    "excerptOne": "extrait",
+    "excerptMany": "extraits",
     "dataFolder": "Dossier des données"
   },
   "workFolder": {

@@ -18,12 +18,25 @@ const INTERNAL_NAMES: ReadonlyArray<{ pattern: RegExp; key: string }> = [
   { pattern: /\bTable[_ ]r(?:esults|ésultats)\b/gi, key: "names.dataFolder" },
 ];
 
+/**
+ * The English word a small model keeps using for what it was given ("no document in the excerpts"),
+ * shown in her language ("extrait", "extraits"), the first capital kept. A word, not an identifier,
+ * so it lives apart from the table above; the English catalogue maps it to itself (HAP-1, lot C-a
+ * replay, BUG-20).
+ */
+const EXCERPT_WORD = /(?<![A-Za-z])excerpt(s?)(?![A-Za-z])/gi;
+
 export function localiseInternalNames(text: string, t: Translator): string {
   let shown = text;
   for (const { pattern, key } of INTERNAL_NAMES) {
     shown = shown.replace(pattern, () => t(key));
   }
-  return shown;
+  return shown.replace(EXCERPT_WORD, (match: string, plural: string) => {
+    const word = t(plural === "" ? "names.excerptOne" : "names.excerptMany");
+    return match.startsWith(match.charAt(0).toUpperCase()) && match.charAt(0) !== match.charAt(0).toLowerCase()
+      ? word.charAt(0).toUpperCase() + word.slice(1)
+      : word;
+  });
 }
 
 /** The internal identifiers this module covers, as written in what the model reads. */

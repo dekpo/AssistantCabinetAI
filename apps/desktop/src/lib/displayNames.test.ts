@@ -29,6 +29,16 @@ describe("an internal name a model repeated", () => {
     expect(localiseInternalNames("In the Document excerpts", english)).toBe("In the Documents folder");
   });
 
+  it("shows the English word excerpt in her language, singular and plural, the capital kept", () => {
+    expect(localiseInternalNames("Aucun document dans les excerpts fournis.", french)).toBe(
+      "Aucun document dans les extraits fournis.",
+    );
+    expect(localiseInternalNames("Pas de prix dans l'excerpt.", french)).toBe("Pas de prix dans l'extrait.");
+    expect(localiseInternalNames("Excerpts: none.", french)).toBe("Extraits: none.");
+    // The English interface keeps the English word.
+    expect(localiseInternalNames("Nothing in the excerpts.", english)).toBe("Nothing in the excerpts.");
+  });
+
   it("leaves an ordinary sentence, a number and a citation alone", () => {
     const text = "Le total est de 1 450 € [1]. Votre dossier de travail contient 3 fichiers.";
     expect(localiseInternalNames(text, french)).toBe(text);

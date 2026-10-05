@@ -151,6 +151,66 @@ fn exchanges(history: &[ChatTurn]) -> Vec<(&ChatTurn, &ChatTurn)> {
     pairs
 }
 
+/// How many past exchanges a model may be shown **beside sources** (document excerpts or table
+/// results), from the context window the server publishes for it. `None`: no cap beyond what fits.
+///
+/// The sources outrank the memory (27 September 2026, "grounding outranks memory"; the owner's
+/// decision of 4 October 2026 after HAP-1, BUG-09). A small model that can hold only one thing must
+/// hold the sources: with the whole leftover budget filled by earlier answers, a 2B model repeated
+/// an invented figure from a previous turn instead of reading the excerpts. The window stands in
+/// for the model's size - it is already published per alias - so no model name or parameter count
+/// is ever hard-coded, and a larger window simply lifts the cap. The numbers are a starting point
+/// to be tuned by measurement (`docs/test-reports/human-acceptance-pass-1/08-lot-c-plan.md`, C-b).
+pub fn max_exchanges_with_sources(window_tokens: usize) -> Option<usize> {
+    if window_tokens <= 4_096 {
+        Some(1)
+    } else if window_tokens <= 8_192 {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+/// A remembered answer is cut to this many characters when the turn carries sources: the gist
+/// survives, an invented detail deep in a long answer does not.
+pub const MAX_REMEMBERED_ANSWER_CHARS: usize = 400;
+
+/// The conversation as a turn that carries sources may see it: only the newest
+/// `max_exchanges_with_sources` exchanges, each remembered answer cut to
+/// `MAX_REMEMBERED_ANSWER_CHARS`. The turns without sources (the no-documents tier, where earlier
+/// exchanges are the only context there is) do not go through this.
+pub fn history_beside_sources(history: &[ChatTurn], budget: ContextBudget) -> Vec<ChatTurn> {
+    let pairs = exchanges(history);
+    let skip = match max_exchanges_with_sources(budget.window_tokens) {
+        Some(max) => pairs.len().saturating_sub(max),
+        None => 0,
+    };
+    pairs
+        .into_iter()
+        .skip(skip)
+        .flat_map(|(question, answer)| {
+            [
+                question.clone(),
+                ChatTurn {
+                    role: answer.role.clone(),
+                    content: shorten(&answer.content, MAX_REMEMBERED_ANSWER_CHARS),
+                },
+            ]
+        })
+        .collect()
+}
+
+/// `text` cut to at most `limit` characters at a word boundary, marked as cut. Unchanged when it
+/// already fits.
+fn shorten(text: &str, limit: usize) -> String {
+    if text.chars().count() <= limit {
+        return text.to_string();
+    }
+    let cut: String = text.chars().take(limit).collect();
+    let at_word = cut.rfind(char::is_whitespace).unwrap_or(cut.len());
+    format!("{}...", cut[..at_word].trim_end())
+}
+
 /// The past exchanges that fit in `budget_chars`, oldest first, ready to go between the system
 /// turn and the current question.
 ///
@@ -235,6 +295,67 @@ mod tests {
 
     fn contents(turns: &[ChatTurn]) -> Vec<&str> {
         turns.iter().map(|turn| turn.content.as_str()).collect()
+    }
+
+    fn budget_of(window_tokens: usize) -> ContextBudget {
+        ContextBudget {
+            window_tokens,
+            output_tokens: 2_048,
+        }
+    }
+
+    fn five_exchanges() -> Vec<ChatTurn> {
+        (1..=5)
+            .flat_map(|n| exchange(&format!("question {n}"), &format!("answer {n}")))
+            .collect()
+    }
+
+    #[test]
+    fn a_small_window_remembers_one_exchange_beside_sources() {
+        let kept = history_beside_sources(&five_exchanges(), budget_of(4_096));
+        assert_eq!(contents(&kept), vec!["question 5", "answer 5"]);
+    }
+
+    #[test]
+    fn the_default_window_remembers_two_exchanges_beside_sources() {
+        let kept = history_beside_sources(&five_exchanges(), ContextBudget::DEFAULT);
+        assert_eq!(
+            contents(&kept),
+            vec!["question 4", "answer 4", "question 5", "answer 5"]
+        );
+    }
+
+    #[test]
+    fn a_large_window_lifts_the_cap() {
+        let kept = history_beside_sources(&five_exchanges(), budget_of(32_768));
+        assert_eq!(kept.len(), 10);
+    }
+
+    #[test]
+    fn a_long_remembered_answer_is_cut_at_a_word_boundary_and_marked() {
+        let long = "word ".repeat(200);
+        let history: Vec<ChatTurn> = exchange("question", &long).into_iter().collect();
+        let kept = history_beside_sources(&history, ContextBudget::DEFAULT);
+        let answer = &kept[1].content;
+        assert!(answer.chars().count() <= MAX_REMEMBERED_ANSWER_CHARS + 3, "{}", answer.len());
+        assert!(answer.ends_with("word..."), "{answer}");
+        assert_eq!(kept[0].content, "question", "a question is never cut");
+    }
+
+    #[test]
+    fn a_short_remembered_answer_is_left_alone_and_an_empty_history_stays_empty() {
+        let kept = history_beside_sources(&exchange("q", "a").to_vec(), ContextBudget::DEFAULT);
+        assert_eq!(contents(&kept), vec!["q", "a"]);
+        assert!(history_beside_sources(&[], ContextBudget::DEFAULT).is_empty());
+    }
+
+    #[test]
+    fn the_cap_depends_on_the_window_and_never_on_a_model_name() {
+        assert_eq!(max_exchanges_with_sources(2_048), Some(1));
+        assert_eq!(max_exchanges_with_sources(4_096), Some(1));
+        assert_eq!(max_exchanges_with_sources(4_097), Some(2));
+        assert_eq!(max_exchanges_with_sources(8_192), Some(2));
+        assert_eq!(max_exchanges_with_sources(8_193), None);
     }
 
     #[test]

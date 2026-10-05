@@ -228,8 +228,10 @@ pub async fn answer(
 
     let instruction = build_two_block_turn(&document_sources, table_text.as_deref());
     let final_turn = format!("{instruction}\n\nQuestion: {question}");
+    // Both blocks are sources: the memory yields to them (`conversation::history_beside_sources`).
+    let remembered = conversation::history_beside_sources(context.history, context.budget);
     let mut turns = conversation::fit_history(
-        context.history,
+        &remembered,
         context.budget.history_chars(final_turn.chars().count()),
     );
     turns.push(ChatTurn {

@@ -532,3 +532,10 @@ BUG-03 and BUG-06 (the data-only router swallowing mixed questions; entity linki
 points at a document) and BUG-16 (the computed figure hidden beside the model's prose) are implemented on
 `fix/lot-d-mixed-routing`: see [10-lot-d-mixed-routing.md](10-lot-d-mixed-routing.md). OBS-8 and the publipostage
 message are deferred (lot E needs the row lookup first).
+
+## Added after the lot D replay (5 October 2026)
+
+BUG-23 (false numeric correction on space-grouped amounts), BUG-24 (wrong folder named under a table answer in a mixed
+question), BUG-25 (an acronym designating a document taken for a table value) and UX-6 (Copy the conversation) are
+fixed in lot D2; see [10-lot-d-mixed-routing.md](10-lot-d-mixed-routing.md). The numeric safety net for document
+answers, approved by the owner, is implemented there too.

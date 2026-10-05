@@ -657,6 +657,15 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | `skip_model` in the mixed tier | Honoured: a proper noun with no value and no close one is refused at once there too (BUG-12) |
 | Deferred | The "nothing for your tables" line on a question that concerns a row waits for the row lookup (lot E); OBS-8 waits for a structural evidence form in the table block |
 
+## Settled by lot D2 of the HAP-1 fixes (5 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| A number is read whole (BUG-23) | `number_check::scan`: a group of exactly three digits after one to three, separated by a space, a no-break space or a narrow no-break space, belongs to the number; "1,500" and "1.500" keep both readings; comparisons are by value ("1 450,00", "1 450" and "1450" are one figure). The mixed tier's correction and the new document check share it |
+| Numeric safety net for document answers | Approved by the owner on 5 October 2026. A figure of two digits or more that is in none of the excerpts and not in the question is reported under the answer, never edited into it; citation markers are ignored; the no-documents tier is not checked. It reports, it does not decide: a derived figure is flagged too |
+| A word of a document's name is not a table value (BUG-25) | The mixed tier tells the classifier the names of the selected documents |
+| "Copy the conversation" copies what is seen (UX-6) | The text as shown, the engine's figure and every note under the answer; the lists of sources are left out. The notes come from one function (`lib/annotations.ts`) used by the view and the copy |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

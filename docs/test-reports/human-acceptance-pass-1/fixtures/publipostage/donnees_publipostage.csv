@@ -1,0 +1,6 @@
+﻿ID_Client,Civilite,Prenom,Nom,Email,No_Commande,Article,Quantite,Prix_Unitaire,Total_Ligne
+101,M.,Jean,Dupont,jean.dupont@email.com,CMD-2026-001,Ordinateur Portable,1,899.0,899.0
+101,M.,Jean,Dupont,jean.dupont@email.com,CMD-2026-001,Souris Sans Fil,1,25.5,25.5
+102,Mme,Sophie,Martin,sophie.martin@email.com,CMD-2026-002,Chaise Ergonomique,1,189.0,189.0
+103,M.,Thomas,Rousseau,thomas.rousseau@email.com,CMD-2026-003,Écran 27 pouces,2,199.99,399.98
+103,M.,Thomas,Rousseau,thomas.rousseau@email.com,CMD-2026-003,Clavier Mécanique,1,79.5,79.5

@@ -519,3 +519,16 @@ await a live proof.
 See [09-retest-lot-c-a.md](09-retest-lot-c-a.md): BUG-20 (English "excerpts" shown to a French reader, fixed on the
 display side), BUG-21 (the timeout variable was never forwarded by Compose, fixed), OBS-9 to OBS-11. BUG-07, UX-1,
 UX-4, UX-5 and the BUG-13 remainder are closed; BUG-09 has its C-b change coded and awaits the measurement.
+
+## Added after the C-b measurement (5 October 2026)
+
+See "C-b measurement results" in [09-retest-lot-c-a.md](09-retest-lot-c-a.md): OBS-12 (better after re-indexing, stale
+index suspected), OBS-13, OBS-14, and the hypothesis BUG-22 (evidence not sized to the model's window; to confirm in
+the Ollama logs). BUG-11 and BUG-21 are closed.
+
+## Status after lot D (5 October 2026, coded, awaiting live replay)
+
+BUG-03 and BUG-06 (the data-only router swallowing mixed questions; entity linking unreachable for a question that
+points at a document) and BUG-16 (the computed figure hidden beside the model's prose) are implemented on
+`fix/lot-d-mixed-routing`: see [10-lot-d-mixed-routing.md](10-lot-d-mixed-routing.md). OBS-8 and the publipostage
+message are deferred (lot E needs the row lookup first).

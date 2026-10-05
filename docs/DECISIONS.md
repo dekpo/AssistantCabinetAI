@@ -644,7 +644,18 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | Memory beside sources (BUG-09) | Approved by the owner on 4 October 2026 with these starting numbers, to be tuned by measurement: a turn that carries sources (documents, tables or both) is sent at most **one** past exchange when the model's published context window is 4 096 tokens or less, **two** up to 8 192, and no cap above; a remembered answer is cut to **400** characters at a word boundary. The no-documents tier is not capped. No prompt string, no turn order and no retrieval query changes. The window stands in for model size, so nothing names a model |
 | The English word "excerpt" (BUG-20) | Shown "extrait"/"extraits" in the French interface, display only, extending the display names of 4 October |
 | The server timeout is configurable (BUG-21) | `LLM_REQUEST_TIMEOUT_SECONDS` is forwarded by `compose.yaml` and listed in `.env.example` |
+| Context windows in the owner's `.env` | The owner keeps `MODEL_CONTEXT_WINDOWS=gemma2:2b=2048,llama3.2:3b=4096,ministral-3:3b=4096` and `LLM_REQUEST_TIMEOUT_SECONDS=300` on the development machine, on purpose, and asks that no tool change them. They put all three models in the "one exchange" class of C-b and leave almost no room for history; whether the runtime then truncates the prompt is to be checked in the Ollama logs (`docs/test-reports/human-acceptance-pass-1/09-retest-lot-c-a.md`) |
 | Models answering without a source | Kept on purpose when nothing is selected (owner, 4 October): it shows what the models already know. Connecting them to external sources (legal texts, medicine lists) is a later phase (`docs/PLATFORM-VISION.md`) |
+
+## Settled by lot D of the HAP-1 fixes (5 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Router with both kinds ticked | Applies the owner's rule of 4 October: a question about the data alone is answered at once with no model; a question that points at a document (`document_references`) or asks for something to be written (`writing_intents`) goes to the mixed tier. Both word lists are locale-pack data. Sentence order is not used: roles come from the file kinds |
+| A document's entity is tied to a row before any figure is shown | `tabular_answer::prepare_for_mixed` returns a document-pointing question unfinished; `mixed_answer::entity_link` links from the excerpts, **text columns only**, preferring a **whole value** found as a phrase over a word shared between values, and linking nothing when the excerpts name two different values. When nothing links, no whole-table figure is shown (`not_linked`) |
+| The computed figure is always shown (BUG-16) | A mixed answer shows the engine's figure and the filters it was computed under in its own block, under the model's prose, labelled as computed by the engine, not the AI |
+| `skip_model` in the mixed tier | Honoured: a proper noun with no value and no close one is refused at once there too (BUG-12) |
+| Deferred | The "nothing for your tables" line on a question that concerns a row waits for the row lookup (lot E); OBS-8 waits for a structural evidence form in the table block |
 
 ## Out of scope until the pilot holds
 

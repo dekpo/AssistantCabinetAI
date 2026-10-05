@@ -26,6 +26,7 @@ Reference name: **HAP-1**. Use it in chat, in commit messages and in `docs/DECIS
 | [07-retest-lot-b.md](07-retest-lot-b.md) | Replay of the lot B checks (4 October 2026): verdicts verified against the fixtures, the Q19 root cause (BUG-17), BUG-18, OBS-8, updated bug status, replay list |
 | [08-lot-c-plan.md](08-lot-c-plan.md) | The plan for lot C (C-a interface and routing, C-b conversation memory), written from the owner decisions of 4 October 2026, with the BUG-10 audit of internal names, the BUG-09 proposal awaiting approval, exit criteria and replay list |
 | [09-retest-lot-c-a.md](09-retest-lot-c-a.md) | Replay of lot C-a (4 October 2026) on four models, the Q28 comparison, BUG-20 and BUG-21, the BUG-11 recipe now that the variable is forwarded, the C-b change and its measurement protocol |
+| [10-lot-d-mixed-routing.md](10-lot-d-mixed-routing.md) | Lot D (5 October 2026): the mixed tier ties a document's entity to a row (Q24), the data-only gate now also refuses writing requests, the computed figure is always shown (BUG-16), what was deliberately not done, replay list |
 | [screenshots/INDEX.md](screenshots/INDEX.md) | The 51 screenshots (`S01.png`..`S51.png`, chronological), what each one shows, and the concordance with the numbers the owner wrote in the original notes |
 | [fixtures/README.md](fixtures/README.md) | The 6 documents and 2 workbooks used, copied from `C:\Users\elise\AssistantCabinetAI\{Docs,Data}\Test`, with their full text and the numbers computed by hand |
 

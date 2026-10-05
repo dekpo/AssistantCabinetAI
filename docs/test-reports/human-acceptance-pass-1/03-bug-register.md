@@ -29,6 +29,8 @@ Effort: **XS** (a few lines), **S** (a function plus tests), **M** (a design dec
 | BUG-17 | S2 | S | French "plus de N" / "moins de N" never becomes a filter; the unfiltered count is answered (added 4 Oct, lot B retest) | Q19 |
 | BUG-18 | S3 | S | "Demander à l'IA" on a computed answer silently returns the same answer when the model cannot do better (added 4 Oct) | Q19 conv 2, 3 |
 | BUG-19 | S4 | M | A threshold written in words ("cinq mille") is refused, not read (added 4 Oct, B2 replay) | Q19 variant |
+| BUG-20 | S4 | XS | A small model writes the English word "excerpts" in a French answer (added 4 Oct) | Q8-d |
+| BUG-21 | S3 | XS | `compose.yaml` did not forward `LLM_REQUEST_TIMEOUT_SECONDS` (added 4 Oct) | BUG-11 proof |
 | UX-1 | - | S | Disambiguation choices are not clickable | Q4, Q9 |
 | UX-2 | S4 | XS | Error banner overflows the sidebar height | Q26, S43 |
 | UX-3 | S4 | XS | Stray `extrait.` and `[extrait 2]` markers in model text | Q8-e, Q8-f |
@@ -511,3 +513,9 @@ BUG-07, BUG-08 (design fix, cause not reproduced), BUG-10 (display side), BUG-13
 are implemented on `fix/lot-c-interface-and-routing`; see [08-lot-c-plan.md](08-lot-c-plan.md) for the change per
 item and the replay steps. BUG-09 (memory) waits for the owner's approval of the C-b numbers; BUG-18 and BUG-11
 await a live proof.
+
+## Added after the lot C-a replay (4 October 2026)
+
+See [09-retest-lot-c-a.md](09-retest-lot-c-a.md): BUG-20 (English "excerpts" shown to a French reader, fixed on the
+display side), BUG-21 (the timeout variable was never forwarded by Compose, fixed), OBS-9 to OBS-11. BUG-07, UX-1,
+UX-4, UX-5 and the BUG-13 remainder are closed; BUG-09 has its C-b change coded and awaits the measurement.

@@ -63,8 +63,11 @@ On a CPU-only server the first request after switching models can stay silent fo
 180 s of `LLM_REQUEST_TIMEOUT_SECONDS` (Ollama unloads one model, loads the other, then reads the prompt before
 the first token). The gateway then answers `provider_error` with `reason: "timeout"`, which the desktop shows as
 "the model took too long to start, try again" (`docs/test-reports/human-acceptance-pass-1/`, BUG-11). The
-second attempt normally succeeds because the model is loaded. Raise the value in the server environment
-(for example 600) on slow machines; the desktop's own `answerIdleTimeoutSeconds` is a separate, client-side
+second attempt normally succeeds because the model is loaded. Raise the value on slow machines (for example
+600): add `LLM_REQUEST_TIMEOUT_SECONDS=600` to the `.env` file next to `compose.yaml` and run
+`docker compose up -d server` (until 4 October 2026 `compose.yaml` did not forward this variable, so setting it
+in `.env` changed nothing; `.env.example` lists it now). To check that the desktop explains a timeout, set it to
+`5` the same way, ask any question, then put the value back; the desktop's own `answerIdleTimeoutSeconds` is a separate, client-side
 setting and does not govern this one.
 
 `DEFAULT_CONTEXT_WINDOW` (default 8192 tokens) and `MODEL_CONTEXT_WINDOWS` (`alias=tokens` pairs, for the

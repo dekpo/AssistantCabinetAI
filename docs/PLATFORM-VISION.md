@@ -62,6 +62,7 @@ Each row is something we do today at no extra cost, which prevents a rewrite lat
 | A second index or vector store | `IndexStore` and `InventoryStore` traits. SQLite is an implementation, not a schema the application knows |
 | Local ONNX embeddings instead of gateway embeddings | The `Embedder` port. Retrieval does not know where a vector came from |
 | A new file format, or a database or API data source | `TextExtractor` and `TabularDataSource` adapters behind one `Source` model |
+| A reference source the model may draw on when no document is selected (legal and regulatory texts, lists of medicines, other public resources) | Owner direction of 4 October 2026, **not for the current sprint**: the lot C-a replay showed four models giving four different answers to a legal retention period. Such a source would be a read-only adapter of public data behind its own port; it must be designed so that no document text, name or patient detail ever leaves the workstation in a query, which `docs/PRIVACY-AND-SECURITY.md` has to approve first |
 | A better OCR engine, GPU OCR, or layout-aware OCR | The `OcrProvider` port. The application names no engine, and `derivation: Recognised` already carries which one read the page |
 | Camera capture from a phone | An image reaching the workstation is already an ingestion input. OCR does not care where the bytes came from |
 | A new profession | File discovery is extension-driven and contains no domain assumption. Column and naming hints are locale and profession **data**, never code |

@@ -214,3 +214,10 @@ Not done in C-a: BUG-18 and BUG-11 live proofs (owner replay recipes below).
 8. **BUG-18 (live proof).** Invoices only, ask `Quelle est la somme des montant ?` (answer: "Somme de montant : 2 215", computed). Under that answer press "Demander à l'IA". Two outcomes are correct: (a) the model proposes nothing usable: the same answer stays and a line says "... a été interrogé, pendant X, mais n'a pas proposé de lecture plus précise de cette question : la réponse calculée ci-dessus est conservée." (b) the model proposes a valid reading: the answer is shown as "interprétée par le modèle". It must never be a silent identical answer.
 9. **BUG-11 (live proof, optional).** Start the server with `LLM_REQUEST_TIMEOUT_SECONDS=5`, ask any question with `ministral-3:3b`: the dedicated "trop de temps à démarrer" sentence must appear instead of the generic failure; restore the value afterwards.
 10. **No regression.** The B2 replay list in [07-retest-lot-b.md](07-retest-lot-b.md), at least rows 1, 6, 7, 9, 11 and 12.
+
+---
+
+## C-b status (4 October 2026)
+
+Approved by the owner with the proposed numbers and coded: see [09-retest-lot-c-a.md](09-retest-lot-c-a.md),
+section "C-b". Branch to create before committing: `fix/lot-c2-history-priority`. Measurement pending.

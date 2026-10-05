@@ -637,6 +637,15 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | Display names (BUG-10) | Implemented in `src/lib/displayNames.ts` at render time and copy; see "Owner decisions after the HAP-1 retests". A guard test fails when a name the model reads has no display name |
 | A column refused for its content is named (BUG-13) | `non_numeric_column` and `formula_cannot_be_verified` nudges carry the column |
 
+## Settled by lot C-b of the HAP-1 fixes (4 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Memory beside sources (BUG-09) | Approved by the owner on 4 October 2026 with these starting numbers, to be tuned by measurement: a turn that carries sources (documents, tables or both) is sent at most **one** past exchange when the model's published context window is 4 096 tokens or less, **two** up to 8 192, and no cap above; a remembered answer is cut to **400** characters at a word boundary. The no-documents tier is not capped. No prompt string, no turn order and no retrieval query changes. The window stands in for model size, so nothing names a model |
+| The English word "excerpt" (BUG-20) | Shown "extrait"/"extraits" in the French interface, display only, extending the display names of 4 October |
+| The server timeout is configurable (BUG-21) | `LLM_REQUEST_TIMEOUT_SECONDS` is forwarded by `compose.yaml` and listed in `.env.example` |
+| Models answering without a source | Kept on purpose when nothing is selected (owner, 4 October): it shows what the models already know. Connecting them to external sources (legal texts, medicine lists) is a later phase (`docs/PLATFORM-VISION.md`) |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

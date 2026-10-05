@@ -187,6 +187,25 @@ pub struct TopGroups {
     pub capped: bool,
 }
 
+/// The groups whose **total** is beyond a threshold: "is there a supplier above 5 000", "which agencies
+/// are under 1 000 in total". A total per group, never one row against the threshold (HAP-1, Q19,
+/// BUG-14): a supplier can be above the threshold with no single invoice near it, and the reverse.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupsBeyond {
+    pub group_column: String,
+    pub threshold: f64,
+    /// `true`: totals strictly above the threshold; `false`: strictly below.
+    pub above: bool,
+    /// The groups strictly beyond the threshold, the most extreme first: largest total first when
+    /// `above`, smallest first otherwise. Empty when none is.
+    pub matches: Vec<GroupSum>,
+    pub group_count: usize,
+    /// The group with the highest total when `above`, the lowest otherwise: said when `matches` is
+    /// empty, so that "no" shows how far from the threshold the nearest group is.
+    pub extreme: GroupSum,
+}
+
 /// The hard ceiling on a `TopGroups` question's N (`docs/DECISIONS.md`, D5): a larger request is
 /// honoured as this many, stated rather than refused.
 pub const MAX_TOP_GROUPS: usize = 50;
@@ -242,6 +261,8 @@ pub enum TabularValue {
     /// The top N groups by total, N capped at `MAX_TOP_GROUPS` and the cap stated
     /// (`docs/DECISIONS.md`, D5).
     TopGroups(TopGroups),
+    /// The groups whose total is above or below a threshold, with the nearest group when none is.
+    GroupsBeyond(GroupsBeyond),
     /// Rows per group, largest first - a count, never a sum (`docs/DECISIONS.md`, D5).
     CountPerGroup(Vec<GroupCount>),
     LargestRow(RowValue),
@@ -382,6 +403,14 @@ pub enum Operation {
         group_by: String,
         sum_column: String,
         n: usize,
+        filters: Vec<FilterSpec>,
+    },
+    /// The groups whose total is strictly above (`above`) or below `threshold`.
+    GroupsBeyond {
+        group_by: String,
+        sum_column: String,
+        threshold: f64,
+        above: bool,
         filters: Vec<FilterSpec>,
     },
     /// Rows per group, largest first - no sum column, since it counts rather than totals.
@@ -683,6 +712,68 @@ pub fn execute(
                     applied_filters(filters),
                 ),
                 derivation: computed("top_n", matched.len()),
+            }
+        }
+        Operation::GroupsBeyond {
+            group_by,
+            sum_column,
+            threshold,
+            above,
+            filters,
+        } => {
+            let group_col = match resolve_value_column(columns, group_by) {
+                Ok(col) => col,
+                Err(reason) => return fail(reason),
+            };
+            let sum_col = match resolve_value_column(columns, sum_column) {
+                Ok(col) => col,
+                Err(reason) => return fail(reason),
+            };
+            if sum_col.inferred_type != ColumnType::Numeric {
+                return fail(NotAnswerableReason::NonNumericColumn);
+            }
+            let matched = match matching_rows(rows, columns, filters, locale) {
+                Ok(indices) => indices,
+                Err(reason) => return fail(reason),
+            };
+            if matched.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let mut sums = group_sums_for(rows, &matched, group_col, sum_col, locale);
+            if sums.is_empty() {
+                return fail(NotAnswerableReason::EmptySheet);
+            }
+            let group_count = sums.len();
+            // Most extreme first; ties keep the alphabetical order the sums already had.
+            sums.sort_by(|a, b| {
+                let order = a.sum.partial_cmp(&b.sum).unwrap_or(std::cmp::Ordering::Equal);
+                if *above {
+                    order.reverse()
+                } else {
+                    order
+                }
+            });
+            let extreme = sums[0].clone();
+            let matches: Vec<GroupSum> = sums
+                .into_iter()
+                .filter(|group| if *above { group.sum > *threshold } else { group.sum < *threshold })
+                .collect();
+            TabularOutcome::Value {
+                value: TabularValue::GroupsBeyond(GroupsBeyond {
+                    group_column: group_col.name.clone(),
+                    threshold: *threshold,
+                    above: *above,
+                    matches,
+                    group_count,
+                    extreme,
+                }),
+                locator: locator(
+                    sheet_inventory,
+                    Some(&sum_col.name),
+                    range_of(&matched),
+                    applied_filters(filters),
+                ),
+                derivation: computed("groups_beyond", matched.len()),
             }
         }
         Operation::CountPerGroup { group_by, filters } => {

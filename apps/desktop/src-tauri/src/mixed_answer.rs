@@ -120,6 +120,10 @@ pub struct MixedAnswer {
     /// A bracketed citation (`"[3]"`) the model wrote that does not resolve to any of
     /// `document_sources` - most often a table fact dressed up as a document citation.
     pub rejected_citations: Vec<String>,
+    /// Figures the model stated that are in none of the excerpts and not in the question, reported
+    /// only when no table figure is shown (a table value is checked by `corrections` instead).
+    /// Reported beside the answer, never edited into it (`number_check`).
+    pub unverified_numbers: Vec<String>,
 }
 
 /// Everything `answer` needs, owned or borrowed, with no `AppHandle` and - on purpose - no
@@ -188,6 +192,7 @@ pub async fn answer(
                     documents_unavailable: None,
                     corrections: Vec::new(),
                     rejected_citations: Vec::new(),
+                    unverified_numbers: Vec::new(),
                 },
                 false,
             ));
@@ -222,6 +227,7 @@ pub async fn answer(
                 documents_unavailable: Some(reason),
                 corrections: Vec::new(),
                 rejected_citations: Vec::new(),
+                unverified_numbers: Vec::new(),
             },
             false,
         ));
@@ -264,6 +270,7 @@ pub async fn answer(
                     documents_unavailable: Some(MixedPartUnavailable::GatewayUnavailable),
                     corrections: Vec::new(),
                     rejected_citations: Vec::new(),
+                    unverified_numbers: Vec::new(),
                 },
                 true,
             ));
@@ -273,6 +280,15 @@ pub async fn answer(
 
     let corrections = verify_numbers(&answer_text, expected, &document_sources);
     let rejected_citations = reject_citations(&answer_text, document_sources.len());
+    // With no table figure on screen there is nothing to correct the prose against, so the figures it
+    // states are held to the excerpts and the question, as a document answer's are.
+    let unverified_numbers = if expected.is_none() && table.is_none() {
+        let mut known: Vec<&str> = document_sources.iter().map(|item| item.text.as_str()).collect();
+        known.push(question);
+        number_check::unsupported_numbers(&answer_text, &known, 2)
+    } else {
+        Vec::new()
+    };
 
     Ok((
         MixedAnswer {
@@ -283,6 +299,7 @@ pub async fn answer(
             documents_unavailable: None,
             corrections,
             rejected_citations,
+            unverified_numbers,
         },
         true,
     ))

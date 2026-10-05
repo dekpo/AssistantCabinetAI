@@ -459,7 +459,7 @@ fn answer_sync(
             ) {
                 FilterDetection::Filters(filters) => {
                     filtered_by_the_question = true;
-                    if let Some(threshold) = group_threshold(
+                    match group_threshold(
                         &operation,
                         &filters,
                         named_column.as_deref(),
@@ -467,19 +467,22 @@ fn answer_sync(
                         sheet.as_deref(),
                         allowed,
                     ) {
-                        return Ok(PendingAnswer::Done(nudge(
-                            file,
-                            &fresh,
-                            allowed,
-                            Some(NotAnswerableReason::GroupThresholdNotSupported),
-                            Vec::new(),
-                            Vec::new(),
-                            None,
-                            Some(threshold),
-                            Vec::new(),
-                        )));
+                        // "Any supplier above 5 000": the totals per supplier against the
+                        // threshold, said as such (the other filters of the question stay).
+                        Some(threshold) => Operation::GroupsBeyond {
+                            group_by: threshold.group_by,
+                            sum_column: threshold.measure,
+                            threshold: threshold.value,
+                            above: threshold.above,
+                            filters: filters
+                                .into_iter()
+                                .filter(|spec| {
+                                    !matches!(spec.comparison, Comparison::GreaterThan(_) | Comparison::LessThan(_))
+                                })
+                                .collect(),
+                        },
+                        None => with_filters(operation, filters),
                     }
-                    with_filters(operation, filters)
                 }
                 FilterDetection::WhichColumn { value, candidates } => {
                     return Ok(PendingAnswer::Done(TabularAnswer::WhichColumn {
@@ -628,14 +631,38 @@ fn answer_sync(
                 return Ok(PendingAnswer::Done(fallback));
             };
             match load_workbook_cached(index, &path, &file, inventory, locale) {
-                Ok((workbook, fresh)) => Ok(PendingAnswer::TryModel {
-                    skip_model: false,
-                    file,
-                    workbook,
-                    inventory: fresh,
-                    allowed: allowed.map(<[String]>::to_vec),
-                    fallback,
-                }),
+                Ok((workbook, fresh)) => {
+                    // A question with no operation that names a value found in the data ("order
+                    // CMD-2026-002") is a lookup of the rows that hold it: shown as they are, never
+                    // handed to a model (HAP-1, the publipostage finding, layer 2).
+                    if let Some(answer) = row_lookup(question, &file, locale, &fresh, &workbook, allowed) {
+                        return Ok(PendingAnswer::Done(answer));
+                    }
+                    // An identifier-shaped token that matches no cell is refused at once, with the
+                    // identifiers close to it: a model cannot find a value the data does not hold,
+                    // and the wait bought nothing (HAP-1, lot E replay: 51 s for "CMD-2026-009").
+                    if let Some((token, close)) = unmatched_identifier(question, &fresh, &workbook, allowed) {
+                        return Ok(PendingAnswer::Done(nudge(
+                            file,
+                            &fresh,
+                            allowed,
+                            Some(NotAnswerableReason::ValueNotFound),
+                            Vec::new(),
+                            Vec::new(),
+                            None,
+                            Some(token),
+                            close,
+                        )));
+                    }
+                    Ok(PendingAnswer::TryModel {
+                        skip_model: false,
+                        file,
+                        workbook,
+                        inventory: fresh,
+                        allowed: allowed.map(<[String]>::to_vec),
+                        fallback,
+                    })
+                }
                 Err(_) => Ok(PendingAnswer::Done(fallback)),
             }
         }
@@ -1060,13 +1087,166 @@ fn with_model_attempt(answer: TabularAnswer, model_alias: &str, elapsed: Duratio
     }
 }
 
-/// The threshold of a question that compares a group's total to a number, when the operation
-/// cannot do that: a plain count under a "greater/less than" row filter, in a question that names
-/// a text column and gives no value for it ("any supplier above 5000"). Counting the rows above the
-/// threshold would answer a different question, and a "0" read as "no supplier" is wrong whenever
-/// the group's total is above it while no single row is (HAP-1, Q19, BUG-14). `None` for every
-/// question that is a legitimate row filter: a value given for the column, a group operation, or
-/// a numeric column named.
+/// A whole value of a text column that the question writes as one token ("CMD-2026-002"), with the
+/// columns that hold it.
+struct IdentifierHit {
+    token: String,
+    /// (column, the cell's own text). More than one column: asked about, never picked.
+    matches: Vec<(String, String)>,
+}
+
+/// The identifiers a question names: a token with a digit **and** a letter ("CMD-2026-002",
+/// "DV-0117"; a year, a date or a plain number is not one) that equals, folded, a whole cell of a text
+/// column. Exact and whole, never a word of a value: "2026" is a word of three order numbers and
+/// names none of them. An ordinary word cannot be an identifier, which is what keeps a lookup from
+/// being triggered by a word that merely equals a cell.
+fn identifier_hits(
+    question: &str,
+    sheet_inventory: &SheetInventory,
+    rows: &[Vec<tabular::CellValue>],
+) -> Vec<IdentifierHit> {
+    let mut hits: Vec<IdentifierHit> = Vec::new();
+    for raw in question.split_whitespace() {
+        let token = raw.trim_matches(|ch: char| !ch.is_alphanumeric());
+        if token.chars().count() < 3
+            || !token.chars().any(|ch| ch.is_ascii_digit())
+            || !token.chars().any(char::is_alphabetic)
+            || hits.iter().any(|hit| hit.token == token)
+        {
+            continue;
+        }
+        let folded = fold_text(token);
+        let matches: Vec<(String, String)> = sheet_inventory
+            .columns
+            .iter()
+            .filter(|column| column.inferred_type == ColumnType::Categorical)
+            .filter_map(|column| {
+                rows.iter()
+                    .filter_map(|row| row.get(column.index))
+                    .map(|cell| text_value(cell).trim().to_string())
+                    .find(|value| fold_text(value) == folded)
+                    .map(|value| (column.name.clone(), value))
+            })
+            .collect();
+        if !matches.is_empty() {
+            hits.push(IdentifierHit {
+                token: token.to_string(),
+                matches,
+            });
+        }
+    }
+    hits
+}
+
+/// An identifier-shaped token of the question (a digit and a letter, at least five characters, as
+/// "CMD-2026-009") that equals no cell of any text column, with the real values closest to it. `None`
+/// when the question names no such token or when it matches a cell.
+fn unmatched_identifier(
+    question: &str,
+    inventory: &TabularInventory,
+    workbook: &Workbook,
+    allowed: Option<&[String]>,
+) -> Option<(String, Vec<String>)> {
+    let sheet_inventory = engine::resolve_sheet_inventory(inventory, None, allowed).ok()?;
+    let sheet_data = workbook
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == sheet_inventory.name)?;
+    let rows = data_rows(sheet_inventory, sheet_data);
+    let token = question
+        .split_whitespace()
+        .map(|raw| raw.trim_matches(|ch: char| !ch.is_alphanumeric()))
+        .find(|token| {
+            token.chars().count() >= 5
+                && token.chars().any(|ch| ch.is_ascii_digit())
+                && token.chars().any(char::is_alphabetic)
+        })?;
+    if !identifier_hits(question, sheet_inventory, rows).is_empty() {
+        return None;
+    }
+    let pool: std::collections::BTreeSet<String> = sheet_inventory
+        .columns
+        .iter()
+        .filter(|column| column.inferred_type == ColumnType::Categorical)
+        .flat_map(|column| rows.iter().filter_map(move |row| row.get(column.index)))
+        .map(|cell| text_value(cell).trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect();
+    Some((token.to_string(), close_values(token, &pool)))
+}
+
+/// The rows that hold an identifier the question names, for a question with no operation of its own
+/// ("order CMD-2026-002"): shown as they are, with the filter named, never handed to a model.
+/// An identifier found in two columns is asked about. `None` when nothing is looked up; the caller
+/// then carries on as before (HAP-1, the publipostage finding, layer 2).
+fn row_lookup(
+    question: &str,
+    file: &str,
+    locale: &str,
+    inventory: &TabularInventory,
+    workbook: &Workbook,
+    allowed: Option<&[String]>,
+) -> Option<TabularAnswer> {
+    let sheet_inventory = engine::resolve_sheet_inventory(inventory, None, allowed).ok()?;
+    let sheet_data = workbook
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == sheet_inventory.name)?;
+    let hits = identifier_hits(question, sheet_inventory, data_rows(sheet_inventory, sheet_data));
+    let hit = hits.into_iter().next()?;
+    let (column, value) = match hit.matches.as_slice() {
+        [(column, value)] => (column.clone(), value.clone()),
+        many => {
+            return Some(TabularAnswer::WhichColumn {
+                file: file.to_string(),
+                value: hit.token,
+                candidates: many.iter().map(|(column, _)| column.clone()).collect(),
+            });
+        }
+    };
+    let filter = FilterSpec {
+        column,
+        comparison: Comparison::Equals(value),
+    };
+    match engine::execute(
+        workbook,
+        inventory,
+        None,
+        allowed,
+        &Operation::Filter { filter },
+        locale,
+    ) {
+        TabularOutcome::Value {
+            value,
+            locator,
+            derivation,
+        } => Some(TabularAnswer::Value {
+            file: file.to_string(),
+            value,
+            locator,
+            derivation,
+            model_attempt: None,
+        }),
+        TabularOutcome::NotDeterministicallyAnswerable { .. } => None,
+    }
+}
+
+/// A threshold the question puts on a group's total.
+struct GroupThreshold {
+    group_by: String,
+    /// The numeric column whose totals are compared.
+    measure: String,
+    value: f64,
+    above: bool,
+}
+
+/// The threshold of a question that compares a group's **total** to a number: a plain count under a
+/// "greater/less than" row filter, in a question that names a text column and gives no value for it
+/// ("any supplier above 5000"). Counting the rows above the threshold would answer a different
+/// question, and a "0" read as "no supplier" is wrong whenever a group's total is above it while no
+/// single row is (HAP-1, Q19, BUG-14); it is answered from the totals per group instead, and the
+/// answer says that is what was computed. `None` for every question that is a legitimate row
+/// filter: a value given for the column, a group operation, or a numeric column named.
 fn group_threshold(
     operation: &Operation,
     filters: &[FilterSpec],
@@ -1074,12 +1254,13 @@ fn group_threshold(
     inventory: &TabularInventory,
     sheet: Option<&str>,
     allowed: Option<&[String]>,
-) -> Option<String> {
+) -> Option<GroupThreshold> {
     if !matches!(operation, Operation::Count { .. }) {
         return None;
     }
-    let threshold = filters.iter().find_map(|spec| match spec.comparison {
-        Comparison::GreaterThan(value) | Comparison::LessThan(value) => Some(value),
+    let (measure, value, above) = filters.iter().find_map(|spec| match spec.comparison {
+        Comparison::GreaterThan(value) => Some((spec.column.clone(), value, true)),
+        Comparison::LessThan(value) => Some((spec.column.clone(), value, false)),
         _ => None,
     })?;
     if filters
@@ -1094,7 +1275,12 @@ fn group_threshold(
         .columns
         .iter()
         .find(|column| column.name == named)?;
-    (column.inferred_type == ColumnType::Categorical).then(|| threshold.to_string())
+    (column.inferred_type == ColumnType::Categorical).then(|| GroupThreshold {
+        group_by: named.to_string(),
+        measure,
+        value,
+        above,
+    })
 }
 
 fn column_names(sheet: &SheetInventory) -> Vec<String> {
@@ -1125,7 +1311,8 @@ fn operation_column_name(operation: &Operation) -> Option<&str> {
         Operation::GroupSum { sum_column, .. }
         | Operation::LargestGroup { sum_column, .. }
         | Operation::LeastGroup { sum_column, .. }
-        | Operation::TopGroups { sum_column, .. } => Some(sum_column.as_str()),
+        | Operation::TopGroups { sum_column, .. }
+        | Operation::GroupsBeyond { sum_column, .. } => Some(sum_column.as_str()),
         Operation::Count { .. }
         | Operation::CountPerGroup { .. }
         | Operation::Filter { .. }
@@ -1183,6 +1370,19 @@ pub(crate) fn with_filters(operation: Operation, filters: Vec<FilterSpec>) -> Op
             group_by,
             sum_column,
             n,
+            filters,
+        },
+        Operation::GroupsBeyond {
+            group_by,
+            sum_column,
+            threshold,
+            above,
+            ..
+        } => Operation::GroupsBeyond {
+            group_by,
+            sum_column,
+            threshold,
+            above,
             filters,
         },
         Operation::CountPerGroup { group_by, .. } => Operation::CountPerGroup { group_by, filters },
@@ -1339,6 +1539,34 @@ fn detect_filters(
     for (index, word) in residual.iter().enumerate() {
         if date_parts.iter().any(|part| part == word) {
             consumed[index] = true;
+        }
+    }
+    // An identifier the question writes whole ("CMD-2026-002") is one value of one column. Read word
+    // by word it became three filters - "CMD", "2026" and "002" - the first two of which equal no
+    // cell, so a question with an order number asked about nothing (lot E).
+    for hit in identifier_hits(question, sheet_inventory, rows) {
+        match hit.matches.as_slice() {
+            [(column, value)] => push_unique(
+                &mut filters,
+                FilterSpec {
+                    column: column.clone(),
+                    comparison: Comparison::Equals(value.clone()),
+                },
+            ),
+            many => {
+                return FilterDetection::WhichColumn {
+                    value: hit.token,
+                    candidates: many.iter().map(|(column, _)| column.clone()).collect(),
+                };
+            }
+        }
+        for part in hit.token.split(|ch: char| !ch.is_alphanumeric()).filter(|part| !part.is_empty()) {
+            let folded_part = fold_text(part);
+            for (index, word) in residual.iter().enumerate() {
+                if fold_text(word) == folded_part {
+                    consumed[index] = true;
+                }
+            }
         }
     }
     // A comparison word ("more than", "plus de") found with no number this module can read next

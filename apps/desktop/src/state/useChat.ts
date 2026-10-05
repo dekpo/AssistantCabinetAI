@@ -335,6 +335,9 @@ export function useChat(
                     ...(mixed.rejectedCitations.length > 0
                       ? { mixedRejectedCitations: mixed.rejectedCitations }
                       : {}),
+                    ...(mixed.unverifiedNumbers.length > 0
+                      ? { unverifiedNumbers: mixed.unverifiedNumbers }
+                      : {}),
                   }
                 : entry,
             ),

@@ -644,3 +644,52 @@ describe("a filter on one day", () => {
     expect(text).not.toContain("entre 2026-01-23 et 2026-01-23");
   });
 });
+
+describe("the totals per group against a threshold", () => {
+  const beyond = (matches: { group: string; sum: number }[], above = true): TabularAnswer => ({
+    kind: "value",
+    file: "factures.xlsx",
+    value: {
+      kind: "groups_beyond",
+      value: {
+        groupColumn: "fournisseur",
+        threshold: 5000,
+        above,
+        matches,
+        groupCount: 3,
+        extreme: { group: "MedSupply", sum: 1450 },
+      },
+    },
+    locator: { sheet: "Factures", headerRow: 0, column: "montant", rowRange: [0, 7], filters: [] },
+    derivation: { kind: "computed", operation: "groups_beyond", row_count: 8 },
+  });
+
+  it("says no, and how far the nearest group is, when none is beyond the threshold", () => {
+    const text = formatTabularAnswer(french, beyond([]), "fr-FR");
+    expect(text).toContain("Aucun fournisseur n'a un total de montant supérieur à 5");
+    expect(text).toMatch(/1\s450/u);
+    expect(text).toContain("MedSupply");
+    expect(text).toContain("total par fournisseur");
+    expect(formatTabularAnswer(english, beyond([]), "en-US")).toContain("No fournisseur has a total of montant above 5,000");
+  });
+
+  it("lists the groups beyond the threshold with their totals", () => {
+    const text = formatTabularAnswer(
+      french,
+      beyond([
+        { group: "MedSupply", sum: 1450 },
+        { group: "Fournitures Dupont", sum: 550 },
+      ]),
+      "fr-FR",
+    );
+    expect(text).toContain("supérieurs à");
+    expect(text).toContain("- MedSupply :");
+    expect(text).toContain("- Fournitures Dupont :");
+  });
+
+  it("reads below as below", () => {
+    expect(formatTabularAnswer(english, beyond([{ group: "Papeterie", sum: 215 }], false), "en-US")).toContain(
+      "below",
+    );
+  });
+});

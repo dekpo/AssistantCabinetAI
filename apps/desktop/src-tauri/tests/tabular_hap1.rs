@@ -364,22 +364,55 @@ async fn a_superlative_is_still_a_group_ranking_not_a_threshold() {
     );
 }
 
-// --- Q19: a group's total against a threshold is refused, not answered as a row count -------
+// --- Q19 (lot E3): a group's total against a threshold is answered from the totals ---------
+
+fn groups_beyond(answer: &TabularAnswer) -> &assistant_cabinet_ai_lib::tabular::engine::GroupsBeyond {
+    let TabularAnswer::Value { value: TabularValue::GroupsBeyond(beyond), .. } = answer else {
+        panic!("expected the totals per group against a threshold, got {answer:?}");
+    };
+    beyond
+}
 
 #[tokio::test]
-async fn a_threshold_on_a_groups_total_is_refused_not_answered_as_a_row_count() {
+async fn no_supplier_above_five_thousand_is_a_no_that_shows_the_highest_total() {
     let folder = Folder::build();
     for (question, locale) in [
         ("Est-ce qu'on a d\u{e9}pens\u{e9} plus de 5000 euros avec un seul fournisseur ce trimestre ?", "fr-FR"),
         ("Is there a fournisseur with more than 5000?", "en-US"),
     ] {
         let answer = folder.ask(question, locale, &[INVOICES]).await;
-        let TabularAnswer::Nudge { reason, model_attempt, .. } = answer else {
-            panic!("{question:?}: expected a refusal, got {answer:?}");
-        };
-        assert_eq!(reason, Some(NotAnswerableReason::GroupThresholdNotSupported), "{question:?}");
-        assert!(model_attempt.is_none(), "{question:?}: the model cannot help, so it is not asked");
+        let beyond = groups_beyond(&answer);
+        assert!(beyond.above, "{question:?}");
+        assert_eq!(beyond.threshold, 5000.0, "{question:?}");
+        assert!(beyond.matches.is_empty(), "{question:?}: {:?}", beyond.matches);
+        assert_eq!(beyond.group_count, 3, "{question:?}");
+        assert_eq!(beyond.extreme.group, "MedSupply", "{question:?}");
+        assert_eq!(beyond.extreme.sum, 1450.0, "{question:?}");
     }
+}
+
+#[tokio::test]
+async fn the_suppliers_above_a_threshold_are_listed_with_their_totals() {
+    let folder = Folder::build();
+    // Totals: MedSupply 1 450, Fournitures Dupont 550, Papeterie Lefevre 215.
+    let answer = folder.ask("Is there a fournisseur with more than 500?", "en-US", &[INVOICES]).await;
+    let beyond = groups_beyond(&answer);
+    let names: Vec<&str> = beyond.matches.iter().map(|group| group.group.as_str()).collect();
+    assert_eq!(names, vec!["MedSupply", "Fournitures Dupont"]);
+    // Compared on the total, not on a single invoice: no invoice of Fournitures Dupont is above 500
+    // (210 is its largest), yet its total is.
+    assert_eq!(beyond.matches[1].sum, 550.0);
+}
+
+#[tokio::test]
+async fn the_suppliers_below_a_threshold_are_listed_smallest_first() {
+    let folder = Folder::build();
+    let answer = folder.ask("Is there a fournisseur with less than 600?", "en-US", &[INVOICES]).await;
+    let beyond = groups_beyond(&answer);
+    assert!(!beyond.above);
+    let names: Vec<&str> = beyond.matches.iter().map(|group| group.group.as_str()).collect();
+    assert_eq!(names, vec!["Papeterie Lefevre", "Fournitures Dupont"]);
+    assert_eq!(beyond.extreme.group, "Papeterie Lefevre");
 }
 
 #[tokio::test]
@@ -468,4 +501,19 @@ fn a_request_to_write_something_is_left_to_the_tier_that_reads_both_sources() {
     // A plain question about the data stays instant, with no model.
     assert!(data_only("Quelle est la somme des montant ?", "fr-FR"));
     assert!(data_only("What is the sum of montant?", "en-US"));
+}
+
+#[tokio::test]
+async fn the_threshold_on_a_groups_total_reads_the_same_in_french() {
+    let folder = Folder::build();
+    let answer = folder.ask("Y a-t-il un fournisseur avec plus de 500 euros ?", "fr-FR", &[INVOICES]).await;
+    let beyond = groups_beyond(&answer);
+    let names: Vec<&str> = beyond.matches.iter().map(|group| group.group.as_str()).collect();
+    assert_eq!(names, vec!["MedSupply", "Fournitures Dupont"]);
+
+    let answer = folder.ask("Y a-t-il un fournisseur avec moins de 300 euros ?", "fr-FR", &[INVOICES]).await;
+    let beyond = groups_beyond(&answer);
+    assert!(!beyond.above);
+    assert_eq!(beyond.matches.len(), 1);
+    assert_eq!(beyond.matches[0].group, "Papeterie Lefevre");
 }

@@ -338,6 +338,18 @@ export type TabularValue =
         capped: boolean;
       };
     }
+  /** The groups whose total is above or below a threshold, with the nearest group when none is. */
+  | {
+      kind: "groups_beyond";
+      value: {
+        groupColumn: string;
+        threshold: number;
+        above: boolean;
+        matches: { group: string; sum: number }[];
+        groupCount: number;
+        extreme: { group: string; sum: number };
+      };
+    }
   /** Rows per group, largest first - a count, never a sum. */
   | { kind: "count_per_group"; value: { group: string; count: number }[] }
   | { kind: "largest_row"; value: TabularRow }
@@ -459,6 +471,8 @@ export interface MixedAnswer {
   /** A bracketed citation (`"[3]"`) the model wrote that does not resolve to any of
    * `documentSources`. */
   rejectedCitations: string[];
+  /** Figures the model stated that are in none of the excerpts and not in the question, when no table figure is shown. */
+  unverifiedNumbers: string[];
 }
 
 export interface AskAnswer {

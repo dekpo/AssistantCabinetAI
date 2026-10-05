@@ -360,6 +360,48 @@ function formatValue(
       lines.push("", over);
       return lines.join("\n");
     }
+    case "groups_beyond": {
+      const { groupColumn, threshold, above, matches, extreme } = value.value;
+      const shared = {
+        group: groupColumn,
+        column: named,
+        threshold: number(threshold),
+      };
+      /* Said every time: the question compared a group's total, not one row, to a number. */
+      const note = t(above ? "tabularAnswer.groupTotalNote" : "tabularAnswer.groupTotalNoteLeast", {
+        group: groupColumn,
+      });
+      if (matches.length === 0) {
+        return [
+          t(above ? "tabularAnswer.groupsAboveNone" : "tabularAnswer.groupsBelowNone", {
+            ...shared,
+            leader: extreme.group,
+            value: number(extreme.sum),
+          }),
+          "",
+          note,
+          "",
+          over,
+        ].join("\n");
+      }
+      return [
+        t(above ? "tabularAnswer.groupsAbove" : "tabularAnswer.groupsBelow", {
+          ...shared,
+          count: counted(matches.length, t("tabularAnswer.groupOne"), t("tabularAnswer.groupMany")),
+        }),
+        "",
+        ...matches
+          .slice(0, MAX_ROWS_SHOWN)
+          .map((group) => `- ${t("tabularAnswer.pair", { name: group.group, value: number(group.sum) })}`),
+        ...(matches.length > MAX_ROWS_SHOWN
+          ? ["", t("tabularAnswer.moreGroups", { count: matches.length - MAX_ROWS_SHOWN })]
+          : []),
+        "",
+        note,
+        "",
+        over,
+      ].join("\n");
+    }
     case "count_per_group":
       return [
         t("tabularAnswer.countPerGroup", { group: named }),
@@ -383,7 +425,7 @@ function formatValue(
       );
     case "rows":
       return [
-        t(derivation.operation === "sort" ? "tabularAnswer.sorted" : "tabularAnswer.filtered", {
+        t(rowsSentenceKey(derivation.operation === "sort", value.value.length), {
           column: named,
           count: counted(value.value.length, t("tabularAnswer.rowOne"), t("tabularAnswer.rowMany")),
         }),
@@ -416,6 +458,14 @@ function formatValue(
   return derivation.kind === "interpreted_by_model"
     ? [withFilters, "", t("tabularAnswer.interpretedRephrase")].join("\n")
     : withFilters;
+}
+
+/** "1 ligne retenue", "2 lignes retenues": the sentence agrees with the number of rows. */
+function rowsSentenceKey(sorted: boolean, count: number): string {
+  if (sorted) {
+    return count === 1 ? "tabularAnswer.sortedOne" : "tabularAnswer.sorted";
+  }
+  return count === 1 ? "tabularAnswer.filteredOne" : "tabularAnswer.filtered";
 }
 
 function rowLines(t: Translator, row: TabularRow): string[] {

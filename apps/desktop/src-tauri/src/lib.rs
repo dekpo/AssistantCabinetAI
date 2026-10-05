@@ -30,6 +30,7 @@ pub mod reveal;
 mod settings;
 pub mod tabular;
 pub mod tabular_answer;
+pub mod template_fill;
 mod work_folder;
 pub mod work_folder_context;
 

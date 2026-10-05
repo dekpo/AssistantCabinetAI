@@ -665,3 +665,31 @@ async fn the_same_acronym_without_the_document_name_is_still_a_missing_value() {
 
     assert!(matches!(result.table, Some(TabularAnswer::Nudge { .. })), "{:?}", result.table);
 }
+
+// --- A figure the model states with no table figure on screen is held to the excerpts --------
+
+#[tokio::test]
+async fn a_figure_in_no_excerpt_is_reported_when_no_table_figure_is_shown() {
+    // The letter names no supplier, so no total is shown; the model nevertheless states one.
+    let folder = Folder::build();
+    let pending = folder.prepare_mixed(REFERENTIAL, "en-US");
+    let sources = vec![evidence("The CPAM strikes Mr Hugo Example off the general scheme from 1 February 2026.")];
+    let gateway = start_fake_gateway(|_| "The total is 1 200,00 EUR, see [1].".to_string());
+
+    let (result, _) = run(pending, sources, None, REFERENTIAL, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert!(result.table.is_none());
+    assert_eq!(result.unverified_numbers, vec!["1 200,00".to_string()]);
+}
+
+#[tokio::test]
+async fn a_figure_the_excerpt_carries_is_not_reported() {
+    let folder = Folder::build();
+    let pending = folder.prepare_mixed(REFERENTIAL, "en-US");
+    let sources = vec![evidence("Quote total: 1 200,00 EUR, no supplier name given.")];
+    let gateway = start_fake_gateway(|_| "The quote total is 1200 EUR.".to_string());
+
+    let (result, _) = run(pending, sources, None, REFERENTIAL, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert!(result.unverified_numbers.is_empty(), "{:?}", result.unverified_numbers);
+}

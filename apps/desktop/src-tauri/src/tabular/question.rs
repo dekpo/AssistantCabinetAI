@@ -420,6 +420,12 @@ fn operation_column_names(operation: &Operation) -> Vec<&str> {
             sum_column,
             filters,
             ..
+        }
+        | Operation::GroupsBeyond {
+            group_by,
+            sum_column,
+            filters,
+            ..
         } => [group_by.as_str(), sum_column.as_str()]
             .into_iter()
             .chain(filters.iter().map(|spec| spec.column.as_str()))

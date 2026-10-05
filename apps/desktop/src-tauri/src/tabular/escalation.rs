@@ -98,6 +98,23 @@ fn describe_value(value: &TabularValue) -> String {
             .map(|group| format!("{} {}: {}", top.group_column, group.group, group.sum))
             .collect::<Vec<_>>()
             .join("; "),
+        TabularValue::GroupsBeyond(beyond) => {
+            let side = if beyond.above { "above" } else { "below" };
+            let listed = beyond
+                .matches
+                .iter()
+                .map(|group| format!("{} {}: {}", beyond.group_column, group.group, group.sum))
+                .collect::<Vec<_>>()
+                .join("; ");
+            if listed.is_empty() {
+                format!(
+                    "no {} has a total {side} {} (nearest: {} {}: {})",
+                    beyond.group_column, beyond.threshold, beyond.group_column, beyond.extreme.group, beyond.extreme.sum
+                )
+            } else {
+                format!("totals {side} {}: {listed}", beyond.threshold)
+            }
+        }
         TabularValue::CountPerGroup(counts) => counts
             .iter()
             .map(|group| format!("{}: {}", group.group, group.count))

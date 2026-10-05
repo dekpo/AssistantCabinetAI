@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
+import { answerForCopy } from "../lib/annotations";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
 import type { CombinedScope } from "../lib/ipc";
 import { useChat } from "../state/useChat";
@@ -34,7 +35,7 @@ export function ChatPanel({
   indexing: IndexingState;
   onModelAliasChange: (alias: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [draft, setDraft] = useState("");
   const {
     entries,
@@ -74,7 +75,12 @@ export function ChatPanel({
   };
 
   const copyAll = () => {
-    const text = formatConversation(entries, streamingId, (role) =>
+    // Everything she sees except the lists of sources: the text as shown, the engine's own figure
+    // and the notes under each answer (`lib/annotations.ts`).
+    const shown = entries.map((entry) =>
+      entry.role === "assistant" ? { ...entry, content: answerForCopy(t, locale, entry) } : entry,
+    );
+    const text = formatConversation(shown, streamingId, (role) =>
       t(role === "user" ? "chat.authorUser" : "chat.authorAssistant"),
     );
     void copyToClipboard(text);

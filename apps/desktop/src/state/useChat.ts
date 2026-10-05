@@ -112,6 +112,9 @@ export interface ChatEntry extends ChatTurn {
   modelAttemptDurationMs?: number;
   /** The attempt was on a question the engine had already computed: the computed answer stays. */
   modelAttemptKept?: true;
+  /** Figures the model stated that appear in none of the excerpts it was given and not in the question
+   * (`number_check`): said under the answer, never edited into it. */
+  unverifiedNumbers?: string[];
   /** A "which file?" answer, as data: one button per candidate, each one resending her question with
    * that file written into it (HAP-1, UX-1). */
   choices?: Choice[];
@@ -432,6 +435,9 @@ export function useChat(
                     ? { unanalysedFiles: result.unanalysedFiles }
                     : {}),
                   ...(result.withoutDocuments ? { withoutDocuments: true as const } : {}),
+                  ...(result.unverifiedNumbers.length > 0
+                    ? { unverifiedNumbers: result.unverifiedNumbers }
+                    : {}),
                 }
               : entry,
           ),

@@ -29,6 +29,7 @@ use crate::conversation::{self, ContextBudget};
 use crate::error::AppError;
 use crate::file_reference::fold_text;
 use crate::gateway::{ChatTurn, GatewayClient};
+use crate::number_check;
 use crate::retrieval::Evidence;
 use crate::tabular::engine::{self, FilterSpec, TabularValue};
 use crate::tabular::inventory::{ColumnType, TabularInventory};
@@ -636,31 +637,6 @@ pub(crate) fn scalar_of(value: &TabularValue) -> Option<f64> {
     }
 }
 
-/// Every run of digits (and the `,`/`.` separators between two digits) found in `text`, alongside
-/// its parsed value - kept to runs of at least three digits, or carrying a separator: a bare one-
-/// or two-digit number is a page, a row or a weekday far more often than a claim about the table,
-/// and this tier's own evidence is a page citation or a computed amount, never a lone digit
-/// (`docs/SESSION-DATA-16-Mixed-Tier.md` keeps locale-formatted thousands grouping out of this
-/// check's scope - it looks at substance, not at how her language writes a number).
-fn scan_numbers(text: &str) -> Vec<(String, f64)> {
-    let mut found = Vec::new();
-    for raw in text.split(|ch: char| !(ch.is_ascii_digit() || ch == ',' || ch == '.')) {
-        let trimmed = raw.trim_matches(|ch: char| ch == ',' || ch == '.');
-        if trimmed.is_empty() {
-            continue;
-        }
-        let digit_count = trimmed.chars().filter(|ch| ch.is_ascii_digit()).count();
-        let has_separator = trimmed.contains(',') || trimmed.contains('.');
-        if digit_count < 3 && !has_separator {
-            continue;
-        }
-        if let Ok(value) = trimmed.replace(',', ".").parse::<f64>() {
-            found.push((trimmed.to_string(), value));
-        }
-    }
-    found
-}
-
 /// Every number in `answer` that matches neither `expected` (the table's own scalar) nor appears
 /// verbatim in one of `excerpts` - mechanism 5. `expected: None` (no scalar table value exists for
 /// this question) makes this a no-op: there is nothing to check a claimed number against, so
@@ -674,18 +650,31 @@ pub(crate) fn verify_numbers(
     let Some(expected) = expected else {
         return Vec::new();
     };
+    let known: Vec<number_check::Number> = excerpts
+        .iter()
+        .flat_map(|excerpt| number_check::scan(&excerpt.text, 1))
+        .collect();
     let mut corrections = Vec::new();
     let mut seen = HashSet::new();
-    for (claimed, value) in scan_numbers(answer) {
-        if (value - expected).abs() < 1e-6 {
+    // Read whole, the way a person writes it: "1 450,00" is one amount, not a "450,00" that would
+    // contradict a table value of 1 450 (HAP-1, lot D replay: three false corrections).
+    for number in number_check::scan(answer, 3) {
+        if number.values.iter().any(|value| (value - expected).abs() < 1e-6) {
             continue;
         }
-        if excerpts.iter().any(|excerpt| excerpt.text.contains(&claimed)) {
+        let written_in_an_excerpt = excerpts.iter().any(|excerpt| excerpt.text.contains(&number.text))
+            || known.iter().any(|other| {
+                other
+                    .values
+                    .iter()
+                    .any(|a| number.values.iter().any(|b| (a - b).abs() < 1e-6))
+            });
+        if written_in_an_excerpt {
             continue;
         }
-        if seen.insert(claimed.clone()) {
+        if seen.insert(number.text.clone()) {
             corrections.push(NumericCorrection {
-                claimed,
+                claimed: number.text,
                 correct: expected,
             });
         }
@@ -808,11 +797,5 @@ mod tests {
     fn a_repeated_bad_citation_is_reported_once() {
         let rejected = reject_citations("See [5] and again [5].", 1);
         assert_eq!(rejected, vec!["[5]".to_string()]);
-    }
-
-    #[test]
-    fn scan_numbers_keeps_a_decimal_even_when_short() {
-        let found = scan_numbers("The rate is 7.5 percent.");
-        assert_eq!(found, vec![("7.5".to_string(), 7.5)]);
     }
 }

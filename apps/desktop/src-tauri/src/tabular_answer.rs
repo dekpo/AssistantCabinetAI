@@ -215,7 +215,7 @@ pub fn prepare(
     index: &IndexStore,
     force_model: bool,
 ) -> Result<PendingAnswer, AppError> {
-    answer_sync(question, data, selection, locale, index, force_model, false)
+    answer_sync(question, data, selection, locale, index, force_model, None)
 }
 
 /// `prepare` for the mixed tier (documents and tables both selected). Same classification, plus
@@ -224,14 +224,19 @@ pub fn prepare(
 /// as the fallback and `skip_model` set, so that `mixed_answer` can try to tie the document's
 /// entity to a row before that whole-table figure is ever shown (HAP-1, Q24). The model is never
 /// asked for it: the entity comes from the retrieved excerpts, not from a query plan.
+///
+/// `document_names` are the relative paths of the selected documents. A capitalised word of the
+/// question that is a word of one of those names ("the CPAM letter") designates the document, not a
+/// value of the table, and is not reported as a value that matches nothing (HAP-1, lot D replay).
 pub fn prepare_for_mixed(
     question: &str,
     data: &DataFolder,
     selection: &ScopeMode,
     locale: &str,
     index: &IndexStore,
+    document_names: &[String],
 ) -> Result<PendingAnswer, AppError> {
-    answer_sync(question, data, selection, locale, index, false, true)
+    answer_sync(question, data, selection, locale, index, false, Some(document_names))
 }
 
 /// D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): documents and tables
@@ -359,8 +364,19 @@ fn answer_sync(
     locale: &str,
     index: &IndexStore,
     force_model: bool,
-    link_documents: bool,
+    // `Some` for the mixed tier: the names of the selected documents (see `prepare_for_mixed`).
+    link_documents: Option<&[String]>,
 ) -> Result<PendingAnswer, AppError> {
+    let document_words: std::collections::HashSet<String> = link_documents
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|name| {
+            name.split(|ch: char| !ch.is_alphanumeric())
+                .filter(|word| !word.is_empty())
+                .map(fold_text)
+                .collect::<Vec<_>>()
+        })
+        .collect();
     let chosen = chosen_workbooks(data, selection)?;
     if chosen.is_empty() {
         return Ok(PendingAnswer::Done(TabularAnswer::NoUsableTable));
@@ -439,6 +455,7 @@ fn answer_sync(
                 operation_column_name(&operation),
                 named_column.as_deref(),
                 locale,
+                &document_words,
             ) {
                 FilterDetection::Filters(filters) => {
                     filtered_by_the_question = true;
@@ -547,7 +564,7 @@ fn answer_sync(
             // A question that points at a document and whose own words filter nothing: its computed
             // value covers the whole table. Handed back unfinished so the mixed tier can tie the
             // document's entity to a row first (`prepare_for_mixed`).
-            if link_documents
+            if link_documents.is_some()
                 && !filtered_by_the_question
                 && matches!(computed, TabularAnswer::Value { .. })
                 && question::refers_to_a_document(question, locale)
@@ -1260,6 +1277,9 @@ fn detect_filters(
     operation_column: Option<&str>,
     named_column: Option<&str>,
     locale: &str,
+    // Folded words of the selected documents' names (mixed tier only): such a word names a
+    // document, not a table value.
+    document_words: &std::collections::HashSet<String>,
 ) -> FilterDetection {
     if residual.is_empty() {
         return FilterDetection::None;
@@ -1602,6 +1622,7 @@ fn detect_filters(
         // regardless of what it is ("Give me a count"), so that capital is not evidence of a
         // proper noun the way every other one in this product's fixtures is.
         if unmatched_value.is_none()
+            && !document_words.contains(&folded)
             && word.chars().next().is_some_and(|ch| ch.is_uppercase())
             && Some(word.as_str()) != first_word(question)
         {

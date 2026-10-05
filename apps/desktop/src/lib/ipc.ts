@@ -475,6 +475,8 @@ export interface AskAnswer {
   scopeOutdated: string[];
   /** She selected no document, so this answer rests on none. Said under the answer. */
   withoutDocuments: boolean;
+  /** Figures the answer states that appear in none of its excerpts and not in the question. */
+  unverifiedNumbers: string[];
   /** Set when tables were selected and no document: the tabular engine answered it. `answer` is
    * then empty. */
   tabularAnswer: TabularAnswer | null;

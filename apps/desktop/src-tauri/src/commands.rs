@@ -25,6 +25,7 @@ use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderInventory};
 use crate::mixed_answer;
+use crate::number_check;
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{self, PageRasterizer, Rasterizer};
@@ -579,6 +580,11 @@ pub struct AskAnswer {
     /// checked the model's prose against what it was actually given
     /// (`docs/SESSION-DATA-16-Mixed-Tier.md`). `None` on every other path.
     pub mixed_answer: Option<mixed_answer::MixedAnswer>,
+    /// The figures a document answer states that appear in none of the excerpts it was written from
+    /// and not in the question either, as the model wrote them. Empty when every figure is
+    /// supported. Reported beside the answer, never edited into it (`number_check`; approved by the
+    /// owner on 5 October 2026 after a small model invented a printer price).
+    pub unverified_numbers: Vec<String>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -836,6 +842,7 @@ async fn sourced_answer(
                 tabular_answer: None,
                 documents_not_needed: false,
                 mixed_answer: None,
+                unverified_numbers: Vec::new(),
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -868,6 +875,7 @@ async fn sourced_answer(
             tabular_answer: None,
             documents_not_needed: false,
             mixed_answer: None,
+            unverified_numbers: Vec::new(),
         });
     }
 
@@ -980,9 +988,15 @@ async fn sourced_answer(
     // Sources outrank memory (BUG-09): beside excerpts, a small window remembers fewer and shorter
     // earlier exchanges (`conversation::history_beside_sources`).
     let history = conversation::history_beside_sources(&history, writer.budget);
+    let asked = question.clone();
     let answer = writer
         .write(grounding, &history, question, on_event)
         .await?;
+    // A figure the model states that is in no excerpt and not in the question: said beside the
+    // answer. Two digits are enough here (a price such as 80 is the case that mattered).
+    let mut known: Vec<&str> = evidence.iter().map(|item| item.text.as_str()).collect();
+    known.push(&asked);
+    let unverified_numbers = number_check::unsupported_numbers(&answer, &known, 2);
 
     Ok(AskAnswer {
         answer,
@@ -995,6 +1009,7 @@ async fn sourced_answer(
         tabular_answer: None,
         documents_not_needed: false,
         mixed_answer: None,
+        unverified_numbers,
     })
 }
 
@@ -1058,6 +1073,7 @@ async fn tabular_tier(
         tabular_answer: Some(answer),
         documents_not_needed: false,
         mixed_answer: None,
+        unverified_numbers: Vec::new(),
     })
 }
 
@@ -1116,6 +1132,7 @@ async fn mixed_data_only_tier(
         tabular_answer: Some(answer),
         documents_not_needed: true,
         mixed_answer: None,
+        unverified_numbers: Vec::new(),
     }))
 }
 
@@ -1165,12 +1182,6 @@ async fn mixed_tier(
         &state.data_file_hashes,
     )?;
 
-    // The tabular part, classified against the selected tables alone - entirely synchronous, so
-    // `&index` never has to survive an `.await` to produce it (`tabular_answer::prepare`,
-    // `force_model: false`: forcing the model is "Demander a l'IA", not this tier's own
-    // decomposition).
-    let pending = tabular_answer::prepare_for_mixed(question, &folder, &scope.data_mode, &locale, &index)?;
-
     // The document selection, resolved exactly as tier 1 does: a selection whose files are all
     // gone or changed is refused rather than quietly answered from nothing, the same guarantee
     // `sourced_answer`'s own documents-tier arm already gives.
@@ -1191,6 +1202,18 @@ async fn mixed_tier(
     if resolution.narrowed && document_paths.is_empty() && !scope_outdated.is_empty() {
         return Err(AppError::ScopeUnavailable);
     }
+
+    // The tabular part, classified against the selected tables alone - entirely synchronous, so
+    // `&index` never has to survive an `.await` to produce it. After the document selection is
+    // known, because a word of a document's name designates the document, not a table value.
+    let pending = tabular_answer::prepare_for_mixed(
+        question,
+        &folder,
+        &scope.data_mode,
+        &locale,
+        &index,
+        &document_paths,
+    )?;
 
     // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
     // search held to the document selection - `index` borrowed only in the synchronous stretch
@@ -1276,6 +1299,7 @@ async fn mixed_tier(
         tabular_answer: None,
         documents_not_needed: false,
         mixed_answer: Some(result),
+        unverified_numbers: Vec::new(),
     })
 }
 

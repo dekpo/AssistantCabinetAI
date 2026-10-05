@@ -151,7 +151,7 @@ impl Folder {
     /// What `commands::mixed_tier` really calls: the same decomposition, plus handing back a
     /// question that points at a document unfinished so the excerpts can be linked to a row.
     fn prepare_mixed(&self, question: &str, locale: &str) -> PendingAnswer {
-        tabular_answer::prepare_for_mixed(question, &self.open(), &ScopeMode::WholeFolder, locale, &self.index)
+        tabular_answer::prepare_for_mixed(question, &self.open(), &ScopeMode::WholeFolder, locale, &self.index, &[])
             .unwrap()
     }
 
@@ -587,4 +587,81 @@ async fn a_whole_value_wins_over_a_word_it_shares_with_another_value() {
     let (result, _) = run(pending, sources, None, REFERENTIAL, "en-US", &gateway.url, "cabinet-chat").await;
 
     assert_eq!(total_of(&result), Some(450.0), "{:?}", result.table);
+}
+
+// --- HAP-1 lot D replay: an amount written with a space for thousands is one number ---------
+
+#[tokio::test]
+async fn an_amount_grouped_the_french_way_is_not_corrected_when_it_is_the_tables_value() {
+    for claim in [
+        "Le total est de 1 840,00 euros.",
+        "Le total est de 1 840 euros.",
+        "Le total est de 1\u{a0}840 euros.",
+        "Le total est de 1840 euros.",
+    ] {
+        let folder = Folder::build();
+        let question = "Quel est le total du montant, et correspond-il au contrat ?";
+        let pending = folder.prepare(question, "fr-FR");
+        let sources = vec![evidence("Le contrat prevoit un montant total de 1 840,00 euros.")];
+        let gateway = start_fake_gateway(move |_| claim.to_string());
+
+        let (result, _) = run(pending, sources, None, question, "fr-FR", &gateway.url, "cabinet-chat").await;
+
+        assert!(result.corrections.is_empty(), "{claim:?}: {:?}", result.corrections);
+    }
+}
+
+#[tokio::test]
+async fn a_wrong_amount_grouped_the_french_way_is_still_corrected_as_one_number() {
+    let folder = Folder::build();
+    let question = "Quel est le total du montant, et correspond-il au contrat ?";
+    let pending = folder.prepare(question, "fr-FR");
+    let sources = vec![evidence("Le contrat prevoit un montant total de 1 840,00 euros.")];
+    let gateway = start_fake_gateway(|_| "Le total est de 1 480,00 euros.".to_string());
+
+    let (result, _) = run(pending, sources, None, question, "fr-FR", &gateway.url, "cabinet-chat").await;
+
+    assert_eq!(result.corrections.len(), 1, "{:?}", result.corrections);
+    assert_eq!(result.corrections[0].claimed, "1 480,00");
+    assert_eq!(result.corrections[0].correct, 1840.0);
+}
+
+// --- HAP-1 lot D replay: a word of the document's own name is not a table value --------------
+
+#[tokio::test]
+async fn an_acronym_naming_the_document_is_not_reported_as_a_missing_value() {
+    // "the CPAM letter": CPAM designates the document (courrier-cpam-radiation.pdf), not a supplier.
+    let question = "What is the total montant for the supplier mentioned in the CPAM letter?";
+    let folder = Folder::build();
+    let names = vec!["courrier-cpam-radiation.pdf".to_string()];
+    let pending = tabular_answer::prepare_for_mixed(
+        question,
+        &folder.open(),
+        &ScopeMode::WholeFolder,
+        "en-US",
+        &folder.index,
+        &names,
+    )
+    .unwrap();
+    let sources = vec![evidence("The CPAM strikes Mr Hugo Example off the general scheme from 1 February 2026.")];
+    let gateway = start_fake_gateway(|_| "The letter names no supplier.".to_string());
+
+    let (result, generated) = run(pending, sources, None, question, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert!(generated, "the document half is still written");
+    assert!(result.table.is_none(), "{:?}", result.table);
+    assert_eq!(result.table_unavailable, Some(MixedPartUnavailable::NotLinked));
+}
+
+#[tokio::test]
+async fn the_same_acronym_without_the_document_name_is_still_a_missing_value() {
+    let question = "What is the total montant for the supplier mentioned in the CPAM letter?";
+    let folder = Folder::build();
+    let pending = folder.prepare_mixed(question, "en-US");
+    let sources = vec![evidence("The CPAM strikes Mr Hugo Example off the general scheme.")];
+    let gateway = start_fake_gateway(|_| "x".to_string());
+
+    let (result, _) = run(pending, sources, None, question, "en-US", &gateway.url, "cabinet-chat").await;
+
+    assert!(matches!(result.table, Some(TabularAnswer::Nudge { .. })), "{:?}", result.table);
 }

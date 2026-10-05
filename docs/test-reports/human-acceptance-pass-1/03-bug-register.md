@@ -539,3 +539,15 @@ BUG-23 (false numeric correction on space-grouped amounts), BUG-24 (wrong folder
 question), BUG-25 (an acronym designating a document taken for a table value) and UX-6 (Copy the conversation) are
 fixed in lot D2; see [10-lot-d-mixed-routing.md](10-lot-d-mixed-routing.md). The numeric safety net for document
 answers, approved by the owner, is implemented there too.
+
+## Added after the D2 replay and lot E (5 October 2026)
+
+BUG-26 (a mixed answer with no table figure shown states a figure that nothing checks; fixed) and UX-7 (blank lines in the
+copied conversation; fixed): [10-lot-d-mixed-routing.md](10-lot-d-mixed-routing.md). BUG-14 (a threshold on a group's total)
+is now answered from the totals per group (E3) instead of refused, and the publipostage finding's layers 1 and 2 are covered
+by E2: [11-lot-e-plan.md](11-lot-e-plan.md). BUG-23, BUG-24 and BUG-25 are confirmed fixed live.
+
+## Added after the lot E replay (5 October 2026)
+
+BUG-27 (plural of "ligne retenue") and BUG-28 (a 51 s model wait for an identifier that matches no cell) are fixed; UX-8 (a poor example
+group in the nudge) is noted. E2 and E3 passed: [11-lot-e-plan.md](11-lot-e-plan.md).

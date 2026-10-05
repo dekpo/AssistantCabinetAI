@@ -91,3 +91,24 @@ Limits: the safety net compares written numbers; it cannot see that "1 200" was 
 3. Q26 (gateway stopped): the label under the answer reads "calculée depuis votre dossier des données, sans l'IA".
 4. Q8 with the quote ticked, three times with `llama3.2:3b`: when the model writes a price that is in no excerpt (for example 80), the line "Le chiffre « 80 » ne figure dans aucun des extraits ..." appears under the answer; when it states only the quote's 1 200,00, nothing appears.
 5. "Copier la conversation" after a mixed answer: the computed block, the "Généré par" line and the notes are in the clipboard, and no "Sources".
+
+### D2 replay results (owner, 5 October 2026, `gemma2:2b`, then other small models)
+
+| # | Check | Verdict | What was seen |
+| --- | --- | --- | --- |
+| 1 | Q23, Q24, the writing request | **PASS** | The computed blocks show 1 450, 1 450 and 2 215; **no false correction** under any of the three (BUG-23 confirmed fixed live). Limit seen again, not a defect: for the writing request gemma wrote "Le montant total de la commande est de 1 200,00 euros HT" (the quote's figure) next to the computed 2 215; that figure is in an excerpt, so nothing is flagged, and the block lets the reader see the difference |
+| 2 | The CPAM letter | **PASS** for the notice, with a finding | The "n'a pas pu être rattaché" notice appears and the refusal about "CPAM" is gone (BUG-25 confirmed). But the model wrote "Le montant total est de 1 200,00 euros HT. extrait de [1]" and **nothing flagged it**: with no table figure shown, the mixed tier checked no figure at all (BUG-26, fixed below) |
+| 3 | Q26, gateway stopped | **PASS** | The computed figure, the "partie document" line and the label "calculée depuis votre dossier des données" (BUG-24 confirmed fixed live) |
+| 4 | Numeric safety net, `gemma2:2b` "3 imprimantes" | **Not triggered** | It answered "1 200,00 euros HT." (a figure of the quote), so nothing to flag |
+| 5 | Numeric safety net, "prix de l'imprimante" ×3 with `llama3.2:3b` (by "Régénérer") | **Not triggered** | Three correct refusals or extracts, no invented price |
+| 6 | The same question with `granite3.1-moe:3b`, `gemma3:1b`, `llama3.2:1b`, `qwen2.5:1.5b` | **Not triggered** | All quote the 1 200,00 total. `llama3.2:1b` writes "Le prix de l'imprimante est de 1 200,00 euros HT" (the total given as the printer's price: a figure of the quote, so not catchable by a number check); the others state it as the total |
+| 7 | Copy the conversation | **PASS-WITH-ISSUES** | It copies everything wanted (computed block, "Généré par", notes, no sources) but with many blank lines (UX-7, fixed below) |
+
+The numeric safety net for document answers is therefore verified by unit tests only; the owner could not make a model invent a figure in this pass and will stay watchful.
+
+### Findings and fixes after the D2 replay
+
+| ID | Title | Change |
+| --- | --- | --- |
+| BUG-26 | A mixed answer with **no table figure shown** states a figure from nowhere and nothing says so (CPAM question) | The mixed tier now holds such an answer to the excerpts and the question, like a document answer (`MixedAnswer.unverified_numbers`, same notice) |
+| UX-7 | "Copy the conversation" has too many blank lines | One blank line between a question-and-answer pair and the next, none inside a turn; a question and its answer follow each other on consecutive lines (`formatConversation`) |

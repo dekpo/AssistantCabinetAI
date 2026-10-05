@@ -666,6 +666,15 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | A word of a document's name is not a table value (BUG-25) | The mixed tier tells the classifier the names of the selected documents |
 | "Copy the conversation" copies what is seen (UX-6) | The text as shown, the engine's figure and every note under the answer; the lists of sources are left out. The notes come from one function (`lib/annotations.ts`) used by the view and the copy |
 
+## Settled by lot E, steps E2 and E3 (5 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Row lookup by identifier (E2) | An **identifier** is a token the question writes whole that has a digit **and** a letter ("CMD-2026-002") and equals, folded, a **whole cell** of a **text** column. It returns the rows holding it, shown as they are with the filter named, with no model and no gateway call; an identifier in two columns is asked about; one that matches no cell is the ordinary refusal. A word of a value is never an identifier ("2026" is a word of three order numbers and names none), and an ordinary word cannot trigger a lookup. This is how the 28 September rule ("a filter is never guessed from natural language") is respected: the cell must exist and be written whole |
+| An identifier is one filter, not several words | `detect_filters` reads an identifier written whole as one `Equals` on its column and consumes its words, instead of three word filters that matched nothing |
+| A threshold on a group's total (E3, supersedes the 5 October refusal) | "Is there a supplier above N" compares the **totals per group** with N and says so; it lists the groups beyond the threshold, or answers no and names the group nearest to it. A question that names a value of the column, or a group operation, stays a row filter. The refusal `group_threshold_not_supported` is no longer produced |
+| Batch generation (owner request, 5 October) | Once the mapping is confirmed, one letter per distinct value of a key column the user confirms (one per row when none), with a summary and one approval; never overwritten; planned as E5 after the template filling |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

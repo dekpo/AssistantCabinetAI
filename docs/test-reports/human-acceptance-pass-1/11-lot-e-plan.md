@@ -84,3 +84,82 @@ E1 and E3 can be done before the decisions below; E2, E4a and E4b need them.
 5. **Several clients matched**: refuse and ask (proposal), or one letter per client.
 6. **Whether the unresolved placeholder proposal** ("Prix_U -> Prix_Unitaire?") is welcome, or the preview should only
    list it as unresolved.
+
+---
+
+## Progress (5 October 2026)
+
+**Owner decisions, 5 October:** all the proposals above are validated (order E1, E2, E3 then E4; Word is the real
+use, with text first; a `Generated` subfolder and `<template>-<identifier>.docx`; the three placeholder syntaxes; several
+clients matched: refuse and ask; the abbreviation proposal welcome). **New request: batch generation.** Once the
+mapping is confirmed, offer to generate **as many letters as there are orders in the spreadsheet**, one `.docx` each
+(the very principle of a mail merge). Recorded as step **E5** below.
+
+| Step | State |
+| --- | --- |
+| E1 | **Folded into E2.** The "this question had nothing for your tables" line was wrong because the question named an order and nothing could look it up; with the lookup the question is recognised. The line is kept for a question that truly names nothing in the tables (a pure content question) |
+| E2 | **Coded, tested, awaiting replay.** An identifier written whole in the question (a token with a digit **and** a letter, such as `CMD-2026-002`) that equals a whole cell of a text column returns the rows holding it, shown as they are with the filter named, no model. Also fixes `detect_filters`: an identifier is one value, not three words ("CMD", "2026", "002" became three filters that matched nothing, so `somme de Total_Ligne pour la commande CMD-2026-001` answered "empty sheet") |
+| E3 | **Coded, tested, awaiting replay.** "Is there a supplier above 5 000" is answered from the **totals per supplier**: the groups beyond the threshold with their totals, or "no, the highest total is 1 450 (MedSupply)"; the answer says it compared totals. New engine operation `GroupsBeyond` and value; above and below, French and English. The refusal of lot B2 (`group_threshold_not_supported`) is no longer produced |
+| E4a, E4b | Next: template filling, text then Word, with preview and approval |
+| E5 | Next, after E4: batch. One letter per distinct value of a **key column** the user confirms (here `No_Commande`: an order with two lines is one letter with two lines); with no key, one per row. A summary of what will be written, then Approve; each file named `<template>-<key>.docx` in the `Generated` subfolder, never overwritten (`-2`, `-3`); a report of what was written |
+
+### Replay list for E2 and E3
+
+Preparation: in the **Data folder** tick only `donnees_publipostage.xlsx` (ticking the `.csv` as well would
+correctly ask which workbook) and run the analysis of the data folder if it has not been. For the first four,
+untick every document.
+
+1. `Quelle est la commande CMD-2026-002 ?` Expected: one row (Sophie Martin, Chaise Ergonomique, 1, 189, 189) listed as "1 ligne retenue, d'après No_Commande", with "Compris comme : No_Commande = CMD-2026-002", no model wait.
+2. `Quelle est la commande CMD-2026-001 ?` Expected: two rows (Ordinateur Portable 899 and Souris Sans Fil 25,5).
+3. `Quelle est la commande CMD-2026-009 ?` Expected: a refusal (no such value), never a row.
+4. `Quelle est la somme de Total_Ligne pour la commande CMD-2026-001 ?` Expected: a sum, **924,5**.
+5. Tick `modele_lettre.docx` in the documents folder and ask the owner's question: `Génère le courrier de la commande CMD-2026-002 en reprenant les données du client et en les insérant dans la lettre correspondante.` Expected: **no** "Cette question ne portait sur aucune de vos tables"; the block "Calculé dans vos données" shows the one row of CMD-2026-002. (The letter is not filled yet: that is E4.)
+6. Data folder: tick only `factures-fournisseurs-2026.xlsx` (documents unticked). `Est-ce qu'on a dépensé plus de 5000 euros avec un seul fournisseur ce trimestre ?` Expected: "Aucun fournisseur n'a un total de montant supérieur à 5 000. Le plus haut total est 1 450 (MedSupply)." with the note that it is the total per supplier.
+7. Same selection: `Y a-t-il un fournisseur avec plus de 500 euros ?` Expected: MedSupply 1 450 and Fournitures Dupont 550.
+8. Same selection: `Y a-t-il un fournisseur avec moins de 300 euros ?` Expected: Papeterie Lefevre 215.
+9. No regression: `Combien de factures de plus de 400 euros ?` still gives 2 (a row threshold, no supplier named), and `Combien de factures de plus de 400 euros pour le fournisseur MedSupply ?` gives 2.
+
+### Replay results of E2 and E3 (owner, 5 October 2026, `gemma2:2b`)
+
+| # | Check | Verdict | What was seen |
+| --- | --- | --- | --- |
+| 1 | `Quelle est la commande CMD-2026-002 ?` | **PASS** | One row (Sophie Martin, Chaise Ergonomique, 1, 189, 189), "Compris comme : No_Commande = CMD-2026-002", "Réponse calculée depuis votre dossier des données, sans l'IA" |
+| 2 | `... CMD-2026-001 ?` | **PASS** | Two rows (Ordinateur Portable 899, Souris Sans Fil 25,5) |
+| 3 | `... CMD-2026-009 ?` | **PASS-WITH-ISSUES** | Refused, never a row, but only **after the model was asked for 51 s** and with the generic text (BUG-28, fixed below) |
+| 4 | `Quelle est la somme de Total_Ligne pour la commande CMD-2026-001 ?` | **PASS** | 924,5 over 2 rows, "Compris comme : No_Commande = CMD-2026-001" |
+| 5 | The owner's own publipostage question (template and data ticked) | **PASS for E2, as expected before E4** | The line "Cette question ne portait sur aucune de vos tables" is gone and the block "Calculé dans vos données" shows the row of CMD-2026-002. The model still echoes the template with its guillemets, with the order number put where the name goes ("«Civilite» «Prenom» «Nom» : «CMD-2026-002»"): it cannot fill a letter from data it must not read, which is why E4 does it in code |
+| 6 | Plus de 5000 euros avec un seul fournisseur | **PASS** | "Aucun fournisseur n'a un total de montant supérieur à 5 000. Le plus haut total est 1 450 (MedSupply)." with the note that it is the total per supplier |
+| 7 | `Y a-t-il un fournisseur avec plus de 500 euros ?` | **PASS** | MedSupply 1 450 and Fournitures Dupont 550 |
+| 8 | `... moins de 300 euros ?` | **PASS** | Papeterie Lefevre 215, with the note "pas de la plus petite ligne isolée" |
+| 9 | `Combien de factures de plus de 400 euros ?` | **PASS** | 2, "Compris comme : montant > 400". The second half of the check (the same question with "pour le fournisseur MedSupply") was not pasted |
+
+The owner appended a path to the questions ("... dans Data/Test/publipostage/donnees_publipostage.csv") to choose between two
+copies of the file found in the data folder; the typed path resolved correctly.
+
+### Findings
+
+| ID | Severity | Title | Change |
+| --- | --- | --- | --- |
+| BUG-27 | S4 | "1 ligne retenues": the sentence did not agree with one row | `filteredOne` and `sortedOne` in both catalogues; chosen by the number of rows |
+| BUG-28 | S3 | An identifier-shaped value that matches no cell cost a 51 s model wait before the refusal | `unmatched_identifier`: a token with a digit and a letter, at least five characters, that equals no cell is refused at once with the identifiers closest to it (the existing "« X » ne correspond à aucune valeur réelle ..." with close values), no model call |
+| UX-8 | S4 | The nudge example picked `Civilite` (two values) as the group to rank by: "Quel(le) Civilite a le plus de Prix_Unitaire ?" | Not changed; a column with more distinct values would make a better example. Backlog |
+
+### Steps E4 and E5, engine core (coded 5 October, not yet visible in the interface)
+
+`src-tauri/src/template_fill.rs` is the whole mail merge as pure functions, with no file, no model and no
+interface: placeholders (`«Name»`, `[Name]`, `{{Name}}`), the mapping (exact / proposed / unresolved), grouping by a key
+column, the line columns, the text letter and the Word letter. **Tested on the owner's own files** (`tests/template_fill.rs`,
+`fixtures/publipostage/`):
+
+- The Word template's eight placeholders match the columns **exactly**; the note at the end of the file, which quotes a Word
+  rule between guillemets with spaces ("« Suivant si »"), is **not** read as a field (a name between guillemets or square
+  brackets must not start or end with a space).
+- An order with two lines gives **one** letter with **two** table rows (the header row stays, the template row is repeated);
+  an order with one line gives one row and nothing of another order or client.
+- Every other part of the Word file is copied byte for byte, in the same order.
+- The text template's `[Prix_U]` and `[Total]` are only **proposed** (`Prix_Unitaire`, `Total_Ligne`): unconfirmed, they stay
+  as written in the letter and are reported as unresolved; confirmed, the letter is filled.
+
+Still to do for the feature to exist for the user: finding the template and the rows from the question, the plan card (template,
+rows, mapping with a choice per placeholder, preview, one letter or one per order, Approve), the command that writes the file(s)
+into a `Generated` subfolder of the documents folder without overwriting, and the audit line. That is the next step.

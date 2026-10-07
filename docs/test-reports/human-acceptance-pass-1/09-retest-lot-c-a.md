@@ -243,3 +243,12 @@ investigated yet.
 Coded, unit-tested, and **no regression** found in the regression run (Q1-Q8) or in the 18 refusals of Q8-e/Q8-f. Its
 **effect is not proven** by this run (see the limits above). It stays: it applies the owner's principle (sources
 outrank memory) at the windows where it matters and costs nothing at the others.
+
+### BUG-22 checked against the Ollama log (7 October 2026): not confirmed
+
+The owner kept the windows 2048 / 4096 (and raised them to 4096 / 8192 / 8192 on 7 October). The hypothesis that a 2048-token window truncated the prompt
+was checked in the log of the running Ollama container (up since 5 October): **88 answers, none with `truncated = 1`, the largest prompt 933 tokens**, windows
+seen 2048, 4096 and 8192; the only warning is the embedding model being asked for 8192 when it is trained at 2048 (harmless). So these fixtures do not reach the
+window; the English answers and pasted excerpts of `gemma2:2b` are the model, not the context. BUG-22 stays a risk for **large real documents**, and the check is now a written
+procedure (`docs/TROUBLESHOOTING.md`) and a standing step of HAP-2. The owner's `.env` windows were not touched by any tool; the comments above the
+line now propose values for the Mac mini.

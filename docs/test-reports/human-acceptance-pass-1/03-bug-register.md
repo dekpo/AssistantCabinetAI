@@ -556,3 +556,8 @@ group in the nudge) is noted. E2 and E3 passed: [11-lot-e-plan.md](11-lot-e-plan
 
 The mail merge (BUG-14's sibling, layer 3 of the publipostage finding) is implemented: plan card, preview, confirmation of proposed matches, one letter
 or one per order, new files in `Generated`: [11-lot-e-plan.md](11-lot-e-plan.md). Awaiting the live replay.
+
+## BUG-22 status (7 October 2026)
+
+Checked in the Ollama log: **no truncation in 88 answers** (largest prompt 933 tokens). Not confirmed for these fixtures; kept as a risk for large real
+documents; procedure in `docs/TROUBLESHOOTING.md`, step H5 of the second human pass.

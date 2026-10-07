@@ -209,3 +209,12 @@ cabinets) separate from each **user device** (the desktop app, its index and OCR
 rollout checklist, and what "no inference port exposed on the LAN" becomes once the gateway alone
 is published on the practice network, behind a firewall rule and a per-person access key
 (Sprint 4, still to build). Tracked in `docs/ROADMAP.md`, Sprint 4.
+
+## Where the desktop program keeps its own files
+
+Outside the documents and data folders, in the application's local data folder (`%LOCALAPPDATA%\com.assistantcabinetai.desktop\` on
+Windows, `~/Library/Application Support/com.assistantcabinetai.desktop/` on macOS; it is a hidden folder on Windows): the local index
+(`index.sqlite3`, `workbooks.sqlite3`, `tabular.sqlite3`), the log of file renames (`renamed-files.jsonl`, original and new name of every
+file the clean-names pass renamed) and the log of generated letters (`generated-files.jsonl`: time, template, data file, key and output name
+of every letter written; never a cell value). `settings.json` is in the configuration folder instead (`%APPDATA%\com.assistantcabinetai.desktop\` on
+Windows). None of them holds the text of a document.

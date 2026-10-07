@@ -686,6 +686,22 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | What may be written | New files only, in a `Generated` subfolder of the documents folder, named `<template>-<key>.<ext>` in the clean-name alphabet, never overwriting (`-2`, `-3`), at most 500 per approval; the template and the data are never modified. Each file is logged (`generated-files.jsonl`, app data folder) with the template, the data file, the key and the output name, never a cell value. This is the first file action of the product that creates content: it is the plan-and-approve case, unlike the clean file names exception |
 | Paths | The preview and the generation re-read the template and the table by relative path through the inventories (a path outside them resolves to nothing) and ignore a column the table does not have; the interface sends decisions, never data |
 
+## Owner decisions on the mail merge, after its replay (7 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| The folder of generated letters is a setting | `Settings::generated_folder_name`, default `Generated`, edited in the settings panel; always one clean name (`clean_folder_name`), sanitised when saved and when read. Replaces the `OUTPUT_FOLDER` constant |
+| No formatting of values | A cell is written as it is. Units and symbols go in the template after the field (`«Total_Ligne» €`). Closes the "values written raw" limit of 6 October |
+| Where the log is | `generated-files.jsonl` in the application's local data folder (`%LOCALAPPDATA%\com.assistantcabinetai.desktop\` on Windows, `~/Library/Application Support/com.assistantcabinetai.desktop/` on macOS), beside the index and `renamed-files.jsonl` |
+
+## Context windows and the second human pass (7 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| The owner's windows | `MODEL_CONTEXT_WINDOWS=gemma2:2b=4096,llama3.2:3b=8192,ministral-3:3b=8192` (raised on 7 October). Values in `.env` are the owner's: no tool changes them. The comments above the line propose values for the Mac mini |
+| The useful ceiling today | About 12288 tokens: the desktop never sends more than 24 000 characters (`gateway.rs` `MAX_CONTEXT_CHARS`, about 8 000 tokens) plus the 2 048-token answer. A larger window is memory for nothing until that cap and the gateway's own are raised in a separate, measured change |
+| The second human pass | `docs/test-reports/human-acceptance-pass-2/README.md`: one self-contained file (setup, data and verified answers, every question, expected result, tick boxes, the truncation check). Run after any significant change and on every new model or machine; the verdicts of two runs on the same fixtures are comparable |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

@@ -223,3 +223,23 @@ is no `Generated` folder yet.
    `Rédige un résumé de la somme des montant.` (with a data folder where that column exists): it still goes to the model.
 8. **The log.** Open the app data folder (`%LOCALAPPDATA%` on Windows, the application's folder) and read `generated-files.jsonl`: one line per letter written, with the template, the data file,
    the key and the output name, and no name of a person or amount.
+
+### Replay results of E4 and E5 (owner, 6-7 October 2026)
+
+The owner replayed the mail merge on the real stack and is **very satisfied: "le publipostage fonctionne bien"**. What was verified:
+
+| Check | Result |
+| --- | --- |
+| The owner's question | A plan card, with the template found in a subfolder (`Test/modele_lettre.docx`), the line "Aucune IA n'a lu vos données ..." and the label "Réponse calculée depuis votre dossier des données, sans l'IA". Nothing written by the question |
+| Generate one letter | Done: the log shows `Generated/modele_lettre-CMD-2026-002.docx`, then `-CMD-2026-001.docx` |
+| A text template | Done: `Generated/modele_lettre-CMD-2026-002.txt` |
+| Every row | Done: with no key column, six letters keyed 1 to 6 (the owner's workbook has six lines), `modele_lettre-1.docx` to `-6.docx` |
+| "Rédige un résumé de la somme des montant." with the template unticked | Tier 2 as designed: "Somme de Total_Ligne : 1 683,3, calculé sur 6 lignes", read by the model from "montant" (the column is `Total_Ligne`) and marked as such |
+| The log | **Exists and is correct**; the owner could not find it because it is in the hidden application data folder: `C:\Users\<user>\AppData\Local\com.assistantcabinetai.desktop\generated-files.jsonl` (next to `renamed-files.jsonl`, `index.sqlite3`, the workbook caches). One line per letter: time, template, data file, key, output; **no cell value** (checked on the real file) |
+
+The details of replay steps 3 to 6 (no overwrite, two lines in a letter, the proposal waiting, the per-order batch) were not pasted; the log proves the letters were written and the owner reports the feature works.
+
+### Owner decisions, 7 October 2026
+
+- **The folder name is a setting**, not a constant: "Dossier des courriers générés" in the settings panel (`generatedFolderName` in `settings.json`, default `Generated`). Whatever is typed becomes **one clean name** (letters without accents, digits, `_`, `.`, `-`; at most 60 characters; never a path, never `.` or `..`; the default when nothing usable is left), on the way in and again on the way out, so a hand-edited `settings.json` cannot make the program write outside the documents folder. Unit-tested.
+- **No formatting of values.** They are written as the cell carries them. A symbol or a unit belongs in the template, written after the field: `«Total_Ligne» €`. Closed.

@@ -551,3 +551,8 @@ by E2: [11-lot-e-plan.md](11-lot-e-plan.md). BUG-23, BUG-24 and BUG-25 are confi
 
 BUG-27 (plural of "ligne retenue") and BUG-28 (a 51 s model wait for an identifier that matches no cell) are fixed; UX-8 (a poor example
 group in the nudge) is noted. E2 and E3 passed: [11-lot-e-plan.md](11-lot-e-plan.md).
+
+## Added after lot E steps E4 and E5 (6 October 2026)
+
+The mail merge (BUG-14's sibling, layer 3 of the publipostage finding) is implemented: plan card, preview, confirmation of proposed matches, one letter
+or one per order, new files in `Generated`: [11-lot-e-plan.md](11-lot-e-plan.md). Awaiting the live replay.

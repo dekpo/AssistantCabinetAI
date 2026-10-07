@@ -675,6 +675,17 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | A threshold on a group's total (E3, supersedes the 5 October refusal) | "Is there a supplier above N" compares the **totals per group** with N and says so; it lists the groups beyond the threshold, or answers no and names the group nearest to it. A question that names a value of the column, or a group operation, stays a row filter. The refusal `group_threshold_not_supported` is no longer produced |
 | Batch generation (owner request, 5 October) | Once the mapping is confirmed, one letter per distinct value of a key column the user confirms (one per row when none), with a summary and one approval; never overwritten; planned as E5 after the template filling |
 
+## Settled by lot E, steps E4 and E5: the mail merge (6 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Who fills the letter | The program, in Rust, on the workstation (`template_fill.rs`). The rows of a table never go to a model (session 16), so no model reads the data or writes the letter; the interface says so under the plan |
+| A request for a letter is a plan, not an answer | Documents and tables selected, a writing verb, one workbook pointed at by an identifier or "each", and a selected template with fields naming columns: the answer is a plan card (template, rows, mapping, preview). **Nothing is written by the question** (`AGENTS.md`, rule 3: a plan the user approves) |
+| A proposed match is never used on a default | A field that only begins a column name (`Prix_U`, `Total`) waits for an explicit confirmation or choice; an ambiguous beginning is not even proposed; a field with no column stays as written and is reported |
+| Several lines under one letter | Rows are grouped by a key column; a column whose value differs within some group is a *line* column, and a template line (text) or table row (Word) holding one is repeated once per row of the group. Batch generation (the owner's request) writes one letter per value of a key column she confirms, or one per row with none |
+| What may be written | New files only, in a `Generated` subfolder of the documents folder, named `<template>-<key>.<ext>` in the clean-name alphabet, never overwriting (`-2`, `-3`), at most 500 per approval; the template and the data are never modified. Each file is logged (`generated-files.jsonl`, app data folder) with the template, the data file, the key and the output name, never a cell value. This is the first file action of the product that creates content: it is the plan-and-approve case, unlike the clean file names exception |
+| Paths | The preview and the generation re-read the template and the table by relative path through the inventories (a path outside them resolves to nothing) and ignore a column the table does not have; the interface sends decisions, never data |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

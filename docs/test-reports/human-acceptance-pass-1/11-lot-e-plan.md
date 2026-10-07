@@ -163,3 +163,63 @@ column, the line columns, the text letter and the Word letter. **Tested on the o
 Still to do for the feature to exist for the user: finding the template and the rows from the question, the plan card (template,
 rows, mapping with a choice per placeholder, preview, one letter or one per order, Approve), the command that writes the file(s)
 into a `Generated` subfolder of the documents folder without overwriting, and the audit line. That is the next step.
+
+### Steps E4 and E5 delivered (6 October 2026, coded and tested, awaiting live replay)
+
+What now happens when a conversation has documents **and** tables selected and the question asks for something to be
+written (`fill_tier` in `commands.rs`, before the data-only router and the mixed tier):
+
+1. The workbook the question points at is found (an identifier it names, such as `CMD-2026-002`, or "each"/"every"/"chaque/tous"
+   for every row). Exactly one selected workbook must qualify; with several, nothing is picked.
+2. The selected documents that are templates are found (`.docx`, `.txt`, `.md` holding at least one field that names, or
+   begins, a column), the best match first.
+3. The answer is **a plan, not text**: a card under the answer with the template, the data, how many letters, the field-to-
+   column mapping (a choice per field), the preview of the letter, and a button. **Nothing is written** and **no model** is called.
+4. A field that is only a **proposal** (`Prix_U` for `Prix_Unitaire`) is never used until she presses Confirm (or picks a column);
+   the button stays disabled while one waits. A field with no column stays as written in the letter and is reported.
+5. The button writes the letters into a `Generated` subfolder of the documents folder, named `<template>-<key>.<extension>` in the
+   clean-name alphabet, **never overwriting** (`-2`, `-3`), the template and the data untouched. One approval writes at most 500
+   letters. Every file written is logged in `generated-files.jsonl` (app data folder): when, template, data file, key, output; no cell.
+6. "One letter per": the order named, or every value of a key column she picks on the card (here `No_Commande`: an order with two lines
+   is **one** letter with **two** table rows); with no key column, one letter per row.
+
+Where the code is: `template_fill.rs` (the merge), `fill_plan.rs` (plan, preview, generation, log), `tabular_answer::locate_fill_source`
+and `load_fill_table`, `commands::{fill_tier, fill_preview, fill_generate}`, `FillPlanCard.tsx`, `lib/fill.ts`. New machine codes:
+`fill_template_unreadable`, `fill_source_unavailable`, `fill_nothing_to_fill`, `fill_too_many`, `fill_write_failed` (both catalogues).
+
+Tested on the owner's own files (`tests/template_fill.rs`, `tests/fill_plan.rs`, `fill_plan` unit tests): the owner's question gives a plan
+with the Word template first, Sophie Martin and the chair in the preview, nothing written; approving writes one new `.docx`; for each order gives
+three letters, the first with two lines; a proposal stays unfilled until confirmed; a log line holds no cell; more than 500 letters is refused
+before anything is written; a name already taken is never overwritten.
+
+Known limits, to decide after the replay: values are written **as the cell carries them** (`189.0`, no currency, no locale formatting); the
+folder name `Generated` is a constant (`fill_plan::OUTPUT_FOLDER`); a template whose placeholder Word splits across runs is handled, one split
+inside a field code or a text box is not tried; several selected workbooks that all hold the identifier make no plan (the mixed tier answers).
+
+### Replay list for E4 and E5 (exact steps)
+
+Restart `pnpm tauri dev` first.
+
+**Preparation.** Documents folder: tick `modele_lettre.docx` only (the `.txt` copy comes in test 4). Data folder: tick **one** workbook
+holding the orders, for example `donnees_publipostage.xlsx` (ticking two copies of it, as in `Data/Test/publipostage`, makes the question
+ambiguous and no plan is offered). The data folder must have been analysed. Open the documents folder in the file manager and note that there
+is no `Generated` folder yet.
+
+1. **The owner's question.** Ask: `Génère le courrier de la commande CMD-2026-002 en reprenant les données du client et en les insérant dans la lettre correspondante.`
+   Expected: a card "Courrier à générer". "Données : ..., No_Commande = CMD-2026-002". Modèle `modele_lettre.docx`. "Seulement CMD-2026-002" selected.
+   The eight fields (No_Commande, Civilite, Prenom, Nom, Article, Quantite, Prix_Unitaire, Total_Ligne) each point at the column of the same name, no "Confirmer"
+   button. The preview reads "Confirmation de votre commande n° CMD-2026-002", "Bonjour Mme Sophie Martin", and the table row Chaise Ergonomique, 1, 189.0, 189.0.
+   Under it the line "Aucune IA n'a lu vos données ...". **No `Generated` folder exists yet.**
+2. **Generate.** Press "Générer 1 courrier(s)". Expected: "1 courrier(s) créé(s)", the path `Generated/modele_lettre-CMD-2026-002.docx` and a "Voir" button
+   that shows the file. Open it in Word: the letter is filled, one table row. `modele_lettre.docx` itself is unchanged (modification time, content).
+3. **No overwrite.** Ask the same question again and generate: a second file `modele_lettre-CMD-2026-002-2.docx`; the first one is unchanged.
+4. **Two lines.** Ask `Génère le courrier de la commande CMD-2026-001`. The preview shows two lines (Ordinateur Portable, Souris Sans Fil); the generated Word letter has two table rows.
+5. **A proposal waits.** Also tick `modele_lettre.txt` in the documents folder and ask the question again. The card now has a template choice; pick `modele_lettre.txt`.
+   Its fields `Prix_U` and `Total` show "Confirmer" and the line "À confirmer avant de générer : Prix_U, Total."; the generate button is **disabled**; the preview still shows
+   `[Prix_U]` and `[Total]` as written. Press Confirmer on both: the preview fills them (`Prix_Unitaire`, `Total_Ligne`) and the button is enabled. Generate: a `.txt` file in `Generated`.
+6. **Every order.** Ask `Génère un courrier pour chaque commande`. Expected: "Données : toutes les lignes de ...", "Un courrier par : chaque ligne" with a count of **5** letters.
+   Choose `No_Commande` in the list: **3** letters. Generate: `modele_lettre-CMD-2026-001.docx`, `-002`, `-003` in `Generated`; the 001 letter has two table rows, the 003 letter has Rousseau and two lines.
+7. **No template, no card.** Untick every template, ask the owner's question: no card, the answer comes from the mixed tier as before, with the computed row. Then ask
+   `Rédige un résumé de la somme des montant.` (with a data folder where that column exists): it still goes to the model.
+8. **The log.** Open the app data folder (`%LOCALAPPDATA%` on Windows, the application's folder) and read `generated-files.jsonl`: one line per letter written, with the template, the data file,
+   the key and the output name, and no name of a person or amount.

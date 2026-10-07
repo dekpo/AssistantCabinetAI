@@ -9,7 +9,6 @@ use assistant_cabinet_ai_lib::analysis_scope::ScopeMode;
 use assistant_cabinet_ai_lib::data_folder::{self, DataFolder};
 use assistant_cabinet_ai_lib::fill_plan::{
     build_plan, candidate_templates, generate, preview, read_template, FillRequest, RequestMapping,
-    OUTPUT_FOLDER,
 };
 use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::inventory::{FileHashCache, WorkFolderInventory};
@@ -111,7 +110,7 @@ fn the_owners_question_finds_the_order_the_template_and_a_plan_without_writing_a
     assert!(plan.preview.text.contains("Chaise Ergonomique"), "{}", plan.preview.text);
     assert!(plan.preview.unresolved.is_empty(), "{:?}", plan.preview.unresolved);
     assert_eq!(plan.preview.file_name, "modele_lettre-CMD-2026-002.docx");
-    assert!(!folders.work.path().join(OUTPUT_FOLDER).exists(), "a plan writes nothing");
+    assert!(!folders.work.path().join("Generated").exists(), "a plan writes nothing");
 }
 
 #[test]
@@ -127,6 +126,7 @@ fn approving_writes_one_new_word_letter_and_touches_neither_the_template_nor_the
     let template = read_template(&folders.inventory(), &request.template).unwrap();
     let report = generate(
         folders.work.path(),
+        "Generated",
         &folders.work.path().join("generated.jsonl.outside-the-folder"),
         1,
         &template,
@@ -162,6 +162,7 @@ fn for_each_order_one_letter_per_order_with_its_own_lines() {
     assert_eq!(preview(&template, &source.table, &request).unwrap().letters, 3);
     let report = generate(
         folders.work.path(),
+        "Generated",
         &folders.work.path().join("generated.jsonl.outside-the-folder"),
         1,
         &template,

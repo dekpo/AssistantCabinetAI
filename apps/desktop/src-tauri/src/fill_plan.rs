@@ -31,9 +31,6 @@ use crate::template_fill::{
     propose_mapping, FillContext, MappingEntry, MappingStatus, Table, TemplateKind,
 };
 
-/// The subfolder of the documents folder the letters are written in.
-pub const OUTPUT_FOLDER: &str = "Generated";
-
 /// The most letters one approval may write.
 pub const MAX_LETTERS: usize = 500;
 
@@ -359,10 +356,12 @@ fn create_unique(directory: &Path, name: &str) -> std::io::Result<(PathBuf, std:
     Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "no free name"))
 }
 
-/// Writes the letters `request` describes into `<work_folder>/Generated`, and logs each one to
+/// Writes the letters `request` describes into `<work_folder>/<output_folder>` (the folder name is a
+/// setting, `Settings::generated_folder`, already one clean name), and logs each one to
 /// `log_path` (the template, the data file, the key and the output name: no cell value).
 pub fn generate(
     work_folder: &Path,
+    output_folder: &str,
     log_path: &Path,
     now_seconds: i64,
     template: &TemplateFile,
@@ -382,7 +381,7 @@ pub fn generate(
     }
     let mapping = confirmed_mapping(request, table);
     let lines = line_columns(table, &all_groups);
-    let directory = work_folder.join(OUTPUT_FOLDER);
+    let directory = work_folder.join(output_folder);
     std::fs::create_dir_all(&directory).map_err(|_| AppError::FillWriteFailed)?;
 
     let mut written = Vec::new();
@@ -401,7 +400,7 @@ pub fn generate(
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_default();
-        let relative = format!("{OUTPUT_FOLDER}/{file_name}");
+        let relative = format!("{output_folder}/{file_name}");
         append_log(log_path, now_seconds, template, &request.data_file, &group.key, &relative);
         written.push(Written {
             relative_path: relative,
@@ -507,7 +506,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let log = directory.path().join("log").join("generated.jsonl");
         let request = request(true, None, Some("Prix_Unitaire"));
-        let first = generate(directory.path(), &log, 1, &template(), &table(), &request).unwrap();
+        let first = generate(directory.path(), "Generated", &log, 1, &template(), &table(), &request).unwrap();
         assert_eq!(
             first.written.iter().map(|w| w.relative_path.as_str()).collect::<Vec<_>>(),
             vec!["Generated/modele-CMD-1.txt", "Generated/modele-CMD-2.txt"]
@@ -516,7 +515,7 @@ mod tests {
         assert!(letter.contains("Souris 25.5"), "{letter}");
 
         // The same request again: the names are taken, so new ones are made and nothing is touched.
-        let second = generate(directory.path(), &log, 2, &template(), &table(), &request).unwrap();
+        let second = generate(directory.path(), "Generated", &log, 2, &template(), &table(), &request).unwrap();
         assert_eq!(
             second.written.iter().map(|w| w.relative_path.as_str()).collect::<Vec<_>>(),
             vec!["Generated/modele-CMD-1-2.txt", "Generated/modele-CMD-2-2.txt"]
@@ -532,7 +531,7 @@ mod tests {
     fn the_log_names_the_template_and_the_key_and_no_cell() {
         let directory = tempfile::tempdir().unwrap();
         let log = directory.path().join("generated.jsonl");
-        generate(directory.path(), &log, 5, &template(), &table(), &request(false, Some("CMD-2"), Some("Prix_Unitaire"))).unwrap();
+        generate(directory.path(), "Generated", &log, 5, &template(), &table(), &request(false, Some("CMD-2"), Some("Prix_Unitaire"))).unwrap();
         let line = std::fs::read_to_string(&log).unwrap();
         assert!(line.contains("modele.txt") && line.contains("CMD-2") && line.contains("Generated/modele-CMD-2.txt"), "{line}");
         for cell in ["Martin", "Chaise", "189"] {
@@ -549,8 +548,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let mut ask = request(true, None, None);
         ask.mapping.clear();
-        let error = generate(directory.path(), &directory.path().join("l.jsonl"), 0, &template(), &big, &ask).unwrap_err();
+        let error = generate(directory.path(), "Generated", &directory.path().join("l.jsonl"), 0, &template(), &big, &ask).unwrap_err();
         assert!(matches!(error, AppError::FillTooMany { .. }));
-        assert!(!directory.path().join(OUTPUT_FOLDER).exists());
+        assert!(!directory.path().join("Generated").exists());
     }
 }

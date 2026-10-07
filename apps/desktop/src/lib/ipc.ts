@@ -23,6 +23,9 @@ export interface AppSettings {
   /** Seconds of silence before an answer is abandoned. Silence, not duration: an answer that
    * keeps arriving is never cut off, however long it takes. Rust clamps whatever is sent. */
   answerIdleTimeoutSeconds: number;
+  /** The subfolder of the documents folder where generated letters are written. Rust keeps it one
+   * clean name, whatever is sent. */
+  generatedFolderName: string;
 }
 
 export interface AppSnapshot {

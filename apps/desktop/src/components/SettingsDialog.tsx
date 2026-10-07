@@ -58,6 +58,7 @@ export function SettingsDialog({
   const [idleTimeoutDraft, setIdleTimeoutDraft] = useState(
     String(settings.answerIdleTimeoutSeconds),
   );
+  const [generatedFolderDraft, setGeneratedFolderDraft] = useState(settings.generatedFolderName);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -73,6 +74,10 @@ export function SettingsDialog({
   useEffect(() => {
     setIdleTimeoutDraft(String(settings.answerIdleTimeoutSeconds));
   }, [settings.answerIdleTimeoutSeconds]);
+
+  useEffect(() => {
+    setGeneratedFolderDraft(settings.generatedFolderName);
+  }, [settings.generatedFolderName]);
 
   const confirmReset = async () => {
     setResetting(true);
@@ -203,6 +208,20 @@ export function SettingsDialog({
             />
             <span className="field__unit">{t("settings.idleTimeoutUnit")}</span>
           </div>
+        </label>
+
+        <label className="field">
+          <span className="field__label">{t("settings.generatedFolderLabel")}</span>
+          <span className="field__description">{t("settings.generatedFolderDescription")}</span>
+          <input
+            type="text"
+            className="field__control"
+            value={generatedFolderDraft}
+            onChange={(event) => setGeneratedFolderDraft(event.target.value)}
+            /* Committed on blur, like the other text fields; Rust turns what she typed into one
+               clean name and the field shows the result. */
+            onBlur={() => onUpdate({ generatedFolderName: generatedFolderDraft })}
+          />
         </label>
 
         <WorkFolderCard

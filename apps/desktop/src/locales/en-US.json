@@ -279,7 +279,9 @@
     "modelAliasUnavailable": "The AI has not listed its profiles yet.",
     "idleTimeoutLabel": "Waiting time",
     "idleTimeoutDescription": "How long to wait when the AI goes quiet, in seconds. A long answer is never cut off while it is still being written; this only ends the wait when nothing arrives at all. Raise it on a slower computer or with a larger model.",
-    "idleTimeoutUnit": "seconds"
+    "idleTimeoutUnit": "seconds",
+    "generatedFolderLabel": "Generated letters folder",
+    "generatedFolderDescription": "The subfolder of your documents folder where letters made from a template and a spreadsheet are written. The name is simplified: letters without accents, digits, hyphens."
   },
   "errorBanner": {
     "title": "This did not work"

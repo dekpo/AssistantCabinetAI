@@ -279,7 +279,9 @@
     "modelAliasUnavailable": "L'IA n'a pas encore indiqué ses profils.",
     "idleTimeoutLabel": "Temps d'attente",
     "idleTimeoutDescription": "Combien de temps attendre quand l'IA ne dit plus rien, en secondes. Une réponse longue n'est jamais interrompue tant qu'elle s'écrit ; ce délai ne met fin qu'à une attente sans rien. Augmentez-le sur un ordinateur plus lent ou avec un modèle plus gros.",
-    "idleTimeoutUnit": "secondes"
+    "idleTimeoutUnit": "secondes",
+    "generatedFolderLabel": "Dossier des courriers générés",
+    "generatedFolderDescription": "Le sous-dossier de votre dossier de documents où sont écrits les courriers générés à partir d'un modèle et d'un tableur. Le nom est simplifié : lettres sans accent, chiffres, tirets."
   },
   "errorBanner": {
     "title": "Cela n'a pas fonctionné"

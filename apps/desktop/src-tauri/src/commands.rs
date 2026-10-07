@@ -1252,6 +1252,7 @@ pub fn fill_generate(
     request: fill_plan::FillRequest,
 ) -> Result<fill_plan::FillReport, AppError> {
     let (work_folder, template, table) = fill_inputs(&app, &state, &request)?;
+    let output_folder = state.read(|settings| settings.generated_folder())?;
     let directory = app
         .path()
         .app_local_data_dir()
@@ -1262,6 +1263,7 @@ pub fn fill_generate(
         .unwrap_or(0);
     fill_plan::generate(
         &work_folder,
+        &output_folder,
         &directory.join("generated-files.jsonl"),
         now,
         &template,

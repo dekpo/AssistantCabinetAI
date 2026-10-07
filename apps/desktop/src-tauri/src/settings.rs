@@ -41,6 +41,10 @@ pub const DEFAULT_LOCALE: &str = "fr-FR";
 /// word appears (`docs/HARDWARE.md`).
 pub const DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 300;
 
+/// The subfolder of the documents folder where generated letters are written, until the user names
+/// another (`Settings::generated_folder_name`).
+pub const DEFAULT_GENERATED_FOLDER_NAME: &str = "Generated";
+
 /// Low enough that a genuinely stuck model is still reported in a reasonable time, high enough
 /// that nobody can set a value that cuts off a working answer on a slow machine.
 pub const MIN_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 30;
@@ -73,6 +77,11 @@ pub struct Settings {
     /// because how long a model stays quiet depends on the model and on the machine, and neither
     /// is knowable from here (`.cursor/rules/v0-sprint.mdc`: nothing hardcoded).
     pub answer_idle_timeout_seconds: u64,
+    /// The subfolder of the documents folder the generated letters are written in. A setting, not a
+    /// constant: the practice names it in its own language. Always a single clean name (ASCII letters,
+    /// digits, `-`, `_`, `.`), whatever was typed or left in a hand-edited file
+    /// (`Settings::generated_folder`).
+    pub generated_folder_name: String,
 }
 
 impl Default for Settings {
@@ -87,11 +96,19 @@ impl Default for Settings {
             work_folder: None,
             data_folder: None,
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
+            generated_folder_name: DEFAULT_GENERATED_FOLDER_NAME.to_string(),
         }
     }
 }
 
 impl Settings {
+    /// The generated-letters folder name as it is used: one clean name, never a path, never empty.
+    /// Sanitised on the way out as well as on the way in, so a `settings.json` edited by hand cannot
+    /// make the program write outside the documents folder.
+    pub fn generated_folder(&self) -> String {
+        clean_folder_name(&self.generated_folder_name)
+    }
+
     /// The stored value as a `Duration`, clamped on the way out as well as on the way in: a
     /// `settings.json` edited by hand never reaches the gateway client unbounded.
     pub fn answer_idle_timeout(&self) -> std::time::Duration {
@@ -149,6 +166,7 @@ pub fn save(
         MIN_ANSWER_IDLE_TIMEOUT_SECONDS,
         MAX_ANSWER_IDLE_TIMEOUT_SECONDS,
     );
+    checked.generated_folder_name = clean_folder_name(&checked.generated_folder_name);
     checked.work_folder = match checked.work_folder.as_deref() {
         None => None,
         Some(chosen) if chosen.trim().is_empty() => None,
@@ -167,6 +185,35 @@ pub fn save(
     let text = serde_json::to_string_pretty(&checked).map_err(|_| AppError::SettingsWriteFailed)?;
     std::fs::write(&path, text).map_err(|_| AppError::SettingsWriteFailed)?;
     Ok(checked)
+}
+
+/// One clean folder name from whatever was typed: the clean-name alphabet, no separator, at most 60
+/// characters, and the default when nothing usable is left. A name made only of dots is not a name
+/// (`.` and `..` mean "here" and "above").
+fn clean_folder_name(typed: &str) -> String {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+
+    let mut cleaned = String::new();
+    for ch in typed.trim().nfd() {
+        if is_combining_mark(ch) {
+            continue;
+        }
+        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.') {
+            cleaned.push(ch);
+        } else if !cleaned.ends_with('-') {
+            // Every separator, space and character outside the alphabet becomes one hyphen.
+            cleaned.push('-');
+        }
+    }
+    let bounded: String = cleaned.chars().take(60).collect();
+    // No leading or trailing dot or hyphen: `.` and `..` mean "here" and "above", and never a name.
+    let name = bounded.trim_matches(|ch| ch == '-' || ch == '.');
+    if name.chars().any(|ch| ch.is_ascii_alphanumeric()) {
+        name.to_string()
+    } else {
+        DEFAULT_GENERATED_FOLDER_NAME.to_string()
+    }
 }
 
 /// A plain shape check. `http` on the practice network, `https` once there are certificates; a
@@ -224,9 +271,11 @@ mod tests {
             work_folder: Some("D:\\work".into()),
             data_folder: Some("D:\\data".into()),
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
+            generated_folder_name: "Courriers".into(),
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
+        assert_eq!(json["generatedFolderName"], "Courriers");
 
         assert_eq!(json["locale"], "fr-FR");
         assert_eq!(json["theme"], "system");
@@ -238,6 +287,31 @@ mod tests {
             json["answerIdleTimeoutSeconds"],
             DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
         );
+    }
+
+    #[test]
+    fn the_generated_folder_name_is_always_one_clean_name_and_never_a_path() {
+        for (typed, expected) in [
+            ("Generated", "Generated"),
+            ("Courriers g\u{e9}n\u{e9}r\u{e9}s", "Courriers-generes"),
+            ("  Lettres  ", "Lettres"),
+            ("", "Generated"),
+            ("   ", "Generated"),
+            ("..", "Generated"),
+            ("../../elsewhere", "elsewhere"),
+            ("a/b\\c", "a-b-c"),
+        ] {
+            let settings = Settings {
+                generated_folder_name: typed.to_string(),
+                ..Settings::default()
+            };
+            assert_eq!(settings.generated_folder(), expected, "{typed:?}");
+        }
+        let long = Settings {
+            generated_folder_name: "x".repeat(200),
+            ..Settings::default()
+        };
+        assert_eq!(long.generated_folder().chars().count(), 60);
     }
 
     #[test]

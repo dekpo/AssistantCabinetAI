@@ -1,0 +1,83 @@
+{
+  "locale": "en-US",
+  "_comment": "Vocabulary for classifying a question about a selected workbook as structural (answered from TabularInventory alone) or a data-analysis operation (computed by tabular::engine, no model call either way). Data, never literals in Rust (docs/DECISIONS.md). A sheet or column name is never guessed from this list - it is matched against the workbook's own real names, in tabular/question.rs.",
+  "structural": {
+    "sheets": ["sheet", "sheets", "tab", "tabs"],
+    "rows": ["row", "rows", "line", "lines", "entry", "entries"],
+    "columns": ["column", "columns", "field", "fields"],
+    "numeric": ["numeric"],
+    "formulas": ["formula", "formulas"]
+  },
+  "operations": {
+    "count": ["count", "many", "number"],
+    "distinct": ["distinct", "unique", "different"],
+    "list": ["list", "lists", "show", "display", "enumerate"],
+    "sum": ["sum", "total", "add"],
+    "mean": ["average", "mean"],
+    "median": ["median"],
+    "min": ["minimum", "min", "lowest", "smallest"],
+    "max": ["maximum", "max", "highest"],
+    "largest_row": ["largest", "biggest"],
+    "sort": ["sort", "order", "ranked"]
+  },
+  "groups": {
+    "which": ["which", "what"],
+    "most": ["most", "highest", "largest", "biggest", "greatest", "top"],
+    "per": ["per", "by", "each"],
+    "least": ["least", "lowest", "smallest"],
+    "top": ["top", "first", "best"]
+  },
+  "column_names": {
+    "_comment": "Words inside a column's own name. Read from every pack at once, whatever the interface language, because a workbook's headers are in whatever language it was exported in. 'measures' marks a column worth totalling; 'not_measures' a number that is not an amount (a year, an identifier, a code). Used only to choose which column to total when a question does not name one.",
+    "measures": ["amount", "amounts", "cost", "costs", "price", "prices", "revenue", "revenues", "spend", "spending", "expense", "expenses", "income", "total", "value", "sum", "fee", "fees", "paid", "balance", "salary", "budget"],
+    "not_measures": ["id", "ids", "year", "years", "code", "codes", "zip", "phone", "index", "number", "no", "num", "ref", "reference", "postcode", "month", "day", "type"]
+  },
+  "descending": ["descending", "desc"],
+  "filler": ["a", "an", "the", "of", "in", "on", "at", "is", "are", "was", "were", "be", "for", "to", "with", "this", "that", "these", "those", "where", "when", "who", "whom", "whose", "and", "or", "please", "kindly", "how", "much", "do", "does", "did", "there", "me"],
+  "comparisons": {
+    "_comment": "Session 11 filter words (docs/DECISIONS.md): a comparison word beside a number, anchored to a real numeric column by tabular_answer::detect_filters - never a guess.",
+    "greater_than": ["more", "over", "above", "greater", "higher", "exceeding"],
+    "less_than": ["less", "under", "below", "fewer", "lower"],
+    "connectors": ["than", "to", "of"],
+    "modifiers": ["at", "not"]
+  },
+  "weekdays": {
+    "1": ["monday"],
+    "2": ["tuesday"],
+    "3": ["wednesday"],
+    "4": ["thursday"],
+    "5": ["friday"],
+    "6": ["saturday"],
+    "7": ["sunday"]
+  },
+  "months": {
+    "1": ["january"],
+    "2": ["february"],
+    "3": ["march"],
+    "4": ["april"],
+    "5": ["may"],
+    "6": ["june"],
+    "7": ["july"],
+    "8": ["august"],
+    "9": ["september"],
+    "10": ["october"],
+    "11": ["november"],
+    "12": ["december"]
+  },
+  "distributive": ["each", "every", "all"],
+  "writing_intents": ["write", "draft", "compose", "generate", "prepare", "produce", "create"],
+  "document_references": ["this letter", "the letter", "this quote", "the quote", "this document", "the document", "this pdf", "this email", "this e-mail", "this contract", "this report", "this note", "mentioned in", "named in"],
+  "between": ["between"],
+  "numbers": {
+    "1": ["one"],
+    "2": ["two"],
+    "3": ["three"],
+    "4": ["four"],
+    "5": ["five"],
+    "6": ["six"],
+    "7": ["seven"],
+    "8": ["eight"],
+    "9": ["nine"],
+    "10": ["ten"]
+  }
+}

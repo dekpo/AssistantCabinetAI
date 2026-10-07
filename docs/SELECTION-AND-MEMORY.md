@@ -51,12 +51,24 @@ Which material a question is answered from is decided by Rust, deterministically
 selected - never guessed by the model from the question's wording. Three tiers, evaluated in this order:
 
 1. **A document is selected** → `retrieval::RETRIEVAL_INSTRUCTION`, held to its excerpts, unconditionally.
-2. **Reserved for Sprint 2b: no document is selected, but tabular data is.** No code yet - `analysis_scope`
-   and the selection only know about documents today - but the chain is designed with this slot in mind so
-   the tabular engine does not have to redesign the honesty rule when it lands. When it does: an instruction
-   of the same shape as `RETRIEVAL_INSTRUCTION`, held strictly to the deterministic tabular result, not to
-   raw rows and not to the model's own arithmetic (`## Open direction: documents and tables together`,
-   below).
+2. **No document is selected, but tabular data is** → the tabular engine (`tabular_answer`), with **no
+   model** for any question its classifier reads (since the tabular UI session, 28 September 2026) and
+   **one narrow, controlled model call** for a question it does not (since session 14's hidden
+   interpreter, D6 in `docs/DECISIONS.md`, `docs/SESSION-DATA-14-Query-Plan.md`) - never to answer, only
+   to translate the question into a validated JSON query plan the unchanged engine then runs. The
+   boundary: only an unrecognised question, or a residual word matching no real data, reaches the model at
+   all; it sees the workbook's schema alone, never a value; every plan is validated against the real
+   workbook before it runs; the computed number always comes from `tabular::engine::execute`, never from
+   the model's own text; and a gateway that is down, slow or wrong degrades to the same nudge the
+   classifier-only path already gave. `AnalysisScope` carries the two selections side by side (`mode` for
+   documents, `dataMode` for workbooks) and `AnalysisScope::tier` picks the tier from them before any file
+   is read. A question the engine answers returns a computed value or a structural fact, citing its sheet,
+   with its provenance showing whether a model helped interpret the question
+   (`TabularDerivation::InterpretedByModel`, carrying the model's alias and the validated plan for
+   replay); one neither path can answer returns a *nudge* naming the workbook's real columns and the
+   operations that do work - never an open-chat fallback. `tabular::escalation::TABULAR_INSTRUCTION` is
+   kept, unsent, for the case below where both are selected. Both selected at once is refused
+   (`documents_and_tables_together`) until that case is designed.
 3. **Neither is selected** → `conversation::NO_DOCUMENTS_INSTRUCTION`. Meant to be rare - once tier 2 exists,
    this is reached only when she has attached neither a document nor a table - and still cautious even then:
    general knowledge is a last resort the instruction explicitly bounds ("stay strictly factual: never
@@ -245,28 +257,51 @@ about documents or not. What is remembered, and how much:
   and 4 remembered exchanges and prints the time and the prompt size. The windows are then adjusted in the
   configuration. It is written for any server device, not for one machine.
 
-## Open direction: documents and tables together (decide in Sprint 2b)
+## Documents and tables together
 
-Recorded now so Sprint 2b starts from it rather than inventing it under pressure. Not a decision.
+The case of tables and **no** documents is tier 2 of `## The grounding priority chain`, above - the engine
+answers, with a model turn only to interpret a question the classifier itself cannot read (session 14's
+hidden interpreter), never to compute. Both selected is the case this section covers.
 
-The case of tables and **no** documents is tier 2 of `## The grounding priority chain`, above - reserved
-there already, so implementing it here means adding one instruction constant next to
-`NO_DOCUMENTS_INSTRUCTION`, not redesigning how the model is told what it may trust. The case below, both
-selected, is the one the chain does not cover on its own and needs the design that follows.
+**Session 15** (D7 in `docs/DECISIONS.md`): with both selected, a question that is clearly and only about
+the data - the tabular classifier recognises it and nothing is left over but filler and the filter words it
+applied - is routed straight to tier 2's own engine, before any document is read for retrieval and with no
+gateway call, exactly as if tables alone were selected. Unchanged by session 16.
 
-- **Each engine alone, never carrying the other's material.** Tables selected and no documents: the tabular
-  engine runs, with no excerpt. Documents selected and no tables: the document engine runs, with no data and
-  no workbook inventory.
-- **Both selected: the engines compute, the model only writes.** Rust routes each question first, as it
-  routes folder questions today: a data question (count, sum, filter, compare) to the tabular engine, a
-  content question to the document engine, a mixed question to both, one after the other.
+**Session 16** (`docs/SESSION-DATA-16-Mixed-Tier.md`) built everything session 15 left refused: the mixed
+tier, `mixed_answer::answer`, reached from `commands::mixed_tier` for every question session 15's own
+router did not already answer. The engines compute and cite; the model only writes.
+
+- **Decomposition reuses tier 2's own classifier** (`tabular_answer::prepare`) rather than inventing a
+  second one. A question with no recognisable data component at all answers from the documents alone, with
+  no tabular nudge offered for a question that was never about the data. A question the classifier resolves
+  to a human choice (which workbook, which column, a workbook that is not usable) **is** the whole answer -
+  no generation, exactly as tier 2's own disambiguations already are.
+- **Retrieval runs before the tabular part is finished.** When the question names an operation but could
+  not anchor a filter from its own words (the same gap session 11's `detect_filters` already guards), the
+  retrieved excerpts are searched for a word that is a real, distinct value of some reachable column -
+  entity linking, never the question's own words a second time. A unique match becomes the table's own
+  filter, computed with no model; a word real in more than one column is asked about, nothing computed.
+  Neither case reaches a cell value or a row through the model: the match is made in Rust, against the
+  workbook's real data, the same way `detect_filters` already anchors a residual question word.
 - **The tabular engine does the arithmetic**, deterministically, and hands the model a small finished result
-  ("12 invoices, 1,840 € in total"), never raw rows: small models are poor at arithmetic and cannot hold a
-  table.
-- **Two labelled blocks** reach the model, "document excerpts" and "table results", each with its own share of
-  the budget, under a contract that forbids computing and forbids using one block in place of the other - the
-  same rule that already keeps excerpts apart from folder facts.
-- **Each block keeps its own "based on" line** under the answer, so she sees which engine each fact came from.
+  (`tabular::escalation::format_evidence`, the exact function tier 2 keeps unsent for this session), never
+  raw rows: small models are poor at arithmetic and cannot hold a table.
+- **Two labelled blocks** reach the model, "Document excerpts" and "Table results", each capped to its own
+  share of the budget (`mixed_answer::MIXED_DOCUMENT_SHARE_CHARS`), under `MIXED_INSTRUCTION`, which forbids
+  computing and forbids using one block in place of the other - the same rule that already keeps excerpts
+  apart from folder facts.
+- **Numeric verification and citation checking, after generation.** Every number the model wrote is checked
+  against the table's own value, or against an excerpt's text verbatim; a mismatch is appended as a
+  correction, the model's draft kept exactly as written. Every bracketed citation is checked against the
+  document excerpts actually supplied; one that resolves to nothing is flagged the same way.
+- **Each block keeps its own "based on" line** under the answer (document pages, and the workbook's sheet
+  and column), so she sees which engine each fact came from.
+- **Partial refusal.** When one side has nothing - the question had no data component, or no document
+  evidence was found, or the gateway could not be reached to write the combined prose - the other side
+  still answers, with a line saying which part could not be established. A computed table value answers
+  with **no gateway call at all** when the document side has nothing to add, the same "deterministic
+  answer, zero gateway calls" guarantee tier 2 already keeps.
 - The engines never call each other, so neither can interfere with the other.
 
 ## Deploying to a separate server device (pending)

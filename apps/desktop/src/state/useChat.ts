@@ -8,8 +8,11 @@ import {
   type GenerationPhase,
   type StopOutcome,
 } from "../lib/generation";
+import { choicesFromFolder, choicesFromTabular, type Choice } from "../lib/choices";
+import type { FillPlan } from "../lib/fill";
 import { formatFolderAnswer } from "../lib/folderAnswer";
 import { conversationHistory } from "../lib/history";
+import { formatTabularAnswer, tabularSourceOf, type TabularSource } from "../lib/tabularAnswer";
 import {
   askWithSources,
   cancelChat,
@@ -17,8 +20,11 @@ import {
   type ChatTurn,
   type Evidence,
   type EvidenceCoverage,
-  type AnalysisScope,
+  type CombinedScope,
   type FolderAnswer,
+  type MixedPartUnavailable,
+  type NumericCorrection,
+  type TabularAnswer,
 } from "../lib/ipc";
 import { truncateForRegenerate, truncateForResend } from "../lib/turns";
 
@@ -66,6 +72,28 @@ export interface ChatEntry extends ChatTurn {
   /** No document was selected, so this answer rests on none of hers. Said under it, because an
    * answer written from general knowledge must never read as one drawn from her folder. */
   withoutDocuments?: true;
+  /** The tabular engine answered this, from the selected tables: tier 2. Usually with no model at
+   * all; since session 14, a question the classifier could not read may have asked a model to
+   * interpret it first (`durationMs`/`modelAlias` are then set, never `deterministic`) - but the
+   * engine still computed the number either way. */
+  tabular?: true;
+  /** A tabular answer the model might do something with: a classified, computed value (the model
+   * can try its own reading instead) or a nudge (the model may be the one thing left to try).
+   * Never set for a tabular answer that names a human choice instead (`which_measure`,
+   * `which_column`, `which_workbook`...) or carries no data to interpret at all - asking the model
+   * there would not be "a second opinion", it would be guessing where this product refuses to.
+   * Found worth adding directly from a real wrong deterministic answer in a manual validation
+   * pass (`docs/DECISIONS.md`, 1 October 2026): correct arithmetic is not the same as a correct
+   * reading of the question, and she asked for a way to request a second opinion when she
+   * suspects the two came apart. Drives the same regenerate control every other tier already
+   * offers, relabelled "Demander a l'IA"/"Ask AI" exactly as it already is for a deterministic
+   * folder answer. */
+  tabularRetryable?: true;
+  /** The workbook and sheet this answer came from: where a document answer lists its pages. */
+  tabularSource?: TabularSource;
+  /** The engine could not answer exactly and suggested what to ask instead. Remembered so a second
+   * miss in a row can say so, and be more direct. */
+  tabularNudge?: true;
   /** This answer stops mid-sentence, and why. Shown as such either way: an incomplete summary
    * that looks finished is the risk the disclaimer exists for. "stopped" is her own stop;
    * "timedOut" is the AI falling silent, and the two must not be confused - one was her
@@ -75,6 +103,47 @@ export interface ChatEntry extends ChatTurn {
    * visible rather than silently endured (`docs/HARDWARE.md`). */
   durationMs?: number;
   modelAlias?: string;
+  /** Set only on a tabular nudge that followed a real, failed attempt to interpret the question
+   * with a model (`tabularAnswer.modelAttempt`, session 14's hidden interpreter) - distinct from
+   * `durationMs`/`modelAlias` above, which mean "this is what the model actually wrote". Found in
+   * a manual validation pass (`docs/DECISIONS.md`, 1 October 2026): a small local model can spend
+   * a minute or more failing to produce a usable plan, and that wait must not vanish into a bare
+   * "without the AI" with nothing to show for it. */
+  modelAttemptAlias?: string;
+  modelAttemptDurationMs?: number;
+  /** The attempt was on a question the engine had already computed: the computed answer stays. */
+  modelAttemptKept?: true;
+  /** Figures the model stated that appear in none of the excerpts it was given and not in the question
+   * (`number_check`): said under the answer, never edited into it. */
+  unverifiedNumbers?: string[];
+  /** A letter was asked for: the plan to approve, shown as a card under this answer. */
+  fillPlan?: FillPlan;
+  /** A "which file?" answer, as data: one button per candidate, each one resending her question with
+   * that file written into it (HAP-1, UX-1). */
+  choices?: Choice[];
+  /** Documents and tables were both selected, but this question was clearly and only about the
+   * data, so the tabular engine answered it alone and the documents selected alongside it were
+   * never read - no retrieval, no gateway call (`docs/SESSION-DATA-15-Mixed-Routing.md`). Said
+   * under the answer, beside the ordinary "without the AI" line a tabular answer already gets. */
+  documentsNotNeeded?: true;
+  /** Documents and tables were both selected, and the mixed tier answered across both
+   * (`docs/SESSION-DATA-16-Mixed-Tier.md`): the engines computed and cited, the model only wrote.
+   * Present exactly when the question reached that tier. */
+  mixed?: true;
+  /** The table's own part of a mixed answer - a computed value, a structural fact, a
+   * disambiguation, or a nudge, formatted the same way tier 2's own answers are. `undefined` when
+   * the question had no data component at all (`mixedTableUnavailable` is then set instead). */
+  mixedTable?: TabularAnswer;
+  /** Where the table part came from: the workbook and sheet, for its own "based on" line beside
+   * the document sources' one. */
+  mixedTableSource?: TabularSource;
+  mixedTableUnavailable?: MixedPartUnavailable;
+  mixedDocumentsUnavailable?: MixedPartUnavailable;
+  /** A number the model wrote that did not match the table or any excerpt - appended under the
+   * answer, which is never rewritten. */
+  mixedCorrections?: NumericCorrection[];
+  /** A bracketed citation the model wrote that did not resolve to any supplied document excerpt. */
+  mixedRejectedCitations?: string[];
 }
 
 export interface ChatState {
@@ -125,10 +194,11 @@ export function useChat(
   onFailure?: () => void,
   hasWorkFolder = false,
   modelAlias?: string,
-  /** Which files questions may draw on. Left out, the whole folder. */
-  scope?: AnalysisScope,
+  /** Which files questions may draw on, from both folders. Left out, the whole documents folder
+   * and no table. */
+  scope?: CombinedScope,
 ): ChatState {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [phase, setPhase] = useState<GenerationPhase>("idle");
   const [streamingId, setStreamingId] = useState<string | null>(null);
@@ -200,10 +270,16 @@ export function useChat(
          (`docs/WORK-FOLDER-INVENTORY.md`). */
       const onFolderAnswer = (folderAnswer: FolderAnswer) => {
         const text = formatFolderAnswer(t, folderAnswer);
+        const choices = choicesFromFolder(folderAnswer);
         setEntries((current) =>
           current.map((entry) =>
             entry.id === answerId
-              ? { ...entry, content: text, deterministic: true as const }
+              ? {
+                  ...entry,
+                  content: text,
+                  deterministic: true as const,
+                  ...(choices.length > 0 ? { choices } : {}),
+                }
               : entry,
           ),
         );
@@ -229,6 +305,133 @@ export function useChat(
           conversationHistory(baseEntries),
         );
         const outdated = result.scopeOutdated.length > 0 ? result.scopeOutdated : undefined;
+        if (result.mixedAnswer !== null) {
+          /* Session 16: documents and tables both selected, answered across both
+             (`docs/SESSION-DATA-16-Mixed-Tier.md`). `mixed.answer` already streamed in through
+             `onDelta`/`onSources` above when generation happened - the content set here is only
+             for the degraded case, where no model was asked at all and the table's own value (or
+             disambiguation) is the whole answer, formatted the same way tier 2's own is. */
+          const mixed = result.mixedAnswer;
+          const source = mixed.table === null ? null : tabularSourceOf(mixed.table);
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    ...(mixed.answer === "" && mixed.table !== null
+                      ? {
+                          content: formatTabularAnswer(t, mixed.table, locale),
+                          deterministic: true as const,
+                        }
+                      : { durationMs: performance.now() - startedAt, modelAlias }),
+                    ...(outdated === undefined ? {} : { scopeOutdated: outdated }),
+                    mixed: true as const,
+                    ...(mixed.table === null ? {} : { mixedTable: mixed.table }),
+                    ...(source === null ? {} : { mixedTableSource: source }),
+                    ...(mixed.tableUnavailable === null
+                      ? {}
+                      : { mixedTableUnavailable: mixed.tableUnavailable }),
+                    ...(mixed.documentsUnavailable === null
+                      ? {}
+                      : { mixedDocumentsUnavailable: mixed.documentsUnavailable }),
+                    ...(mixed.corrections.length > 0 ? { mixedCorrections: mixed.corrections } : {}),
+                    ...(mixed.rejectedCitations.length > 0
+                      ? { mixedRejectedCitations: mixed.rejectedCitations }
+                      : {}),
+                    ...(mixed.unverifiedNumbers.length > 0
+                      ? { unverifiedNumbers: mixed.unverifiedNumbers }
+                      : {}),
+                  }
+                : entry,
+            ),
+          );
+          return;
+        }
+        if (result.tabularAnswer !== null) {
+          /* The tabular engine answered: tables were selected, no document. Written here, in her
+             language, from facts - except for a value the engine computed from a model-written
+             plan (session 14's hidden interpreter, `docs/SESSION-DATA-14-Query-Plan.md`), where a
+             model *did* spend real time and really was asked, even though it never wrote a word
+             of the answer's text either: the number is still the engine's alone. That one case
+             gets the same "generated by" treatment as an ordinary model answer, with its own
+             duration, rather than the blanket "without the AI" line - which a manual validation
+             pass (1 October 2026) found genuinely misleading after a real wait with a spinner. */
+          const tabularAnswer = result.tabularAnswer;
+          const previous = [...baseEntries].reverse().find((entry) => entry.role === "assistant");
+          const nudge = tabularAnswer.kind === "nudge";
+          const source = tabularSourceOf(tabularAnswer);
+          const interpreted =
+            tabularAnswer.kind === "value" && tabularAnswer.derivation.kind === "interpreted_by_model"
+              ? tabularAnswer.derivation
+              : null;
+          // A nudge is still entirely deterministic text - no model wrote a word of it - but one
+          // that followed a real, failed model attempt still cost real time, and that must not
+          // vanish (`docs/DECISIONS.md`, the session 14 manual validation pass).
+          const modelAttempt =
+            tabularAnswer.kind === "nudge" || tabularAnswer.kind === "value"
+              ? (tabularAnswer.modelAttempt ?? null)
+              : null;
+          const retryable = tabularAnswer.kind === "value" || tabularAnswer.kind === "nudge";
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    content: formatTabularAnswer(
+                      t,
+                      tabularAnswer,
+                      locale,
+                      nudge && previous?.tabularNudge === true,
+                    ),
+                    tabular: true as const,
+                    ...(interpreted === null
+                      ? { deterministic: true as const }
+                      : {
+                          durationMs: performance.now() - startedAt,
+                          modelAlias: interpreted.model_alias,
+                        }),
+                    ...(modelAttempt === null
+                      ? {}
+                      : {
+                          modelAttemptAlias: modelAttempt.modelAlias,
+                          modelAttemptDurationMs: modelAttempt.durationMs,
+                          // A kept computed value: the line says so, instead of "could not turn
+                          // this question into something computable" (HAP-1, BUG-18).
+                          ...(tabularAnswer.kind === "value" ? { modelAttemptKept: true as const } : {}),
+                        }),
+                    ...(choicesFromTabular(tabularAnswer).length > 0
+                      ? { choices: choicesFromTabular(tabularAnswer) }
+                      : {}),
+                    ...(retryable ? { tabularRetryable: true as const } : {}),
+                    ...(source === null ? {} : { tabularSource: source }),
+                    ...(nudge ? { tabularNudge: true as const } : {}),
+                    ...(result.documentsNotNeeded ? { documentsNotNeeded: true as const } : {}),
+                  }
+                : entry,
+            ),
+          );
+          return;
+        }
+        if (result.fillPlan !== null) {
+          /* A letter was asked for and the template and the rows were found: a plan, not an answer.
+             Nothing was written and no model was involved; the card under this text is where she
+             decides. */
+          const plan = result.fillPlan;
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    content: t("fill.intro", { template: plan.template }),
+                    deterministic: true as const,
+                    mixed: true as const,
+                    fillPlan: plan,
+                  }
+                : entry,
+            ),
+          );
+          return;
+        }
         if (result.folderAnswer !== null) {
           if (outdated !== undefined) {
             setEntries((current) =>
@@ -258,6 +461,9 @@ export function useChat(
                     ? { unanalysedFiles: result.unanalysedFiles }
                     : {}),
                   ...(result.withoutDocuments ? { withoutDocuments: true as const } : {}),
+                  ...(result.unverifiedNumbers.length > 0
+                    ? { unverifiedNumbers: result.unverifiedNumbers }
+                    : {}),
                 }
               : entry,
           ),
@@ -315,7 +521,7 @@ export function useChat(
         setStreamingId(null);
       }
     },
-    [phase, onFailure, hasWorkFolder, modelAlias, scope, t],
+    [phase, onFailure, hasWorkFolder, modelAlias, scope, t, locale],
   );
 
   const send = useCallback(

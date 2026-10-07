@@ -1,0 +1,9 @@
+{
+  "locale": "en-US",
+  "_comment": "Test questions for tabular/question.rs. Data, never literals in Rust: the src/guards/sources.test.ts guard forbids French in a .rs file, so both languages live here. Same keys as fr-FR.json; the two files change together.",
+  "questions": {
+    "sheet_names": "What sheets does this workbook have?",
+    "row_count_in_named_sheet": "How many rows are in the Facturation sheet?",
+    "sum_of_named_column": "What is the total montant?"
+  }
+}

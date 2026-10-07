@@ -1149,3 +1149,30 @@ async fn the_same_folder_answers_the_same_way_whatever_model_is_configured() {
     assert_eq!(second, FolderAnswer::FileCount { total: 15 });
     assert_eq!(indexed.gateway.count(), 0);
 }
+
+/// HAP-1, BUG-07, Q28: a general-knowledge question that shares a subject word ("records",
+/// "dossiers") and a list word ("what", "quel") with a listing request is not answered from the
+/// inventory. Five unrelated words are not "list the files". The positive cases of
+/// `g1_an_ordinary_phrasing_is_answered_from_the_folder_with_no_gateway_call` stay the safety net.
+#[tokio::test]
+async fn a_general_question_sharing_a_subject_word_is_not_answered_from_the_folder() {
+    let indexed = index_fixture("flat").await;
+    let inventory = inventory_of("flat", &indexed);
+
+    for (question, locale) in [
+        (
+            "Quel est le d\u{e9}lai l\u{e9}gal de conservation des dossiers m\u{e9}dicaux en France ?",
+            "fr-FR",
+        ),
+        (
+            "What is the legal retention period for medical records files in France?",
+            "en-US",
+        ),
+    ] {
+        assert_eq!(
+            route(&inventory, &indexed.index, question, locale),
+            QuestionRoute::GlobalRetrieval,
+            "{question:?} must reach retrieval or the model, not the inventory"
+        );
+    }
+}

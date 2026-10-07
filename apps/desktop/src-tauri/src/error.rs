@@ -51,6 +51,11 @@ pub enum AppError {
     #[error("work_folder_no_longer_allowed")]
     WorkFolderNoLongerAllowed,
 
+    /// The Data Folder equivalent, reported separately from `WorkFolderNoLongerAllowed` so the
+    /// interface names the folder that actually stopped passing the rules.
+    #[error("data_folder_no_longer_allowed")]
+    DataFolderNoLongerAllowed,
+
     #[error("work_folder_is_symlink")]
     WorkFolderIsSymlink { path: String },
 
@@ -88,6 +93,12 @@ pub enum AppError {
     #[error("no_work_folder_set")]
     NoWorkFolderSet,
 
+    /// The Data Folder equivalent of `NoWorkFolderSet`: distinct from it because the two folders
+    /// are chosen independently, and the interface has to tell a missing Data Folder apart from a
+    /// missing Documents Folder to say the right sentence.
+    #[error("no_data_folder_set")]
+    NoDataFolderSet,
+
     #[error("index_unavailable")]
     IndexUnavailable,
 
@@ -111,6 +122,12 @@ pub enum AppError {
     #[error("scope_unavailable")]
     ScopeUnavailable,
 
+    /// Documents and tables are both selected for this conversation. Answering from both at once
+    /// is not designed yet (`docs/SELECTION-AND-MEMORY.md`, "documents and tables together"), and
+    /// quietly picking one side would be worse than saying so: she unticks one list, or the other.
+    #[error("documents_and_tables_together")]
+    DocumentsAndTablesTogether,
+
     /// She stopped the question herself, while it was still being worked on. Not a failure: the
     /// interface keeps no banner and nothing of the abandoned run (`docs/CHAT-UX-ASSESSMENT.md`).
     #[error("chat_cancelled")]
@@ -133,6 +150,28 @@ pub enum AppError {
     /// confidence floor. The page is reported empty, exactly like a page with no text layer.
     #[error("ocr_page_unreadable")]
     OcrPageUnreadable { path: String, page: u32 },
+
+    /// The template of a mail merge could not be read as a letter (HAP-1, lot E).
+    #[error("fill_template_unreadable")]
+    FillTemplateUnreadable { path: String },
+
+    /// The template or the table the plan was made from is no longer there, no longer analysed, or
+    /// no longer readable.
+    #[error("fill_source_unavailable")]
+    FillSourceUnavailable,
+
+    /// The table has no row to make a letter from.
+    #[error("fill_nothing_to_fill")]
+    FillNothingToFill,
+
+    /// One approval would write more letters than the limit.
+    #[error("fill_too_many")]
+    FillTooMany { count: usize, limit: usize },
+
+    /// A letter could not be written; the ones already written stay, the template and the data are
+    /// untouched.
+    #[error("fill_write_failed")]
+    FillWriteFailed,
 }
 
 impl AppError {
@@ -150,6 +189,7 @@ impl AppError {
             Self::WorkFolderIsProtected { .. } => "work_folder_is_protected",
             Self::WorkFolderIsCloudSynced { .. } => "work_folder_is_cloud_synced",
             Self::WorkFolderNoLongerAllowed => "work_folder_no_longer_allowed",
+            Self::DataFolderNoLongerAllowed => "data_folder_no_longer_allowed",
             Self::WorkFolderIsSymlink { .. } => "work_folder_is_symlink",
             Self::WorkFolderUncNotSupported { .. } => "work_folder_unc_not_supported",
             Self::WorkFolderNotWritable { .. } => "work_folder_not_writable",
@@ -161,16 +201,23 @@ impl AppError {
             Self::ContextTooLarge { .. } => "context_too_large",
             Self::Gateway { code, .. } => code,
             Self::NoWorkFolderSet => "no_work_folder_set",
+            Self::NoDataFolderSet => "no_data_folder_set",
             Self::IndexUnavailable => "index_unavailable",
             Self::ExtractionEmpty { .. } => "extraction_empty",
             Self::ExtractionFailed { .. } => "extraction_failed",
             Self::InsufficientEvidence => "insufficient_evidence",
             Self::ScopeUnavailable => "scope_unavailable",
+            Self::DocumentsAndTablesTogether => "documents_and_tables_together",
             Self::ChatCancelled => "chat_cancelled",
             Self::OcrUnavailable => "ocr_unavailable",
             Self::OcrLanguageUnavailable { .. } => "ocr_language_unavailable",
             Self::OcrFailed { .. } => "ocr_failed",
             Self::OcrPageUnreadable { .. } => "ocr_page_unreadable",
+            Self::FillTemplateUnreadable { .. } => "fill_template_unreadable",
+            Self::FillSourceUnavailable => "fill_source_unavailable",
+            Self::FillNothingToFill => "fill_nothing_to_fill",
+            Self::FillTooMany { .. } => "fill_too_many",
+            Self::FillWriteFailed => "fill_write_failed",
         }
     }
 
@@ -182,14 +229,22 @@ impl AppError {
             | Self::SettingsWriteFailed
             | Self::WorkFolderSelectionCancelled
             | Self::WorkFolderNoLongerAllowed
+            | Self::DataFolderNoLongerAllowed
             | Self::ServerResponseInvalid
             | Self::NoWorkFolderSet
+            | Self::NoDataFolderSet
             | Self::IndexUnavailable
             | Self::InsufficientEvidence
             | Self::ScopeUnavailable
+            | Self::DocumentsAndTablesTogether
             | Self::ChatCancelled
             | Self::WorkFolderRevealFailed
+            | Self::FillSourceUnavailable
+            | Self::FillNothingToFill
+            | Self::FillWriteFailed
             | Self::OcrUnavailable => json!({}),
+            Self::FillTemplateUnreadable { path } => json!({ "path": path }),
+            Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
                 json!({ "path": path })
             }

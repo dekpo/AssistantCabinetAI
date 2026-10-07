@@ -1,7 +1,9 @@
-import type { AnalysisScope, FileRecord } from "./ipc";
+import type { AnalysisScope, CombinedScope, FileRecord } from "./ipc";
 
 /**
- * The documents a conversation may rely on, as she ticked them (`docs/SELECTION-AND-MEMORY.md`).
+ * The files a conversation may rely on, as she ticked them (`docs/SELECTION-AND-MEMORY.md`). One
+ * set of rules for both cards: the Documents Folder's documents and the Data Folder's workbooks
+ * are chosen the same way, each list relative to its own folder.
  *
  * Three states, and the wire form Rust already understands for each:
  * - **none**: an explicit selection with no entries. The default. Questions are answered without
@@ -82,4 +84,17 @@ export function toggleAll(scope: AnalysisScope, now: number): AnalysisScope {
   return selectionOf(scope) === "all"
     ? { ...noDocumentsScope(scope.createdAt), updatedAt: now }
     : { ...wholeFolderScope(scope.createdAt), updatedAt: now };
+}
+
+/**
+ * What is sent with a question: both lists, built fresh before each one. The timestamps are the
+ * later of the two, since the combined choice last changed when either list did.
+ */
+export function combineScopes(documents: AnalysisScope, data: AnalysisScope): CombinedScope {
+  return {
+    mode: documents.mode,
+    dataMode: data.mode,
+    createdAt: Math.min(documents.createdAt, data.createdAt),
+    updatedAt: Math.max(documents.updatedAt, data.updatedAt),
+  };
 }

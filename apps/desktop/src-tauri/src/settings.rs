@@ -41,6 +41,10 @@ pub const DEFAULT_LOCALE: &str = "fr-FR";
 /// word appears (`docs/HARDWARE.md`).
 pub const DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 300;
 
+/// The subfolder of the documents folder where generated letters are written, until the user names
+/// another (`Settings::generated_folder_name`).
+pub const DEFAULT_GENERATED_FOLDER_NAME: &str = "Generated";
+
 /// Low enough that a genuinely stuck model is still reported in a reasonable time, high enough
 /// that nobody can set a value that cuts off a working answer on a slow machine.
 pub const MIN_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 30;
@@ -65,10 +69,19 @@ pub struct Settings {
     pub model_alias: String,
     pub embedding_alias: String,
     pub work_folder: Option<String>,
+    /// The Data Folder (CSV/XLSX), a sibling of `work_folder` rather than a rename of it: the two
+    /// are validated through the same `WorkFolderPolicy` but kept as separate settings so neither
+    /// folder can be lost by the other's absence.
+    pub data_folder: Option<String>,
     /// Seconds of silence before an answer is abandoned. A setting rather than a constant,
     /// because how long a model stays quiet depends on the model and on the machine, and neither
     /// is knowable from here (`.cursor/rules/v0-sprint.mdc`: nothing hardcoded).
     pub answer_idle_timeout_seconds: u64,
+    /// The subfolder of the documents folder the generated letters are written in. A setting, not a
+    /// constant: the practice names it in its own language. Always a single clean name (ASCII letters,
+    /// digits, `-`, `_`, `.`), whatever was typed or left in a hand-edited file
+    /// (`Settings::generated_folder`).
+    pub generated_folder_name: String,
 }
 
 impl Default for Settings {
@@ -81,12 +94,21 @@ impl Default for Settings {
             model_alias: DEFAULT_MODEL_ALIAS.to_string(),
             embedding_alias: DEFAULT_EMBEDDING_ALIAS.to_string(),
             work_folder: None,
+            data_folder: None,
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
+            generated_folder_name: DEFAULT_GENERATED_FOLDER_NAME.to_string(),
         }
     }
 }
 
 impl Settings {
+    /// The generated-letters folder name as it is used: one clean name, never a path, never empty.
+    /// Sanitised on the way out as well as on the way in, so a `settings.json` edited by hand cannot
+    /// make the program write outside the documents folder.
+    pub fn generated_folder(&self) -> String {
+        clean_folder_name(&self.generated_folder_name)
+    }
+
     /// The stored value as a `Duration`, clamped on the way out as well as on the way in: a
     /// `settings.json` edited by hand never reaches the gateway client unbounded.
     pub fn answer_idle_timeout(&self) -> std::time::Duration {
@@ -144,7 +166,13 @@ pub fn save(
         MIN_ANSWER_IDLE_TIMEOUT_SECONDS,
         MAX_ANSWER_IDLE_TIMEOUT_SECONDS,
     );
+    checked.generated_folder_name = clean_folder_name(&checked.generated_folder_name);
     checked.work_folder = match checked.work_folder.as_deref() {
+        None => None,
+        Some(chosen) if chosen.trim().is_empty() => None,
+        Some(chosen) => Some(display(&policy.validate(Path::new(chosen))?)),
+    };
+    checked.data_folder = match checked.data_folder.as_deref() {
         None => None,
         Some(chosen) if chosen.trim().is_empty() => None,
         Some(chosen) => Some(display(&policy.validate(Path::new(chosen))?)),
@@ -157,6 +185,35 @@ pub fn save(
     let text = serde_json::to_string_pretty(&checked).map_err(|_| AppError::SettingsWriteFailed)?;
     std::fs::write(&path, text).map_err(|_| AppError::SettingsWriteFailed)?;
     Ok(checked)
+}
+
+/// One clean folder name from whatever was typed: the clean-name alphabet, no separator, at most 60
+/// characters, and the default when nothing usable is left. A name made only of dots is not a name
+/// (`.` and `..` mean "here" and "above").
+fn clean_folder_name(typed: &str) -> String {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+
+    let mut cleaned = String::new();
+    for ch in typed.trim().nfd() {
+        if is_combining_mark(ch) {
+            continue;
+        }
+        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.') {
+            cleaned.push(ch);
+        } else if !cleaned.ends_with('-') {
+            // Every separator, space and character outside the alphabet becomes one hyphen.
+            cleaned.push('-');
+        }
+    }
+    let bounded: String = cleaned.chars().take(60).collect();
+    // No leading or trailing dot or hyphen: `.` and `..` mean "here" and "above", and never a name.
+    let name = bounded.trim_matches(|ch| ch == '-' || ch == '.');
+    if name.chars().any(|ch| ch.is_ascii_alphanumeric()) {
+        name.to_string()
+    } else {
+        DEFAULT_GENERATED_FOLDER_NAME.to_string()
+    }
 }
 
 /// A plain shape check. `http` on the practice network, `https` once there are certificates; a
@@ -189,6 +246,7 @@ mod tests {
         let defaults = Settings::default();
 
         assert_eq!(defaults.work_folder, None);
+        assert_eq!(defaults.data_folder, None);
         // `None` means "follow the system", which is what a first launch does.
         assert_eq!(defaults.locale, None);
         assert_eq!(defaults.model_alias, DEFAULT_MODEL_ALIAS);
@@ -211,20 +269,49 @@ mod tests {
             model_alias: "cabinet-chat".into(),
             embedding_alias: "cabinet-embed".into(),
             work_folder: Some("D:\\work".into()),
+            data_folder: Some("D:\\data".into()),
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
+            generated_folder_name: "Courriers".into(),
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
+        assert_eq!(json["generatedFolderName"], "Courriers");
 
         assert_eq!(json["locale"], "fr-FR");
         assert_eq!(json["theme"], "system");
         assert_eq!(json["serverUrl"], "http://mac-mini.local:8080");
         assert_eq!(json["modelAlias"], "cabinet-chat");
         assert_eq!(json["workFolder"], "D:\\work");
+        assert_eq!(json["dataFolder"], "D:\\data");
         assert_eq!(
             json["answerIdleTimeoutSeconds"],
             DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
         );
+    }
+
+    #[test]
+    fn the_generated_folder_name_is_always_one_clean_name_and_never_a_path() {
+        for (typed, expected) in [
+            ("Generated", "Generated"),
+            ("Courriers g\u{e9}n\u{e9}r\u{e9}s", "Courriers-generes"),
+            ("  Lettres  ", "Lettres"),
+            ("", "Generated"),
+            ("   ", "Generated"),
+            ("..", "Generated"),
+            ("../../elsewhere", "elsewhere"),
+            ("a/b\\c", "a-b-c"),
+        ] {
+            let settings = Settings {
+                generated_folder_name: typed.to_string(),
+                ..Settings::default()
+            };
+            assert_eq!(settings.generated_folder(), expected, "{typed:?}");
+        }
+        let long = Settings {
+            generated_folder_name: "x".repeat(200),
+            ..Settings::default()
+        };
+        assert_eq!(long.generated_folder().chars().count(), 60);
     }
 
     #[test]
@@ -249,6 +336,29 @@ mod tests {
             settings.answer_idle_timeout(),
             std::time::Duration::from_secs(120)
         );
+    }
+
+    #[test]
+    fn a_data_folder_round_trips_through_serialisation_like_the_work_folder() {
+        let settings = Settings {
+            data_folder: Some("D:\\data\\AssistantCabinetAI\\Data".into()),
+            ..Settings::default()
+        };
+
+        let json = serde_json::to_string(&settings).expect("serialises");
+        let restored: Settings = serde_json::from_str(&json).expect("deserialises");
+
+        assert_eq!(restored.data_folder, settings.data_folder);
+    }
+
+    #[test]
+    fn a_file_written_before_the_data_folder_setting_existed_still_loads() {
+        // Same `serde(default)` contract as the idle timeout below: an older `settings.json`
+        // carries no `dataFolder`, and must open with `None` rather than refuse to load.
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+
+        assert_eq!(settings.data_folder, None);
     }
 
     #[test]

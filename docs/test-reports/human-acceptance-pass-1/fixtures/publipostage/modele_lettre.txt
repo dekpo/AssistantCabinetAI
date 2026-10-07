@@ -1,0 +1,19 @@
+MODÈLE DE LETTRE DE CONFIRMATION DE COMMANDE
+
+Objet : Confirmation de votre commande n° [No_Commande]
+
+Bonjour [Civilite] [Prenom] [Nom],
+
+Nous vous remercions pour votre confiance. Voici le récapitulatif de votre commande :
+
+-------------------------------------------------------------------------
+Article                         | Quantité   | Prix Unitaire | Total
+-------------------------------------------------------------------------
+[Article]                       | [Quantite] | [Prix_U] €    | [Total] €
+-------------------------------------------------------------------------
+
+Si vous avez commandé plusieurs articles, ils apparaîtront listés ci-dessus.
+Votre commande sera expédiée rapidement à votre adresse.
+
+Cordialement,
+L'équipe Service Client

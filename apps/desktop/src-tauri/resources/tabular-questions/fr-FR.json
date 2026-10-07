@@ -1,0 +1,83 @@
+{
+  "locale": "fr-FR",
+  "_comment": "Vocabulaire de classification d'une question sur un classeur selectionne : structurelle (repondue depuis TabularInventory seul) ou operation d'analyse de donnees (calculee par tabular::engine, sans appel au modele dans les deux cas). Donnees, jamais des litteraux en Rust (docs/DECISIONS.md). Un nom de feuille ou de colonne n'est jamais devine depuis cette liste - il est compare aux noms reels du classeur, dans tabular/question.rs. Formes accentuees et non accentuees toutes deux presentes, comme dans work-folder-questions (on ne peut pas exiger qu'un accent soit tape).",
+  "structural": {
+    "sheets": ["feuille", "feuilles", "onglet", "onglets"],
+    "rows": ["ligne", "lignes", "entree", "entrees", "entrée", "entrées"],
+    "columns": ["colonne", "colonnes", "champ", "champs"],
+    "numeric": ["numerique", "numérique"],
+    "formulas": ["formule", "formules"]
+  },
+  "operations": {
+    "count": ["compte", "combien", "nombre"],
+    "distinct": ["distinct", "distinctes", "uniques", "differentes", "différentes"],
+    "list": ["liste", "listes", "lister", "listez", "affiche", "afficher", "affichez", "montre", "montrer", "montrez", "enumere", "énumère", "enumerer", "énumérer"],
+    "sum": ["somme", "total", "totale"],
+    "mean": ["moyenne", "moyen"],
+    "median": ["mediane", "médiane"],
+    "min": ["minimum", "min"],
+    "max": ["maximum", "max"],
+    "largest_row": ["grosse", "importante", "important"],
+    "sort": ["trier", "tri", "ordonner"]
+  },
+  "groups": {
+    "which": ["quel", "quelle", "quels", "quelles", "lequel", "laquelle", "qui"],
+    "most": ["plus", "maximum", "max", "premier", "premiere", "première"],
+    "per": ["par", "chaque"],
+    "least": ["moins", "petit", "petite", "petits", "petites"],
+    "top": ["premier", "premiere", "première", "premiers", "premières", "top"]
+  },
+  "column_names": {
+    "_comment": "Mots a l'interieur du nom d'une colonne. Lus dans tous les packs a la fois, quelle que soit la langue de l'interface, car les en-tetes d'un classeur sont dans la langue de son export. 'measures' designe une colonne a additionner ; 'not_measures' un nombre qui n'est pas un montant (une annee, un identifiant, un code). Sert seulement a choisir la colonne a additionner quand la question n'en nomme aucune.",
+    "measures": ["montant", "montants", "cout", "couts", "coût", "coûts", "prix", "recette", "recettes", "depense", "depenses", "dépense", "dépenses", "total", "valeur", "somme", "honoraires", "tarif", "solde", "ttc", "ht", "budget"],
+    "not_measures": ["id", "annee", "annees", "année", "années", "code", "postal", "telephone", "téléphone", "numero", "numéro", "num", "mois", "jour", "ref", "reference", "référence", "siret", "siren", "type"]
+  },
+  "descending": ["decroissant", "décroissant", "descendant"],
+  "filler": ["le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "est", "sont", "etait", "était", "etaient", "étaient", "pour", "avec", "ce", "cet", "cette", "ces", "ou", "où", "et", "dans", "svp", "donne", "donnez", "moi", "nous", "vous", "veuillez", "dont", "que", "qu"],
+  "comparisons": {
+    "_comment": "Mots de comparaison de la session 11 (docs/DECISIONS.md) : un mot de comparaison a cote d'un nombre, rattache a une colonne numerique reelle par tabular_answer::detect_filters - jamais devine.",
+    "greater_than": ["plus", "superieur", "supérieur", "superieurs", "supérieurs", "superieure", "supérieure", "superieures", "supérieures"],
+    "less_than": ["moins", "inferieur", "inférieur", "inferieurs", "inférieurs", "inferieure", "inférieure", "inferieures", "inférieures"],
+    "connectors": ["de", "du", "que", "a", "à", "d", "qu"],
+    "modifiers": ["au", "pas"]
+  },
+  "weekdays": {
+    "1": ["lundi"],
+    "2": ["mardi"],
+    "3": ["mercredi"],
+    "4": ["jeudi"],
+    "5": ["vendredi"],
+    "6": ["samedi"],
+    "7": ["dimanche"]
+  },
+  "months": {
+    "1": ["janvier"],
+    "2": ["fevrier", "février"],
+    "3": ["mars"],
+    "4": ["avril"],
+    "5": ["mai"],
+    "6": ["juin"],
+    "7": ["juillet"],
+    "8": ["aout", "août"],
+    "9": ["septembre"],
+    "10": ["octobre"],
+    "11": ["novembre"],
+    "12": ["decembre", "décembre"]
+  },
+  "distributive": ["chaque", "tous", "toutes", "tout", "toute"],
+  "writing_intents": ["rédige", "rédiger", "rédigez", "écris", "écrire", "écrivez", "génère", "générer", "générez", "compose", "composer", "composez", "prépare", "préparer", "préparez", "produis", "produire", "brouillon"],
+  "document_references": ["cette lettre", "la lettre", "ce courrier", "le courrier", "ce devis", "le devis", "ce document", "le document", "ce pdf", "ce mail", "cet email", "cet e-mail", "ce contrat", "ce rapport", "cette note", "mentionne dans", "mentionnee dans", "mentionnes dans", "mentionnees dans", "cité dans", "cite dans"],
+  "between": ["entre"],
+  "numbers": {
+    "1": ["un", "une"],
+    "2": ["deux"],
+    "3": ["trois"],
+    "4": ["quatre"],
+    "5": ["cinq"],
+    "6": ["six"],
+    "7": ["sept"],
+    "8": ["huit"],
+    "9": ["neuf"],
+    "10": ["dix"]
+  }
+}

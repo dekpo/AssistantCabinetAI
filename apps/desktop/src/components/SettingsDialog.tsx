@@ -5,6 +5,7 @@ import type { AppError } from "../lib/errors";
 import type { AppSettings, ThemeChoice } from "../lib/ipc";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DataFolderCard } from "./DataFolderCard";
 import { ErrorBanner } from "./ErrorBanner";
 import { WorkFolderCard } from "./WorkFolderCard";
 
@@ -26,9 +27,11 @@ export function SettingsDialog({
   settings,
   settingsPath,
   suggestedWorkFolder,
+  suggestedDataFolder,
   aliases,
   saveError,
   indexing,
+  dataIndexing,
   onUpdate,
   onReset,
   onClose,
@@ -36,10 +39,13 @@ export function SettingsDialog({
   settings: AppSettings;
   settingsPath: string;
   suggestedWorkFolder: string | null;
+  suggestedDataFolder: string | null;
   aliases: string[];
   saveError: AppError | null;
   /** The same analysis pass the sidebar card starts: one pass, wherever it is started from. */
   indexing: IndexingState;
+  /** The Data Folder's pass, the same one its sidebar card starts. */
+  dataIndexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure.
    * Written as a method rather than `() => Promise<void>` so the literal guard in
@@ -52,6 +58,7 @@ export function SettingsDialog({
   const [idleTimeoutDraft, setIdleTimeoutDraft] = useState(
     String(settings.answerIdleTimeoutSeconds),
   );
+  const [generatedFolderDraft, setGeneratedFolderDraft] = useState(settings.generatedFolderName);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -67,6 +74,10 @@ export function SettingsDialog({
   useEffect(() => {
     setIdleTimeoutDraft(String(settings.answerIdleTimeoutSeconds));
   }, [settings.answerIdleTimeoutSeconds]);
+
+  useEffect(() => {
+    setGeneratedFolderDraft(settings.generatedFolderName);
+  }, [settings.generatedFolderName]);
 
   const confirmReset = async () => {
     setResetting(true);
@@ -199,11 +210,32 @@ export function SettingsDialog({
           </div>
         </label>
 
+        <label className="field">
+          <span className="field__label">{t("settings.generatedFolderLabel")}</span>
+          <span className="field__description">{t("settings.generatedFolderDescription")}</span>
+          <input
+            type="text"
+            className="field__control"
+            value={generatedFolderDraft}
+            onChange={(event) => setGeneratedFolderDraft(event.target.value)}
+            /* Committed on blur, like the other text fields; Rust turns what she typed into one
+               clean name and the field shows the result. */
+            onBlur={() => onUpdate({ generatedFolderName: generatedFolderDraft })}
+          />
+        </label>
+
         <WorkFolderCard
           workFolder={settings.workFolder}
           suggestedWorkFolder={suggestedWorkFolder}
           onChosen={(path) => onUpdate({ workFolder: path })}
           indexing={indexing}
+        />
+
+        <DataFolderCard
+          dataFolder={settings.dataFolder}
+          suggestedDataFolder={suggestedDataFolder}
+          onChosen={(path) => onUpdate({ dataFolder: path })}
+          indexing={dataIndexing}
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}

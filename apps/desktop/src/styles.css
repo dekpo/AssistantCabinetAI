@@ -110,6 +110,10 @@ body {
 .app__main {
   display: grid;
   grid-template-columns: minmax(240px, 300px) 1fr;
+  /* One row exactly as tall as the window allows, never as tall as its tallest column: a sidebar
+     with both folder lists open and a connection banner scrolls inside itself instead of making
+     the whole page scroll (HAP-1, UX-2). */
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   padding: 16px 20px 20px;
   min-height: 0;
@@ -121,6 +125,67 @@ body {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The connection banner stays in view when both folder lists are open and push it below the fold:
+   it reports a state that is still true and that every answer depends on (HAP-1, UX-4). */
+.fill-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px 12px;
+}
+
+.fill-card__title {
+  font-weight: 600;
+  margin: 0;
+}
+
+.fill-card__row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fill-card__fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0;
+  padding: 6px 10px 8px;
+}
+
+.fill-card__text {
+  background: var(--surface);
+  border-radius: 4px;
+  max-height: 260px;
+  margin: 6px 0 0;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.fill-card__error {
+  color: var(--alert-text);
+  margin: 0;
+}
+
+.message__computed {
+  border-left: 3px solid var(--accent);
+  margin: 8px 0;
+  padding: 2px 0 2px 10px;
+}
+
+.app__pinned {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--surface);
 }
 
 .card,

@@ -9,22 +9,29 @@ pub mod cancellation;
 pub mod chunking;
 mod commands;
 pub mod conversation;
+pub mod data_folder;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
 pub mod file_record;
 pub mod file_reference;
+pub mod fill_plan;
 pub mod filename_sanitizer;
 pub mod folder_questions;
 pub mod gateway;
 pub mod index_store;
 pub mod indexing;
 pub mod inventory;
+pub mod mixed_answer;
+pub mod number_check;
 pub mod ocr;
 pub mod raster;
 pub mod retrieval;
 pub mod reveal;
 mod settings;
+pub mod tabular;
+pub mod tabular_answer;
+pub mod template_fill;
 mod work_folder;
 pub mod work_folder_context;
 
@@ -44,6 +51,13 @@ pub fn run() {
             commands::reset_settings,
             commands::choose_work_folder,
             commands::ensure_suggested_work_folder,
+            commands::choose_data_folder,
+            commands::ensure_suggested_data_folder,
+            commands::reveal_data_folder,
+            commands::reveal_data_file,
+            commands::index_data_folder,
+            commands::data_folder_inventory,
+            commands::reset_data_index,
             commands::check_server_health,
             commands::cancel_chat,
             commands::index_work_folder,
@@ -53,6 +67,8 @@ pub fn run() {
             commands::reveal_work_folder,
             commands::reveal_work_file,
             commands::reset_index,
+            commands::fill_preview,
+            commands::fill_generate,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

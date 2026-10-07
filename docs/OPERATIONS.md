@@ -59,6 +59,17 @@ half minutes (`docs/TROUBLESHOOTING.md`, 22 September 2026). A related piece of 
 `MODEL_ALIASES` is a promise that the model works, so weights under about 1B do not belong there
 however fast they are.
 
+On a CPU-only server the first request after switching models can stay silent for more than the default
+180 s of `LLM_REQUEST_TIMEOUT_SECONDS` (Ollama unloads one model, loads the other, then reads the prompt before
+the first token). The gateway then answers `provider_error` with `reason: "timeout"`, which the desktop shows as
+"the model took too long to start, try again" (`docs/test-reports/human-acceptance-pass-1/`, BUG-11). The
+second attempt normally succeeds because the model is loaded. Raise the value on slow machines (for example
+600): add `LLM_REQUEST_TIMEOUT_SECONDS=600` to the `.env` file next to `compose.yaml` and run
+`docker compose up -d server` (until 4 October 2026 `compose.yaml` did not forward this variable, so setting it
+in `.env` changed nothing; `.env.example` lists it now). To check that the desktop explains a timeout, set it to
+`5` the same way, ask any question, then put the value back; the desktop's own `answerIdleTimeoutSeconds` is a separate, client-side
+setting and does not govern this one.
+
 `DEFAULT_CONTEXT_WINDOW` (default 8192 tokens) and `MODEL_CONTEXT_WINDOWS` (`alias=tokens` pairs, for the
 aliases that need another value) set how much a model may read in one request - the conversation's memory
 included. The gateway passes it on every request (`num_ctx`), caps it at what the model itself supports, and
@@ -78,6 +89,34 @@ the time to answer and the prompt size the runtime reports.
 Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.
+
+## Diagnosing the tabular hidden interpreter against a real model
+
+Session 14 (`docs/DECISIONS.md`, "the hidden interpreter session" and its manual validation pass
+entries) added a second gateway-facing script, alongside `measure_context.py`:
+
+```powershell
+cd apps/server
+uv run python scripts/probe_query_plan.py --url http://127.0.0.1:8080 --alias gemma2:2b
+```
+
+Sends the **exact** instruction and schema `tabular::query_plan::build_schema_message` builds
+(copied verbatim into the script, over a small fictional fixture it also carries) to a real model,
+non-streaming, and prints the raw reply - no document, no real workbook, nothing from `fixtures/`.
+`--question <key>` runs one case instead of all six (`--help` lists them); the reply is exactly
+what `tabular::query_plan::parse_response`/`resolve` would be given, so a reply that looks wrong
+here is the same one the product would have received.
+
+**Use this whenever a tabular question that should reach the model-assisted path instead nudges,
+or computes a number that looks wrong, and a real gateway is reachable.** It answers the question
+"did the model write a bad plan, or did Rust misread a good one" directly, without needing to
+reproduce the conversation in the app first. Reading its output against
+`tabular::query_plan::QueryPlan`'s own fields (`src/tabular/query_plan.rs`) usually shows which:
+a reply that is not valid JSON, or whose shape does not match the plan at all, is the model;
+a reply that looks like a sensible plan but still nudged is more likely Rust's - and every
+`query_plan.rs` test named `a_real_<model>_reply_...` started from exactly this script's output,
+captured verbatim, kept as a permanent regression test once the gap it found was fixed. Follow
+that pattern: a new finding from this script is worth its own such test, not only a fix.
 
 ## Why not a native-only install
 
@@ -162,11 +201,20 @@ Same repository, same `compose.yaml`, a new `.env`. Run `docker compose up -d`, 
 account, recreate the instructions from `prompts/`. Do **not** carry the Windows `data/` over: it is a test
 account, not a recipe.
 
-**Pending, recorded 27 September 2026: a step-by-step runbook for a separate server device.** Today the
-gateway, Ollama and Open WebUI run on the same machine as the desktop app. The target is a **server device**
-(the Mac mini first, other hardware later - the runbook must not assume one machine) and a **user device**
-(the desktop app, its index and OCR). Beyond the steps above it has to settle what the constraint "no inference
-port exposed on the LAN" becomes: the user device must reach the gateway over the practice network, so the
-gateway alone is published there - never Ollama, never Open WebUI - behind a firewall rule and a per-person
-access key (Sprint 4). Then run `scripts/measure_context.py` on that device and set `MODEL_CONTEXT_WINDOWS`
-from what it measures. Tracked in `docs/ROADMAP.md`, Sprint 4.
+**The step-by-step runbook for a separate server device** (recorded as pending on 27 September 2026,
+written on 1 October 2026 ahead of Sprint 4) is `docs/DEPLOYMENT.md`. Today the gateway, Ollama and
+Open WebUI still run on the same machine as the desktop app in development; that document covers
+the target shape - a **server device** (the Mac mini first, other hardware later for other
+cabinets) separate from each **user device** (the desktop app, its index and OCR) - the beta
+rollout checklist, and what "no inference port exposed on the LAN" becomes once the gateway alone
+is published on the practice network, behind a firewall rule and a per-person access key
+(Sprint 4, still to build). Tracked in `docs/ROADMAP.md`, Sprint 4.
+
+## Where the desktop program keeps its own files
+
+Outside the documents and data folders, in the application's local data folder (`%LOCALAPPDATA%\com.assistantcabinetai.desktop\` on
+Windows, `~/Library/Application Support/com.assistantcabinetai.desktop/` on macOS; it is a hidden folder on Windows): the local index
+(`index.sqlite3`, `workbooks.sqlite3`, `tabular.sqlite3`), the log of file renames (`renamed-files.jsonl`, original and new name of every
+file the clean-names pass renamed) and the log of generated letters (`generated-files.jsonl`: time, template, data file, key and output name
+of every letter written; never a cell value). `settings.json` is in the configuration folder instead (`%APPDATA%\com.assistantcabinetai.desktop\` on
+Windows). None of them holds the text of a document.

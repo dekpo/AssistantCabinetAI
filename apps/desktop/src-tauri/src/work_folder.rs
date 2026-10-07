@@ -20,11 +20,16 @@ const WRITE_PROBE_NAME: &str = ".assistant-cabinet-write-check";
 /// What we propose at first launch, directly in the home: `~/AssistantCabinetAI`.
 pub const WORK_FOLDER_NAME: &str = "AssistantCabinetAI";
 
-/// The dedicated subfolder for documents, inside `WORK_FOLDER_NAME`. A sibling `DATA` folder is
+/// The dedicated subfolder for documents, inside `WORK_FOLDER_NAME`. A sibling `Data` folder is
 /// planned for spreadsheet work (CSV/XLSX), so the root is not itself the allow-listed folder: each
-/// kind of file gets its own named subfolder underneath it. ASCII and uppercase, like every folder
-/// name this product creates, so it reads the same and sorts the same on every platform.
-pub const DOCUMENTS_SUBFOLDER_NAME: &str = "DOCS";
+/// kind of file gets its own named subfolder underneath it. ASCII, one capital letter, like every
+/// folder name this product creates, so it reads the same and sorts the same on every platform.
+pub const DOCUMENTS_SUBFOLDER_NAME: &str = "Docs";
+
+/// The dedicated subfolder for tabular work (CSV/XLSX), a sibling of `DOCUMENTS_SUBFOLDER_NAME`
+/// underneath `WORK_FOLDER_NAME` rather than a second Documents Folder. See `docs/DECISIONS.md`,
+/// "Documents live at the work folder's root".
+pub const DATA_SUBFOLDER_NAME: &str = "Data";
 
 /// Folder names meaning "a sync client mirrors this tree". Matched as a prefix on every path
 /// component, without regard to case, so `OneDrive - Contoso` and `GoogleDrive-someone@example.com`
@@ -165,23 +170,50 @@ impl WorkFolderPolicy {
     }
 }
 
-/// Where we suggest she puts the work folder. Outside Documents on purpose, and in the `DOCS`
-/// subfolder rather than the root, so a future `DATA` subfolder for CSV/XLSX can sit beside it
+/// Where we suggest she puts the work folder. Outside Documents on purpose, and in the `Docs`
+/// subfolder rather than the root, so a future `Data` subfolder for CSV/XLSX can sit beside it
 /// without the two kinds of file sharing one directory.
 pub fn suggested_work_folder(home: Option<&Path>) -> Option<PathBuf> {
-    home.map(|home| home.join(WORK_FOLDER_NAME).join(DOCUMENTS_SUBFOLDER_NAME))
+    suggested_subfolder(home, DOCUMENTS_SUBFOLDER_NAME)
 }
 
-/// Create `~/AssistantCabinetAI/DOCS` if it is missing, then apply the same rules as a folder she
+/// Where we suggest she puts the data folder: `~/AssistantCabinetAI/Data`, a sibling of `Docs`
+/// rather than a second Documents Folder (`docs/DECISIONS.md`).
+pub fn suggested_data_folder(home: Option<&Path>) -> Option<PathBuf> {
+    suggested_subfolder(home, DATA_SUBFOLDER_NAME)
+}
+
+fn suggested_subfolder(home: Option<&Path>, subfolder_name: &str) -> Option<PathBuf> {
+    home.map(|home| home.join(WORK_FOLDER_NAME).join(subfolder_name))
+}
+
+/// Create `~/AssistantCabinetAI/Docs` if it is missing, then apply the same rules as a folder she
 /// picked. Nothing is created until she asks: declining leaves the profile untouched. Both the
-/// root and the `DOCS` subfolder are created together (`create_dir_all`): an empty root left
-/// behind by a failed attempt is harmless, and it is where a future `DATA` subfolder would live
-/// too.
+/// root and the `Docs` subfolder are created together (`create_dir_all`): an empty root left
+/// behind by a failed attempt is harmless, and it is where the `Data` subfolder lives too.
 pub fn ensure_suggested(
     policy: &WorkFolderPolicy,
     home: Option<&Path>,
 ) -> Result<PathBuf, AppError> {
-    let path = suggested_work_folder(home).ok_or(AppError::Internal)?;
+    ensure_suggested_subfolder(policy, home, DOCUMENTS_SUBFOLDER_NAME)
+}
+
+/// The `Data` equivalent of `ensure_suggested`: create `~/AssistantCabinetAI/Data` if missing,
+/// then apply the same rules as a folder she picked. Shares its root with `Docs`, so whichever of
+/// the two is created first also creates the root, and the other reuses it.
+pub fn ensure_suggested_data(
+    policy: &WorkFolderPolicy,
+    home: Option<&Path>,
+) -> Result<PathBuf, AppError> {
+    ensure_suggested_subfolder(policy, home, DATA_SUBFOLDER_NAME)
+}
+
+fn ensure_suggested_subfolder(
+    policy: &WorkFolderPolicy,
+    home: Option<&Path>,
+    subfolder_name: &str,
+) -> Result<PathBuf, AppError> {
+    let path = suggested_subfolder(home, subfolder_name).ok_or(AppError::Internal)?;
     policy.check_path(&path)?;
 
     match std::fs::symlink_metadata(&path) {
@@ -462,7 +494,7 @@ mod tests {
 
         let suggested = suggested_work_folder(Some(&home)).expect("a home was given");
 
-        assert_eq!(suggested, home.join("AssistantCabinetAI").join("DOCS"));
+        assert_eq!(suggested, home.join("AssistantCabinetAI").join("Docs"));
         assert!(policy.check_path(&suggested).is_ok());
     }
 
@@ -673,8 +705,8 @@ mod tests {
 
     #[test]
     fn creating_the_suggested_folder_also_creates_its_root() {
-        // The root is not itself the allow-listed folder, but it must exist so a future `DATA`
-        // subfolder can be created beside `DOCS` without a separate step.
+        // The root is not itself the allow-listed folder, but it must exist so a future `Data`
+        // subfolder can be created beside `Docs` without a separate step.
         let home = tempfile::tempdir().expect("temporary home");
         let policy = home_policy(home.path());
 
@@ -696,7 +728,7 @@ mod tests {
 
     #[test]
     fn a_file_blocking_the_suggested_root_is_refused_and_left_alone() {
-        // The blocker now sits one level above the suggested folder (`DOCS`'s parent), so creating
+        // The blocker now sits one level above the suggested folder (`Docs`'s parent), so creating
         // the nested path fails outright rather than reaching `validate` on an existing file.
         let home = tempfile::tempdir().expect("temporary home");
         let policy = home_policy(home.path());
@@ -732,6 +764,88 @@ mod tests {
         let policy = WorkFolderPolicy::new(Vec::new(), Vec::new(), vec![home.path().to_path_buf()]);
 
         let error = ensure_suggested(&policy, Some(home.path())).expect_err("expected a refusal");
+
+        assert_eq!(error.code(), "work_folder_is_cloud_synced");
+        assert!(!home.path().join(WORK_FOLDER_NAME).exists());
+    }
+
+    #[test]
+    fn the_suggested_data_folder_sits_beside_docs_in_the_home_and_is_accepted() {
+        let policy = test_policy();
+        let home = home_path();
+
+        let suggested = suggested_data_folder(Some(&home)).expect("a home was given");
+
+        assert_eq!(suggested, home.join("AssistantCabinetAI").join("Data"));
+        assert!(policy.check_path(&suggested).is_ok());
+    }
+
+    #[test]
+    fn creating_the_suggested_data_folder_makes_it_and_its_root() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+        let expected = home.path().join(WORK_FOLDER_NAME).join(DATA_SUBFOLDER_NAME);
+
+        let accepted = ensure_suggested_data(&policy, Some(home.path())).expect("created");
+
+        assert!(expected.is_dir());
+        assert!(home.path().join(WORK_FOLDER_NAME).is_dir());
+        assert_eq!(accepted, dunce::canonicalize(&expected).expect("resolves"));
+        assert!(!accepted.join(WRITE_PROBE_NAME).exists());
+    }
+
+    #[test]
+    fn creating_the_suggested_data_folder_reuses_a_root_docs_already_created() {
+        // Docs and Data are siblings under the same root: whichever is created first makes the
+        // root, and the other must not fail or recreate it.
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+        ensure_suggested(&policy, Some(home.path())).expect("Docs created");
+
+        let accepted =
+            ensure_suggested_data(&policy, Some(home.path())).expect("Data created beside it");
+
+        assert!(accepted.is_dir());
+        assert!(home
+            .path()
+            .join(WORK_FOLDER_NAME)
+            .join(DOCUMENTS_SUBFOLDER_NAME)
+            .is_dir());
+    }
+
+    #[test]
+    fn creating_the_suggested_data_folder_a_second_time_reuses_it() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+
+        let first = ensure_suggested_data(&policy, Some(home.path())).expect("created");
+        let second = ensure_suggested_data(&policy, Some(home.path())).expect("reused");
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn a_file_blocking_the_suggested_data_name_is_refused_and_left_alone() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = home_policy(home.path());
+        std::fs::create_dir(home.path().join(WORK_FOLDER_NAME)).expect("creates the root");
+        let blocking = home.path().join(WORK_FOLDER_NAME).join(DATA_SUBFOLDER_NAME);
+        std::fs::write(&blocking, b"not a folder").expect("writes the fixture");
+
+        let error =
+            ensure_suggested_data(&policy, Some(home.path())).expect_err("expected a refusal");
+
+        assert_eq!(error.code(), "work_folder_not_a_directory");
+        assert!(blocking.is_file());
+    }
+
+    #[test]
+    fn a_suggested_data_folder_inside_a_sync_tree_is_refused_without_creating_it() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let policy = WorkFolderPolicy::new(Vec::new(), Vec::new(), vec![home.path().to_path_buf()]);
+
+        let error =
+            ensure_suggested_data(&policy, Some(home.path())).expect_err("expected a refusal");
 
         assert_eq!(error.code(), "work_folder_is_cloud_synced");
         assert!(!home.path().join(WORK_FOLDER_NAME).exists());

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
+import { answerForCopy } from "../lib/annotations";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
-import type { AnalysisScope } from "../lib/ipc";
+import type { CombinedScope } from "../lib/ipc";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
@@ -23,8 +24,8 @@ export function ChatPanel({
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
-  /** The files this conversation is about, chosen in the folder card beside it. */
-  scope: AnalysisScope;
+  /** The files this conversation is about, chosen in the two folder cards beside it. */
+  scope: CombinedScope;
   /** Whether a question is being answered, so the folder card can lock the choice meanwhile. */
   onBusyChange: (busy: boolean) => void;
   modelAlias: string;
@@ -34,7 +35,7 @@ export function ChatPanel({
   indexing: IndexingState;
   onModelAliasChange: (alias: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [draft, setDraft] = useState("");
   const {
     entries,
@@ -74,7 +75,12 @@ export function ChatPanel({
   };
 
   const copyAll = () => {
-    const text = formatConversation(entries, streamingId, (role) =>
+    // Everything she sees except the lists of sources: the text as shown, the engine's own figure
+    // and the notes under each answer (`lib/annotations.ts`).
+    const shown = entries.map((entry) =>
+      entry.role === "assistant" ? { ...entry, content: answerForCopy(t, locale, entry) } : entry,
+    );
+    const text = formatConversation(shown, streamingId, (role) =>
       t(role === "user" ? "chat.authorUser" : "chat.authorAssistant"),
     );
     void copyToClipboard(text);

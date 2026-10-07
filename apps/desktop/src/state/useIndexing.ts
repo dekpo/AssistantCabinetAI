@@ -6,6 +6,9 @@ import { indexWorkFolder, type IndexProgress, type IndexSummary } from "../lib/i
  * One analysis pass over the work folder, owned above both places that start it: the folder card
  * in the sidebar, and the answer that had to say "analyse your documents first". Two buttons, one
  * pass - a second pass started while the first is running would re-embed the same files.
+ *
+ * The Data Folder has its own, built from the same hook with `indexDataFolder`: two folders, two
+ * independent passes, each shared by the sidebar card and the settings panel.
  */
 export interface IndexingState {
   running: boolean;
@@ -25,7 +28,9 @@ export interface IndexingState {
   reset: () => void;
 }
 
-export function useIndexing(): IndexingState {
+export function useIndexing(
+  pass: (onProgress: (progress: IndexProgress) => void) => Promise<IndexSummary> = indexWorkFolder,
+): IndexingState {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<IndexProgress | null>(null);
   const [summary, setSummary] = useState<IndexSummary | null>(null);
@@ -44,7 +49,7 @@ export function useIndexing(): IndexingState {
     setProgress(null);
     setRunning(true);
     try {
-      setSummary(await indexWorkFolder(setProgress));
+      setSummary(await pass(setProgress));
       return true;
     } catch (raw: unknown) {
       setError(normaliseError(raw));
@@ -55,7 +60,7 @@ export function useIndexing(): IndexingState {
       setProgress(null);
       setFinishedPasses((count) => count + 1);
     }
-  }, []);
+  }, [pass]);
 
   const reset = useCallback(() => {
     setSummary(null);

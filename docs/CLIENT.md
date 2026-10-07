@@ -22,7 +22,7 @@ Reference: [Tauri 2](https://v2.tauri.app/start/), [webview versions](https://v2
 
 One window, one product:
 
-- **left:** the work folder (files);
+- **left:** the documents folder, then the data folder (files);
 - **right:** chat, the proposed plan, and Approve / Cancel;
 - **top:** Assistant Cabinet AI;
 - **settings:** light / dark / follow the system, and the language, defaulting to the system choice.
@@ -73,11 +73,11 @@ Desktop and Documents. Detail and the checks in code: `docs/PRIVACY-AND-SECURITY
 
 Rules:
 
-- The suggested folder is `~/AssistantCabinetAI/DOCS`, shown before anything is chosen. `DOCS` is a
-  dedicated subfolder of `~/AssistantCabinetAI` rather than the root itself, so a sibling `DATA`
+- The suggested folder is `~/AssistantCabinetAI/Docs`, shown before anything is chosen. `Docs` is a
+  dedicated subfolder of `~/AssistantCabinetAI` rather than the root itself, so a sibling `Data`
   folder for spreadsheet work (CSV/XLSX) can sit beside it later without the two kinds of file
   sharing one directory. A primary button **creates it if needed and uses it** (both the root and
-  `DOCS` together); **Choose a folder...** still opens the system dialog. Nothing is created until
+  `Docs` together); **Choose a folder...** still opens the system dialog. Nothing is created until
   she asks.
 - Refuse the drive root, system folders, the practice software's own store, and the whole of Documents as
   an allow-list. Today the pilot's downloads and scans land directly in My Documents; the work folder is a
@@ -99,6 +99,53 @@ After she has filed the documents in her own software, the work folder empties i
 **Undo the batch** works only while the files are still in the work folder. What she typed into Medilink is
 outside our reach, and the screen says so. If she empties the dedicated trash herself, we do not restore —
 same as Explorer or the Finder.
+
+## The data folder
+
+A second, sibling folder for tabular files (CSV, XLSX): `~/AssistantCabinetAI/Data`, beside
+`~/AssistantCabinetAI/Docs`. The documents folder feeds retrieval — extract, index, answer with
+sources. The data folder is not a second documents folder and does not feed that pipeline: it
+exists so CSV/XLSX files never share a directory with PDF/DOCX/scans, and it feeds the deterministic
+tabular engine (`tabular::engine`, `docs/ARCHITECTURE.md`'s "Tabular analysis" row) instead.
+**Unlike the documents folder, it is never required**: the conversation works without one.
+
+Its card is the documents folder card, cloned (tabular UI session, 28 September 2026): one
+component, `DataFolderCard`, in the sidebar and again in the settings panel, built from the same
+parts as `WorkFolderCard` (`components/FolderCardParts.tsx`) — the same buttons (Voir, Changer,
+Reset, **Analyser**), the same summary line ("X fichiers, Y analysés, Z illisibles"), the same dots,
+and, in the sidebar, the same selection list ("Données utilisées : aucune ⚠ / N fichiers /
+toutes ⚠").
+
+- **Analyser** (`index_data_folder`) cleans file names exactly as the documents pass does (same
+  rule, same `renamed-files.jsonl`), then parses every CSV/XLS/XLSX/XLSM file on this computer and
+  caches its `TabularInventory`. No embedding and no gateway call, so it is over in a moment; the
+  line under the card says so, because an Analyse that finishes before the spinner is seen would
+  otherwise read as a button that did nothing.
+- **Three states per file**, computed by `data_folder::DataFolder` from the filesystem
+  (`WorkFolderInventory`, unchanged, built with no index) joined with the cached inventories
+  (`IndexStore::all_tabular_inventories`): orange, not analysed yet or changed since; green, at
+  least one sheet looks like a real table (`TabularInventory::has_a_usable_sheet`: 8 rows, 2
+  columns, formulas under 5 % of the rows); red, analysed and nothing usable in it — a note renamed
+  `.csv`, a three-row table, a file that is not a workbook — or not a spreadsheet at all.
+- **Only a green file can be ticked**, as only an analysed document can be. Unticking the last file
+  returns to "aucune", never to "toutes". Changing the data folder resets the data selection; the
+  next Analyse drops the inventories of files no longer present.
+- **Reset** (`reset_data_index`) forgets the workbook analyses only. The documents index is never
+  touched by it, nor the workbooks by the documents card's Reset.
+
+A conversation with workbooks selected and no document is answered by the tabular engine alone —
+tier 2 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a computed value or a
+structural fact, cited by **sheet** (and column) where a document answer cites its page, with no
+model involved; or, when the engine cannot answer exactly, a sentence naming the workbook's real
+columns and the operations that work. Since session 11 (30 September 2026) a filter anchored on
+real data — a value, a weekday, a month, a year, or a comparison beside a number — is computed, not
+just named: the answer shows an **"Understood as"** line under it, written from the filter the
+engine actually ran, never from the question's own words. A value found in two reachable columns
+is asked about rather than guessed at (`WhichColumn`); a value found in none gets a nudge naming
+close real values instead of a silent zero. Documents and workbooks selected together: a question
+that is clearly and only about the data is routed straight to the tabular engine, exactly as above
+(session 15, D7 in `docs/DECISIONS.md`); every other question is still refused with
+`documents_and_tables_together` — combining both sides in one answer is a later session's design.
 
 ## Why not Open WebUI Computer
 
@@ -142,3 +189,6 @@ Delegating a real scan is still processing health data, so it waits for the DPIA
 The Mac mini is the practice's model server. Assistant Cabinet AI installs on **each** workstation. They are
 not the same machine, and patient files are never copied to the mini to "use its power" — that would turn it
 into a health-record store.
+
+The full runbook — client and server hardware requirements, the LAN topology, the beta rollout checklist for
+this cabinet and the template for the next one — is `docs/DEPLOYMENT.md`.

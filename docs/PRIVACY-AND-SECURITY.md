@@ -30,6 +30,26 @@ These hold from the prototype, not "later".
 Disk encryption (BitLocker, FileVault) on the workstations **and** the Mac mini is mandatory before any real
 pilot.
 
+**The tabular hidden interpreter's one exception, decided as D6 (`docs/DECISIONS.md`, session 7;
+implemented session 14, `docs/SESSION-DATA-14-Query-Plan.md`).** When a tabular question does not
+classify deterministically, the gateway receives the question's own text plus the workbook's **schema**:
+sheet names, row counts, and each column's name, type, unit and whether it holds formulas. **Never** a
+cell value, a distinct value, a row, or a file path. On the pilot's deployment this schema reaches Ollama
+on her own Mac mini, not a third party, the same destination every other chat turn already reaches. The
+DPIA draft owed before a real workbook is ever pointed at this path must carry this line explicitly:
+column and sheet names, never values, reach the gateway.
+
+**The mixed tier (session 16, `docs/SESSION-DATA-16-Mixed-Tier.md`), documents and tables both selected.**
+The gateway receives exactly what tier 1 already sends for the document half (retrieved excerpts, capped
+to this tier's own share of the budget) plus one computed line for the table half
+(`tabular::escalation::format_evidence`: the sheet, the column, the operation and its result - never a raw
+row, never a cell value outside the one number the engine computed). Entity linking, the step that matches
+a word found in a retrieved excerpt against the workbook's real column values to build a filter, happens
+entirely in Rust, before anything is sent: the gateway never sees the candidate word or the column it
+matched, only the already-filtered, already-computed result if one was found. Numeric verification and
+citation checking, after the model writes, read the model's own reply and the evidence already sent -
+nothing new leaves the workstation for either check.
+
 ## The workstation is not automatically local
 
 "On her machine" is not the same as "nowhere else". The operating system copies parts of the profile to a
@@ -46,7 +66,7 @@ File Provider client — OneDrive, Dropbox, Google Drive, Box — mounts under `
 
 ### What the code does about it
 
-The work folder is `~/AssistantCabinetAI/DOCS` (a dedicated `DOCS` subfolder, so a future `DATA`
+The work folder is `~/AssistantCabinetAI/Docs` (a dedicated `Docs` subfolder, so a future `Data`
 subfolder for spreadsheet work can sit beside it), directly in the home. OneDrive Backup only covers Desktop,
 Documents, Pictures, Music and Videos, and iCloud only Desktop and Documents, so neither reaches it. The
 same is true of File History and the Windows Backup app. The location is a default, not the guarantee;
@@ -74,6 +94,10 @@ the guarantee is in `apps/desktop/src-tauri/src/work_folder.rs`:
   for a standalone practice PC, and a blocker for a managed one.
 - **Local index placement.** The retrieval index holds chunks of every document, so it lives in
   `%LOCALAPPDATA%` (`app_local_data_dir()`), never in the roaming `%APPDATA%` that holds `settings.json`.
+  The tabular pipeline's typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) is the one place
+  the Data Folder side holds cell values at rest, unlike its structural inventory: it lives in the same
+  `IndexStore` SQLite file, never a file beside the source workbook, is covered by the same workstation
+  disk encryption, and is cleared on every Analyse pass and on the Data Folder's own Reset.
 - **Her existing documents.** `docs/PILOT-GP.md` records that everything she downloads and scans lands in
   My Documents at the root. If OneDrive Backup is enabled on her machine, **her patient reports are
   already in Microsoft's cloud today**, independently of this software. She is the named data controller,

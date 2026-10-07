@@ -397,6 +397,38 @@ anywhere under `resources/`.
 
 ---
 
+## Checking that the model's window is not truncating the prompt (7 October 2026)
+
+**Symptom that sends you here.** A small model answers in English, pastes an unrelated excerpt, or refuses after a long wait,
+and the question looked simple. **Cause to rule out:** the prompt (instruction, excerpts, remembered answers) is longer than
+the window given to that model (`MODEL_CONTEXT_WINDOWS`, else `DEFAULT_CONTEXT_WINDOW`), and the runtime cuts its beginning
+without telling the application. Ollama says it in its own log; nothing in the program does.
+
+**Procedure** (repository root; right after asking the question that looked wrong, because the log only goes back to the
+creation of the container and `down` or `--force-recreate` empties it):
+
+```powershell
+docker compose logs ollama --since 30m | Select-String "truncated = 1"     # a cut prompt
+docker compose logs ollama --since 30m | Select-String "stop processing"   # every answer, with its size
+docker compose logs ollama --since 30m | Select-String "n_ctx_slot"        # the window actually applied
+```
+
+(bash: the same with `grep`.) The line to read is `slot release: id 0 | task 0 | stop processing: n_tokens = 853, truncated = 0`.
+`n_tokens` is the prompt plus the answer in tokens; `truncated = 1` means the prompt was cut.
+
+- **No `truncated = 1`, `n_tokens` well under the window:** not the cause.
+- **`truncated = 1`:** raise that model's window in `.env` (the comments above `MODEL_CONTEXT_WINDOWS` say how far it is useful),
+  `docker compose up -d server`, ask again, check again.
+- **`n_ctx_slot` is not the value in `.env`:** the model supports less than asked (the gateway caps it) or the server was not
+  restarted after the edit.
+- **`requested context size too large for model ... n_ctx_train=2048`:** the embedding model `nomic-embed-text`, trained at
+  2048, was asked for a larger window. Harmless: it uses 2048.
+
+**State when this was written (owner's machine, container up since 5 October):** 88 answers in the log, **none truncated**, the
+largest 933 tokens, windows seen 2048, 4096 and 8192. The 6 October hypothesis (BUG-22: a 2048-token window cutting the prompt)
+is **not supported** by these fixtures; it stays a risk for larger real documents, which is why the check is a standing step of
+the human pass (`docs/test-reports/human-acceptance-pass-2/README.md`, appendix 1).
+
 ## How to use this file
 
 - New entry at the top, dated, with a short heading naming the symptom or the wrong assumption — not

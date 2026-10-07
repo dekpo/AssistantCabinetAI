@@ -1,0 +1,9 @@
+{
+  "locale": "fr-FR",
+  "_comment": "Questions de test pour tabular/question.rs. Donnees, jamais des litteraux en Rust : le garde src/guards/sources.test.ts interdit le francais dans un fichier .rs. Memes cles que en-US.json ; les deux fichiers changent ensemble.",
+  "questions": {
+    "sheet_names": "Quelles feuilles contient ce classeur ?",
+    "row_count_in_named_sheet": "Combien de lignes dans la feuille Facturation ?",
+    "sum_of_named_column": "Quelle est la somme des montant ?"
+  }
+}

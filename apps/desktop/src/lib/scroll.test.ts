@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOTTOM_TOLERANCE_PX, isNearBottom, scrollBehaviour } from "./scroll";
+import { BOTTOM_TOLERANCE_PX, isNearBottom, nextFollowing, scrollBehaviour } from "./scroll";
 
 describe("isNearBottom", () => {
   it("is at the end when the conversation is shorter than the panel", () => {
@@ -26,5 +26,24 @@ describe("scrollBehaviour", () => {
 
   it("jumps when the machine asks for less motion", () => {
     expect(scrollBehaviour(true)).toBe("auto");
+  });
+});
+
+describe("nextFollowing", () => {
+  it("keeps following when the content grew under a view that was at the end", () => {
+    expect(nextFollowing(true, false, false)).toBe(true);
+  });
+
+  it("stops following when she scrolled away from the end", () => {
+    expect(nextFollowing(true, false, true)).toBe(false);
+  });
+
+  it("follows again as soon as she is back at the end", () => {
+    expect(nextFollowing(false, true, true)).toBe(true);
+    expect(nextFollowing(false, true, false)).toBe(true);
+  });
+
+  it("does not start following by itself once she has left", () => {
+    expect(nextFollowing(false, false, false)).toBe(false);
   });
 });

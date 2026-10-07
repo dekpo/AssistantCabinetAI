@@ -55,7 +55,23 @@ describe("formatConversation", () => {
       { id: "a1", role: "assistant" as const, content: "Bonjour, comment puis-je aider ?" },
     ];
     expect(formatConversation(entries, null, label)).toBe(
-      "Vous: Bonjour\n\nAssistant: Bonjour, comment puis-je aider ?",
+      "Vous: Bonjour\nAssistant: Bonjour, comment puis-je aider ?",
+    );
+  });
+
+  it("keeps one blank line between pairs and none inside a turn", () => {
+    const entries = [
+      { id: "q1", role: "user" as const, content: "Combien ?" },
+      {
+        id: "a1",
+        role: "assistant" as const,
+        content: "Somme : 1 450.\n\nCalculé sur 3 lignes.\n\n\nCompris comme : x.   \n",
+      },
+      { id: "q2", role: "user" as const, content: "Et ?" },
+      { id: "a2", role: "assistant" as const, content: "Rien." },
+    ];
+    expect(formatConversation(entries, null, label)).toBe(
+      "Vous: Combien ?\nAssistant: Somme : 1 450.\nCalculé sur 3 lignes.\nCompris comme : x.\n\nVous: Et ?\nAssistant: Rien.",
     );
   });
 
@@ -66,6 +82,6 @@ describe("formatConversation", () => {
       { id: "q2", role: "user" as const, content: "Et ensuite ?" },
       { id: "a2", role: "assistant" as const, content: "En cours" },
     ];
-    expect(formatConversation(entries, "a2", label)).toBe("Vous: Bonjour\n\nAssistant: Bonjour\n\nVous: Et ensuite ?");
+    expect(formatConversation(entries, "a2", label)).toBe("Vous: Bonjour\nAssistant: Bonjour\n\nVous: Et ensuite ?");
   });
 });

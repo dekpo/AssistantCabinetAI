@@ -493,9 +493,10 @@ Deliverable: the software installs and runs at her practice.
 - **A step-by-step runbook for deploying the server side** (gateway, Ollama, Open WebUI, their configuration)
   to a separate **server device**, written for any such device rather than for one Mac mini, since the stack
   will be replicated on other hardware. Recorded on 27 September 2026, while the stack still runs on the same
-  machine as the desktop app and the Mac mini has not arrived. It needs design as well as steps: today
-  everything is published on `127.0.0.1`, and the user device must reach the gateway - and only the gateway -
-  over the practice network, behind a firewall rule and an access key. After the move, run
+  machine as the desktop app and the Mac mini has not arrived. **Written 1 October 2026, ahead of this
+  window: `docs/DEPLOYMENT.md`.** The LAN exposure it designs - today everything is published on
+  `127.0.0.1`, and the user device must reach the gateway - and only the gateway - over the practice network,
+  behind a firewall rule and an access key - is still to build, tracked there. After the move, run
   `apps/server/scripts/measure_context.py` there and set `MODEL_CONTEXT_WINDOWS` from what it measures.
 - Security checks: path allow-list, context cap, per-person access key, no clear text on the network.
 - `docs/user/`: installation and getting started, **in French**, written for her.
@@ -528,8 +529,11 @@ deployment (sprint 4). It is platform work for the next profession — the case 
 - Workbook inventory persisted locally, keyed by relative path and SHA-256: sheets, dimensions, columns,
   inferred types, row counts, header row, date and numeric and categorical columns, formula presence,
   supported capabilities. No copy of the source file.
-- Deterministic operations: count, distinct, sum, min, max, group sum, largest single row, filter, sort.
-  A group **total** and the largest **single row** are different facts and are labelled as such.
+- Deterministic operations: count, distinct, sum, min, max, mean, median, group sum, the largest group,
+  the least group, the top N groups, rows per group, largest single row, filter, sort - mean, median,
+  least group, top N and rows-per-group added by decision D5 (`docs/DECISIONS.md`), implemented session
+  12. A group **total** and the largest **single row** are different facts and are labelled as such. A
+  new operation is never added quietly: it needs an owner decision recorded in `docs/DECISIONS.md`.
 - Question classification from a **locale pattern pack** (data, not Rust literals). The operations are
   language-neutral; the sentence comes from the React catalogues. Changing the locale cannot change a
   number.
@@ -539,9 +543,19 @@ deployment (sprint 4). It is platform work for the next profession — the case 
   and refused for factual answers. No formula evaluation, no Excel engine.
 - Escalation to the model only when the deterministic path cannot answer, carrying the aggregate card as
   structured evidence — never rows. The model's citations are verified against that evidence afterwards.
-- **Tests:** deterministic answers perform zero gateway calls, proved with a provider double that panics
-  when called; every deterministic question still answers with the gateway stopped; the same question
+- **Tests:** deterministic answers perform zero gateway calls, proved with a test double that fails any
+  request it receives; every deterministic question still answers with the gateway stopped; the same question
   returns the same number under a different model alias.
+- **Human acceptance pass, after the last tabular session (currently session 16) closes.** `cargo test`
+  and `pnpm test` green is not the same as seeing it work: before Sprint 2b is called done, run the
+  built app, by hand, against real example CSV/XLSX files, asking it the precise questions the
+  sessions 9-16 reference sets already cover (filters, dates, weekdays, months, group rankings,
+  mean/median, mixed documents-and-tables) plus whatever a person tries that the fixtures did not
+  think of. The point is to demonstrate the deterministic engine actually working end to end in the
+  interface, not only in a test harness, and to catch anything the reference set's own fixtures
+  happened not to exercise. Not scheduled as its own numbered session yet; add one (or fold it into
+  session 16's existing "manual validation" step, widened to the whole engine) when the last session
+  in the sequence is reached.
 
 Design, and what is reused from `LocalGridMind` versus what is deliberately not:
 `docs/SPRINT-2-ASSESSMENT.md`.
@@ -583,7 +597,7 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | French output quality | The model alias is a setting; change the alias, not the code |
 | Drift onto Open WebUI, voice, certificates | Frozen by `.cursor/rules/v0-sprint.mdc` |
 | Tabular work pulled into milestone A | Sprint 2a is documents only. Sprint 2b is dated after milestone B, and the pilot has no spreadsheets |
-| A spreadsheet application grows out of sprint 2b | Nine named operations, data-grid sheets only, no formula evaluation. A tenth operation is a decision, not a configuration |
+| A spreadsheet application grows out of sprint 2b | Named operations and data-grid sheets only, no formula evaluation. Every operation the engine gained past the original nine was added by an owner decision recorded in `docs/DECISIONS.md`, never added quietly |
 
 ## Mapping from the old phases
 

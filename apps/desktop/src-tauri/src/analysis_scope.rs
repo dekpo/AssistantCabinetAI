@@ -12,8 +12,14 @@
 //!
 //! Deliberately absent, so they cannot drift from real membership or from what consumes them: a
 //! scope id (nothing persists a session yet), the allowed domains (derived on demand from each
-//! member's `FileRecord::kind`), a purpose label, a status enum, and sheet restrictions (Sprint 2b
-//! adds `sheet_names` to `ScopeEntry` when a tabular engine exists to read them).
+//! member's `FileRecord::kind`), and a purpose label or status enum.
+//!
+//! Sprint 2b adds `sheet_names` to `ScopeEntry`: a selected workbook may be narrowed to some of
+//! its sheets. `FileRecord` stays sheet-agnostic (`docs/ARCHITECTURE.md`'s rule that a domain
+//! fact lives with the domain that produced it), so the restriction cannot live on the resolved
+//! inventory the way the rest of a scope does. `ScopeResolution::sheet_restrictions` carries it
+//! instead, keyed by relative path, and the tabular engine is the only reader of it: retrieval
+//! and the document router never look at it.
 
 use serde::{Deserialize, Serialize};
 
@@ -40,14 +46,61 @@ pub struct ScopeEntry {
     /// this entry was added, so a silent file replacement mid-conversation can be detected.
     pub pinned_id: String,
     pub added_at: i64,
+    /// Restricts a selected workbook to these sheets. Empty means every sheet it holds -
+    /// meaningless for a document entry, and never consulted for one. Sheet names, not indices,
+    /// because they are what a workbook's own inventory names them by and what survives a column
+    /// being inserted elsewhere in the file.
+    #[serde(default)]
+    pub sheet_names: Vec<String>,
 }
 
+/// One conversation's scope, built from both selection lists before every question: the
+/// documents she ticked in the Documents Folder card (`mode`) and the workbooks she ticked in the
+/// Data Folder card (`data_mode`). Two modes rather than one mixed list, because each is relative
+/// to its own folder - the same relative path can exist in both - and because "tous" means the
+/// whole of one folder, never of the other.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisScope {
+    /// The Documents Folder selection. Everything in this module's `resolve` reads this one only.
     pub mode: ScopeMode,
+    /// The Data Folder selection. Absent on the wire means no table, which is what every caller
+    /// sent before the Data Folder could be selected from. `WholeFolder` is every green workbook
+    /// in the Data Folder; `Explicit` holds entries relative to the Data Folder.
+    #[serde(default = "ScopeMode::nothing")]
+    pub data_mode: ScopeMode,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+impl ScopeMode {
+    /// An explicit selection with no entry: "aucun".
+    pub fn nothing() -> Self {
+        Self::Explicit(Vec::new())
+    }
+
+    /// Whether this selection chose anything at all. "Tous" did, even over an empty folder.
+    pub fn chose_something(&self) -> bool {
+        match self {
+            Self::WholeFolder => true,
+            Self::Explicit(entries) => !entries.is_empty(),
+        }
+    }
+}
+
+/// Which grounding tier a scope asks for (`docs/SELECTION-AND-MEMORY.md`, the grounding priority
+/// chain), decided from the two selections alone, before any file is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroundingTier {
+    /// Documents chosen, no table: tier 1, retrieval. Also "neither", tier 3, which the document
+    /// path already tells apart through `ScopeResolution::no_documents_chosen`.
+    Documents,
+    /// At least one table chosen and no document: tier 2, the tabular engine, no model.
+    TablesOnly,
+    /// Both: session 15's router answers a clearly data-only question from tier 2 alone; session
+    /// 16's mixed tier (`commands::mixed_tier`, `mixed_answer.rs`) answers everything else, never
+    /// silently routed to one side (`docs/SESSION-DATA-16-Mixed-Tier.md`).
+    DocumentsAndTables,
 }
 
 impl AnalysisScope {
@@ -55,8 +108,17 @@ impl AnalysisScope {
     pub fn whole_folder(now: i64) -> Self {
         Self {
             mode: ScopeMode::WholeFolder,
+            data_mode: ScopeMode::nothing(),
             created_at: now,
             updated_at: now,
+        }
+    }
+
+    pub fn tier(&self) -> GroundingTier {
+        match (self.mode.chose_something(), self.data_mode.chose_something()) {
+            (true, true) => GroundingTier::DocumentsAndTables,
+            (false, true) => GroundingTier::TablesOnly,
+            (_, false) => GroundingTier::Documents,
         }
     }
 
@@ -79,30 +141,38 @@ impl AnalysisScope {
                 no_documents_chosen: false,
                 missing: Vec::new(),
                 changed: Vec::new(),
+                sheet_restrictions: std::collections::BTreeMap::new(),
             };
         };
 
         let mut members = Vec::new();
         let mut missing = Vec::new();
         let mut changed = Vec::new();
+        let mut sheet_restrictions = std::collections::BTreeMap::new();
         for entry in entries {
             match full.find_by_relative_path(&entry.relative_path) {
                 None => missing.push(entry.relative_path.clone()),
                 Some(record) if record.id != entry.pinned_id => {
                     changed.push(entry.relative_path.clone())
                 }
-                Some(record) => members.push(record.clone()),
+                Some(record) => {
+                    if !entry.sheet_names.is_empty() {
+                        sheet_restrictions
+                            .insert(entry.relative_path.clone(), entry.sheet_names.clone());
+                    }
+                    members.push(record.clone());
+                }
             }
         }
         ScopeResolution {
             inventory: WorkFolderInventory::from_records(full.root(), members),
             narrowed: true,
-            // Every entry today is a document: the picker offers analysed files only. When tables
-            // can be chosen too, this becomes "no entry is a document", and a table-only choice
-            // reaches the tabular engine without excerpts.
+            // Documents only: a table-only choice never reaches this function's caller on the
+            // document path, because `tier` routes it to the tabular engine first.
             no_documents_chosen: entries.is_empty(),
             missing,
             changed,
+            sheet_restrictions,
         }
     }
 }
@@ -122,6 +192,22 @@ pub struct ScopeResolution {
     pub missing: Vec<String>,
     /// Entries whose file is there but no longer has the content that was pinned.
     pub changed: Vec<String>,
+    /// Sheet names a surviving entry was narrowed to, keyed by relative path. A path absent here
+    /// carries no restriction: every sheet the workbook holds is in scope. Read only by the
+    /// tabular engine (`tabular::engine::execute`), which must treat a sheet outside this list
+    /// exactly as it treats a sheet that does not exist - never distinguishing the two, or a
+    /// question could probe which sheets exist outside the scope she chose.
+    pub sheet_restrictions: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl ScopeResolution {
+    /// The sheets a workbook at `relative_path` is restricted to, if any. `None` means
+    /// unrestricted - every sheet the workbook holds.
+    pub fn sheets_allowed(&self, relative_path: &str) -> Option<&[String]> {
+        self.sheet_restrictions
+            .get(relative_path)
+            .map(Vec::as_slice)
+    }
 }
 
 #[cfg(test)]
@@ -143,7 +229,9 @@ mod tests {
                 relative_path: "2026/mars/bilan.pdf".to_string(),
                 pinned_id: "abc123".to_string(),
                 added_at: 2_000,
+                sheet_names: Vec::new(),
             }]),
+            data_mode: ScopeMode::nothing(),
             created_at: 1_000,
             updated_at: 2_000,
         };
@@ -188,17 +276,28 @@ mod tests {
     }
 
     fn explicit(entries: &[(&str, &str)]) -> AnalysisScope {
+        explicit_with_sheets(
+            &entries
+                .iter()
+                .map(|(path, id)| (*path, *id, &[][..]))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn explicit_with_sheets(entries: &[(&str, &str, &[&str])]) -> AnalysisScope {
         AnalysisScope {
             mode: ScopeMode::Explicit(
                 entries
                     .iter()
-                    .map(|(path, id)| ScopeEntry {
+                    .map(|(path, id, sheets)| ScopeEntry {
                         relative_path: path.to_string(),
                         pinned_id: id.to_string(),
                         added_at: 1,
+                        sheet_names: sheets.iter().map(|s| s.to_string()).collect(),
                     })
                     .collect(),
             ),
+            data_mode: ScopeMode::nothing(),
             created_at: 1,
             updated_at: 1,
         }
@@ -268,6 +367,152 @@ mod tests {
                 .resolve(&folder())
                 .no_documents_chosen
         );
+    }
+
+    #[test]
+    fn a_sheet_restriction_is_reported_only_for_the_entry_that_carries_one() {
+        let resolution = explicit_with_sheets(&[
+            ("a.txt", "id-a", &["Facturation"]),
+            ("b.txt", "id-b", &[]),
+        ])
+        .resolve(&folder());
+
+        assert_eq!(
+            resolution.sheets_allowed("a.txt"),
+            Some(&["Facturation".to_string()][..])
+        );
+        assert_eq!(resolution.sheets_allowed("b.txt"), None);
+        assert_eq!(resolution.sheets_allowed("c.txt"), None);
+    }
+
+    #[test]
+    fn an_empty_sheet_names_list_means_unrestricted() {
+        let resolution = explicit_with_sheets(&[("a.txt", "id-a", &[])]).resolve(&folder());
+
+        assert_eq!(resolution.sheets_allowed("a.txt"), None);
+    }
+
+    #[test]
+    fn a_sheet_restriction_on_a_changed_or_missing_entry_is_not_reported() {
+        // The entry did not survive, so nothing at all should be said about its sheets - a
+        // restriction on a workbook that was rejected would be a stray fact nobody can act on.
+        let resolution = explicit_with_sheets(&[
+            ("a.txt", "old-id", &["Facturation"]),
+            ("gone.txt", "id-x", &["Consultations"]),
+        ])
+        .resolve(&folder());
+
+        assert!(resolution.sheet_restrictions.is_empty());
+    }
+
+    #[test]
+    fn the_whole_folder_scope_never_carries_a_sheet_restriction() {
+        let resolution = AnalysisScope::whole_folder(1).resolve(&folder());
+
+        assert!(resolution.sheet_restrictions.is_empty());
+    }
+
+    #[test]
+    fn sheet_names_round_trip_through_the_wire_form() {
+        let scope = explicit_with_sheets(&[("data.csv", "id-1", &["Facturation", "Stock"])]);
+        let json = serde_json::to_value(&scope).unwrap();
+
+        let ScopeMode::Explicit(entries) = &scope.mode else {
+            panic!("expected an explicit scope");
+        };
+        assert_eq!(
+            json["mode"]["entries"][0]["sheetNames"],
+            serde_json::json!(["Facturation", "Stock"])
+        );
+        let back: AnalysisScope = serde_json::from_value(json).unwrap();
+        assert_eq!(back, scope);
+        assert_eq!(entries[0].sheet_names, vec!["Facturation", "Stock"]);
+    }
+
+    #[test]
+    fn a_scope_entry_with_no_sheet_names_field_still_deserialises() {
+        // Written before this field existed, or written by a caller that only ever means "every
+        // sheet". `#[serde(default)]` is what keeps that reading as "unrestricted" rather than a
+        // parse failure.
+        let json = serde_json::json!({
+            "mode": {
+                "kind": "explicit",
+                "entries": [
+                    { "relativePath": "a.csv", "pinnedId": "id-a", "addedAt": 1 }
+                ]
+            },
+            "createdAt": 1,
+            "updatedAt": 1
+        });
+
+        let scope: AnalysisScope = serde_json::from_value(json).unwrap();
+        let ScopeMode::Explicit(entries) = &scope.mode else {
+            panic!("expected an explicit scope");
+        };
+        assert!(entries[0].sheet_names.is_empty());
+    }
+
+    fn with_data(documents: ScopeMode, data: ScopeMode) -> AnalysisScope {
+        AnalysisScope {
+            mode: documents,
+            data_mode: data,
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
+    fn one_entry(path: &str) -> ScopeMode {
+        ScopeMode::Explicit(vec![ScopeEntry {
+            relative_path: path.to_string(),
+            pinned_id: "id".to_string(),
+            added_at: 1,
+            sheet_names: Vec::new(),
+        }])
+    }
+
+    #[test]
+    fn the_tier_is_decided_from_the_two_selections_alone() {
+        use GroundingTier::*;
+        let none = ScopeMode::nothing;
+        assert_eq!(with_data(none(), none()).tier(), Documents);
+        assert_eq!(with_data(one_entry("a.pdf"), none()).tier(), Documents);
+        assert_eq!(with_data(ScopeMode::WholeFolder, none()).tier(), Documents);
+        assert_eq!(with_data(none(), one_entry("a.csv")).tier(), TablesOnly);
+        assert_eq!(with_data(none(), ScopeMode::WholeFolder).tier(), TablesOnly);
+        assert_eq!(
+            with_data(one_entry("a.pdf"), one_entry("a.csv")).tier(),
+            DocumentsAndTables
+        );
+        assert_eq!(
+            with_data(ScopeMode::WholeFolder, ScopeMode::WholeFolder).tier(),
+            DocumentsAndTables
+        );
+    }
+
+    #[test]
+    fn a_scope_sent_before_the_data_folder_existed_chooses_no_table() {
+        let json = serde_json::json!({
+            "mode": { "kind": "explicit", "entries": [] },
+            "createdAt": 1,
+            "updatedAt": 1
+        });
+
+        let scope: AnalysisScope = serde_json::from_value(json).unwrap();
+
+        assert_eq!(scope.data_mode, ScopeMode::nothing());
+        assert_eq!(scope.tier(), GroundingTier::Documents);
+    }
+
+    #[test]
+    fn the_data_selection_never_leaks_into_the_document_resolution() {
+        // A workbook ticked in the Data Folder is relative to that folder. Resolving the document
+        // selection must not see it at all - not as a member, and not as a missing file either.
+        let resolution =
+            with_data(ScopeMode::nothing(), one_entry("a.txt")).resolve(&folder());
+
+        assert!(resolution.no_documents_chosen);
+        assert!(resolution.inventory.is_empty());
+        assert!(resolution.missing.is_empty());
     }
 
     #[test]

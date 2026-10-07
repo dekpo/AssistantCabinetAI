@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
+import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
-import { noDocumentsScope } from "./lib/analysisScope";
-import type { AnalysisScope } from "./lib/ipc";
+import { combineScopes, noDocumentsScope } from "./lib/analysisScope";
+import { indexDataFolder, type AnalysisScope } from "./lib/ipc";
 import { applyTheme } from "./lib/theme";
 import { useAppSettings } from "./state/useAppSettings";
 import { useIndexing } from "./state/useIndexing";
@@ -34,17 +35,26 @@ export default function App() {
   /* Owned here rather than inside the folder card, because two places start the same pass: the
      card's own button, and the answer that had to say the documents have not been read yet. */
   const indexing = useIndexing();
+  /* The Data Folder's own pass: two folders, two passes that never wait on each other. */
+  const dataIndexing = useIndexing(indexDataFolder);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /* The documents the conversation is about. Held here because it is chosen in the folder card and
      used by the chat: nothing persists a session yet, so nothing persists this. It starts with no
      document: the selection is built only from what she ticks (`docs/SELECTION-AND-MEMORY.md`). */
   const [scope, setScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
+  /* The workbooks, chosen the same way in the Data Folder card and starting from none too. */
+  const [dataScope, setDataScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
   const workFolder = snapshot?.settings.workFolder ?? null;
   /* Files chosen in one folder mean nothing in another: their paths would resolve to nothing and
      every question would be refused. A different folder starts from no document again. Analyse
      leaves the selection alone: each ticked file is pinned to its content and survives a pass. */
   useEffect(() => setScope(noDocumentsScope(Date.now())), [workFolder]);
+  const dataFolder = snapshot?.settings.dataFolder ?? null;
+  /* The same rule for the Data Folder: another folder, no workbook chosen. */
+  useEffect(() => setDataScope(noDocumentsScope(Date.now())), [dataFolder]);
+  /* Both lists, joined only when a question is sent (`docs/SELECTION-AND-MEMORY.md`). */
+  const chatScope = useMemo(() => combineScopes(scope, dataScope), [scope, dataScope]);
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
 
@@ -107,15 +117,29 @@ export default function App() {
               onScopeChange={setScope}
               scopeLocked={chatBusy}
             />
+            <DataFolderCard
+              dataFolder={snapshot.settings.dataFolder}
+              suggestedDataFolder={snapshot.suggestedDataFolder}
+              onChosen={(path) => void update({ dataFolder: path })}
+              indexing={dataIndexing}
+              detail="collapsible"
+              scope={dataScope}
+              onScopeChange={setDataScope}
+              scopeLocked={chatBusy}
+            />
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />
             ))}
-            {healthError === null ? null : <ErrorBanner error={healthError} onRetry={refresh} />}
+            {healthError === null ? null : (
+              <div className="app__pinned">
+                <ErrorBanner error={healthError} onRetry={refresh} />
+              </div>
+            )}
           </aside>
           <ChatPanel
             onFailure={refresh}
             hasWorkFolder={snapshot.settings.workFolder !== null}
-            scope={scope}
+            scope={chatScope}
             onBusyChange={setChatBusy}
             modelAlias={snapshot.settings.modelAlias}
             aliases={health?.aliases ?? []}
@@ -128,9 +152,11 @@ export default function App() {
             settings={snapshot.settings}
             settingsPath={snapshot.settingsPath}
             suggestedWorkFolder={snapshot.suggestedWorkFolder}
+            suggestedDataFolder={snapshot.suggestedDataFolder}
             aliases={health?.aliases ?? []}
             saveError={saveError}
             indexing={indexing}
+            dataIndexing={dataIndexing}
             onUpdate={(patch) => void update(patch)}
             onReset={reset}
             onClose={() => setSettingsOpen(false)}

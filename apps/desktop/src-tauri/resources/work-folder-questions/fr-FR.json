@@ -1,6 +1,7 @@
 {
   "locale": "fr-FR",
   "_comment": "Vocabulaire des questions auxquelles l'inventaire du dossier de travail repond seul, sans appel a la passerelle. Donnees, jamais des litteraux en Rust (docs/DECISIONS.md, docs/WORK-FOLDER-INVENTORY.md). Une question n'emprunte ce chemin que si chacun de ses mots figure ci-dessous. Les formes accentuees et non accentuees sont toutes deux presentes : on ne peut pas exiger qu'un accent soit tape.",
+  "max_unknown_words": 2,
   "filler": [
     "a",
     "actuel",

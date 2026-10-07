@@ -12,24 +12,31 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::analysis_scope::AnalysisScope;
+use crate::analysis_scope::{AnalysisScope, GroundingTier};
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::conversation::{self, ContextBudget, ModelBudgets};
+use crate::data_folder::{self, DataFolder, DataFolderReport};
 use crate::error::AppError;
 use crate::file_record::FileRecord;
+use crate::fill_plan;
 use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderInventory};
+use crate::mixed_answer;
+use crate::number_check;
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{self, PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
 use crate::reveal;
 use crate::settings::{self, Settings};
-use crate::work_folder::{self, display, suggested_work_folder, WorkFolderPolicy};
+use crate::tabular_answer::{self, TabularAnswer};
+use crate::work_folder::{
+    self, display, suggested_data_folder, suggested_work_folder, WorkFolderPolicy,
+};
 use crate::work_folder_context::{self, ContextView};
 
 pub struct AppState {
@@ -41,6 +48,9 @@ pub struct AppState {
     /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
     /// scan in the folder (`inventory::FileHashCache`).
     pub file_hashes: FileHashCache,
+    /// The same, for the Data Folder. Kept apart so resetting one folder's analysis never makes
+    /// the other re-read its files.
+    pub data_file_hashes: FileHashCache,
     /// Each model's context budget, as the gateway last published it (`conversation`).
     pub model_budgets: Mutex<ModelBudgets>,
 }
@@ -52,6 +62,7 @@ impl AppState {
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
             file_hashes: FileHashCache::new(),
+            data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
         })
     }
@@ -73,9 +84,12 @@ pub struct AppSnapshot {
     settings: Settings,
     system_locale: String,
     settings_path: String,
-    /// What to propose when no folder has been chosen: `~/AssistantCabinetAI/DOCS`, outside
+    /// What to propose when no folder has been chosen: `~/AssistantCabinetAI/Docs`, outside
     /// Documents so that no cloud client mirrors it.
     suggested_work_folder: Option<String>,
+    /// The Data Folder equivalent: `~/AssistantCabinetAI/Data`, a sibling of `Docs` rather than a
+    /// second Documents Folder.
+    suggested_data_folder: Option<String>,
     warnings: Vec<String>,
 }
 
@@ -154,15 +168,22 @@ pub fn load_app_snapshot(
             warnings.push(AppError::WorkFolderNoLongerAllowed.code().to_string());
         }
     }
+    if let Some(chosen) = stored.data_folder.clone() {
+        let policy = work_folder_policy(&app);
+        if policy.validate(Path::new(&chosen)).is_err() {
+            stored.data_folder = None;
+            warnings.push(AppError::DataFolderNoLongerAllowed.code().to_string());
+        }
+    }
 
+    let home = app.path().home_dir().ok();
     state.replace(stored.clone())?;
     Ok(AppSnapshot {
         settings: stored,
         system_locale: sys_locale::get_locale().unwrap_or_default(),
         settings_path: display(&settings::settings_path(&app)?),
-        suggested_work_folder: suggested_work_folder(app.path().home_dir().ok().as_deref())
-            .as_deref()
-            .map(display),
+        suggested_work_folder: suggested_work_folder(home.as_deref()).as_deref().map(display),
+        suggested_data_folder: suggested_data_folder(home.as_deref()).as_deref().map(display),
         warnings,
     })
 }
@@ -214,12 +235,38 @@ pub async fn choose_work_folder(app: AppHandle) -> Result<String, AppError> {
     Ok(display(&accepted))
 }
 
-/// Create `~/AssistantCabinetAI/DOCS` if needed, then return the accepted path. The interface
+/// Create `~/AssistantCabinetAI/Docs` if needed, then return the accepted path. The interface
 /// still has to save the settings; this command does not write `settings.json` on its own.
 #[tauri::command]
 pub fn ensure_suggested_work_folder(app: AppHandle) -> Result<String, AppError> {
     let home = app.path().home_dir().ok();
     let accepted = work_folder::ensure_suggested(&work_folder_policy(&app), home.as_deref())?;
+    Ok(display(&accepted))
+}
+
+/// Opens the system dialog, then applies the allow-list, for the Data Folder. Nothing is stored
+/// until the interface saves the settings, and nothing is read from the folder in this sprint.
+#[tauri::command]
+pub async fn choose_data_folder(app: AppHandle) -> Result<String, AppError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |chosen| {
+        let _ = sender.send(chosen);
+    });
+
+    let Some(chosen) = receiver.await.map_err(|_| AppError::Internal)? else {
+        return Err(AppError::WorkFolderSelectionCancelled);
+    };
+    let path = chosen.into_path().map_err(|_| AppError::Internal)?;
+    let accepted = work_folder_policy(&app).validate(&path)?;
+    Ok(display(&accepted))
+}
+
+/// Create `~/AssistantCabinetAI/Data` if needed, then return the accepted path. The interface
+/// still has to save the settings; this command does not write `settings.json` on its own.
+#[tauri::command]
+pub fn ensure_suggested_data_folder(app: AppHandle) -> Result<String, AppError> {
+    let home = app.path().home_dir().ok();
+    let accepted = work_folder::ensure_suggested_data(&work_folder_policy(&app), home.as_deref())?;
     Ok(display(&accepted))
 }
 
@@ -281,17 +328,7 @@ pub async fn index_work_folder(
     // agree on one spelling of each file. Logged as it happens: a pass that fails afterwards must
     // not leave a renamed file with no record of what it used to be.
     let sanitised = filename_sanitizer::sanitize_folder(Path::new(&work_folder));
-    if let Ok(directory) = app.path().app_local_data_dir() {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_secs() as i64)
-            .unwrap_or(0);
-        let _ = filename_sanitizer::append_log(
-            &directory.join("renamed-files.jsonl"),
-            &sanitised.renamed,
-            now,
-        );
-    }
+    log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
     let mut summary = indexing::run(
@@ -368,6 +405,17 @@ pub fn reveal_work_folder(state: State<'_, AppState>) -> Result<(), AppError> {
     reveal::folder(Path::new(&work_folder))
 }
 
+/// Show the Data Folder in the system's own file manager. Same shape as `reveal_work_folder`:
+/// takes no path, reads the folder from settings, and reveal itself stays folder-type-agnostic.
+#[tauri::command]
+pub fn reveal_data_folder(state: State<'_, AppState>) -> Result<(), AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    reveal::folder(Path::new(&data_folder))
+}
+
 /// Show one file of the work folder, selected in the system's file manager.
 ///
 /// Unlike the command above this one takes a path from the webview, so it takes a path *relative
@@ -399,6 +447,100 @@ pub fn reset_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), App
     Ok(())
 }
 
+/// The Data Folder's Analyse: clean names first, exactly as for the Documents Folder, then every
+/// CSV/XLS/XLSX/XLSM file parsed and its inventory cached (`data_folder::analyse`). No embedding
+/// and no gateway call - local parsing only, so it is over in moments where the Documents pass
+/// takes minutes. Counts only on the progress channel: no file name, no cell.
+#[tauri::command]
+pub fn index_data_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    on_progress: Channel<IndexProgress>,
+) -> Result<IndexSummary, AppError> {
+    let (data_folder, locale) = state.read(|settings| {
+        (settings.data_folder.clone(), settings.locale.clone())
+    })?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
+
+    // The same rename, the same log and the same guarantees as the Documents Folder's pass
+    // (`docs/DECISIONS.md`, "clean file names"): the name only, never the content, never over
+    // another file, never out of its folder.
+    let sanitised = filename_sanitizer::sanitize_folder(Path::new(&data_folder));
+    log_renames(&app, &sanitised.renamed);
+
+    let mut index = open_index(&app)?;
+    let mut summary = data_folder::analyse(
+        Path::new(&data_folder),
+        &mut index,
+        locale,
+        &|progress| {
+            let _ = on_progress.send(progress);
+        },
+    )?;
+    summary.renamed_files = sanitised.renamed;
+    summary.rename_failed_files = sanitised.failed;
+    Ok(summary)
+}
+
+/// What is in the Data Folder right now, and which workbooks hold a usable table: the
+/// filesystem, joined with the cached tabular inventories. The one place both are read together
+/// (`docs/DECISIONS.md`, "the two inventories stay separate").
+#[tauri::command]
+pub fn data_folder_inventory(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DataFolderReport, AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let index = open_index(&app).ok();
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        index.as_ref(),
+        &state.data_file_hashes,
+    )?;
+    Ok(folder.report())
+}
+
+/// Show one file of the Data Folder, selected in the system's file manager. A path relative to
+/// the Data Folder and nothing else, refused if it could leave it - `reveal_work_file`'s rules.
+#[tauri::command]
+pub fn reveal_data_file(state: State<'_, AppState>, relative_path: String) -> Result<(), AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    reveal::file(Path::new(&data_folder), &relative_path)
+}
+
+/// Forget every workbook analysis, and nothing else: the Data Folder card's Reset. The documents
+/// index is left exactly as it is, as `reset_index` leaves the workbooks - two cards, two
+/// independent resets. No file in either folder is touched.
+#[tauri::command]
+pub fn reset_data_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    let mut index = open_index(&app)?;
+    index.clear_tabular_inventories()?;
+    index.clear_tabular_workbooks()?;
+    state.data_file_hashes.forget_all();
+    Ok(())
+}
+
+/// Append the renames a pass made to `renamed-files.jsonl`, as they happen: a pass that fails
+/// afterwards must not leave a renamed file with no record of what it used to be.
+fn log_renames(app: &AppHandle, renamed: &[filename_sanitizer::Renamed]) {
+    if let Ok(directory) = app.path().app_local_data_dir() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs() as i64)
+            .unwrap_or(0);
+        let _ = filename_sanitizer::append_log(&directory.join("renamed-files.jsonl"), renamed, now);
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AskAnswer {
@@ -425,6 +567,28 @@ pub struct AskAnswer {
     pub scope_outdated: Vec<String>,
     /// She selected no document, so this answer rests on none. The interface says so under it.
     pub without_documents: bool,
+    /// Present when tables were selected and no document: the tabular engine answered, with no
+    /// gateway call. `answer` is then empty, as for `folder_answer`.
+    pub tabular_answer: Option<TabularAnswer>,
+    /// Documents and tables were both selected, but this question was clearly and only about the
+    /// data - the tabular classifier recognised it and nothing was left over - so the tabular
+    /// engine answered it alone, exactly as tier 2 (`docs/SESSION-DATA-15-Mixed-Routing.md`). The
+    /// documents selected alongside the table were never read: no retrieval, no gateway call.
+    /// Always false outside that one path.
+    pub documents_not_needed: bool,
+    /// Documents and tables were both selected, and this question was neither answered by tier 2
+    /// alone nor refused: the mixed tier decomposed it, computed and cited across both sides, and
+    /// checked the model's prose against what it was actually given
+    /// (`docs/SESSION-DATA-16-Mixed-Tier.md`). `None` on every other path.
+    pub mixed_answer: Option<mixed_answer::MixedAnswer>,
+    /// The figures a document answer states that appear in none of the excerpts it was written from
+    /// and not in the question either, as the model wrote them. Empty when every figure is
+    /// supported. Reported beside the answer, never edited into it (`number_check`; approved by the
+    /// owner on 5 October 2026 after a small model invented a printer price).
+    pub unverified_numbers: Vec<String>,
+    /// A letter was asked for and everything it needs was found: the plan the user approves before
+    /// anything is written (`fill_plan`). `answer` is then empty; nothing was generated by a model.
+    pub fill_plan: Option<fill_plan::FillPlan>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -553,6 +717,37 @@ async fn sourced_answer(
         scope,
         history,
     } = asked;
+
+    // Which tier this question is on, decided from the two selections before anything is read
+    // (`docs/SELECTION-AND-MEMORY.md`, the grounding priority chain).
+    match scope.tier() {
+        // D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): a question
+        // that is clearly and only about the data is answered by the tabular engine alone, before
+        // any file content is read for retrieval - kept exactly as session 15 left it, and still
+        // tried first. Session 16's own mixed tier (`mixed_tier`, `mixed_answer.rs`) starts
+        // exactly at its `None`: everything that question did not already answer.
+        GroundingTier::DocumentsAndTables => {
+            // "Demander a l'IA" (`skip_deterministic`) asks for the model's reading instead of the
+            // engine's alone, so the data-only shortcut is skipped and the mixed tier answers; it
+            // was ignored here until HAP-1 (BUG-04), which left the button doing nothing.
+            if skip_deterministic {
+                return mixed_tier(app, state, &question, &scope, &history, on_event).await;
+            }
+            // A request for a letter, with the template and the rows it needs found: a plan to
+            // approve, not an answer (`fill_plan`, lot E). Nothing is written here.
+            if let Some(answer) = fill_tier(app, state, &question, &scope)? {
+                return Ok(answer);
+            }
+            match mixed_data_only_tier(app, state, &question, &scope).await? {
+                Some(answer) => return Ok(answer),
+                None => return mixed_tier(app, state, &question, &scope, &history, on_event).await,
+            }
+        }
+        GroundingTier::TablesOnly => {
+            return tabular_tier(app, state, &question, &scope, skip_deterministic).await
+        }
+        GroundingTier::Documents => {}
+    }
     let (work_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) = state
         .read(|settings| {
             (
@@ -653,6 +848,11 @@ async fn sourced_answer(
                 unanalysed_files: 0,
                 scope_outdated,
                 without_documents: false,
+                tabular_answer: None,
+                documents_not_needed: false,
+                mixed_answer: None,
+                unverified_numbers: Vec::new(),
+                fill_plan: None,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -682,6 +882,11 @@ async fn sourced_answer(
             unanalysed_files: 0,
             scope_outdated: Vec::new(),
             without_documents: true,
+            tabular_answer: None,
+            documents_not_needed: false,
+            mixed_answer: None,
+            unverified_numbers: Vec::new(),
+            fill_plan: None,
         });
     }
 
@@ -791,9 +996,18 @@ async fn sourced_answer(
         work_folder_context::build_system_turn(retrieval::RETRIEVAL_INSTRUCTION, &folder_context),
         retrieval::format_evidence(&evidence)
     );
+    // Sources outrank memory (BUG-09): beside excerpts, a small window remembers fewer and shorter
+    // earlier exchanges (`conversation::history_beside_sources`).
+    let history = conversation::history_beside_sources(&history, writer.budget);
+    let asked = question.clone();
     let answer = writer
         .write(grounding, &history, question, on_event)
         .await?;
+    // A figure the model states that is in no excerpt and not in the question: said beside the
+    // answer. Two digits are enough here (a price such as 80 is the case that mattered).
+    let mut known: Vec<&str> = evidence.iter().map(|item| item.text.as_str()).collect();
+    known.push(&asked);
+    let unverified_numbers = number_check::unsupported_numbers(&answer, &known, 2);
 
     Ok(AskAnswer {
         answer,
@@ -803,6 +1017,426 @@ async fn sourced_answer(
         unanalysed_files: inventory.unanalysed_documents(),
         scope_outdated,
         without_documents: false,
+        tabular_answer: None,
+        documents_not_needed: false,
+        mixed_answer: None,
+        unverified_numbers,
+        fill_plan: None,
+    })
+}
+
+/// Tier 2: tables selected, no document. Answered by the tabular engine alone - structural facts,
+/// computed values, or a nudge naming the real columns - with no gateway call and no embedding for
+/// a question the classifier reads on its own. Two gateway calls are possible, both narrow and
+/// internal to `tabular_answer`, session 14's hidden interpreter, never load-bearing for a
+/// number's correctness: automatically, only when a question does not classify deterministically
+/// at all (gap G); and now, since the manual validation pass that found a classified answer can
+/// still be a *wrong* interpretation (`docs/DECISIONS.md`), on "Demander a l'IA"/"Ask AI"
+/// (`skip_deterministic`) - the tier's own form of the regenerate control every other tier already
+/// offers, asking the model in addition to a classified answer rather than instead of one. The
+/// conversation history is not needed and not read.
+async fn tabular_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+    skip_deterministic: bool,
+) -> Result<AskAnswer, AppError> {
+    let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
+        (
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.answer_idle_timeout(),
+        )
+    })?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let index = open_index(app)?;
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
+    // Two steps, not one `tabular_answer::answer(...)` call: `prepare` is the only place `index`
+    // is read, entirely synchronously, so the `&index` borrow never has to survive the `.await`
+    // on `resolve` - `IndexStore` is not `Sync`, and this command's future must be `Send`
+    // (`tabular_answer`'s own module doc explains why).
+    let pending =
+        tabular_answer::prepare(question, &folder, &scope.data_mode, locale, &index, skip_deterministic)?;
+    let assist = tabular_answer::ModelAssist {
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+    };
+    let answer = tabular_answer::resolve(pending, question, locale, &assist).await;
+    Ok(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated: Vec::new(),
+        without_documents: false,
+        tabular_answer: Some(answer),
+        documents_not_needed: false,
+        mixed_answer: None,
+        unverified_numbers: Vec::new(),
+        fill_plan: None,
+    })
+}
+
+/// The first, low-risk step of D7 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`):
+/// documents and tables are both selected. Reads the same settings and opens the same Data Folder
+/// as `tabular_tier`, then the same `prepare`/`resolve` split, for the same `IndexStore`-across-
+/// `.await` reason (`tabular_answer`'s own module doc): `prepare_if_data_only` is the only place
+/// `index` is read, entirely synchronously, and already carries the precondition that keeps gap G
+/// from ever reaching `resolve` on this path (`None` here means the caller keeps its own
+/// mixed-selection refusal).
+async fn mixed_data_only_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+) -> Result<Option<AskAnswer>, AppError> {
+    let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
+        (
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.answer_idle_timeout(),
+        )
+    })?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let index = open_index(app)?;
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
+    let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
+    let Some(pending) =
+        tabular_answer::prepare_if_data_only(question, &folder, &scope.data_mode, locale, &index)?
+    else {
+        return Ok(None);
+    };
+    let assist = tabular_answer::ModelAssist {
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+    };
+    let answer = tabular_answer::resolve(pending, question, locale, &assist).await;
+    Ok(Some(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated: Vec::new(),
+        without_documents: false,
+        tabular_answer: Some(answer),
+        documents_not_needed: true,
+        mixed_answer: None,
+        unverified_numbers: Vec::new(),
+        fill_plan: None,
+    }))
+}
+
+/// Documents and tables are both selected and the question asks for something to be written. When a
+/// selected document is a template whose fields name columns of the one workbook the question points at
+/// (an identifier it names, or "each"), the answer is a plan to approve: the template, the rows, the
+/// mapping and a preview. Nothing is written and no model is called; `None` for every other question.
+fn fill_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+) -> Result<Option<AskAnswer>, AppError> {
+    let (work_folder, data_folder, locale) = state.read(|settings| {
+        (
+            settings.work_folder.clone(),
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+        )
+    })?;
+    let (Some(work_folder), Some(data_folder)) = (work_folder, data_folder) else {
+        return Ok(None);
+    };
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    if !crate::tabular::question::has_writing_intent(question, &locale) {
+        return Ok(None);
+    }
+    let index = open_index(app)?;
+    let data = DataFolder::discover(Path::new(&data_folder), Some(&index), &state.data_file_hashes)?;
+    let every_row = crate::tabular::question::has_distributive_word(question, &locale);
+    let Some(source) =
+        tabular_answer::locate_fill_source(question, &data, &scope.data_mode, &locale, &index, every_row)?
+    else {
+        return Ok(None);
+    };
+    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let resolution = scope.resolve(&full_inventory);
+    let templates = fill_plan::candidate_templates(&resolution.inventory, &source.table.columns);
+    if templates.is_empty() {
+        return Ok(None);
+    }
+    let plan = fill_plan::build_plan(templates, &source.file, &source.sheet, &source.table, source.key)?;
+    Ok(Some(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated: Vec::new(),
+        without_documents: false,
+        tabular_answer: None,
+        documents_not_needed: false,
+        mixed_answer: None,
+        unverified_numbers: Vec::new(),
+        fill_plan: Some(plan),
+    }))
+}
+
+/// What the preview and the generation both start from: the template and the table, read again from
+/// their folders by relative path - never trusted from the interface.
+fn fill_inputs(
+    app: &AppHandle,
+    state: &AppState,
+    request: &fill_plan::FillRequest,
+) -> Result<(std::path::PathBuf, fill_plan::TemplateFile, crate::template_fill::Table), AppError> {
+    let (work_folder, data_folder, locale) = state.read(|settings| {
+        (
+            settings.work_folder.clone(),
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+        )
+    })?;
+    let work_folder = work_folder.ok_or(AppError::NoWorkFolderSet)?;
+    let data_folder = data_folder.ok_or(AppError::NoDataFolderSet)?;
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let index = open_index(app)?;
+    let inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let template =
+        fill_plan::read_template(&inventory, &request.template).ok_or(AppError::FillSourceUnavailable)?;
+    let data = DataFolder::discover(Path::new(&data_folder), Some(&index), &state.data_file_hashes)?;
+    let (_, table) = tabular_answer::load_fill_table(&data, &request.data_file, &locale, &index)
+        .ok_or(AppError::FillSourceUnavailable)?;
+    Ok((std::path::PathBuf::from(work_folder), template, table))
+}
+
+/// The preview of a mail merge for the choices she made on the plan card.
+#[tauri::command]
+pub fn fill_preview(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: fill_plan::FillRequest,
+) -> Result<fill_plan::FillPreview, AppError> {
+    let (_, template, table) = fill_inputs(&app, &state, &request)?;
+    fill_plan::preview(&template, &table, &request)
+}
+
+/// Writes the letters she approved, into a `Generated` subfolder of the documents folder. The only
+/// place a mail merge writes anything, and only ever new files.
+#[tauri::command]
+pub fn fill_generate(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: fill_plan::FillRequest,
+) -> Result<fill_plan::FillReport, AppError> {
+    let (work_folder, template, table) = fill_inputs(&app, &state, &request)?;
+    let output_folder = state.read(|settings| settings.generated_folder())?;
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|_| AppError::FillWriteFailed)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or(0);
+    fill_plan::generate(
+        &work_folder,
+        &output_folder,
+        &directory.join("generated-files.jsonl"),
+        now,
+        &template,
+        &table,
+        &request,
+    )
+}
+
+/// Session 16 (`docs/SESSION-DATA-16-Mixed-Tier.md`): documents and tables are both selected, and
+/// `mixed_data_only_tier` already decided this question is not clearly and only about the data.
+/// Reads the same two folders `tabular_tier`/`mixed_data_only_tier` already do, resolves the
+/// document selection exactly as tier 1 does, then hands everything to `mixed_answer::answer` -
+/// the Tauri-free module that actually decomposes, links an entity, computes, generates and
+/// checks. This function is the thin wrapper around it: settings, the local index, and forwarding
+/// `mixed_answer::answer`'s two callbacks to the real `Channel`.
+async fn mixed_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+    history: &[ChatTurn],
+    on_event: &Channel<ChatStreamEvent>,
+) -> Result<AskAnswer, AppError> {
+    let (work_folder, data_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) =
+        state.read(|settings| {
+            (
+                settings.work_folder.clone(),
+                settings.data_folder.clone(),
+                settings.server_url.clone(),
+                settings.model_alias.clone(),
+                settings.embedding_alias.clone(),
+                settings.locale.clone(),
+                settings.answer_idle_timeout(),
+            )
+        })?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+
+    // `index` stays owned, never borrowed into a struct held across an `.await`, for the same
+    // `IndexStore`-is-not-`Sync` reason `tabular_answer`'s own module doc gives - the exact pattern
+    // `sourced_answer`'s tier 1 arm already uses below (`open_index`, then a plain local, borrowed
+    // only in the synchronous stretches between awaits).
+    let index = open_index(app)?;
+    let folder = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
+
+    // The document selection, resolved exactly as tier 1 does: a selection whose files are all
+    // gone or changed is refused rather than quietly answered from nothing, the same guarantee
+    // `sourced_answer`'s own documents-tier arm already gives.
+    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let resolution = scope.resolve(&full_inventory);
+    let scope_outdated: Vec<String> = resolution
+        .missing
+        .iter()
+        .cloned()
+        .chain(resolution.changed.iter().cloned())
+        .collect();
+    let document_paths: Vec<String> = resolution
+        .inventory
+        .indexed_files()
+        .into_iter()
+        .map(|file| file.relative_path.clone())
+        .collect();
+    if resolution.narrowed && document_paths.is_empty() && !scope_outdated.is_empty() {
+        return Err(AppError::ScopeUnavailable);
+    }
+
+    // The tabular part, classified against the selected tables alone - entirely synchronous, so
+    // `&index` never has to survive an `.await` to produce it. After the document selection is
+    // known, because a word of a document's name designates the document, not a table value.
+    let pending = tabular_answer::prepare_for_mixed(
+        question,
+        &folder,
+        &scope.data_mode,
+        &locale,
+        &index,
+        &document_paths,
+    )?;
+
+    // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
+    // search held to the document selection - `index` borrowed only in the synchronous stretch
+    // right after the embed `.await`, exactly as tier 1's own retrieval already is.
+    let (document_sources, documents_unavailable) = if document_paths.is_empty()
+        || !matches!(index.chunk_count(), Ok(count) if count > 0)
+    {
+        (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence))
+    } else {
+        let search_text = conversation::retrieval_query(question, history);
+        match state
+            .gateway
+            .embed(&server_url, &embedding_alias, std::slice::from_ref(&search_text))
+            .await
+        {
+            Ok(vectors) => {
+                let query_embedding = vectors.into_iter().next().unwrap_or_default();
+                match retrieval::search_scoped(
+                    &index,
+                    &search_text,
+                    &query_embedding,
+                    RetrievalScope::Files(&document_paths),
+                ) {
+                    Ok(found) if !found.is_empty() => (found, None),
+                    _ => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence)),
+                }
+            }
+            Err(_) => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::GatewayUnavailable)),
+        }
+    };
+
+    let budget = state
+        .model_budgets
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .for_alias(&model_alias);
+    let context = mixed_answer::MixedContext {
+        locale: &locale,
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+        history,
+        budget,
+    };
+
+    // Nothing below touches `index`, `folder` or the document inventory again: everything either
+    // function needs from here on is owned data already extracted above
+    // (`mixed_answer::MixedContext`'s own doc explains why that boundary matters).
+    let (result, generated) = mixed_answer::answer(
+        question,
+        pending,
+        document_sources,
+        documents_unavailable,
+        &context,
+        |sources| {
+            let _ = on_event.send(ChatStreamEvent::Sources {
+                sources: sources.to_vec(),
+                coverage: None,
+            });
+        },
+        |delta| {
+            let _ = on_event.send(ChatStreamEvent::Delta {
+                text: delta.to_string(),
+            });
+        },
+    )
+    .await?;
+    if generated {
+        let _ = on_event.send(ChatStreamEvent::Completed {
+            text: result.answer.clone(),
+        });
+    }
+
+    Ok(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: None,
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated,
+        without_documents: false,
+        tabular_answer: None,
+        documents_not_needed: false,
+        mixed_answer: Some(result),
+        unverified_numbers: Vec::new(),
+        fill_plan: None,
     })
 }
 

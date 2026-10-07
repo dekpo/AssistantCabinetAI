@@ -15,6 +15,8 @@ use rusqlite::Connection;
 use crate::chunking::Chunk;
 use crate::error::AppError;
 use crate::extraction::PageOrigin;
+use crate::tabular::inventory::TabularInventory;
+use crate::tabular::Workbook;
 
 const INDEX_FILE_NAME: &str = "index.sqlite3";
 
@@ -99,6 +101,17 @@ impl IndexStore {
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
                     chunk_id UNINDEXED,
                     text
+                );
+                CREATE TABLE IF NOT EXISTS tabular_inventories (
+                    relative_path TEXT PRIMARY KEY,
+                    workbook_id TEXT NOT NULL,
+                    inventory_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS tabular_inventories_by_hash
+                    ON tabular_inventories (workbook_id);
+                CREATE TABLE IF NOT EXISTS tabular_workbooks (
+                    workbook_id TEXT PRIMARY KEY,
+                    workbook_json TEXT NOT NULL
                 );
                 ",
             )
@@ -488,6 +501,204 @@ impl IndexStore {
                 _ => Err(AppError::IndexUnavailable),
             })
     }
+
+    /// Store this workbook's inventory, replacing whatever was cached for the same path.
+    /// Keyed by path rather than by content hash: a changed file naturally invalidates its old
+    /// entry by overwriting the row at its path, the same "changed file -> invalidated"
+    /// guarantee `put`/`get_by_hash`/`invalidate` promise (`docs/ARCHITECTURE.md`'s
+    /// `InventoryStore`), without a second table to keep in step with this one.
+    pub fn put_tabular_inventory(&self, inventory: &TabularInventory) -> Result<(), AppError> {
+        let json = serde_json::to_string(inventory).map_err(|_| AppError::IndexUnavailable)?;
+        self.connection
+            .execute(
+                "INSERT INTO tabular_inventories (relative_path, workbook_id, inventory_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(relative_path) DO UPDATE SET
+                    workbook_id = excluded.workbook_id,
+                    inventory_json = excluded.inventory_json",
+                rusqlite::params![inventory.relative_path, inventory.workbook_id, json],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// The cached inventory for this content hash, if the file at whatever path produced it is
+    /// still cached under that same hash. `None` both when nothing was ever cached and when the
+    /// file has since changed - the two are indistinguishable from a hash alone, which is
+    /// exactly why the caller re-parses on a miss rather than treating one as an error.
+    pub fn tabular_inventory_by_hash(
+        &self,
+        workbook_id: &str,
+    ) -> Result<Option<TabularInventory>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT inventory_json FROM tabular_inventories WHERE workbook_id = ?1
+                 ORDER BY relative_path LIMIT 1",
+                [workbook_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map(Some)
+            .or_else(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                _ => Err(AppError::IndexUnavailable),
+            })?
+            .map(|json| serde_json::from_str(&json).map_err(|_| AppError::IndexUnavailable))
+            .transpose()
+    }
+
+    /// Forget whatever inventory is cached for this path. Used when a file is dropped from the
+    /// Data Folder, so a stale entry cannot be found under its old hash for ever.
+    pub fn invalidate_tabular_inventory(&self, relative_path: &str) -> Result<(), AppError> {
+        self.connection
+            .execute(
+                "DELETE FROM tabular_inventories WHERE relative_path = ?1",
+                [relative_path],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// Every workbook with a cached inventory: which path, and which content it describes. The
+    /// tabular counterpart of `all_documents`, reading `tabular_inventories` only - the Data
+    /// Folder panel joins this against the filesystem itself, and nothing document-related ever
+    /// reads it (`docs/DECISIONS.md`, "the two inventories stay separate").
+    pub fn all_tabular_inventories(&self) -> Result<Vec<TabularInventoryRow>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT relative_path, workbook_id FROM tabular_inventories
+                 ORDER BY relative_path",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(TabularInventoryRow {
+                    relative_path: row.get(0)?,
+                    workbook_id: row.get(1)?,
+                })
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// Drop every cached workbook inventory whose path is not in `present`. The Data Folder's
+    /// counterpart of `retain_documents`: a workbook removed from the folder stops being
+    /// selectable and answerable. Returns the paths dropped.
+    pub fn retain_tabular_inventories(
+        &mut self,
+        present: &[String],
+    ) -> Result<Vec<String>, AppError> {
+        let known: std::collections::BTreeSet<&str> =
+            present.iter().map(String::as_str).collect();
+        let gone: Vec<String> = self
+            .all_tabular_inventories()?
+            .into_iter()
+            .map(|row| row.relative_path)
+            .filter(|path| !known.contains(path.as_str()))
+            .collect();
+        if gone.is_empty() {
+            return Ok(gone);
+        }
+        let tx = self
+            .connection
+            .transaction()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        for path in &gone {
+            tx.execute(
+                "DELETE FROM tabular_inventories WHERE relative_path = ?1",
+                [path],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(gone)
+    }
+
+    /// Forget every cached workbook inventory, and nothing else. The Data Folder card's Reset: the
+    /// two folders are reset from two cards, independently, so this must never touch `documents`
+    /// or `chunks` - exactly as `clear` never touches this table.
+    pub fn clear_tabular_inventories(&mut self) -> Result<(), AppError> {
+        self.connection
+            .execute("DELETE FROM tabular_inventories", [])
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// The typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`): cell values already
+    /// read and typed by an adapter, so a question over an unchanged workbook never re-reads or
+    /// re-parses the file - `tabular_answer::answer` falls back to `tabular::load_current` (a
+    /// full read) only on a miss, and stores the result here afterwards.
+    ///
+    /// Keyed by the content SHA-256, not by path, unlike `tabular_inventories`: the same bytes
+    /// under two names (a rename, `docs/WORK-FOLDER-INVENTORY.md`'s "clean file names") share one
+    /// entry, and a change in content is a different key rather than an overwrite to invalidate.
+    /// `ON CONFLICT` is still harmless here - the same hash can only ever map to the same bytes -
+    /// but keeps this in step with `put_tabular_inventory`'s own shape.
+    ///
+    /// Unlike `inventory_json`, this table holds cell values at rest on the workstation
+    /// (`docs/PRIVACY-AND-SECURITY.md`): the same application-data SQLite file as every other
+    /// index table, never a file beside the source workbook, and cleared by `clear_tabular_workbooks`
+    /// on every Analyse pass and on the Data Folder's own Reset - never left to outlive either.
+    pub fn put_tabular_workbook(
+        &self,
+        workbook_id: &str,
+        workbook: &Workbook,
+    ) -> Result<(), AppError> {
+        let json = serde_json::to_string(workbook).map_err(|_| AppError::IndexUnavailable)?;
+        self.connection
+            .execute(
+                "INSERT INTO tabular_workbooks (workbook_id, workbook_json)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(workbook_id) DO UPDATE SET workbook_json = excluded.workbook_json",
+                rusqlite::params![workbook_id, json],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// The cached cell values for this content hash, when a question has already read this exact
+    /// workbook since the last Analyse pass or reset. `None` on a cold cache or a miss - the
+    /// caller re-reads the file itself, the same refusal-free fallback `tabular_inventory_by_hash`
+    /// already gives its own caller.
+    pub fn tabular_workbook_by_hash(
+        &self,
+        workbook_id: &str,
+    ) -> Result<Option<Workbook>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT workbook_json FROM tabular_workbooks WHERE workbook_id = ?1",
+                [workbook_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map(Some)
+            .or_else(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                _ => Err(AppError::IndexUnavailable),
+            })?
+            .map(|json| serde_json::from_str(&json).map_err(|_| AppError::IndexUnavailable))
+            .transpose()
+    }
+
+    /// Forget every cached workbook's cell values, and nothing else - `tabular_inventories` and
+    /// every document table are untouched. Called at the start of every `data_folder::analyse`
+    /// pass (a workbook that left the folder, or whose content changed, must not go on serving
+    /// stale cells under its old hash a moment longer than the pass that would have caught it)
+    /// and from the Data Folder card's Reset, exactly where `clear_tabular_inventories` is.
+    pub fn clear_tabular_workbooks(&mut self) -> Result<(), AppError> {
+        self.connection
+            .execute("DELETE FROM tabular_workbooks", [])
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+}
+
+/// One cached workbook inventory, by path and content hash. No sheet, column or cell: the panel
+/// needs to know whether a workbook was analysed, never what it holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabularInventoryRow {
+    pub relative_path: String,
+    pub workbook_id: String,
 }
 
 /// The index already holds every word in the corpus, so answering "is this a word from the
@@ -822,6 +1033,246 @@ mod tests {
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].chunk_id, "inbox/letter.pdf#p1#s1");
+    }
+
+    fn sample_inventory(relative_path: &str, workbook_id: &str) -> TabularInventory {
+        use crate::tabular::inventory::{
+            ColumnInventory, ColumnType, SheetInventory, TabularFormat,
+        };
+
+        TabularInventory {
+            workbook_id: workbook_id.to_string(),
+            relative_path: relative_path.to_string(),
+            format: TabularFormat::Csv,
+            sheets: vec![SheetInventory {
+                name: relative_path.to_string(),
+                header_row: Some(0),
+                row_count: 1,
+                column_count: 1,
+                columns: vec![ColumnInventory {
+                    name: "montant".to_string(),
+                    index: 0,
+                    inferred_type: ColumnType::Numeric,
+                    has_formulas: false,
+                    year_like: false,
+                    unit: None,
+                    unparsed_count: 0,
+                    ambiguous_date: false,
+                }],
+                has_formulas: false,
+                formula_cells: 0,
+            }],
+        }
+    }
+
+    #[test]
+    fn a_tabular_inventory_is_found_again_by_its_workbook_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let inventory = sample_inventory("data/montants.csv", "hash-1");
+
+        store.put_tabular_inventory(&inventory).unwrap();
+        let found = store.tabular_inventory_by_hash("hash-1").unwrap();
+
+        assert_eq!(found, Some(inventory));
+        assert_eq!(
+            store.tabular_inventory_by_hash("hash-absent").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_changed_file_is_no_longer_found_under_its_old_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let before = sample_inventory("data/montants.csv", "hash-old");
+        store.put_tabular_inventory(&before).unwrap();
+
+        // Same path, new content: the pass that re-reads a changed file stores its new hash at
+        // the same relative path, exactly as `put_tabular_inventory`'s own contract promises.
+        let after = sample_inventory("data/montants.csv", "hash-new");
+        store.put_tabular_inventory(&after).unwrap();
+
+        assert_eq!(store.tabular_inventory_by_hash("hash-old").unwrap(), None);
+        assert_eq!(
+            store.tabular_inventory_by_hash("hash-new").unwrap(),
+            Some(after)
+        );
+    }
+
+    #[test]
+    fn invalidating_a_path_forgets_whatever_was_cached_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let inventory = sample_inventory("data/montants.csv", "hash-1");
+        store.put_tabular_inventory(&inventory).unwrap();
+
+        store
+            .invalidate_tabular_inventory("data/montants.csv")
+            .unwrap();
+
+        assert_eq!(store.tabular_inventory_by_hash("hash-1").unwrap(), None);
+    }
+
+    #[test]
+    fn every_cached_workbook_is_listed_by_path_and_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store
+            .put_tabular_inventory(&sample_inventory("b.csv", "hash-b"))
+            .unwrap();
+        store
+            .put_tabular_inventory(&sample_inventory("a.csv", "hash-a"))
+            .unwrap();
+
+        assert_eq!(
+            store.all_tabular_inventories().unwrap(),
+            vec![
+                TabularInventoryRow {
+                    relative_path: "a.csv".into(),
+                    workbook_id: "hash-a".into()
+                },
+                TabularInventoryRow {
+                    relative_path: "b.csv".into(),
+                    workbook_id: "hash-b".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_workbook_gone_from_the_folder_is_dropped_and_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store
+            .put_tabular_inventory(&sample_inventory("kept.csv", "hash-k"))
+            .unwrap();
+        store
+            .put_tabular_inventory(&sample_inventory("gone.csv", "hash-g"))
+            .unwrap();
+
+        let dropped = store
+            .retain_tabular_inventories(&["kept.csv".to_string()])
+            .unwrap();
+
+        assert_eq!(dropped, vec!["gone.csv".to_string()]);
+        assert_eq!(store.tabular_inventory_by_hash("hash-g").unwrap(), None);
+        assert!(store.tabular_inventory_by_hash("hash-k").unwrap().is_some());
+    }
+
+    #[test]
+    fn the_two_resets_leave_each_others_tables_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store
+            .replace_document(
+                "letter.txt",
+                "sha-l",
+                false,
+                &[sample_chunk("letter.txt#p1#s1", "letter.txt", "Bonjour")],
+                &[vec![1.0]],
+                None,
+                None,
+            )
+            .unwrap();
+        store
+            .put_tabular_inventory(&sample_inventory("data.csv", "hash-d"))
+            .unwrap();
+
+        store.clear_tabular_inventories().unwrap();
+        assert_eq!(store.chunk_count().unwrap(), 1, "the Data reset kept the documents");
+        assert!(store.all_tabular_inventories().unwrap().is_empty());
+
+        store
+            .put_tabular_inventory(&sample_inventory("data.csv", "hash-d"))
+            .unwrap();
+        store.clear().unwrap();
+        assert_eq!(store.chunk_count().unwrap(), 0);
+        assert_eq!(
+            store.all_tabular_inventories().unwrap().len(),
+            1,
+            "the Documents reset kept the workbooks"
+        );
+    }
+
+    fn sample_workbook() -> Workbook {
+        use crate::tabular::{CellValue, SheetData};
+
+        Workbook {
+            sheets: vec![SheetData {
+                name: "Feuille1".to_string(),
+                rows: vec![
+                    vec![CellValue::Text("montant".to_string())],
+                    vec![CellValue::Number(10.0)],
+                ],
+            }],
+        }
+    }
+
+    #[test]
+    fn a_typed_workbook_is_found_again_by_its_content_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let workbook = sample_workbook();
+
+        store.put_tabular_workbook("hash-1", &workbook).unwrap();
+
+        assert_eq!(
+            store.tabular_workbook_by_hash("hash-1").unwrap(),
+            Some(workbook)
+        );
+        assert_eq!(store.tabular_workbook_by_hash("hash-absent").unwrap(), None);
+    }
+
+    #[test]
+    fn writing_the_same_hash_twice_replaces_rather_than_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let workbook = sample_workbook();
+
+        store.put_tabular_workbook("hash-1", &workbook).unwrap();
+        store.put_tabular_workbook("hash-1", &workbook).unwrap();
+
+        assert_eq!(
+            store.tabular_workbook_by_hash("hash-1").unwrap(),
+            Some(workbook)
+        );
+    }
+
+    #[test]
+    fn clearing_typed_workbooks_leaves_the_inventories_and_documents_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        store
+            .put_tabular_workbook("hash-1", &sample_workbook())
+            .unwrap();
+        store
+            .put_tabular_inventory(&sample_inventory("data.csv", "hash-1"))
+            .unwrap();
+        store
+            .replace_document(
+                "letter.txt",
+                "sha-l",
+                false,
+                &[sample_chunk("letter.txt#p1#s1", "letter.txt", "Bonjour")],
+                &[vec![1.0]],
+                None,
+                None,
+            )
+            .unwrap();
+
+        store.clear_tabular_workbooks().unwrap();
+
+        assert_eq!(store.tabular_workbook_by_hash("hash-1").unwrap(), None);
+        assert!(
+            store.tabular_inventory_by_hash("hash-1").unwrap().is_some(),
+            "clearing the cell cache must not touch the structural inventory"
+        );
+        assert_eq!(
+            store.chunk_count().unwrap(),
+            1,
+            "clearing the cell cache must not touch the documents"
+        );
     }
 
     #[test]

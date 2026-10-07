@@ -105,6 +105,18 @@ carries a document-specific field. See `docs/WORK-FOLDER-INVENTORY.md`.
 Spreadsheets are **not** flattened into text chunks to resemble PDFs. They get their own pipeline, their
 own inventory and their own deterministic operations.
 
+Reading a column's own locale (`docs/DECISIONS.md`, D2-D4):
+
+- Decimal and thousands marks are read from a column's own cells, never the operating system's locale.
+- A lone separator no single cell can settle is decided by the rest of its column, or by the interface
+  locale only when the column offers no evidence either way - never guessed from one value.
+- A currency or percent sign travels with the column as a unit; an unparseable cell is counted, never
+  folded silently into a sum. A column is `Numeric` at 95% parse or better.
+- A date is a real calendar value, never a serial number or a locale guess; a day-first column types
+  `Date` only when some cell's day or format rules out the month-first reading, `Categorical` otherwise.
+- The header row is the best-scoring candidate in the first twenty rows - fill, distinct labels, how
+  differently the row beneath reads - never simply the first row of text.
+
 ## OCR is an extraction path, not a second pipeline
 
 A scanned page is a document whose text has to be recovered before anything else can happen to it. That
@@ -142,6 +154,7 @@ Source {
   derivation: Extracted                                    copied from the file's own text
        |      Recognised { engine, confidence }             a machine read a picture of it
        |      Computed { operation, operands, row_count }   we calculated it
+       |      InterpretedByModel { ..Computed, model_alias, plan }  a model chose the plan; we still calculated it
        |      FormulaStored { expression }                  the file says so; we did not verify it
        |      ModelAsserted                                 the model said it
 }
@@ -151,6 +164,12 @@ Source {
 render a computed total differently from a model sentence, and it lets a test assert that nothing
 labelled `Computed` ever passed through an LLM. A citation is never invented: an answer may only cite a
 `Source` that the retrieval or analysis step actually returned.
+
+`InterpretedByModel` is `Computed`'s sibling, not `ModelAsserted`'s: the model never states the number.
+It names which question it understood - sheet, columns, filters, the operation - from the workbook's
+schema alone, and Rust validates and runs that plan through the same engine `Computed` already uses
+(`tabular::query_plan`, session 14's hidden interpreter, `docs/SESSION-DATA-14-Query-Plan.md`). The value
+is always the engine's full-pass arithmetic; the model only ever widened which questions reach one.
 
 `Recognised` is not a flavour of `Extracted`. "The letter says 6.8" and "a machine thinks the letter says
 6.8" are different claims, and collapsing them would let OCR uncertainty arrive at the user as model
@@ -180,6 +199,80 @@ a fact.
 The refusal is part of the contract. When the deterministic engine cannot establish an answer it returns
 `NOT_DETERMINISTICALLY_ANSWERABLE` with what it does have — the available columns, for instance — rather
 than a guess, and when the sources do not carry an answer the product says so rather than generating one.
+
+### The tabular engine's one controlled escalation
+
+The tabular tier's deterministic path (`tabular_answer`) still makes zero gateway calls for any question
+its classifier reads. Only when that classifier returns "not recognised", or a residual word looked like
+an attempted filter value but matched no real data, does a model get a turn — never to answer, only to
+translate the question into a JSON query plan (`tabular::query_plan::QueryPlan`), from the workbook's
+**schema** alone: sheet names, row counts, each column's name, type, unit and whether it holds formulas.
+No cell value, no distinct value, no row, no file path ever leaves the workstation for this.
+
+```text
+question
+  → classify deterministically → answerable   → engine::execute → Computed
+                                → not answerable (unrecognised, or a filter value matching no data)
+      → schema (no values) → model → JSON plan
+      → validate, in order:
+          1. parse strictly (deny_unknown_fields; an unknown field or op is rejected, not ignored)
+          2. sheet reachable under the scope
+          3. every named column exists
+          4. the operation is allowed on that column's type, and not on a formula column
+          5. every eq/in filter value is resolved against the column's real values
+             (folded equality; a miss returns close values, never a silent zero)
+          6. limits within bounds
+      → map to an existing tabular::engine::Operation, run through the unchanged engine
+      → InterpretedByModel, or the ordinary nudge when any step above failed
+```
+
+Steps 2–4 are not duplicated: the plan is mapped to an ordinary `Operation` and handed to
+`tabular::engine::execute`, so a column that does not exist or a formula column is refused by the exact
+same code path a deterministically classified question already goes through. Only step 1 (parsing) and
+step 5 (filter-value resolution) are this module's own. A gateway that is unreachable, too slow, or
+answers invalid JSON degrades to the same nudge an unrecognised question already gave before this
+capability existed — the model widens which questions get an answer, and is never load-bearing for
+whether any answer is correct.
+
+### The mixed tier: the engines compute, the model only writes
+
+Documents and tables both selected (`GroundingTier::DocumentsAndTables`) is still routed in two steps
+(`docs/SESSION-DATA-15-Mixed-Routing.md`, `docs/SESSION-DATA-16-Mixed-Tier.md`). A question that is
+clearly and only about the data is answered by the tabular engine alone, before anything else is read —
+unchanged since session 15. Everything else reaches `mixed_answer::answer`, a Tauri-free module
+`commands::mixed_tier` calls into with an already-classified `tabular_answer::PendingAnswer` and whatever
+retrieval already found, for the same `IndexStore`-is-not-`Sync` reason `tabular_answer`'s own
+`prepare`/`resolve` split exists: neither the tabular classification nor retrieval's embed-then-search
+sequence may hold a reference to the index across a gateway `.await`, so both happen in `commands.rs`,
+owning the index, before `mixed_answer::answer` is ever called.
+
+```text
+question (documents and tables both selected)
+  → tabular classifier, over the tables alone → clearly data-only → tier 2's own engine, unchanged (session 15)
+  → otherwise: retrieval over the selected documents
+  → tabular_answer::prepare's own PendingAnswer:
+      Done(value | structural | a human choice)  → that is the whole answer; no generation, no model
+      TryModel (operation recognised, no filter resolved from the question's own words)
+          → entity linking: a retrieved excerpt's word anchored against the table's real column
+            values (`mixed_answer::entity_link`) — ambiguous between two columns → asked, nothing
+            computed; unique → the table's own filter, computed, no model
+          → neither: session 14's hidden interpreter, unchanged
+  → a computed Value (or no data question at all) and the document excerpts: one turn, two labelled
+    blocks ("Document excerpts", "Table results"), MIXED_INSTRUCTION — forbids computing, forbids
+    swapping one block for the other
+  → the model writes; every number it wrote is checked against the table's own value or an excerpt's
+    verbatim text afterward (`mixed_answer::verify_numbers`), and every bracketed citation against what
+    was actually supplied (`reject_citations`) — a mismatch is appended, never silently rewritten
+  → either side missing (no data question, or no document evidence, or the gateway unreachable for
+    generation) degrades to the side that still has something, with no gateway call when that is the
+    table alone
+```
+
+The model never receives a cell value or a row here either: the table block is built from
+`tabular::escalation::format_evidence`, the exact function tier 2 keeps unsent for this session, which
+already refuses to turn a row list into evidence. A mixed answer's `Source`-shaped half is `Computed`
+(the table) beside `Extracted`/`Recognised` (the documents) — never `ModelAsserted`: the model's prose is
+checked against both, not trusted as a third kind of fact.
 
 ## Runtimes are adapters, never the home of business logic
 

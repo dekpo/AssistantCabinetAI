@@ -32,7 +32,7 @@ must appear at once, with the line *"... sans l'IA"* under it and no "Généré 
 | Commit tested (`git rev-parse --short HEAD`) | |
 | Operating system | |
 | Interface language (Settings) | fr-FR for everything except test H6 |
-| Models tested (the names shown in the model selector at the bottom right of the chat) | |
+| Models tested (the names shown in the model selector at the bottom right of the chat). From 7 October 2026 a pass that ends in a choice of model uses only the free-licence families of `docs/MODELS.md`; models outside them (Gemma 2/3, Llama, MedGemma) may still be run as witnesses but are not candidates | |
 | Context window of each model (the line `MODEL_CONTEXT_WINDOWS` of the `.env` file; default 8192) | |
 | `LLM_REQUEST_TIMEOUT_SECONDS` in `.env` (default 180) | |
 

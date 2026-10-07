@@ -702,6 +702,15 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | The useful ceiling today | About 12288 tokens: the desktop never sends more than 24 000 characters (`gateway.rs` `MAX_CONTEXT_CHARS`, about 8 000 tokens) plus the 2 048-token answer. A larger window is memory for nothing until that cap and the gateway's own are raised in a separate, measured change |
 | The second human pass | `docs/test-reports/human-acceptance-pass-2/README.md`: one self-contained file (setup, data and verified answers, every question, expected result, tick boxes, the truncation check). Run after any significant change and on every new model or machine; the verdicts of two runs on the same fixtures are comparable |
 
+## Models: free licences only (owner decision, 7 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Which models | Only families under a free licence (Apache 2.0 or MIT), those of the table in `docs/MODELS.md`, "Licence policy": Qwen, Gemma 4, DeepSeek-R1 distillations, Ministral 3, Mistral Small / Nemo, Phi, Granite, GLM. Reason: not to be blocked or constrained at the sale. Llama 3.x / 4, Gemma 2 / 3, MedGemma and every research or registration-gated licence are out |
+| What this does not settle | The ranking is the owner's preference, not a measured order. The agent noted reservations (Qwen 2.5 3B and 72B licences, the Llama base of two DeepSeek distillations, Mistral Small 22B versus 24B, a Granite tag that may not exist, the GLM-4 licence, the reasoning behaviour of DeepSeek-R1) that must be checked on the model card of the exact tag before it is pulled; each pulled model also needs its row in `models/LICENSES.md` |
+| The development machine | The owner's current aliases include models that are now out (`gemma2:2b`, `gemma3:1b`, `llama3.2`, `medgemma:4b`). They remain as test witnesses on the development machine until she replaces them; none is a pilot or shipped model. The `.env` values are hers |
+| Embedding and reranking | Same rule: `nomic-embed-text` (Apache 2.0) is loaded; `bge-m3` (MIT) is the French candidate; changing the embedding model re-indexes every folder |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

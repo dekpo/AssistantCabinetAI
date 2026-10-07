@@ -4,7 +4,7 @@ A weight without a row in this file is not loaded on a practice machine.
 
 How to add or remove a model without restarting Compose: `models/README.md`.
 
-Review date: 2026-09-21.
+Review date: 2026-09-21. **Licence policy of 7 October 2026: only the free-licence families (Apache 2.0, MIT) listed in `docs/MODELS.md`, "Licence policy", are used from now on.** A row for each model the owner pulls from that list is still required before it is loaded on a practice machine; the register below predates the policy and still holds rows for families that are now out (Llama, Gemma 3): they are kept as history, not as candidates.
 
 **Currently loaded** (matches `.env`'s `MODEL_ALIASES` on this machine, 21 September 2026):
 `mistral`, `llama3.1-8b-instruct`, `nomic-embed-text`, `qwen2.5:1.5b`. Everything else below is a

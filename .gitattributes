@@ -5,3 +5,4 @@
 *.png binary
 
 *.toml text eol=lf
+Cargo.lock text eol=lf

@@ -11,6 +11,67 @@ In one sentence: **yes** test several families on the Mac mini, at the owner's h
 sandbox. **No** model shop at the GP's practice, **no** "clinical care" weight, and **not** the 120-billion
 `gpt-oss` as a daily driver on 64 GB.
 
+## Licence policy: only free-licence models (owner decision, 7 October 2026)
+
+**From 7 October 2026 the product is developed, tested and shipped with the model families below and no others.** The reason
+is commercial: a model under a restrictive licence (a "community" licence with a usage threshold, a mandatory "Built with"
+notice, a research-only or registration-gated licence) could block or complicate the sale later. Apache 2.0 and MIT carry
+none of that. This replaces the "Gemma 3 possible" and "Llama avoided unless a written decision" lines of the table in
+"Weight licences" below: Gemma 2, Gemma 3, MedGemma, Llama 3.x and Llama 4 are **out**.
+
+### The owner's ranking
+
+| Rank | Family (latest generation) | Provider | Free licence | Sizes available (billions of parameters) | Ollama ID advised for the Mac mini |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Qwen (2.5 / 3 / 3.5 series) | Alibaba Cloud | Apache 2.0 | 0.5B, 1.5B, 3B, 7B, 14B, 32B, 72B | `qwen2.5:32b` |
+| 2 | Gemma 4 | Google DeepMind | Apache 2.0 | E2B, E4B, 12B, 26B (MoE), 31B | `gemma4:31b` (or the 26b MoE) |
+| 3 | DeepSeek-R1 (distillations) | DeepSeek | MIT | 1.5B, 7B, 8B, 14B, 32B, 70B | `deepseek-r1:32b` |
+| 4 | Ministral 3 | Mistral AI | Apache 2.0 | 3B, 8B, 14B | `ministral-3:14b` |
+| 5 | Mistral Small / Nemo | Mistral AI | Apache 2.0 | 12B (Nemo), 24B (Small) | `mistral-small:24b` |
+| 6 | Phi (Phi-3 / Phi-4) | Microsoft | MIT | 3.8B, 7B, 14B | `phi4:14b` |
+| 7 | Granite (3.x / 4.x series) | IBM | Apache 2.0 | 1B, 3B, 8B, 34B | `granite3-dense:34b` |
+| 8 | GLM (5.x series) | Z.ai / Tsinghua | MIT | 9B, 18B, 30B | `glm4:9b` |
+
+The rank is the owner's order of preference. It is **not** a measured quality order on our tasks (administrative French,
+retrieval-grounded answers, a JSON query plan over a table): the pilot catalogue is still decided by the bake-off and by the
+human pass (`docs/test-reports/human-acceptance-pass-2/README.md`), two or three winners at most (see "Two tiers").
+
+### Reservations to settle before pulling a tag (the agent's notes, from its own knowledge, not checked against the live
+model cards: **read the card of the exact tag**, and add its row to `models/LICENSES.md`)
+
+| Family | What to check | Why |
+| --- | --- | --- |
+| Qwen 2.5 | The **3B** and **72B** of Qwen 2.5 were not under Apache 2.0 (a research licence and the Qwen licence); the 0.5B, 1.5B, 7B, 14B and 32B were. Prefer the Qwen **3** tags, which were Apache 2.0 across the range; confirm the "3.5" series on its card | The table lists every size as Apache 2.0 |
+| Gemma 4 | That the card of the exact tag says Apache 2.0 | Gemma 2 and 3 were under Google's "Gemma Terms of Use", not an open-source licence; the move to Apache 2.0 is the owner's information |
+| DeepSeek-R1 distillations | The weights are MIT, but each distillation is built on a base model: the 1.5B, 7B, 14B and 32B on Qwen 2.5, the **8B and 70B on Llama**, so the Llama community licence and its notice may still bind those two. Prefer the Qwen-based sizes | A licence is not only the one on the top of the card |
+| DeepSeek-R1, behaviour | It is a **reasoning** model: it writes its thinking before answering. That thinking counts against `MAX_OUTPUT_TOKENS` (2048), is slow on CPU, and can break the JSON query plan of the tabular interpreter and the streaming display. Test it on the human pass before choosing it | Not a licence issue; a product one |
+| Mistral Small | Pull **`mistral-small:24b`** explicitly. The older 22B release was under a research licence; `mistral-small:latest` may point at either | Apache 2.0 applies to the 24B generation |
+| Granite | The tag `granite3-dense:34b` does not match what we know of Ollama's library (the dense Granite 3 models are 2B and 8B; the 34B is a code model; the MoE ones are 1B and 3B). Search the library (`ollama search granite`) and prefer `granite3.3:8b` or the current 8B | An ID that does not exist cannot be pulled |
+| GLM | `glm4:9b` is the 2024 GLM-4-9B, whose licence is the GLM-4 custom licence (commercial use subject to registration), not MIT; the MIT licence belongs to later releases (4.5 and after). Confirm the tag and the sizes | The table lists the family as MIT |
+| Phi, Ministral 3, Mistral Nemo | Nothing to add | MIT and Apache 2.0 respectively |
+
+### Not on the list any more, and where they still are on the owner's machine
+
+`gemma2:2b`, `gemma3:1b`, `llama3.2:3b`, `llama3.2:1b`, `medgemma:4b` are in the owner's `.env` (`MODEL_ALIASES`) and were used in the
+human passes. They stay usable **as test witnesses on the development machine only** until the owner replaces them; they are never
+a pilot or a shipped model. The aliases that already comply: `ministral-3:3b` (Ministral 3), `granite3.1-moe:3b` (Granite),
+`qwen2.5:1.5b` (Qwen 2.5, Apache), `gemma4:e2b` (Gemma 4, if its card confirms Apache 2.0), and the embedding model `nomic-embed-text` (Apache 2.0).
+
+### Additions the agent proposes (same rule: free licence, useful for RAG and tables; confirm each card before pulling)
+
+| Candidate | Licence (to confirm) | Why it fits |
+| --- | --- | --- |
+| `gpt-oss:20b` | Apache 2.0 | Already the daily candidate of "Bench list" below; strong at structured output (the query plan) and tool use |
+| Qwen 3 (`qwen3:8b`, `qwen3:14b`, `qwen3:30b`) | Apache 2.0 | Rank 1 family, current generation, a full range of sizes including a fast MoE; the safer tags than Qwen 2.5 for licence |
+| `mistral` 7B (v0.3) | Apache 2.0 | The existing witness of `models/LICENSES.md`; light, usable French |
+| SmolLM3 (3B) | Apache 2.0 | A small model for the fast profile where a 3B is wanted; check its French on the human pass |
+| Embedding: `nomic-embed-text` (loaded), `bge-m3` | Apache 2.0, MIT | Retrieval quality decides the answers more than the chat model; `bge-m3` is multilingual and the French candidate named in the register. Changing the embedding model means re-indexing every folder |
+| Embedding: `granite-embedding`, `mxbai-embed-large`, `snowflake-arctic-embed2` | Apache 2.0 | Alternatives to bench against `bge-m3` on the French fixtures |
+| A reranker (`bge-reranker-v2-m3`) | Apache 2.0 | The `AIProvider` port has a `rerank` method that nothing implements yet; a small reranker is the usual first gain for a RAG |
+
+For the **tabular** part the chat model only translates a question into a JSON plan the engine validates and runs: any model that follows
+a short instruction and returns clean JSON is enough; size matters less there than for document answers.
+
 ## Two tiers, never mixed
 
 | Tier | Where | How many weights | Who sees the technical name |
@@ -110,6 +171,8 @@ belongs in the locale pack rather than hardcoded in a prompt — see `docs/LANGU
 a leftover from the French documentation.
 
 ## Weight licences
+
+**Superseded in part by "Licence policy" above (7 October 2026): only the families of that table are used.** The table below is kept for the reasoning on licences.
 
 Distinct from the stack licences below. Each **model** has its own card.
 

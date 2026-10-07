@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
+import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
 import { annotationLines } from "../lib/annotations";
 import { groupSources } from "../lib/sourceGroups";
@@ -327,6 +328,8 @@ export function MessageList({
                   </ul>
                 </details>
               )}
+              {/* A letter was asked for: the plan she approves (`FillPlanCard`). */}
+              {entry.fillPlan === undefined ? null : <FillPlanCard plan={entry.fillPlan} />}
               {/* Every note under the answer, as lines: where it came from, what it rests on, what could
                   not be established (`lib/annotations.ts`, also what "Copy the conversation" copies). */}
               {annotationLines(t, locale, entry).map((line, index) => (

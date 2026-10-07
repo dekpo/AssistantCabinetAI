@@ -92,6 +92,10 @@ export function annotationLines(t: Translator, locale: string, entry: ChatEntry)
       }),
     );
   }
+  // A letter plan: the program fills the letter, from the rows on this computer, no AI read them.
+  if (entry.fillPlan !== undefined) {
+    lines.push(t("fill.noModel"));
+  }
   // A figure the model stated that is in none of the excerpts it was given and not in the question.
   for (const number of entry.unverifiedNumbers ?? []) {
     lines.push(t("chat.unverifiedNumber", { number }));

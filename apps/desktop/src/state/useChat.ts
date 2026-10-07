@@ -9,6 +9,7 @@ import {
   type StopOutcome,
 } from "../lib/generation";
 import { choicesFromFolder, choicesFromTabular, type Choice } from "../lib/choices";
+import type { FillPlan } from "../lib/fill";
 import { formatFolderAnswer } from "../lib/folderAnswer";
 import { conversationHistory } from "../lib/history";
 import { formatTabularAnswer, tabularSourceOf, type TabularSource } from "../lib/tabularAnswer";
@@ -115,6 +116,8 @@ export interface ChatEntry extends ChatTurn {
   /** Figures the model stated that appear in none of the excerpts it was given and not in the question
    * (`number_check`): said under the answer, never edited into it. */
   unverifiedNumbers?: string[];
+  /** A letter was asked for: the plan to approve, shown as a card under this answer. */
+  fillPlan?: FillPlan;
   /** A "which file?" answer, as data: one button per candidate, each one resending her question with
    * that file written into it (HAP-1, UX-1). */
   choices?: Choice[];
@@ -403,6 +406,26 @@ export function useChat(
                     ...(source === null ? {} : { tabularSource: source }),
                     ...(nudge ? { tabularNudge: true as const } : {}),
                     ...(result.documentsNotNeeded ? { documentsNotNeeded: true as const } : {}),
+                  }
+                : entry,
+            ),
+          );
+          return;
+        }
+        if (result.fillPlan !== null) {
+          /* A letter was asked for and the template and the rows were found: a plan, not an answer.
+             Nothing was written and no model was involved; the card under this text is where she
+             decides. */
+          const plan = result.fillPlan;
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    content: t("fill.intro", { template: plan.template }),
+                    deterministic: true as const,
+                    mixed: true as const,
+                    fillPlan: plan,
                   }
                 : entry,
             ),

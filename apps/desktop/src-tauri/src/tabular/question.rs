@@ -74,6 +74,9 @@ struct PatternPack {
     /// the writing, so it goes to the tier that reads both (`has_writing_intent`).
     #[serde(default)]
     writing_intents: Vec<String>,
+    /// Words that put every row in scope ("each", "every", "all"): "write a letter for each order".
+    #[serde(default)]
+    distributive: Vec<String>,
     /// Session 12's D5 (`docs/DECISIONS.md`): number words one to ten, keyed `"1"` to `"10"`, for
     /// reading a `top_n` question's N without ever guessing a digit from the question's own
     /// vocabulary words. A larger N is always typed as a digit, which `extract_n` reads directly.
@@ -234,6 +237,18 @@ pub(crate) fn has_writing_intent(question: &str, locale: &str) -> bool {
     };
     let question = spaced_words(question);
     pack.writing_intents
+        .iter()
+        .any(|word| question.contains(&spaced_words(word)))
+}
+
+/// True when the question asks for something for every row or every group ("for each order"),
+/// judged from the locale's own pack, by whole words.
+pub(crate) fn has_distributive_word(question: &str, locale: &str) -> bool {
+    let Some(pack) = pack_for(locale) else {
+        return false;
+    };
+    let question = spaced_words(question);
+    pack.distributive
         .iter()
         .any(|word| question.contains(&spaced_words(word)))
 }

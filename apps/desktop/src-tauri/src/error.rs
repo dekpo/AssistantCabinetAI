@@ -150,6 +150,28 @@ pub enum AppError {
     /// confidence floor. The page is reported empty, exactly like a page with no text layer.
     #[error("ocr_page_unreadable")]
     OcrPageUnreadable { path: String, page: u32 },
+
+    /// The template of a mail merge could not be read as a letter (HAP-1, lot E).
+    #[error("fill_template_unreadable")]
+    FillTemplateUnreadable { path: String },
+
+    /// The template or the table the plan was made from is no longer there, no longer analysed, or
+    /// no longer readable.
+    #[error("fill_source_unavailable")]
+    FillSourceUnavailable,
+
+    /// The table has no row to make a letter from.
+    #[error("fill_nothing_to_fill")]
+    FillNothingToFill,
+
+    /// One approval would write more letters than the limit.
+    #[error("fill_too_many")]
+    FillTooMany { count: usize, limit: usize },
+
+    /// A letter could not be written; the ones already written stay, the template and the data are
+    /// untouched.
+    #[error("fill_write_failed")]
+    FillWriteFailed,
 }
 
 impl AppError {
@@ -191,6 +213,11 @@ impl AppError {
             Self::OcrLanguageUnavailable { .. } => "ocr_language_unavailable",
             Self::OcrFailed { .. } => "ocr_failed",
             Self::OcrPageUnreadable { .. } => "ocr_page_unreadable",
+            Self::FillTemplateUnreadable { .. } => "fill_template_unreadable",
+            Self::FillSourceUnavailable => "fill_source_unavailable",
+            Self::FillNothingToFill => "fill_nothing_to_fill",
+            Self::FillTooMany { .. } => "fill_too_many",
+            Self::FillWriteFailed => "fill_write_failed",
         }
     }
 
@@ -212,7 +239,12 @@ impl AppError {
             | Self::DocumentsAndTablesTogether
             | Self::ChatCancelled
             | Self::WorkFolderRevealFailed
+            | Self::FillSourceUnavailable
+            | Self::FillNothingToFill
+            | Self::FillWriteFailed
             | Self::OcrUnavailable => json!({}),
+            Self::FillTemplateUnreadable { path } => json!({ "path": path }),
+            Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
                 json!({ "path": path })
             }

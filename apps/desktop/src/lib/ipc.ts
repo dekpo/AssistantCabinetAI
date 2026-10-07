@@ -1,3 +1,4 @@
+import type { FillPlan, FillPreview, FillReport, FillRequest } from "./fill";
 import { Channel, invoke } from "@tauri-apps/api/core";
 
 /**
@@ -491,6 +492,9 @@ export interface AskAnswer {
   withoutDocuments: boolean;
   /** Figures the answer states that appear in none of its excerpts and not in the question. */
   unverifiedNumbers: string[];
+  /** A letter was asked for and the template and the rows it needs were found: a plan to approve.
+   * `answer` is then empty. */
+  fillPlan: FillPlan | null;
   /** Set when tables were selected and no document: the tabular engine answered it. `answer` is
    * then empty. */
   tabularAnswer: TabularAnswer | null;
@@ -620,6 +624,17 @@ export function dataFolderInventory(): Promise<DataFolderReport> {
  * Confirm before calling it. */
 export function resetDataIndex(): Promise<void> {
   return invoke<void>("reset_data_index");
+}
+
+/** The preview of a mail merge for the choices made on the plan card. */
+export function fillPreview(request: FillRequest): Promise<FillPreview> {
+  return invoke<FillPreview>("fill_preview", { request });
+}
+
+/** Writes the letters she approved into the `Generated` subfolder of the documents folder: new files
+ * only, the template and the data untouched. */
+export function fillGenerate(request: FillRequest): Promise<FillReport> {
+  return invoke<FillReport>("fill_generate", { request });
 }
 
 /** Show one file of the work folder, selected in the system's file manager. Takes the path

@@ -15,6 +15,7 @@ pub mod error;
 pub mod extraction;
 pub mod file_record;
 pub mod file_reference;
+pub mod fill_plan;
 pub mod filename_sanitizer;
 pub mod folder_questions;
 pub mod gateway;
@@ -66,6 +67,8 @@ pub fn run() {
             commands::reveal_work_folder,
             commands::reveal_work_file,
             commands::reset_index,
+            commands::fill_preview,
+            commands::fill_generate,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

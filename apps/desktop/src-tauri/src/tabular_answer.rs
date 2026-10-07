@@ -1087,6 +1087,124 @@ fn with_model_attempt(answer: TabularAnswer, model_alias: &str, elapsed: Duratio
     }
 }
 
+/// A workbook's single sheet as the text a letter is filled from, with the identifier that chose it.
+pub struct FillSource {
+    /// Relative to the data folder.
+    pub file: String,
+    pub sheet: String,
+    pub table: crate::template_fill::Table,
+    /// The column and the value of the identifier the question named; `None` when the question asked
+    /// for every row.
+    pub key: Option<(String, String)>,
+}
+
+/// The cells of one sheet as the text a person sees in each, header row left out.
+fn fill_table_of(workbook: &Workbook, sheet_inventory: &SheetInventory) -> Option<crate::template_fill::Table> {
+    let sheet_data = workbook
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == sheet_inventory.name)?;
+    Some(crate::template_fill::Table {
+        columns: sheet_inventory.columns.iter().map(|column| column.name.clone()).collect(),
+        rows: data_rows(sheet_inventory, sheet_data)
+            .iter()
+            .map(|row| {
+                sheet_inventory
+                    .columns
+                    .iter()
+                    .map(|column| row.get(column.index).map(|cell| text_value(cell).trim().to_string()).unwrap_or_default())
+                    .collect()
+            })
+            .collect(),
+    })
+}
+
+/// Opens one analysed workbook for a mail merge: its single reachable sheet as a table. `None` for a
+/// workbook that is not analysed, unreadable, changed since, or has several reachable sheets (a letter
+/// is never filled from a sheet picked for her).
+fn open_for_fill(
+    data: &DataFolder,
+    record: &FileRecord,
+    allowed: Option<&[String]>,
+    locale: &str,
+    index: &IndexStore,
+) -> Option<(Workbook, TabularInventory, String)> {
+    if record.processing_status != ProcessingStatus::Indexed {
+        return None;
+    }
+    let inventory = data.usable_inventory(&record.relative_path)?;
+    let path = data.files().absolute_path(record)?;
+    let (workbook, fresh) =
+        load_workbook_cached(index, &path, &record.relative_path, inventory, locale).ok()?;
+    let sheet = engine::resolve_sheet_inventory(&fresh, None, allowed).ok()?.name.clone();
+    Some((workbook, fresh, sheet))
+}
+
+/// The workbook, among the selected ones, that holds the identifier the question names ("order
+/// CMD-2026-002"), as a table to fill a template from. With `every_row`, a question that asked for
+/// every row needs no identifier: the one selected workbook is the source. `None` when no workbook
+/// qualifies; never a guess between two.
+pub fn locate_fill_source(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    every_row: bool,
+) -> Result<Option<FillSource>, AppError> {
+    let chosen = chosen_workbooks(data, selection)?;
+    let mut sources: Vec<FillSource> = Vec::new();
+    for each in &chosen {
+        let Some((workbook, fresh, sheet)) =
+            open_for_fill(data, each.record, each.sheets.as_deref(), locale, index)
+        else {
+            continue;
+        };
+        let Some(sheet_inventory) = fresh.sheets.iter().find(|candidate| candidate.name == sheet) else {
+            continue;
+        };
+        let Some(table) = fill_table_of(&workbook, sheet_inventory) else {
+            continue;
+        };
+        let sheet_data = workbook.sheets.iter().find(|candidate| candidate.name == sheet);
+        let hits = sheet_data
+            .map(|data| identifier_hits(question, sheet_inventory, data_rows(sheet_inventory, data)))
+            .unwrap_or_default();
+        let key = hits.into_iter().find_map(|hit| match hit.matches.as_slice() {
+            [(column, value)] => Some((column.clone(), value.clone())),
+            _ => None,
+        });
+        if key.is_some() || every_row {
+            sources.push(FillSource {
+                file: each.record.relative_path.clone(),
+                sheet,
+                table,
+                key,
+            });
+        }
+    }
+    // Exactly one workbook qualifies; with several, nothing is picked for her.
+    Ok(match sources.len() {
+        1 => sources.pop(),
+        _ => None,
+    })
+}
+
+/// A workbook's single sheet as a table, by its path relative to the data folder (the preview and
+/// the generation re-read it rather than trust what the interface sends back).
+pub fn load_fill_table(
+    data: &DataFolder,
+    file: &str,
+    locale: &str,
+    index: &IndexStore,
+) -> Option<(String, crate::template_fill::Table)> {
+    let record = data.files().find_by_relative_path(file)?;
+    let (workbook, fresh, sheet) = open_for_fill(data, record, None, locale, index)?;
+    let sheet_inventory = fresh.sheets.iter().find(|candidate| candidate.name == sheet)?;
+    let table = fill_table_of(&workbook, sheet_inventory)?;
+    Some((sheet, table))
+}
+
 /// A whole value of a text column that the question writes as one token ("CMD-2026-002"), with the
 /// columns that hold it.
 struct IdentifierHit {

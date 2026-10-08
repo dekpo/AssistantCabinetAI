@@ -74,6 +74,22 @@ per input in the order they were sent. Three rules matter more than the wire sha
 The register records the alias, how many passages, how many characters, how many vectors, the dimensions
 and one SHA-256 over the batch. Not a passage.
 
+**How indexing sends it, and what it can and cannot do.** A document is embedded in requests of at most 16
+chunks and 20 000 characters, in chunk order, and its chunks enter the index only when **every** vector exists: a file that fails
+halfway leaves nothing behind and is retried by the next pass. Each request has a deadline (120 s, 240 s for the first of a pass)
+and one retry on a deadline or a 502 / 503 / 504. There is **no cap on the size of a file**; the cost is linear, about 0.7 s per
+1 000-character chunk on the CPU-only reference stack, so a 42-page text PDF takes about 80 s to analyse and a thousand-page one
+takes about half an hour, shown by a bar that moves by batch. When one file cannot be embedded (a deadline passing twice, an error
+of the runtime's own) the pass goes on, lists the file with its reason and retries it next time; when the server is unreachable or
+the model is down, or three files fail in a row, the pass stops with that error. Nothing about this changes what is stored or
+what a citation can point at. Decision and numbers: `docs/DECISIONS.md` (embedding timeout fix) and `docs/TROUBLESHOOTING.md`.
+
+**What the logs show.** Every embeddings request leaves one `embedding` event in the gateway's log (metadata only: `request_id`,
+`actor`, `started_at`, `duration_ms`, `model_alias`, `input_count`, `input_chars`, `inputs_sha256`, `vector_count`, `dimensions`,
+`prompt_tokens`, `outcome`). A healthy pass over a long document is a run of lines with `input_count` <= 16 and `outcome`
+`completed`, whose `input_count` adds up to the chunks the file produced; a failed request has the gateway's error code as its
+`outcome`. An unchanged folder produces none. How to read them: `docs/OPERATIONS.md`, "Watching an Analyse".
+
 **OCR is part of parsing, and it stays on the workstation.** A page whose text layer is usable is read
 natively and never rasterised; a page without one is rendered to a bitmap in memory and handed to a
 local engine behind the `OcrProvider` port. The detection is per page, so a letter that mixes a

@@ -70,6 +70,49 @@ in `.env` changed nothing; `.env.example` lists it now). To check that the deskt
 `5` the same way, ask any question, then put the value back; the desktop's own `answerIdleTimeoutSeconds` is a separate, client-side
 setting and does not govern this one.
 
+### Watching an Analyse
+
+When an analysis is slow, stalls or fails, watch both containers while it runs (repository root, before pressing Analyse; the
+logs only go back to the creation of the container):
+
+```powershell
+docker compose ps
+docker compose logs -f --tail=0 server     # one terminal: the gateway, one line per embeddings request
+docker compose logs -f --tail=0 ollama     # a second one: the runtime
+docker stats --no-stream assistant-cabinet-ollama    # CPU while a request runs
+```
+
+(bash: the same.) An `embedding` line looks like this, with no text in it:
+
+```text
+embedding {"duration_ms": 9664, "input_chars": 14884, "input_count": 16, "inputs_sha256": "86b0...", "model_alias": "assistant-embed",
+           "outcome": "completed", "prompt_tokens": ..., "request_id": "embd-...", "vector_count": 16, ...}
+```
+
+- `input_count` <= 16 and `input_chars` <= 20 000 on every line; their sum over a pass is the number of chunks of the files read.
+  One line with a large `input_count` means the client is an older build.
+- `duration_ms` is what to compare with the client's 120 s deadline (240 s for the first request of a pass). On the development PC a
+  16-chunk request takes 8 to 17 s. **Time one on the Mac mini before relying on those numbers:**
+
+  ```powershell
+  # from the repository root, with the stack up; sends 16 invented passages, never a document
+  python -c "import json,urllib.request as u;b=json.dumps({'model':'assistant-embed','input':['Le comite relit le calendrier des reunions de la semaine. '*20]*16}).encode();import time;t=time.time();u.urlopen(u.Request('http://127.0.0.1:8080/v1/embeddings',b,{'Content-Type':'application/json'}),timeout=300).read();print(round(time.time()-t,1),'s')"
+  ```
+
+- `outcome` is `completed`, or the gateway's error code: `provider_error` (with a `reason` in the response, not in the log),
+  `provider_unreachable` when the Ollama container is down or was cut during the request. Two consecutive failing lines for the
+  same `input_count` are the attempt and its one retry.
+- No `embedding` line at all after pressing Analyse: the pass did not reach the gateway, or nothing needed embedding. Look at the
+  summary in the app: unchanged files are skipped without a request, a scan is read by OCR on the workstation first (up to 20 s
+  a page), and a gateway that is off is `server_unreachable` in the sidebar.
+- A client that gave up does not stop the gateway: a request that ran past the client's deadline still ends with `completed` in the
+  log, a few seconds after the sidebar reported a failure. That mismatch is how the 7 October 2026 case showed itself.
+- In `ollama`: `[GIN] ... | 200 | 9.6s | POST "/api/embed"` is one batch; `starting llama-server` just before the first one is the
+  model loading, and should appear once per pass, not before every batch (`OLLAMA_MAX_LOADED_MODELS=1` evicts it whenever a chat
+  model is used in between).
+- To check that no text reached the logs, search them for a distinctive sentence of the document:
+  `docker compose logs server | grep -c "<sentence>"` must print `0`.
+
 `DEFAULT_CONTEXT_WINDOW` (default 8192 tokens) and `MODEL_CONTEXT_WINDOWS` (`alias=tokens` pairs, for the
 aliases that need another value) set how much a model may read in one request - the conversation's memory
 included. The gateway passes it on every request (`num_ctx`), caps it at what the model itself supports, and

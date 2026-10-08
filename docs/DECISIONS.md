@@ -711,6 +711,20 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | The development machine | The owner's current aliases include models that are now out (`gemma2:2b`, `gemma3:1b`, `llama3.2`, `medgemma:4b`). They remain as test witnesses on the development machine until she replaces them; none is a pilot or shipped model. The `.env` values are hers |
 | Embedding and reranking | Same rule: `nomic-embed-text` (Apache 2.0) is loaded; `bge-m3` (MIT) is the French candidate; changing the embedding model re-indexes every folder |
 
+## Settled by the embedding timeout fix (7 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Size of an embeddings request | At most 16 chunks and 20 000 characters (`indexing.rs`, `EMBEDDING_BATCH_INPUTS` / `EMBEDDING_BATCH_CHARS`). Measured on the CPU-only stack at about 0.7 s per 1 000-character chunk whatever the batch size, so a request takes about 11 s, a retry wastes seconds rather than minutes, and the bar moves every few seconds. The gateway-mirrored ceilings (256 inputs, 200 000 characters) stay as the hard limit |
+| Deadline | 120 s per request, 240 s for the first request of a pass (a cold model load), one retry after 2 s on a deadline or a 502 / 503 / 504, never on a 4xx and never on an unreachable server. Constants in `gateway.rs` (`EmbeddingDeadlines`), injectable for tests |
+| Not a user setting | A timeout she cannot act on does not belong on the settings screen. Server URL, model and folder stay configuration (`AGENTS.md`); this one is a property of the batch size and of the hardware, revisited with a measurement on the Mac mini |
+| Its own error | `embedding_timeout` is not `server_timeout`. The latter stays the code of a chat that went silent and keeps its sentence (and its pointer to `answerIdleTimeoutSeconds`); the former says the AI took too long to read the text and to check that the machine is on. A failure to connect is `server_unreachable` even when it is also a timeout |
+| A failed file | Does not stop the pass and is never written to the index: `failedFiles` lists path, code and data, the folder card names each with its localised reason, and it stays "not analysed yet" so the next pass tries it again. A failure that is not about one file (unreachable, model down, refused request, a code other than `provider_error`) stops the pass |
+| Three in a row | `MAX_CONSECUTIVE_FAILED_FILES` = 3 files failing to embed in a row end the pass with the last error: a dead server would otherwise cost two deadlines per remaining file. A file that embeds resets the count |
+| The Analyse button | Unchanged: a file that failed to embed is not `failed` (that is "read, nothing usable") but not analysed, so the button stays lit, which is right while a retry can succeed |
+| Progress | Counts only, as before: `batchIndex` / `batchTotal` inside the current file. No file name and no text |
+| Not decided here | Moving extraction and OCR off the async thread and wiring cancellation into the pass (open in `docs/TROUBLESHOOTING.md`, same entry) |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { analysisFraction, analysisPending, countPending } from "./analysis";
-import type { FileRecord, ProcessingStatus } from "./ipc";
+import type { FileRecord, IndexProgress, ProcessingStatus } from "./ipc";
+
+function progress(
+  processedFiles: number,
+  totalFiles: number,
+  batchIndex = 0,
+  batchTotal = 0,
+): IndexProgress {
+  return { processedFiles, totalFiles, batchIndex, batchTotal };
+}
 
 function file(processingStatus: ProcessingStatus): FileRecord {
   return {
@@ -75,15 +84,32 @@ describe("analysisPending", () => {
 
 describe("analysisFraction", () => {
   it("reports how far the pass has got", () => {
-    expect(analysisFraction({ processedFiles: 3, totalFiles: 12 })).toBe(0.25);
+    expect(analysisFraction(progress(3, 12))).toBe(0.25);
   });
 
   it("calls a pass over nothing finished rather than dividing by zero", () => {
-    expect(analysisFraction({ processedFiles: 0, totalFiles: 0 })).toBe(1);
+    expect(analysisFraction(progress(0, 0))).toBe(1);
+  });
+
+  it("moves inside a long document instead of standing still", () => {
+    // One file of three, two batches of four done: a sixth of the way through the pass.
+    expect(analysisFraction(progress(1, 3, 2, 4))).toBeCloseTo(0.5, 5);
+    expect(analysisFraction(progress(0, 1, 1, 4))).toBe(0.25);
+  });
+
+  it("only goes forward as batches complete", () => {
+    const steps = [progress(0, 2, 0, 3), progress(0, 2, 1, 3), progress(0, 2, 3, 3), progress(1, 2)];
+    const fractions = steps.map(analysisFraction);
+
+    expect([...fractions].sort((a, b) => a - b)).toStrictEqual(fractions);
+  });
+
+  it("never lets a file claim more than its own share", () => {
+    expect(analysisFraction(progress(0, 4, 9, 3))).toBe(0.25);
   });
 
   it("never draws past either end of the bar", () => {
-    expect(analysisFraction({ processedFiles: 20, totalFiles: 12 })).toBe(1);
-    expect(analysisFraction({ processedFiles: -1, totalFiles: 12 })).toBe(0);
+    expect(analysisFraction(progress(20, 12))).toBe(1);
+    expect(analysisFraction(progress(-1, 12))).toBe(0);
   });
 });

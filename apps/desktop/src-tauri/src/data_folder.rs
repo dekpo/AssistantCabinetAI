@@ -187,6 +187,8 @@ pub fn analyse(
     on_progress(IndexProgress {
         processed_files: 0,
         total_files,
+        batch_index: 0,
+        batch_total: 0,
     });
 
     let mut usable = 0;
@@ -226,6 +228,8 @@ pub fn analyse(
         on_progress(IndexProgress {
             processed_files: position + 1,
             total_files,
+            batch_index: 0,
+            batch_total: 0,
         });
     }
 
@@ -245,6 +249,7 @@ pub fn analyse(
         removed_files,
         renamed_files: Vec::new(),
         rename_failed_files: Vec::new(),
+        failed_files: Vec::new(),
         unavailable_capabilities: Vec::new(),
         chunk_count: 0,
     })

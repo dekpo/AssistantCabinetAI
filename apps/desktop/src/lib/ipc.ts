@@ -199,6 +199,17 @@ export type ChatStreamEvent =
 export interface IndexProgress {
   processedFiles: number;
   totalFiles: number;
+  /** Inside the file being embedded: batches done and batches in all. Both 0 outside that. */
+  batchIndex: number;
+  batchTotal: number;
+}
+
+/** A file that could not be embedded: the pass went on without it and will try it again. */
+export interface FailedFile {
+  path: string;
+  /** A machine code, localised by `errorMessage`. */
+  code: string;
+  data: Record<string, unknown>;
 }
 
 export interface RenamedFile {
@@ -220,6 +231,8 @@ export interface IndexSummary {
   renamedFiles: RenamedFile[];
   /** Files that needed a clean name and could not be renamed. Left as they were. */
   renameFailedFiles: string[];
+  /** Files that could not be embedded. Never recorded as analysed; the next pass retries them. */
+  failedFiles: FailedFile[];
   /** Machine codes for an ingestion capability that did not start. Empty on a healthy install. */
   unavailableCapabilities: string[];
   chunkCount: number;

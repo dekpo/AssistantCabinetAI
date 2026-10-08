@@ -1,0 +1,34 @@
+---
+description: Knowledge Base programme (lots 0-11) - mandatory ritual for any agent working on it
+alwaysApply: true
+---
+
+# Knowledge Base programme
+
+This rule applies **only** when the task is part of the Knowledge Base (KB) programme: the owner dragged a
+`docs/SESSION-KB-*.md` file into the chat, or the request names a "KB lot". Ignore it otherwise.
+
+**Authority.** The owner decided on 8 October 2026 to build the KB, which supersedes the "frozen until
+14 October 2026" block of `v0-sprint.mdc` and the dated milestones of `AGENTS.md` for this work (lot 0
+rewrites those files; until it is merged, this rule wins for KB work). Every other boundary stays: local
+only, no cloud LLM, no telemetry, plan + approval for file actions, Compose environment, English for
+developers and French for users, no real patient file.
+
+**Before any code**, read in this order: `docs/SESSION-KB-WORKFLOW.md` (the ritual), `docs/SESSION-KB-00-master.md`
+(invariants I1-I14, schema, decisions D1-D10), the section of your lot only, and the reports of the lots
+you depend on in `docs/test-reports/knowledge-base-pass-1/lots/`. Do only your lot.
+
+**Four duties at the end of every lot**, detailed in the workflow file:
+
+1. **Branch.** Work on `feat/kb-<topic>` created from `kb/integration`. Never on `main`, never on
+   `kb/integration` directly. Git writes are the owner's: hand over the full copy-paste command block.
+2. **Document.** Write `docs/test-reports/knowledge-base-pass-1/lots/lot-NN-<slug>.md` (versioned) and
+   update the docs the lot names. A lot with no written report is not done.
+3. **Propose a real human test.** If the owner can see the lot working in the running application, you
+   must propose a step-by-step UX/UI test (`human-tests/lot-NN-<slug>.md`) and ask her to run it. If only
+   part of it is visible, propose that part. If nothing is visible, say so and offer the nearest developer
+   check. Always include a non-regression smoke test. Never claim a screen works if only unit tests ran.
+4. **Hand over.** Update `docs/SESSION-KB-STATUS.md` and name the next launcher file to drag into a new chat.
+
+No AI attribution in anything git-facing (`AGENTS.md`). Never run plain `cargo fmt`: format only the files
+you touched with `rustfmt --edition 2021 <files>`.

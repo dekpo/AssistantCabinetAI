@@ -18,7 +18,33 @@ pub const MAX_CONTEXT_CHARS: usize = 24_000;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(4);
-const EMBEDDING_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// How long one embeddings request may take, and how often it is tried.
+///
+/// Measured on the CPU-only reference stack (`docs/TROUBLESHOOTING.md`, embedding timeout):
+/// about 0.7 s per 1 000-character chunk, so a 16-chunk batch takes about 11 s and a cold model
+/// load adds a few seconds. 120 s is ten times the batch; 240 s for the first request of a pass
+/// absorbs a model that has to be loaded into memory first (`OLLAMA_MAX_LOADED_MODELS=1` evicts
+/// it). These are not user settings: nothing she could change would be the right answer, and a
+/// timeout she cannot act on does not belong on the settings screen. Injectable so a test can use
+/// milliseconds.
+#[derive(Debug, Clone, Copy)]
+pub struct EmbeddingDeadlines {
+    pub first_batch: Duration,
+    pub batch: Duration,
+    /// Pause before the single retry, so a server that just restarted has a moment to be ready.
+    pub retry_pause: Duration,
+}
+
+impl Default for EmbeddingDeadlines {
+    fn default() -> Self {
+        Self {
+            first_batch: Duration::from_secs(240),
+            batch: Duration::from_secs(120),
+            retry_pause: Duration::from_secs(2),
+        }
+    }
+}
 
 /// Caps mirrored from the gateway (`docs/RETRIEVAL.md`): the client caps too, because indexing
 /// sends batches rather than one conversation and a runaway folder should never leave the
@@ -80,6 +106,7 @@ struct HealthProviderBody {
 
 pub struct GatewayClient {
     http: reqwest::Client,
+    embedding_deadlines: EmbeddingDeadlines,
 }
 
 impl GatewayClient {
@@ -91,7 +118,19 @@ impl GatewayClient {
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
             .map_err(|_| AppError::Internal)?;
-        Ok(Self { http })
+        Ok(Self {
+            http,
+            embedding_deadlines: EmbeddingDeadlines::default(),
+        })
+    }
+
+    pub fn with_embedding_deadlines(mut self, deadlines: EmbeddingDeadlines) -> Self {
+        self.embedding_deadlines = deadlines;
+        self
+    }
+
+    pub fn embedding_deadlines(&self) -> EmbeddingDeadlines {
+        self.embedding_deadlines
     }
 
     pub async fn health(&self, server_url: &str) -> Result<HealthSnapshot, AppError> {
@@ -207,13 +246,38 @@ impl GatewayClient {
         Ok(answer)
     }
 
-    /// One vector per input, in the order they were sent (OpenAI-compatible). The caller must
-    /// already respect the batch caps; this only enforces them defensively.
+    /// One vector per input, in the order they were sent (OpenAI-compatible), with the ordinary
+    /// per-batch deadline. The caller must already respect the batch caps; this only enforces
+    /// them defensively.
     pub async fn embed(
         &self,
         server_url: &str,
         model_alias: &str,
         inputs: &[String],
+    ) -> Result<Vec<Vec<f32>>, AppError> {
+        self.embed_batch(
+            server_url,
+            model_alias,
+            inputs,
+            self.embedding_deadlines.batch,
+        )
+        .await
+    }
+
+    /// `embed` with the deadline chosen by the caller: indexing gives the first request of a pass
+    /// the longer one, because the model may still have to be loaded.
+    ///
+    /// One retry, and only for what a second try can fix: a deadline that passed, or the gateway
+    /// answering 502, 503 or 504. A refusal of the request itself (4xx) is never repeated, and an
+    /// unreachable server is not either - it said so at once. A deadline that passes twice is
+    /// `embedding_timeout`, never `server_timeout`: that code belongs to a chat that went silent,
+    /// and its sentence points at a setting that has no effect here.
+    pub async fn embed_batch(
+        &self,
+        server_url: &str,
+        model_alias: &str,
+        inputs: &[String],
+        deadline: Duration,
     ) -> Result<Vec<Vec<f32>>, AppError> {
         if inputs.is_empty() {
             return Ok(Vec::new());
@@ -232,27 +296,57 @@ impl GatewayClient {
             });
         }
 
+        let first = self
+            .embed_once(server_url, model_alias, inputs, deadline)
+            .await;
+        let Err(failure) = first else {
+            return first.map_err(|failure| failure.error);
+        };
+        if !failure.retryable {
+            return Err(failure.error);
+        }
+        tokio::time::sleep(self.embedding_deadlines.retry_pause).await;
+        self.embed_once(server_url, model_alias, inputs, deadline)
+            .await
+            .map_err(|failure| failure.error)
+    }
+
+    async fn embed_once(
+        &self,
+        server_url: &str,
+        model_alias: &str,
+        inputs: &[String],
+        deadline: Duration,
+    ) -> Result<Vec<Vec<f32>>, Attempt> {
         let url = endpoint(server_url, "/v1/embeddings");
         let payload = json!({ "model": model_alias, "input": inputs });
         let response = self
             .http
             .post(&url)
-            .timeout(EMBEDDING_TIMEOUT)
+            .timeout(deadline)
             .json(&payload)
             .send()
             .await
-            .map_err(|error| transport_error(error, server_url))?;
+            .map_err(|error| embedding_transport_error(error, server_url))?;
         if !response.status().is_success() {
             let status = response.status().as_u16();
             let body = response.text().await.unwrap_or_default();
             let parsed: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
-            return Err(gateway_error(&parsed).unwrap_or(AppError::ServerError { status }));
+            return Err(Attempt {
+                error: gateway_error(&parsed).unwrap_or(AppError::ServerError { status }),
+                retryable: RETRYABLE_STATUSES.contains(&status),
+            });
         }
 
-        let body: EmbeddingsBody = response
-            .json()
-            .await
-            .map_err(|_| AppError::ServerResponseInvalid)?;
+        let body: EmbeddingsBody = response.json().await.map_err(|error| {
+            // A body cut short by the deadline is a timeout like any other; one that arrived
+            // whole but unreadable is not worth asking for again.
+            if error.is_timeout() {
+                embedding_transport_error(error, server_url)
+            } else {
+                Attempt::final_error(AppError::ServerResponseInvalid)
+            }
+        })?;
         let mut ordered: Vec<(usize, Vec<f32>)> = body
             .data
             .into_iter()
@@ -261,9 +355,28 @@ impl GatewayClient {
         ordered.sort_by_key(|(index, _)| *index);
         let vectors: Vec<Vec<f32>> = ordered.into_iter().map(|(_, vector)| vector).collect();
         if vectors.len() != inputs.len() {
-            return Err(AppError::ServerResponseInvalid);
+            return Err(Attempt::final_error(AppError::ServerResponseInvalid));
         }
         Ok(vectors)
+    }
+}
+
+/// Statuses a second attempt can fix: the gateway or the model behind it was busy or restarting.
+/// Anything else the gateway refuses with (4xx above all) would be refused the same way again.
+const RETRYABLE_STATUSES: [u16; 3] = [502, 503, 504];
+
+/// One failed embeddings attempt, and whether asking again could help.
+struct Attempt {
+    error: AppError,
+    retryable: bool,
+}
+
+impl Attempt {
+    fn final_error(error: AppError) -> Self {
+        Self {
+            error,
+            retryable: false,
+        }
     }
 }
 
@@ -327,6 +440,27 @@ fn transport_error(error: reqwest::Error, server_url: &str) -> AppError {
         }
     } else {
         AppError::ServerResponseInvalid
+    }
+}
+
+/// The embeddings call's own reading of a transport failure: a deadline that passed is
+/// `embedding_timeout` and worth one more try; a server that cannot be reached is not.
+///
+/// A failure to connect comes first, even when it is also a timeout: a machine that is off or on
+/// another network never answers the connection, which is "unreachable", not "too slow". Telling
+/// her to retry in that case sends her looking at the wrong thing.
+fn embedding_transport_error(error: reqwest::Error, server_url: &str) -> Attempt {
+    if error.is_connect() {
+        Attempt::final_error(AppError::ServerUnreachable {
+            url: server_url.to_string(),
+        })
+    } else if error.is_timeout() {
+        Attempt {
+            error: AppError::EmbeddingTimeout,
+            retryable: true,
+        }
+    } else {
+        Attempt::final_error(transport_error(error, server_url))
     }
 }
 

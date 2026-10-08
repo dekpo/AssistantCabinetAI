@@ -76,6 +76,12 @@ pub enum AppError {
     #[error("server_timeout")]
     ServerTimeout { url: String },
 
+    /// One embeddings request ran past its deadline, twice. Distinct from `ServerTimeout`, which
+    /// is a chat that went silent: its sentence points at a waiting time in the settings that does
+    /// not govern indexing at all.
+    #[error("embedding_timeout")]
+    EmbeddingTimeout,
+
     #[error("server_error")]
     ServerError { status: u16 },
 
@@ -196,6 +202,7 @@ impl AppError {
             Self::WorkFolderRevealFailed => "work_folder_reveal_failed",
             Self::ServerUnreachable { .. } => "server_unreachable",
             Self::ServerTimeout { .. } => "server_timeout",
+            Self::EmbeddingTimeout => "embedding_timeout",
             Self::ServerError { .. } => "server_error",
             Self::ServerResponseInvalid => "server_response_invalid",
             Self::ContextTooLarge { .. } => "context_too_large",
@@ -231,6 +238,7 @@ impl AppError {
             | Self::WorkFolderNoLongerAllowed
             | Self::DataFolderNoLongerAllowed
             | Self::ServerResponseInvalid
+            | Self::EmbeddingTimeout
             | Self::NoWorkFolderSet
             | Self::NoDataFolderSet
             | Self::IndexUnavailable
@@ -322,6 +330,19 @@ mod tests {
 
         assert_eq!(payload["code"], "work_folder_is_cloud_synced");
         assert_eq!(payload["data"]["service"], "OneDrive");
+    }
+
+    #[test]
+    fn an_embedding_timeout_is_not_a_chat_timeout() {
+        let embedding = serde_json::to_value(AppError::EmbeddingTimeout).expect("serialises");
+        let chat = serde_json::to_value(AppError::ServerTimeout {
+            url: "http://example.test".into(),
+        })
+        .expect("serialises");
+
+        assert_eq!(embedding["code"], "embedding_timeout");
+        assert_eq!(chat["code"], "server_timeout");
+        assert_eq!(embedding["data"], json!({}));
     }
 
     #[test]

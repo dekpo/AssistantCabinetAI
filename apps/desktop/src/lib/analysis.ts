@@ -26,11 +26,17 @@ export function countPending(files: FileRecord[]): number {
 /**
  * Where to draw the bar, as a fraction between 0 and 1. A pass over an empty folder is finished
  * the moment it starts, which is the only honest thing a bar can say about no work at all.
+ *
+ * Inside a long document the bar moves by its batches, so one 42-page PDF does not look frozen
+ * for the minutes it takes. Never more than the file's own share: a file is not done until it is
+ * counted in `processedFiles`.
  */
 export function analysisFraction(progress: IndexProgress): number {
   if (progress.totalFiles <= 0) {
     return 1;
   }
-  const fraction = progress.processedFiles / progress.totalFiles;
+  const insideFile =
+    progress.batchTotal > 0 ? Math.min(1, progress.batchIndex / progress.batchTotal) : 0;
+  const fraction = (progress.processedFiles + insideFile) / progress.totalFiles;
   return Math.min(1, Math.max(0, fraction));
 }

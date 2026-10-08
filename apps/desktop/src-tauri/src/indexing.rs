@@ -10,10 +10,26 @@ use crate::chunking;
 use crate::discovery::{self, DiscoveredFile};
 use crate::error::AppError;
 use crate::extraction::{self, ExtractionError, PageOrigin};
-use crate::gateway::{GatewayClient, MAX_EMBEDDING_CHARS, MAX_EMBEDDING_INPUTS};
+use crate::gateway::GatewayClient;
 use crate::index_store::IndexStore;
 use crate::ocr::OcrProvider;
 use crate::raster::PageRasterizer;
+
+/// How much one embeddings request carries. The gateway's own ceilings (`MAX_EMBEDDING_*`) stay
+/// as the hard limit; these are what a request is sized to *in practice*, because the latency of
+/// one call grows with its size and the call has a deadline.
+///
+/// Measured on the CPU-only reference stack (`docs/TROUBLESHOOTING.md`, embedding timeout): about
+/// 0.7 s per 1 000-character chunk whatever the batch size, so 16 chunks take about 11 s. That
+/// leaves the 120 s deadline ten times the batch, a retry that wastes seconds rather than minutes,
+/// and a progress step every few seconds. The character cap is the same bound for chunks that
+/// are longer than usual: 16 chunks of the 1 200-character ceiling are 19 200.
+pub const EMBEDDING_BATCH_INPUTS: usize = 16;
+pub const EMBEDDING_BATCH_CHARS: usize = 20_000;
+
+/// This many files in a row failing to embed means the server is the problem, not the files:
+/// the pass stops with the last error instead of spending two deadlines on every file left.
+pub const MAX_CONSECUTIVE_FAILED_FILES: usize = 3;
 
 /// The OCR engine did not start. Every scan reads as unreadable, however clear it is.
 pub const CAPABILITY_OCR_ENGINE: &str = "ocrEngine";
@@ -22,6 +38,18 @@ pub const CAPABILITY_OCR_ENGINE: &str = "ocrEngine";
 /// still can, which is what made the failure in `docs/TROUBLESHOOTING.md` look like a bad
 /// document rather than a missing capability.
 pub const CAPABILITY_PAGE_RASTERIZER: &str = "pageRasterizer";
+
+/// A file whose vectors could not all be made. Never written to the index, so it is neither
+/// half-analysed nor skipped as unchanged next time. A machine code, not a sentence: the
+/// interface localises it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FailedFile {
+    pub path: String,
+    pub code: String,
+    /// What the sentence for `code` interpolates (a status, say). Never document text.
+    pub data: serde_json::Value,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +73,9 @@ pub struct IndexSummary {
     /// and new. Filled by the caller that ran the rename, so a pass that fails halfway still
     /// leaves the rename recorded elsewhere; empty here.
     pub renamed_files: Vec<crate::filename_sanitizer::Renamed>,
+    /// Files that could not be embedded, with the reason as a machine code. The pass went on
+    /// without them; the next pass tries them again.
+    pub failed_files: Vec<FailedFile>,
     /// Files that needed a clean name and could not be renamed. Left as they were.
     pub rename_failed_files: Vec<String>,
     /// Machine codes for an ingestion capability that did not start for this pass, in a stable
@@ -65,6 +96,11 @@ pub struct IndexProgress {
     /// Files already dealt with, whether indexed, skipped as unchanged, or unreadable.
     pub processed_files: usize,
     pub total_files: usize,
+    /// Inside the file being embedded: batches done, and batches in all. Both 0 when the file is
+    /// not being embedded (read, skipped, or a pass over spreadsheets), so a bar can place itself
+    /// between two files instead of standing still for the minutes one long document takes.
+    pub batch_index: usize,
+    pub batch_total: usize,
 }
 
 /// One pass over the work folder. Files whose content hash has not changed since the last pass
@@ -100,12 +136,19 @@ pub async fn run(
     on_progress(IndexProgress {
         processed_files: 0,
         total_files,
+        batch_index: 0,
+        batch_total: 0,
     });
     let mut indexed_files = 0usize;
     let mut unchanged_files = 0usize;
     let mut empty_files = Vec::new();
     let mut ocr_files = Vec::new();
     let mut low_confidence_files = Vec::new();
+    let mut failed_files: Vec<FailedFile> = Vec::new();
+    let mut consecutive_failures = 0usize;
+    // The model may still have to be loaded for the first request of a pass: it gets the longer
+    // deadline until one request has succeeded.
+    let mut model_warm = false;
 
     for (position, file) in files.iter().enumerate() {
         // Reported as this file starts rather than as it ends, because several branches below
@@ -114,6 +157,8 @@ pub async fn run(
         on_progress(IndexProgress {
             processed_files: position,
             total_files,
+            batch_index: 0,
+            batch_total: 0,
         });
         let sha256 = match hash_file(file) {
             Ok(hash) => hash,
@@ -159,8 +204,43 @@ pub async fn run(
                     )?;
                     empty_files.push(file.relative_path.clone());
                 } else {
-                    let embeddings =
-                        embed_chunks(gateway, server_url, embedding_alias, &chunks).await?;
+                    // Nothing is written until every vector exists: a file that fails halfway
+                    // leaves no trace in the index, so it is never mistaken for an analysed one.
+                    let embedded = embed_chunks(
+                        gateway,
+                        server_url,
+                        embedding_alias,
+                        &chunks,
+                        &mut model_warm,
+                        &|batch_index, batch_total| {
+                            on_progress(IndexProgress {
+                                processed_files: position,
+                                total_files,
+                                batch_index,
+                                batch_total,
+                            })
+                        },
+                    )
+                    .await;
+                    let embeddings = match embedded {
+                        Ok(vectors) => {
+                            consecutive_failures = 0;
+                            vectors
+                        }
+                        Err(error) if is_about_this_file(&error) => {
+                            consecutive_failures += 1;
+                            if consecutive_failures >= MAX_CONSECUTIVE_FAILED_FILES {
+                                return Err(error);
+                            }
+                            failed_files.push(FailedFile {
+                                path: file.relative_path.clone(),
+                                code: error.code().to_string(),
+                                data: error.data(),
+                            });
+                            continue;
+                        }
+                        Err(error) => return Err(error),
+                    };
                     let (engine, version) = ocr_identity(ocr, document.used_ocr);
                     index.replace_document(
                         &file.relative_path,
@@ -189,6 +269,8 @@ pub async fn run(
     on_progress(IndexProgress {
         processed_files: total_files,
         total_files,
+        batch_index: 0,
+        batch_total: 0,
     });
 
     Ok(IndexSummary {
@@ -201,6 +283,7 @@ pub async fn run(
         removed_files,
         renamed_files: Vec::new(),
         rename_failed_files: Vec::new(),
+        failed_files,
         unavailable_capabilities,
         chunk_count: index.chunk_count()?,
     })
@@ -274,62 +357,80 @@ fn hash_file(file: &DiscoveredFile) -> std::io::Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-/// Send chunk text to the gateway in batches that respect the embedding caps client-side too
-/// (`docs/RETRIEVAL.md`): the gateway does not trust a caller, but a client that never sends an
-/// oversized batch in the first place fails faster and closer to the cause.
+/// Whether an embeddings failure belongs to this file rather than to the server: a deadline that
+/// passed twice, or a gateway that answered with an error of its own making. Anything else - the
+/// server unreachable, the model not there, a refused request - would fail the next file the same
+/// way, so the pass stops instead of reporting every remaining file as broken.
+fn is_about_this_file(error: &AppError) -> bool {
+    match error {
+        AppError::EmbeddingTimeout | AppError::ServerError { .. } => true,
+        AppError::Gateway { code, .. } => code == "provider_error",
+        _ => false,
+    }
+}
+
+/// Cut the chunks into the requests that will carry them: at most `EMBEDDING_BATCH_INPUTS`
+/// chunks and `EMBEDDING_BATCH_CHARS` characters each, in order, none empty. A chunk longer than
+/// the character cap still travels, alone.
+fn plan_batches(chunks: &[chunking::Chunk]) -> Vec<std::ops::Range<usize>> {
+    let mut batches = Vec::new();
+    let mut start = 0usize;
+    let mut chars = 0usize;
+    for (position, chunk) in chunks.iter().enumerate() {
+        let chunk_chars = chunk.text.chars().count();
+        let in_batch = position - start;
+        if in_batch > 0
+            && (in_batch + 1 > EMBEDDING_BATCH_INPUTS
+                || chars + chunk_chars > EMBEDDING_BATCH_CHARS)
+        {
+            batches.push(start..position);
+            start = position;
+            chars = 0;
+        }
+        chars += chunk_chars;
+    }
+    if start < chunks.len() {
+        batches.push(start..chunks.len());
+    }
+    batches
+}
+
+/// Send chunk text to the gateway in small batches (`docs/RETRIEVAL.md`): the latency of one
+/// request grows with its size and the request has a deadline, so a long document is many short
+/// calls rather than one that can run past it. The vectors come back in chunk order.
+///
+/// `on_batch` receives (batches done, batches in all): once before the first, then after each.
 async fn embed_chunks(
     gateway: &GatewayClient,
     server_url: &str,
     embedding_alias: &str,
     chunks: &[chunking::Chunk],
+    model_warm: &mut bool,
+    on_batch: &(dyn Fn(usize, usize) + Sync),
 ) -> Result<Vec<Vec<f32>>, AppError> {
+    let batches = plan_batches(chunks);
+    let deadlines = gateway.embedding_deadlines();
     let mut vectors = Vec::with_capacity(chunks.len());
-    let mut batch: Vec<String> = Vec::new();
-    let mut batch_chars = 0usize;
 
-    async fn flush(
-        gateway: &GatewayClient,
-        server_url: &str,
-        embedding_alias: &str,
-        batch: &mut Vec<String>,
-        vectors: &mut Vec<Vec<f32>>,
-    ) -> Result<(), AppError> {
-        if batch.is_empty() {
-            return Ok(());
-        }
-        let embedded = gateway.embed(server_url, embedding_alias, batch).await?;
-        vectors.extend(embedded);
-        batch.clear();
-        Ok(())
+    on_batch(0, batches.len());
+    for (done, range) in batches.iter().enumerate() {
+        let texts: Vec<String> = chunks[range.clone()]
+            .iter()
+            .map(|chunk| chunk.text.clone())
+            .collect();
+        let deadline = if *model_warm {
+            deadlines.batch
+        } else {
+            deadlines.first_batch
+        };
+        vectors.extend(
+            gateway
+                .embed_batch(server_url, embedding_alias, &texts, deadline)
+                .await?,
+        );
+        *model_warm = true;
+        on_batch(done + 1, batches.len());
     }
-
-    for chunk in chunks {
-        let chunk_chars = chunk.text.chars().count();
-        if !batch.is_empty()
-            && (batch.len() + 1 > MAX_EMBEDDING_INPUTS
-                || batch_chars + chunk_chars > MAX_EMBEDDING_CHARS)
-        {
-            flush(
-                gateway,
-                server_url,
-                embedding_alias,
-                &mut batch,
-                &mut vectors,
-            )
-            .await?;
-            batch_chars = 0;
-        }
-        batch.push(chunk.text.clone());
-        batch_chars += chunk_chars;
-    }
-    flush(
-        gateway,
-        server_url,
-        embedding_alias,
-        &mut batch,
-        &mut vectors,
-    )
-    .await?;
 
     Ok(vectors)
 }
@@ -376,6 +477,80 @@ mod tests {
             missing,
             vec![CAPABILITY_OCR_ENGINE, CAPABILITY_PAGE_RASTERIZER]
         );
+    }
+
+    fn chunk_of(chars: usize) -> chunking::Chunk {
+        chunking::Chunk {
+            chunk_id: "a.txt#p1#s1".into(),
+            relative_path: "a.txt".into(),
+            page_number: 1,
+            section: 1,
+            text: "x".repeat(chars),
+            origin: PageOrigin::TextLayer,
+            confidence: None,
+        }
+    }
+
+    #[test]
+    fn short_chunks_are_cut_by_count() {
+        let chunks: Vec<_> = (0..40).map(|_| chunk_of(100)).collect();
+
+        let batches = plan_batches(&chunks);
+
+        assert_eq!(batches, vec![0..16, 16..32, 32..40]);
+    }
+
+    #[test]
+    fn long_chunks_are_cut_by_characters_before_the_count_is_reached() {
+        let chunks: Vec<_> = (0..10).map(|_| chunk_of(6_000)).collect();
+
+        let batches = plan_batches(&chunks);
+
+        assert!(batches.iter().all(|range| range.len() <= 3));
+        assert_eq!(batches.iter().map(|range| range.len()).sum::<usize>(), 10);
+    }
+
+    #[test]
+    fn a_chunk_over_the_character_cap_travels_alone_rather_than_being_dropped() {
+        let chunks = vec![
+            chunk_of(100),
+            chunk_of(EMBEDDING_BATCH_CHARS + 1),
+            chunk_of(100),
+        ];
+
+        let batches = plan_batches(&chunks);
+
+        assert_eq!(batches, vec![0..1, 1..2, 2..3]);
+    }
+
+    #[test]
+    fn no_chunks_means_no_request() {
+        assert!(plan_batches(&[]).is_empty());
+    }
+
+    #[test]
+    fn only_failures_about_the_file_let_the_pass_go_on() {
+        assert!(is_about_this_file(&AppError::EmbeddingTimeout));
+        assert!(is_about_this_file(&AppError::ServerError { status: 500 }));
+        assert!(is_about_this_file(&AppError::Gateway {
+            code: "provider_error".into(),
+            data: serde_json::json!({}),
+        }));
+
+        assert!(!is_about_this_file(&AppError::ServerUnreachable {
+            url: "http://example.test".into(),
+        }));
+        assert!(!is_about_this_file(&AppError::Gateway {
+            code: "provider_unreachable".into(),
+            data: serde_json::json!({}),
+        }));
+        assert!(!is_about_this_file(&AppError::Gateway {
+            code: "model_alias_not_allowed".into(),
+            data: serde_json::json!({}),
+        }));
+        assert!(!is_about_this_file(&AppError::ServerTimeout {
+            url: "http://example.test".into(),
+        }));
     }
 
     #[test]

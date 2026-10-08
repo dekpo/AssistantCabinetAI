@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
-import { normaliseError, type AppError } from "../lib/errors";
+import { errorMessage, normaliseError, type AppError } from "../lib/errors";
 import {
   chooseWorkFolder,
   ensureSuggestedWorkFolder,
@@ -43,6 +43,9 @@ const CAPABILITY_KEYS: Record<string, string> = {
 
 /** Renames listed one by one under the analysis summary; the rest are counted. */
 const MAX_RENAMES_LISTED = 5;
+
+/** Documents that could not be analysed, listed with their reason; the rest are counted. */
+const MAX_FAILED_LISTED = 5;
 
 export function WorkFolderCard({
   workFolder,
@@ -144,6 +147,31 @@ export function WorkFolderCard({
     indexing.summary === null
       ? []
       : [
+          /* First, because it is the one line that asks her to do something: a document that is
+             not analysed cannot answer a question, and the reason differs from file to file. */
+          ...(indexing.summary.failedFiles.length > 0
+            ? [
+                `${counted(
+                  indexing.summary.failedFiles.length,
+                  t("workFolder.failedOne"),
+                  t("workFolder.failedMany"),
+                )}.`,
+                ...indexing.summary.failedFiles.slice(0, MAX_FAILED_LISTED).map(
+                  ({ path, code, data }) =>
+                    t("workFolder.failedItem", {
+                      path,
+                      reason: errorMessage(t, normaliseError({ code, data })),
+                    }),
+                ),
+                ...(indexing.summary.failedFiles.length > MAX_FAILED_LISTED
+                  ? [
+                      t("workFolder.failedMore", {
+                        count: indexing.summary.failedFiles.length - MAX_FAILED_LISTED,
+                      }),
+                    ]
+                  : []),
+              ]
+            : []),
           ...(indexing.summary.ocrFiles.length > 0
             ? [
                 `${counted(

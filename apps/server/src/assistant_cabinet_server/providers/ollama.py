@@ -81,8 +81,20 @@ class OllamaProvider:
             response = await self._client.post(
                 "/api/embed", json={"model": request.model, "input": request.inputs}
             )
-        except httpx.ConnectError as error:
+        except (httpx.NetworkError, httpx.RemoteProtocolError) as error:
+            # A refused connection, and also a connection that was open and then cut: stopping
+            # the runtime mid-request is a reset or a half-sent response, not a refusal. Only
+            # the first was handled, so the second surfaced as an unhandled 500 with no code.
             raise self._unreachable() from error
+        except httpx.TimeoutException as error:
+            # The same answer `generate` gives: a runtime that is slow, not absent. Without it
+            # this surfaced as an unhandled 500 with no code, and the register - which takes the
+            # outcome from the code - had nothing to say about the failure.
+            raise GatewayError(
+                ErrorCode.provider_error,
+                status_code=504,
+                data={"provider": self.name, "reason": "timeout"},
+            ) from error
         self._raise_for_status(response.status_code)
         body = response.json()
         return EmbeddingResult(

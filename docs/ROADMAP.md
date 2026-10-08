@@ -19,6 +19,11 @@ authoritative source of filesystem facts, so that a file count, a file name or a
 be inferred by a model from retrieved passages. Design: `docs/WORK-FOLDER-INVENTORY.md`. Nothing else moves;
 sprint 2b keeps its date.
 
+**Amended 8 October 2026.** The product grows a local, source-grounded Knowledge Base, and the two dated
+milestones below give way to capabilities: **the 14 October 2026 milestone is withdrawn** and milestone A is
+history. What replaced them, and the tracks that run beside it, are in "Milestones" below; the decisions are
+in `docs/DECISIONS.md`, "Knowledge Base and the product direction". Nothing already delivered is undone.
+
 One goal: an **installable** prototype the pilot GP can use, which answers **with its sources** on her own
 documents. Given a choice between one more feature and a more reliable, private, testable and replaceable
 flow, take the second.
@@ -38,15 +43,38 @@ She opens Assistant Cabinet AI
   → no document is kept on the server
 ```
 
-## Two milestones, not one
+## Milestones
 
-The brief says four weeks; "end of the month" leaves two. So the same technical chain is cut into two
-milestones.
+### Capabilities, from 8 October 2026
+
+A milestone is now something the product **can do**, shown on fictional fixtures and then by the owner in
+the running application, not a date. The Knowledge Base programme (twelve lots, 0 to 11) is cut into five of
+them. The working plan behind it is local scaffolding; what is versioned is `docs/DECISIONS.md` and the lot
+reports in `docs/test-reports/knowledge-base-pass-1/`.
+
+| Milestone | Lots | What the product can do when it is reached |
+| --- | --- | --- |
+| **K-A** | 0 to 3 | The slowness is **measured** (per-stage timings of a question and of an Analyse pass), the lexical search is held to the selection, and the knowledge store and its ports exist. Nothing changes on screen |
+| **K-B** | 4 and 5 | The files the user has analysed feed the Knowledge Base, and the Analyse summary says what was found |
+| **K-C** | 6 and 7 | Questions are targeted inside the user's own selection, in `suggest` mode first, with a visible line and a one-click widen; the shadow measurement accumulates |
+| **K-D** | 8 to 10 | The user manages the knowledge; suggestions, entity autocomplete and the speech-ready vocabulary exist; activity profiles are proposed |
+| **K-E** | 11 | The release gate: benchmarks and the manual protocol decide whether `auto` may become the default, and `main` receives the programme |
+
+### Tracks that run beside it, and that it neither blocks nor waits for
+
+| Track | State | Gate |
+| --- | --- | --- |
+| Saved conversations (create, save, remove, each with its selection) | Planned after sprint 2b; needs only a stored `AnalysisScope` per conversation | None from the KB |
+| Speech (workstation-local, Whisper first), in `dekpo/SpeechLab` then its integration | Separate repository and milestones; the KB only offers read-only contracts (ranked surface forms, transcript repair proposals) | Free licences only; **cloud speech stays forbidden** (`docs/DECISIONS.md`) |
+| Windows installer, deployment at the practice, the Mac mini (sprint 4) | Continues; no longer tied to 14 October | The DPIA draft, a named data controller and disk encryption (the legal gate below), not the KB |
+| Real documents | Unchanged | The same legal gate; until then `fixtures/gp-sandbox/` |
+
+### History: the two dated milestones of 16 September 2026
 
 | Milestone | Date | What must work | On what |
 | --- | --- | --- | --- |
-| **A — the chain holds** | **30 September 2026** | Native window, gateway, local index, answer with sources, isolation test | `fixtures/gp-sandbox/` (fictional) |
-| **B — she uses it** | **14 October 2026** | The three GP flows, the Windows installer, deployment at the practice | Her own documents, **after** the legal gate |
+| **A — the chain holds** | 30 September 2026 | Native window, gateway, local index, answer with sources, isolation test | `fixtures/gp-sandbox/` (fictional). **Reached**, ahead of time |
+| ~~**B — she uses it**~~ | ~~14 October 2026~~ | ~~The three GP flows, the Windows installer, deployment at the practice~~ | **Withdrawn on 8 October 2026.** Its content did not disappear: the installer and the deployment are the sprint 4 track above, the GP flows are sprint 3, and real documents wait for the legal gate |
 
 ## Sprint order
 
@@ -480,9 +508,10 @@ it with a hostile PDF.
 Nothing is transmitted. "Export" means a renamed file in the work folder, or a summary on the clipboard.
 She sends it from Medilink and MSSanté as she does today.
 
-## Sprint 4 — real deployment (8 → 14 October)
+## Sprint 4 — real deployment (8 → 14 October, dates withdrawn on 8 October 2026)
 
-Deliverable: the software installs and runs at her practice.
+Deliverable: the software installs and runs at her practice. **The 14 October date is withdrawn** (see
+"Milestones"): this sprint is a separate track, gated by the legal gate below and not by the Knowledge Base.
 
 - Windows installer, signed if possible, otherwise with a written install procedure.
 - Failure handling: server unreachable, model missing, file locked by Word or the antivirus, disk full.
@@ -595,7 +624,7 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | macOS portability is assumed rather than proved | Nothing here has ever been compiled on macOS and there is no CI. Add a `windows-latest` plus `macos-latest` job before the OCR code, and parameterise the work-folder test paths, which today would fail on macOS for a fixture reason rather than a design one (`docs/SPRINT-2.5-ASSESSMENT.md` section O) |
 | The 2019 PC cannot keep up with indexing | Batch cap, index per work folder rather than per disk, timing measured at first run |
 | French output quality | The model alias is a setting; change the alias, not the code |
-| Drift onto Open WebUI, voice, certificates | Frozen by `.cursor/rules/v0-sprint.mdc` |
+| Drift onto Open WebUI, certificates, vision | Frozen by `.cursor/rules/v0-sprint.mdc`. Voice, organisation, calendar and connectors are planned, each behind its own decision (8 October 2026) |
 | Tabular work pulled into milestone A | Sprint 2a is documents only. Sprint 2b is dated after milestone B, and the pilot has no spreadsheets |
 | A spreadsheet application grows out of sprint 2b | Named operations and data-grid sheets only, no formula evaluation. Every operation the engine gained past the original nine was added by an owner decision recorded in `docs/DECISIONS.md`, never added quietly |
 
@@ -616,13 +645,20 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | 9 Field pilot | After 14 October |
 | 10 More professions and agents | Unchanged: after real validation |
 
-## After 14 October, not before
+## Later, with no date
+
+*(Headed "After 14 October, not before" until 8 October 2026, when that date was withdrawn.)*
+
+**Moved to planned on 8 October 2026, each behind its own decision when its turn comes:** voice
+(workstation-local speech; cloud speech stays forbidden), file organisation, a calendar (local adapter
+first; Google needs a separate owner decision and the DPIA) and external connectors. Nothing is built for
+them in the Knowledge Base programme beyond the read-only contracts it offers. Still out: vision, mobile,
+app stores, a second profession, autonomous agents, fine-tuning, an accounting module, the Ameli account,
+automatic transmission, RBAC, billing, analytics.
 
 Sprint 2b (tabular data) comes first, then **saved conversations** (create, save, remove, each with its
-selection - the in-memory history of sprint 2a.8 is what they will store), then voice, vision, mobile, app
-stores, a second profession,
-autonomous agents, fine-tuning, an accounting module, the Ameli account, automatic transmission, RBAC,
-billing, analytics.
+selection - the in-memory history of sprint 2a.8 is what they will store). The rest of the original list
+is in the paragraph above.
 
 Scan OCR left this list on 19 September 2026 and became sprint 2.5. What stays out of v0 is everything
 *around* it: layout-aware OCR, tables read from images, handwriting, GPU acceleration, camera capture,

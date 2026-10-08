@@ -285,7 +285,12 @@
     "idleTimeoutDescription": "Combien de temps attendre quand l'IA ne dit plus rien, en secondes. Une réponse longue n'est jamais interrompue tant qu'elle s'écrit ; ce délai ne met fin qu'à une attente sans rien. Augmentez-le sur un ordinateur plus lent ou avec un modèle plus gros.",
     "idleTimeoutUnit": "secondes",
     "generatedFolderLabel": "Dossier des courriers générés",
-    "generatedFolderDescription": "Le sous-dossier de votre dossier de documents où sont écrits les courriers générés à partir d'un modèle et d'un tableur. Le nom est simplifié : lettres sans accent, chiffres, tirets."
+    "generatedFolderDescription": "Le sous-dossier de votre dossier de documents où sont écrits les courriers générés à partir d'un modèle et d'un tableur. Le nom est simplifié : lettres sans accent, chiffres, tirets.",
+    "advancedLabel": "Avancé",
+    "timingLogLabel": "Noter les durées dans un journal",
+    "timingLogDescription": "Écrit, sur cet ordinateur seulement, combien de temps prend chaque question et chaque analyse : des durées et des nombres, jamais votre question, un nom de fichier ou un extrait. Désactivé par défaut ; à activer pour une mesure.",
+    "showDiagnosticsLabel": "Préparer l'affichage des durées",
+    "showDiagnosticsDescription": "Réservé à un panneau pour les développeurs, pas encore disponible : l'activer ne change rien à l'écran pour l'instant."
   },
   "errorBanner": {
     "title": "Cela n'a pas fonctionné"

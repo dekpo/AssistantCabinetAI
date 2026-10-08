@@ -285,7 +285,12 @@
     "idleTimeoutDescription": "How long to wait when the AI goes quiet, in seconds. A long answer is never cut off while it is still being written; this only ends the wait when nothing arrives at all. Raise it on a slower computer or with a larger model.",
     "idleTimeoutUnit": "seconds",
     "generatedFolderLabel": "Generated letters folder",
-    "generatedFolderDescription": "The subfolder of your documents folder where letters made from a template and a spreadsheet are written. The name is simplified: letters without accents, digits, hyphens."
+    "generatedFolderDescription": "The subfolder of your documents folder where letters made from a template and a spreadsheet are written. The name is simplified: letters without accents, digits, hyphens.",
+    "advancedLabel": "Advanced",
+    "timingLogLabel": "Write the timings to a log",
+    "timingLogDescription": "Writes, on this computer only, how long each question and each analysis takes: durations and numbers, never your question, a file name or an excerpt. Off by default; switch it on for a measurement.",
+    "showDiagnosticsLabel": "Prepare the timings display",
+    "showDiagnosticsDescription": "Reserved for a developer panel that is not available yet: switching it on changes nothing on screen for now."
   },
   "errorBanner": {
     "title": "This did not work"

@@ -444,6 +444,51 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
+    /// The same full-text search, held to the chunks of `relative_paths`.
+    ///
+    /// The restriction is part of the query, so the `limit` is spent on in-scope chunks only. A
+    /// search of the whole index that is filtered afterwards is not equivalent: a file outside the
+    /// selection stuffed with the query's words takes the best lexical places, and the match the
+    /// selection does hold goes without its bonus. An empty set allows nothing, not everything.
+    ///
+    /// `bm25(chunks_fts)` is unchanged by the join: the full-text table is still the one the
+    /// `MATCH` is written against, so its ranking function sees the same statistics.
+    pub fn search_lexical_in(
+        &self,
+        query: &str,
+        limit: usize,
+        relative_paths: &[String],
+    ) -> Result<Vec<LexicalHit>, AppError> {
+        let match_expression = fts_match_expression(query);
+        if match_expression.is_empty() || relative_paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let paths = serde_json::to_string(relative_paths).map_err(|_| AppError::Internal)?;
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT chunks_fts.chunk_id, bm25(chunks_fts) FROM chunks_fts
+                 JOIN chunks ON chunks.chunk_id = chunks_fts.chunk_id
+                 WHERE chunks_fts MATCH ?1
+                   AND chunks.relative_path IN (SELECT value FROM json_each(?2))
+                 ORDER BY bm25(chunks_fts) LIMIT ?3",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map(
+                rusqlite::params![match_expression, paths, limit as i64],
+                |row| {
+                    Ok(LexicalHit {
+                        chunk_id: row.get(0)?,
+                        rank: row.get(1)?,
+                    })
+                },
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
     /// Every stored chunk with its vector, for brute-force cosine similarity. A work folder holds
     /// tens of files, not millions, so loading everything into memory is fast enough and avoids a
     /// vector-database dependency (`docs/RETRIEVAL.md`).
@@ -1033,6 +1078,106 @@ mod tests {
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].chunk_id, "inbox/letter.pdf#p1#s1");
+    }
+
+    fn store_with_three_files() -> (tempfile::TempDir, IndexStore) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        for (path, text) in [
+            (
+                "Archive \u{e9}t\u{e9}/it's \"a\" name.pdf",
+                "Cephalees episodiques depuis deux semaines",
+            ),
+            (
+                "b.pdf",
+                "Cephalees episodiques et nausees matinales persistantes",
+            ),
+            ("c.pdf", "Courrier sans rapport avec ceci"),
+        ] {
+            let chunk = sample_chunk(&format!("{path}#p1#s1"), path, text);
+            store
+                .replace_document(path, "hash", false, &[chunk], &[vec![0.1, 0.2]], None, None)
+                .unwrap();
+        }
+        (dir, store)
+    }
+
+    /// The bundled SQLite must offer `json_each`, and `bm25` must mean the same thing through the
+    /// join: the same chunks, ranked the same way, as the unrestricted search over the same files.
+    #[test]
+    fn a_scoped_lexical_search_ranks_exactly_like_the_unrestricted_one() {
+        let (_dir, store) = store_with_three_files();
+        let every_path: Vec<String> = [
+            "Archive \u{e9}t\u{e9}/it's \"a\" name.pdf",
+            "b.pdf",
+            "c.pdf",
+        ]
+        .iter()
+        .map(|path| path.to_string())
+        .collect();
+
+        let unrestricted = store.search_lexical("cephalees episodiques", 6).unwrap();
+        let scoped = store
+            .search_lexical_in("cephalees episodiques", 6, &every_path)
+            .unwrap();
+
+        assert_eq!(unrestricted.len(), 2);
+        assert_eq!(scoped, unrestricted);
+        assert!(scoped[0].rank <= scoped[1].rank, "bm25 is lower-is-better");
+    }
+
+    #[test]
+    fn a_scoped_lexical_search_only_returns_chunks_of_the_given_files() {
+        let (_dir, store) = store_with_three_files();
+
+        let hits = store
+            .search_lexical_in("cephalees", 6, &["b.pdf".to_string()])
+            .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].chunk_id, "b.pdf#p1#s1");
+
+        let none = store
+            .search_lexical_in("cephalees", 6, &["c.pdf".to_string()])
+            .unwrap();
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn a_scoped_lexical_search_over_no_files_allows_nothing() {
+        let (_dir, store) = store_with_three_files();
+
+        assert!(store
+            .search_lexical_in("cephalees", 6, &[])
+            .unwrap()
+            .is_empty());
+        assert!(!store.search_lexical("cephalees", 6).unwrap().is_empty());
+    }
+
+    /// Folders keep their accents (only file names are made plain), and a path may hold a quote:
+    /// the set travels as a JSON value, never spliced into the SQL.
+    #[test]
+    fn a_scoped_lexical_search_accepts_accents_and_quotes_in_a_path() {
+        let (_dir, store) = store_with_three_files();
+        let awkward = "Archive \u{e9}t\u{e9}/it's \"a\" name.pdf".to_string();
+
+        let hits = store
+            .search_lexical_in("cephalees", 6, &[awkward.clone()])
+            .unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].chunk_id.starts_with(&awkward));
+    }
+
+    #[test]
+    fn a_scoped_lexical_search_spends_its_limit_inside_the_scope() {
+        let (_dir, store) = store_with_three_files();
+
+        let hits = store
+            .search_lexical_in("cephalees episodiques", 1, &["b.pdf".to_string()])
+            .unwrap();
+
+        assert_eq!(hits.len(), 1, "the limit applies after the restriction");
+        assert_eq!(hits[0].chunk_id, "b.pdf#p1#s1");
     }
 
     fn sample_inventory(relative_path: &str, workbook_id: &str) -> TabularInventory {

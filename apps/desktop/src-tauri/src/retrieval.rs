@@ -5,7 +5,7 @@
 use serde::Serialize;
 
 use crate::extraction::PageOrigin;
-use crate::index_store::{cosine_similarity, IndexStore};
+use crate::index_store::{cosine_similarity, IndexStore, LexicalHit};
 
 /// How many excerpts an answer may cite at most.
 pub const MAX_EVIDENCE_CHUNKS: usize = 6;
@@ -76,7 +76,59 @@ pub fn search_scoped(
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
 ) -> Result<Vec<Evidence>, crate::error::AppError> {
-    let lexical_hits = index.search_lexical(query_text, MAX_EVIDENCE_CHUNKS)?;
+    search_scoped_counted(index, query_text, query_embedding, scope).map(|found| found.evidence)
+}
+
+/// What a search found, with how much it had to look at to find it. The count is for the
+/// diagnostics (`knowledge::diagnostics`): it says whether a slow search is slow because the scope
+/// is large.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchOutcome {
+    pub evidence: Vec<Evidence>,
+    /// Stored chunks of the scope that were scored, before the cut to the caps.
+    pub chunks_considered: usize,
+}
+
+/// `search_scoped`, reporting how many chunks were scored. Same evidence, same order.
+pub fn search_scoped_counted(
+    index: &IndexStore,
+    query_text: &str,
+    query_embedding: &[f32],
+    scope: RetrievalScope<'_>,
+) -> Result<SearchOutcome, crate::error::AppError> {
+    let lexical_hits = lexical_hits_in(index, query_text, scope)?;
+    search_scoped_with_hits(index, query_embedding, scope, &lexical_hits)
+}
+
+/// The lexical bonus candidates for `scope`: the best full-text matches **among the scope's own
+/// files**, so a file the user did not select can never use up the places that decide who gets
+/// the bonus. `WholeFolder` has no restriction to apply and keeps the unrestricted search.
+fn lexical_hits_in(
+    index: &IndexStore,
+    query_text: &str,
+    scope: RetrievalScope<'_>,
+) -> Result<Vec<LexicalHit>, crate::error::AppError> {
+    match scope {
+        RetrievalScope::WholeFolder => index.search_lexical(query_text, MAX_EVIDENCE_CHUNKS),
+        RetrievalScope::File(relative_path) => index.search_lexical_in(
+            query_text,
+            MAX_EVIDENCE_CHUNKS,
+            &[relative_path.to_string()],
+        ),
+        RetrievalScope::Files(relative_paths) | RetrievalScope::CurrentFolder(relative_paths) => {
+            index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)
+        }
+    }
+}
+
+/// The ranking itself, given the lexical hits already computed: so `search_per_document` can run
+/// the full-text query once for all its files instead of once per file.
+fn search_scoped_with_hits(
+    index: &IndexStore,
+    query_embedding: &[f32],
+    scope: RetrievalScope<'_>,
+    lexical_hits: &[LexicalHit],
+) -> Result<SearchOutcome, crate::error::AppError> {
     let all_chunks = match scope {
         RetrievalScope::WholeFolder => index.all_chunks()?,
         RetrievalScope::File(relative_path) => index.chunks_for_document(relative_path)?,
@@ -97,6 +149,8 @@ pub fn search_scoped(
                 .collect()
         }
     };
+
+    let chunks_considered = all_chunks.len();
 
     let mut scored: Vec<Evidence> = Vec::new();
     for chunk in &all_chunks {
@@ -143,7 +197,10 @@ pub fn search_scoped(
         total_chars += evidence.text.len();
         selected.push(evidence);
     }
-    Ok(selected)
+    Ok(SearchOutcome {
+        evidence: selected,
+        chunks_considered,
+    })
 }
 
 /// One excerpt from **each** of `relative_paths`, in the order given.
@@ -164,16 +221,35 @@ pub fn search_per_document(
     query_embedding: &[f32],
     relative_paths: &[String],
 ) -> Result<Vec<Evidence>, crate::error::AppError> {
+    search_per_document_counted(index, query_text, query_embedding, relative_paths)
+        .map(|found| found.evidence)
+}
+
+/// `search_per_document`, reporting how many chunks were scored across the files. Same evidence,
+/// same order.
+pub fn search_per_document_counted(
+    index: &IndexStore,
+    query_text: &str,
+    query_embedding: &[f32],
+    relative_paths: &[String],
+) -> Result<SearchOutcome, crate::error::AppError> {
     let mut selected: Vec<Evidence> = Vec::new();
     let mut total_chars = 0usize;
+    let mut chunks_considered = 0usize;
+
+    // The full-text query is the same for every file, so it runs once, over all of them. Run per
+    // file it repeated one query as many times as there were documents.
+    let lexical_hits = index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)?;
 
     for relative_path in relative_paths {
-        let mut inside = search_scoped(
+        let found = search_scoped_with_hits(
             index,
-            query_text,
             query_embedding,
             RetrievalScope::File(relative_path),
+            &lexical_hits,
         )?;
+        chunks_considered += found.chunks_considered;
+        let mut inside = found.evidence;
         // Ranking inside one file can find nothing above the noise floor - a summary question
         // shares few words with a lab report. The file still has to be represented, so fall back
         // to its first stored chunk rather than dropping it from an answer that claims to cover
@@ -192,7 +268,10 @@ pub fn search_per_document(
         selected.push(evidence);
     }
 
-    Ok(selected)
+    Ok(SearchOutcome {
+        evidence: selected,
+        chunks_considered,
+    })
 }
 
 /// The opening passage of a file, used when nothing in it ranks above the noise floor. Its score
@@ -304,6 +383,201 @@ mod tests {
                 .unwrap();
         }
         store
+    }
+
+    /// Several chunks per file, which `store_with_chunks` cannot build: it replaces a document each
+    /// time it is given the same path.
+    fn store_with_documents(documents: Vec<(&str, Vec<(&str, &str, Vec<f32>)>)>) -> IndexStore {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        for (path, chunks) in documents {
+            let stored: Vec<Chunk> = chunks
+                .iter()
+                .enumerate()
+                .map(|(position, (chunk_id, text, _))| Chunk {
+                    chunk_id: chunk_id.to_string(),
+                    relative_path: path.to_string(),
+                    page_number: 1,
+                    section: position as u32 + 1,
+                    text: text.to_string(),
+                    origin: crate::extraction::PageOrigin::TextLayer,
+                    confidence: None,
+                })
+                .collect();
+            let vectors: Vec<Vec<f32>> = chunks.into_iter().map(|(_, _, vector)| vector).collect();
+            store
+                .replace_document(path, "hash", false, &stored, &vectors, None, None)
+                .unwrap();
+        }
+        store
+    }
+
+    /// The defect `search_lexical_in` exists for. Eight files outside the selection are stuffed
+    /// with the query's words; the one match inside the selection says each word once and its
+    /// vector is orthogonal to the question's, so only the lexical bonus can bring it back.
+    #[test]
+    fn a_scoped_search_gets_lexical_bonus_only_from_its_own_files() {
+        let mut documents = vec![(
+            "inside.pdf",
+            vec![(
+                "inside#p1#s1",
+                "Cephalees signalees pendant ce rendez-vous du mois dernier",
+                vec![0.0, 1.0],
+            )],
+        )];
+        let stuffed_ids: Vec<String> = (0..8).map(|n| format!("stuffed{n}#p1#s1")).collect();
+        let stuffed_paths: Vec<String> = (0..8).map(|n| format!("stuffed{n}.pdf")).collect();
+        for n in 0..8 {
+            documents.push((
+                stuffed_paths[n].as_str(),
+                vec![(
+                    stuffed_ids[n].as_str(),
+                    "cephalees episodiques cephalees episodiques cephalees episodiques",
+                    vec![0.0, 1.0],
+                )],
+            ));
+        }
+        let store = store_with_documents(documents);
+        let query = "cephalees episodiques";
+
+        // The trap is real: the unrestricted full-text search spends all six places on the
+        // stuffed files, so the in-scope chunk gets no bonus from it.
+        let unrestricted = store.search_lexical(query, MAX_EVIDENCE_CHUNKS).unwrap();
+        assert_eq!(unrestricted.len(), MAX_EVIDENCE_CHUNKS);
+        assert!(
+            unrestricted
+                .iter()
+                .all(|hit| hit.chunk_id.starts_with("stuffed")),
+            "the fixture must reproduce the crowding: {unrestricted:?}"
+        );
+
+        let allowed = vec!["inside.pdf".to_string()];
+        let hits =
+            search_scoped(&store, query, &[1.0, 0.0], RetrievalScope::Files(&allowed)).unwrap();
+        assert_eq!(hits.len(), 1, "the in-scope match keeps its lexical bonus");
+        assert_eq!(hits[0].chunk_id, "inside#p1#s1");
+
+        let named = search_scoped(
+            &store,
+            query,
+            &[1.0, 0.0],
+            RetrievalScope::File("inside.pdf"),
+        )
+        .unwrap();
+        assert_eq!(
+            named.len(),
+            1,
+            "a named file is held to its own lexical hits too"
+        );
+
+        let mut present = allowed.clone();
+        present.extend(stuffed_paths.iter().take(1).cloned());
+        let current = search_scoped(
+            &store,
+            query,
+            &[1.0, 0.0],
+            RetrievalScope::CurrentFolder(&present),
+        )
+        .unwrap();
+        assert!(
+            current.iter().any(|hit| hit.chunk_id == "inside#p1#s1"),
+            "the current folder is held to its own files as well: {current:?}"
+        );
+    }
+
+    /// `WholeFolder` keeps the unrestricted search: with nothing to restrict, nothing changes.
+    #[test]
+    fn the_whole_folder_keeps_the_unrestricted_lexical_search() {
+        let store = store_with_documents(vec![
+            (
+                "a.pdf",
+                vec![("a#p1#s1", "Cephalees episodiques", vec![0.0, 1.0])],
+            ),
+            (
+                "b.pdf",
+                vec![("b#p1#s1", "Sujet sans rapport", vec![0.0, 1.0])],
+            ),
+        ]);
+
+        let hits = search(&store, "cephalees", &[1.0, 0.0]).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].chunk_id, "a#p1#s1");
+    }
+
+    /// "Each document" evidence must be what it was when every file ran its own query. The
+    /// fixture puts the query word in the weaker-looking chunk of one file, so the answer depends
+    /// on the lexical bonus reaching the per-file ranking.
+    #[test]
+    fn each_document_search_returns_the_same_evidence_with_one_lexical_query() {
+        let store = store_with_documents(vec![
+            (
+                "a.pdf",
+                vec![("a#p1#s1", "Bilan annuel de synthese", vec![1.0, 0.0])],
+            ),
+            (
+                "b.pdf",
+                vec![
+                    ("b#p1#s1", "Introduction generale", vec![0.9, 0.1]),
+                    ("b#p1#s2", "Cephalees episodiques", vec![0.8, 0.2]),
+                ],
+            ),
+            (
+                "c.pdf",
+                vec![("c#p1#s1", "Courrier sans rapport", vec![0.0, 1.0])],
+            ),
+        ]);
+        let files = vec![
+            "a.pdf".to_string(),
+            "b.pdf".to_string(),
+            "c.pdf".to_string(),
+        ];
+
+        let found = search_per_document_counted(&store, "cephalees", &[1.0, 0.0], &files).unwrap();
+
+        let ids: Vec<&str> = found
+            .evidence
+            .iter()
+            .map(|item| item.chunk_id.as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["a#p1#s1", "b#p1#s2", "c#p1#s1"],
+            "a's best chunk, b's lexical match over its closer vector, c's opening chunk as a \
+             fallback with score 0"
+        );
+        assert_eq!(found.evidence[2].score, 0.0);
+        assert_eq!(found.chunks_considered, 4);
+        assert_eq!(
+            search_per_document(&store, "cephalees", &[1.0, 0.0], &files).unwrap(),
+            found.evidence
+        );
+    }
+
+    #[test]
+    fn a_counted_search_reports_how_many_chunks_it_scored() {
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "HbA1c a 6.8 pourcent", vec![1.0, 0.0]),
+            (
+                "b#p1#s1",
+                "b.pdf",
+                "sujet totalement different",
+                vec![0.0, 1.0],
+            ),
+            ("c#p1#s1", "c.pdf", "autre sujet", vec![0.0, 1.0]),
+        ]);
+
+        let whole =
+            search_scoped_counted(&store, "HbA1c", &[1.0, 0.0], RetrievalScope::WholeFolder)
+                .unwrap();
+        assert_eq!(whole.chunks_considered, 3);
+        assert_eq!(whole.evidence.len(), 1);
+
+        let paths = vec!["a.pdf".to_string(), "b.pdf".to_string()];
+        let files =
+            search_scoped_counted(&store, "HbA1c", &[1.0, 0.0], RetrievalScope::Files(&paths))
+                .unwrap();
+        assert_eq!(files.chunks_considered, 2);
     }
 
     /// A guard against exactly the regression `RETRIEVAL_INSTRUCTION` was rewritten for on

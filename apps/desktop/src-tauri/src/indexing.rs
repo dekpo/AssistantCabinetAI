@@ -3,6 +3,9 @@
 //! Kept out of `commands.rs` so the pipeline can be exercised without Tauri, and so no piece of
 //! it depends on the webview being present.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -12,7 +15,10 @@ use crate::error::AppError;
 use crate::extraction::{self, ExtractionError, PageOrigin};
 use crate::gateway::GatewayClient;
 use crate::index_store::IndexStore;
-use crate::ocr::OcrProvider;
+use crate::knowledge::diagnostics::{
+    elapsed_ms, timed_ms, AnalysisPass, AnalysisTimings, FileTiming, StageTimer,
+};
+use crate::ocr::{ImageFormat, OcrError, OcrInput, OcrPage, OcrProvider};
 use crate::raster::PageRasterizer;
 
 /// How much one embeddings request carries. The gateway's own ceilings (`MAX_EMBEDDING_*`) stay
@@ -86,6 +92,10 @@ pub struct IndexSummary {
     /// (`docs/LANGUAGE-AND-LOCALE.md`).
     pub unavailable_capabilities: Vec<&'static str>,
     pub chunk_count: u64,
+    /// Where the pass spent its time: numbers only (`knowledge::diagnostics`). Always measured,
+    /// because it costs a few clock reads; written to `analysis-timings.jsonl` only when
+    /// `write_timing_log` is on.
+    pub timings: Option<AnalysisTimings>,
 }
 
 /// How far one pass has got, sent while it runs so a long analysis shows its progress rather than
@@ -120,6 +130,10 @@ pub async fn run(
     on_progress: &(dyn Fn(IndexProgress) + Sync),
 ) -> Result<IndexSummary, AppError> {
     let unavailable_capabilities = unavailable_capabilities(ocr, rasterizer);
+    let pass_timer = StageTimer::start();
+    // The engine itself is timed from inside, so the time it takes is not counted as extraction.
+    let timed_ocr = ocr.map(TimedOcr::new);
+    let ocr: Option<&dyn OcrProvider> = timed_ocr.as_ref().map(|engine| engine as &dyn OcrProvider);
     let files = discovery::discover(work_folder);
     // Before reading anything: a document she deleted must stop being citable, and that is true
     // whether or not the rest of the pass succeeds. Keyed on the same walk the pass itself uses,
@@ -131,6 +145,12 @@ pub async fn run(
             .collect::<Vec<_>>(),
     )?;
     let total_files = files.len();
+    let mut timings = AnalysisTimings::new(AnalysisPass::Documents, total_files);
+    // The file being worked on: its stages are written into `file_timing` as they finish, and it
+    // is closed at the top of the next iteration, so every early `continue` below still reports.
+    let mut file_timing = FileTiming::default();
+    let mut file_started = Instant::now();
+    let mut file_active = false;
     // Sent before any work, so the bar appears at zero rather than only once the first file is
     // done - on a folder of scans that first file can take a while on its own.
     on_progress(IndexProgress {
@@ -151,6 +171,13 @@ pub async fn run(
     let mut model_warm = false;
 
     for (position, file) in files.iter().enumerate() {
+        finish_file(
+            &mut timings,
+            &mut file_active,
+            &mut file_timing,
+            file_started,
+        );
+        file_started = Instant::now();
         // Reported as this file starts rather than as it ends, because several branches below
         // `continue`, and a count some paths forget to advance is worse than one that is a
         // single file behind. The final call after the loop closes the gap.
@@ -160,7 +187,9 @@ pub async fn run(
             batch_index: 0,
             batch_total: 0,
         });
-        let sha256 = match hash_file(file) {
+        let (hashed, hash_ms) = timed_ms(|| hash_file(file));
+        timings.hash_ms += hash_ms;
+        let sha256 = match hashed {
             Ok(hash) => hash,
             Err(_) => continue,
         };
@@ -168,19 +197,39 @@ pub async fn run(
             unchanged_files += 1;
             continue;
         }
+        timings.files_processed += 1;
+        file_timing = FileTiming {
+            position,
+            ..FileTiming::default()
+        };
+        file_active = true;
 
-        match extraction::extract(file, ocr, rasterizer, locale) {
+        let ocr_before = timed_ocr.as_ref().map_or(0, TimedOcr::spent_ms);
+        let (extracted, extraction_ms) =
+            timed_ms(|| extraction::extract(file, ocr, rasterizer, locale));
+        let ocr_ms = timed_ocr.as_ref().map_or(0, TimedOcr::spent_ms) - ocr_before;
+        file_timing.ocr_ms = ocr_ms;
+        file_timing.extract_ms = extraction_ms.saturating_sub(ocr_ms);
+        timings.ocr_ms += file_timing.ocr_ms;
+        timings.extract_ms += file_timing.extract_ms;
+
+        match extracted {
             Ok(document) if document.empty => {
                 let (engine, version) = ocr_identity(ocr, document.used_ocr);
-                index.replace_document(
-                    &file.relative_path,
-                    &sha256,
-                    true,
-                    &[],
-                    &[],
-                    engine,
-                    version,
-                )?;
+                let (written, write_ms) = timed_ms(|| {
+                    index.replace_document(
+                        &file.relative_path,
+                        &sha256,
+                        true,
+                        &[],
+                        &[],
+                        engine,
+                        version,
+                    )
+                });
+                written?;
+                file_timing.write_ms += write_ms;
+                timings.write_ms += write_ms;
                 empty_files.push(file.relative_path.clone());
                 if document.low_confidence {
                     low_confidence_files.push(file.relative_path.clone());
@@ -190,22 +239,34 @@ pub async fn run(
                 if document.low_confidence {
                     low_confidence_files.push(file.relative_path.clone());
                 }
-                let chunks = chunking::chunk(&document);
+                let (chunks, chunk_ms) = timed_ms(|| chunking::chunk(&document));
+                file_timing.chunk_ms = chunk_ms;
+                file_timing.chunks = chunks.len();
+                timings.chunk_ms += chunk_ms;
+                for chunk in &chunks {
+                    timings.note_chunk_text(&chunk.text);
+                }
                 if chunks.is_empty() {
                     let (engine, version) = ocr_identity(ocr, document.used_ocr);
-                    index.replace_document(
-                        &file.relative_path,
-                        &sha256,
-                        true,
-                        &[],
-                        &[],
-                        engine,
-                        version,
-                    )?;
+                    let (written, write_ms) = timed_ms(|| {
+                        index.replace_document(
+                            &file.relative_path,
+                            &sha256,
+                            true,
+                            &[],
+                            &[],
+                            engine,
+                            version,
+                        )
+                    });
+                    written?;
+                    file_timing.write_ms += write_ms;
+                    timings.write_ms += write_ms;
                     empty_files.push(file.relative_path.clone());
                 } else {
                     // Nothing is written until every vector exists: a file that fails halfway
                     // leaves no trace in the index, so it is never mistaken for an analysed one.
+                    let embed_started = Instant::now();
                     let embedded = embed_chunks(
                         gateway,
                         server_url,
@@ -222,9 +283,18 @@ pub async fn run(
                         },
                     )
                     .await;
+                    // Counted whether or not it worked: a request that ran into its deadline is
+                    // exactly the time worth knowing about.
+                    file_timing.embed_ms = elapsed_ms(embed_started.elapsed());
+                    timings.embed_ms += file_timing.embed_ms;
                     let embeddings = match embedded {
                         Ok(vectors) => {
                             consecutive_failures = 0;
+                            timings.embed_batches += plan_batches(&chunks).len();
+                            timings.embedded_chars += chunks
+                                .iter()
+                                .map(|chunk| chunk.text.chars().count())
+                                .sum::<usize>();
                             vectors
                         }
                         Err(error) if is_about_this_file(&error) => {
@@ -242,15 +312,20 @@ pub async fn run(
                         Err(error) => return Err(error),
                     };
                     let (engine, version) = ocr_identity(ocr, document.used_ocr);
-                    index.replace_document(
-                        &file.relative_path,
-                        &sha256,
-                        false,
-                        &chunks,
-                        &embeddings,
-                        engine,
-                        version,
-                    )?;
+                    let (written, write_ms) = timed_ms(|| {
+                        index.replace_document(
+                            &file.relative_path,
+                            &sha256,
+                            false,
+                            &chunks,
+                            &embeddings,
+                            engine,
+                            version,
+                        )
+                    });
+                    written?;
+                    file_timing.write_ms += write_ms;
+                    timings.write_ms += write_ms;
                     indexed_files += 1;
                     if chunks.iter().any(|chunk| chunk.origin == PageOrigin::Ocr) {
                         ocr_files.push(file.relative_path.clone());
@@ -266,12 +341,19 @@ pub async fn run(
         }
     }
 
+    finish_file(
+        &mut timings,
+        &mut file_active,
+        &mut file_timing,
+        file_started,
+    );
     on_progress(IndexProgress {
         processed_files: total_files,
         total_files,
         batch_index: 0,
         batch_total: 0,
     });
+    timings.total_ms = pass_timer.total_ms();
 
     Ok(IndexSummary {
         scanned_files: total_files,
@@ -286,7 +368,65 @@ pub async fn run(
         failed_files,
         unavailable_capabilities,
         chunk_count: index.chunk_count()?,
+        timings: Some(timings),
     })
+}
+
+/// Close the file being worked on: its total, then into the slowest-files list.
+fn finish_file(
+    timings: &mut AnalysisTimings,
+    active: &mut bool,
+    timing: &mut FileTiming,
+    started: Instant,
+) {
+    if *active {
+        timing.total_ms = elapsed_ms(started.elapsed());
+        timings.note_file(*timing);
+        *active = false;
+    }
+}
+
+/// An OCR engine that adds up the time it spends, so the pass can tell reading a scan from
+/// extracting a text layer. It decorates the real port and changes nothing else: same identity,
+/// same version, same answers.
+struct TimedOcr<'a> {
+    inner: &'a dyn OcrProvider,
+    nanoseconds: AtomicU64,
+}
+
+impl<'a> TimedOcr<'a> {
+    fn new(inner: &'a dyn OcrProvider) -> Self {
+        Self {
+            inner,
+            nanoseconds: AtomicU64::new(0),
+        }
+    }
+
+    fn spent_ms(&self) -> u64 {
+        self.nanoseconds.load(Ordering::Relaxed) / 1_000_000
+    }
+}
+
+impl OcrProvider for TimedOcr<'_> {
+    fn id(&self) -> &str {
+        self.inner.id()
+    }
+
+    fn version(&self) -> &str {
+        self.inner.version()
+    }
+
+    fn supports(&self, format: ImageFormat) -> bool {
+        self.inner.supports(format)
+    }
+
+    fn recognise(&self, input: &OcrInput<'_>) -> Result<OcrPage, OcrError> {
+        let started = Instant::now();
+        let page = self.inner.recognise(input);
+        let spent = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.nanoseconds.fetch_add(spent, Ordering::Relaxed);
+        page
+    }
 }
 
 /// Which ingestion capabilities are missing for this pass. Read from the ports themselves rather

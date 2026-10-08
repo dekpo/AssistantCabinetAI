@@ -82,6 +82,16 @@ pub struct Settings {
     /// digits, `-`, `_`, `.`), whatever was typed or left in a hand-edited file
     /// (`Settings::generated_folder`).
     pub generated_folder_name: String,
+    /// Reveals the developer panel that shows each question's timings. Nothing in the interface
+    /// reads it yet; a later lot renders the panel (`docs/DECISIONS.md`, "Knowledge Base"). Never
+    /// shown in normal chat.
+    pub show_diagnostics: bool,
+    /// Appends one line of numbers and machine codes per question to `retrieval-timings.jsonl`,
+    /// and one per Analyse pass to `analysis-timings.jsonl`, in the application's local data
+    /// folder. No question, no file name, no entity, no excerpt
+    /// (`knowledge::diagnostics`). Off by default; edited in `settings.json` until the settings
+    /// dialog gets its "Advanced" group.
+    pub write_timing_log: bool,
 }
 
 impl Default for Settings {
@@ -97,6 +107,8 @@ impl Default for Settings {
             data_folder: None,
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
             generated_folder_name: DEFAULT_GENERATED_FOLDER_NAME.to_string(),
+            show_diagnostics: false,
+            write_timing_log: false,
         }
     }
 }
@@ -272,10 +284,14 @@ mod tests {
             data_folder: Some("D:\\data".into()),
             answer_idle_timeout_seconds: DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS,
             generated_folder_name: "Courriers".into(),
+            show_diagnostics: true,
+            write_timing_log: true,
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
         assert_eq!(json["generatedFolderName"], "Courriers");
+        assert_eq!(json["showDiagnostics"], true);
+        assert_eq!(json["writeTimingLog"], true);
 
         assert_eq!(json["locale"], "fr-FR");
         assert_eq!(json["theme"], "system");
@@ -359,6 +375,23 @@ mod tests {
             serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
 
         assert_eq!(settings.data_folder, None);
+    }
+
+    #[test]
+    fn measurement_is_off_by_default_and_for_a_file_that_predates_it() {
+        let defaults = Settings::default();
+        assert!(!defaults.show_diagnostics);
+        assert!(!defaults.write_timing_log);
+
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+        assert!(!settings.show_diagnostics);
+        assert!(!settings.write_timing_log);
+
+        let switched_on: Settings =
+            serde_json::from_str(r#"{"writeTimingLog":true}"#).expect("loads");
+        assert!(switched_on.write_timing_log);
+        assert!(!switched_on.show_diagnostics);
     }
 
     #[test]

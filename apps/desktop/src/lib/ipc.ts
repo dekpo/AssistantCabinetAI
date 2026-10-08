@@ -26,6 +26,13 @@ export interface AppSettings {
   /** The subfolder of the documents folder where generated letters are written. Rust keeps it one
    * clean name, whatever is sent. */
   generatedFolderName: string;
+  /** Reveals the developer panel that shows each question's timings. Nothing renders it yet; never
+   * shown in normal chat. Off by default. */
+  showDiagnostics: boolean;
+  /** Appends numbers and machine codes, never a question or a file name, to
+   * `retrieval-timings.jsonl` and `analysis-timings.jsonl` in the app-data folder. Off by default;
+   * edited in `settings.json` until the settings dialog has its "Advanced" group. */
+  writeTimingLog: boolean;
 }
 
 export interface AppSnapshot {
@@ -236,6 +243,48 @@ export interface IndexSummary {
   /** Machine codes for an ingestion capability that did not start. Empty on a healthy install. */
   unavailableCapabilities: string[];
   chunkCount: number;
+  /** Where the pass spent its time. Numbers only. */
+  timings: AnalysisTimings | null;
+}
+
+export type AnalysisPass = "documents" | "data";
+
+/** One of the slowest files of a pass, by position in the pass. Never a name. */
+export interface FileTiming {
+  position: number;
+  totalMs: number;
+  extractMs: number;
+  ocrMs: number;
+  chunkMs: number;
+  embedMs: number;
+  writeMs: number;
+  chunks: number;
+}
+
+/**
+ * The timings of one Analyse pass (`knowledge::diagnostics` in Rust). The Documents pass fills the
+ * hash, extract, OCR, chunk, embed and write stages; the Data pass fills `buildInventoryMs` and
+ * `writeMs`. `extractMs` excludes `ocrMs`.
+ */
+export interface AnalysisTimings {
+  pass: AnalysisPass;
+  filesScanned: number;
+  /** Files read in this pass: not skipped as unchanged. */
+  filesProcessed: number;
+  hashMs: number;
+  extractMs: number;
+  ocrMs: number;
+  chunkMs: number;
+  embedMs: number;
+  embedBatches: number;
+  embeddedChars: number;
+  writeMs: number;
+  buildInventoryMs: number;
+  chunksTotal: number;
+  /** Chunks whose text is byte-identical to an earlier chunk of the same pass. */
+  chunksRepeatingEarlierText: number;
+  totalMs: number;
+  slowestFiles: FileTiming[];
 }
 
 /**
@@ -520,6 +569,42 @@ export interface AskAnswer {
   /** Documents and tables were both selected, and the mixed tier answered across both
    * (`docs/SESSION-DATA-16-Mixed-Tier.md`). */
   mixedAnswer: MixedAnswer | null;
+  /** Where this question spent its time. Numbers and machine codes only. */
+  diagnostics: RetrievalDiagnostics | null;
+}
+
+export type RetrievalPath =
+  | "documents"
+  | "tabular"
+  | "mixed"
+  | "folder_answer"
+  | "without_documents";
+
+export type RetrievalPlan = "one_file" | "every_document" | "whole_folder";
+
+/**
+ * The timings and counts of one question (`knowledge::diagnostics` in Rust). Every `...Ms` is the
+ * wall time of one stage, and stays 0 when the question did not go through it. Nothing renders
+ * this yet; `AppSettings.showDiagnostics` is reserved for the panel that will.
+ */
+export interface RetrievalDiagnostics {
+  path: RetrievalPath;
+  plan: RetrievalPlan | null;
+  selectedDocuments: number;
+  selectedWorkbooks: number;
+  chunksConsidered: number;
+  chunksSelected: number;
+  estimatedInputChars: number;
+  inventoryMs: number;
+  scopeMs: number;
+  routingMs: number;
+  embeddingMs: number;
+  searchMs: number;
+  workbookLoadMs: number;
+  workbookCacheHit: boolean;
+  generationFirstTokenMs: number | null;
+  generationTotalMs: number;
+  totalMs: number;
 }
 
 /**

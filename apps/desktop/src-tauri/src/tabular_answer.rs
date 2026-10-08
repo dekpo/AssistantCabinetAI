@@ -811,6 +811,9 @@ fn load_workbook_cached(
     inventory: &TabularInventory,
     locale: &str,
 ) -> Result<(Workbook, TabularInventory), TabularError> {
+    // Timed and reported to the question's diagnostics (`knowledge::diagnostics`): how long a
+    // workbook takes to come back, and whether the cache was what brought it back.
+    let started = std::time::Instant::now();
     if let Ok(Some(workbook)) = index.tabular_workbook_by_hash(&inventory.workbook_id) {
         let fresh = TabularInventory::build(
             relative_path,
@@ -819,6 +822,7 @@ fn load_workbook_cached(
             &workbook,
             locale,
         );
+        crate::knowledge::diagnostics::record_workbook_load(started.elapsed(), true);
         return Ok((workbook, fresh));
     }
     let (workbook, fresh) =
@@ -826,6 +830,7 @@ fn load_workbook_cached(
     // Best-effort: a question is still answered from `workbook` even when the write fails (a
     // locked or full disk), exactly as a cache miss already would have been.
     let _ = index.put_tabular_workbook(&fresh.workbook_id, &workbook);
+    crate::knowledge::diagnostics::record_workbook_load(started.elapsed(), false);
     Ok((workbook, fresh))
 }
 

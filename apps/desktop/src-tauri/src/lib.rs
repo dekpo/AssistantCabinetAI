@@ -22,6 +22,7 @@ pub mod gateway;
 pub mod index_store;
 pub mod indexing;
 pub mod inventory;
+pub mod knowledge;
 pub mod mixed_answer;
 pub mod number_check;
 pub mod ocr;

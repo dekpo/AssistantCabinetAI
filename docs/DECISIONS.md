@@ -725,6 +725,44 @@ Full context: `docs/test-reports/human-acceptance-pass-1/` (07 and 08).
 | Progress | Counts only, as before: `batchIndex` / `batchTotal` inside the current file. No file name and no text |
 | Not decided here | Moving extraction and OCR off the async thread and wiring cancellation into the pass (open in `docs/TROUBLESHOOTING.md`, same entry) |
 
+## Knowledge Base and the product direction (8 October 2026)
+
+Owner decisions taken in the planning conversation of 8 October 2026. They redefine the phase after
+the embedding fix: the product grows a local, source-grounded Knowledge Base (KB), and the dated
+milestones give way to capabilities (`docs/ROADMAP.md`).
+
+| Subject | Decision |
+| --- | --- |
+| What the KB is | A local registry of the entities (people, organisations, places, identifiers, items, terms) found in the files the user has actually analysed, with aliases, roles, provenance and phonetic keys. Its first job is **candidate discovery inside the user's own selection** (scope reduction, targeted answers, a better choice of workbook). Its second is to be the shared vocabulary of the product: question suggestions, entity autocomplete, speech repair and spoken forms, conversation titles, organisation plans, an outbound-query guard. It is never a replacement for retrieval, never an authority over numbers, never a memory of conversations |
+| The layers | The user's `AnalysisScope` says what may be looked at. Knowledge finds candidates inside it. Retrieval ranks passages. The DATA engine owns deterministic structured truth and is unchanged. The model only interprets supplied evidence |
+| D1 — types | Neutral. The role is an attribute, not a type. Base types: `person`, `organization`, `location`, `identifier`, `item`, `term`. Dates are not entities: the DATA engine owns date constraints |
+| D2 — roles | An open vocabulary of neutral machine ids (`client`, `provider`, `counterparty`, `sender`, `recipient`, `author`, `supplier`, …). Optional **lexicon packs** (health, legal, accounting, …) add header vocabulary and display labels. Nothing profession-specific in the schema or in Rust. An optional `subtype` (`medication` for an `item`, `invoice` for an `identifier`) comes from packs, never from a Rust enum |
+| D3 — phonetics | A phonetic key and a spoken form exist from the first schema, to prepare speech-to-text repair and text-to-speech |
+| D4 — three modes | `off` (no extraction, no lookup: today's behaviour), `suggest` (extraction and shadow measurement on, suggestions and the entity picker on, **no automatic scope reduction**; a reduction the user asks for through an entity chip still applies), `auto` (automatic reduction when the rules allow). The default after this work is `suggest`; `auto` becomes the default only after the release gate of the last lot |
+| D5 — shadow measurement | Always on when the mode is not `off`: the KB computes what it would have targeted, retrieval still runs on the full selection in `suggest`, and the overlap with the sources actually cited is stored as counts only |
+| D6 — visible targeting | A line under an answer that used a reduced scope, with a one-click **widen** (ask again on the full selection) and the list of files used. Automatic widening when the reduced evidence is weak |
+| D7 — speech | Runs on the workstation. Audio, transcripts and the KB never cross the network, so the KB never has to leave the client. First model family: Whisper (MIT), quality permitting; free licences only (Apache 2.0 or MIT), CC-BY only by an explicit later decision. **Cloud speech stays forbidden** |
+| D8 — read aloud | A button, off by default. An "read answers automatically" setting is a possible later addition; the KB only supplies spoken forms |
+| D9 — milestones | The **14 October 2026 milestone is withdrawn**; milestones become capabilities K-A to K-E (`docs/ROADMAP.md`). The Windows installer and the work on real documents continue as a separate track and are gated by the DPIA, not by the KB |
+| D10 — names on screen | Suggestions hide names by default (`knowledge_hide_names_in_suggestions = true`): a screen is visible to waiting-room visitors |
+| No longer frozen | Voice (workstation-local speech), file organisation, calendar and external connectors move from "frozen" to **planned, each behind its own decision** when its turn comes. Nothing is built for them in the KB programme except the read-only contracts it offers (`speech` and `organisation` rows of the plan) |
+| Still forbidden | Cloud speech, any cloud LLM, telemetry, real patient files before the written DPIA draft, a named data controller and disk encryption on both machines |
+| The calendar | A local adapter (`.ics` or CalDAV on the practice network) first. A **Google calendar adapter needs a separate owner decision and the DPIA**: an appointment plus a person's name is personal data, and sending it to a third party is not a technical detail |
+| File actions | Unchanged: a plan, a human approval, nothing destructive. The file-name exception of 25 September 2026 is not a precedent for organising folders |
+| Invariants | The KB is built only from the user's own analysed files and manual edits, never from questions, answers, history or transcripts. A lookup that fails, finds nothing or is ambiguous falls back to the existing path on the full selection. Nothing the KB stores is sent to a model or written to a log as text. Rust returns machine codes, the interface writes the sentences. Windows and macOS both, no `cfg` in the KB. The full list is in the lot reports of `docs/test-reports/knowledge-base-pass-1/` and, once written, `docs/KNOWLEDGE-BASE.md` |
+| Branches | `main` stays untouched until the release gate. Each lot is a branch merged into `kb/integration` by pull request; the baseline is the tag `kb-baseline` (`f27505f`) |
+
+## Settled by KB lot 0, measure and unfreeze (8 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Measure before optimising | The owner saw slowness and the KB was not obviously the cure: at question time the only embedding call is the question's, the chunk vectors are computed at Analyse and the prompt is capped. So the question path and the Analyse path are instrumented first, and the numbers (`docs/test-reports/knowledge-base-pass-1/00-baseline.md`) decide what is optimised |
+| What a timing line holds | Numbers and machine codes only: milliseconds, counts, a path code, a plan code, a timestamp. **No question, no file name, no entity, no excerpt**, and not even the position of a file by name: the slowest files of a pass are identified by their index in the pass. A test serialises a value built from a populated store and checks it |
+| Off by default | `write_timing_log` (default false) appends one JSON line per question to `retrieval-timings.jsonl`, and one per Analyse pass to `analysis-timings.jsonl`, in the application's local data folder beside `renamed-files.jsonl`. `show_diagnostics` (default false) is reserved for the developer panel that a later lot renders; nothing in the interface shows a timing yet. Both are settings, with a checkbox each in a new "Avancé" / "Advanced" group of the settings dialog (added on the owner's request, 8 October 2026, ahead of the lot that was to bring the dialog work). The second one is honest about being inert: its description says it changes nothing on screen yet |
+| Lexical search is held to the scope | The lexical bonus came from a search of the whole index, so a file outside the selection stuffed with the query words could take the six lexical places and leave an in-scope match without its bonus. `IndexStore::search_lexical_in` restricts the full-text search to the paths of the scope; `File`, `Files` and `CurrentFolder` scopes use it, `WholeFolder` keeps the unrestricted search. Ranking, caps and the four-character term rule are unchanged |
+| One lexical query for "each document" | `search_per_document` ran the same full-text query once per file. It now runs it once for the whole list. Same evidence, same order |
+| Deliberately not changed here | `fts_match_expression` still drops terms shorter than four characters (so "Dr", "Roy", "Lee" and "Ng" are never searched), and `search_per_document` still takes files in path order until its character budget is spent. Both change what the user gets and are decided in the targeting lot, with measurements |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

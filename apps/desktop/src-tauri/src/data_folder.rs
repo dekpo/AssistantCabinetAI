@@ -17,6 +17,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Instant;
 
 use serde::Serialize;
 
@@ -26,6 +27,9 @@ use crate::file_record::{FileKind, FileRecord, ProcessingStatus, Readability};
 use crate::index_store::IndexStore;
 use crate::indexing::{IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, WorkFolderInventory};
+use crate::knowledge::diagnostics::{
+    elapsed_ms, timed_ms, AnalysisPass, AnalysisTimings, FileTiming, StageTimer,
+};
 use crate::tabular;
 use crate::tabular::inventory::{TabularFormat, TabularInventory};
 
@@ -177,13 +181,20 @@ pub fn analyse(
     // not selectively: a pass rebuilds every inventory below regardless of whether a file
     // changed, so a cell cache that survived it could serve bytes this very pass never looked at
     // again.
-    index.clear_tabular_workbooks()?;
+    let pass_timer = StageTimer::start();
+    let (cleared, clear_ms) = timed_ms(|| index.clear_tabular_workbooks());
+    cleared?;
 
     let workbooks: Vec<discovery::DiscoveredFile> = discovery::discover_all(root)
         .into_iter()
         .filter(|file| FileKind::from_extension(&file.extension) == FileKind::TabularCandidate)
         .collect();
     let total_files = workbooks.len();
+    // `build_inventory_ms` is parsing every workbook; `write_ms` is storing the inventories (and
+    // forgetting the typed cache up front). Per workbook, only its position is kept.
+    let mut timings = AnalysisTimings::new(AnalysisPass::Data, total_files);
+    timings.files_processed = total_files;
+    timings.write_ms += clear_ms;
     on_progress(IndexProgress {
         processed_files: 0,
         total_files,
@@ -195,14 +206,26 @@ pub fn analyse(
     let mut unusable = Vec::new();
     for (position, file) in workbooks.iter().enumerate() {
         let path = Path::new(&file.absolute_path);
-        match tabular::build_inventory(path, &file.relative_path, locale) {
+        let workbook_started = Instant::now();
+        let mut workbook_timing = FileTiming {
+            position,
+            ..FileTiming::default()
+        };
+        let (built, build_ms) =
+            timed_ms(|| tabular::build_inventory(path, &file.relative_path, locale));
+        workbook_timing.extract_ms = build_ms;
+        timings.build_inventory_ms += build_ms;
+        match built {
             Ok(inventory) => {
                 if inventory.has_a_usable_sheet() {
                     usable += 1;
                 } else {
                     unusable.push(file.relative_path.clone());
                 }
-                index.put_tabular_inventory(&inventory)?;
+                let (stored, write_ms) = timed_ms(|| index.put_tabular_inventory(&inventory));
+                stored?;
+                workbook_timing.write_ms = write_ms;
+                timings.write_ms += write_ms;
             }
             // The adapters report a file they cannot open as `ReadFailed` or `ParseFailed` alike
             // (`calamine` does not tell a locked file from a fake `.xlsx`), so the difference is
@@ -212,12 +235,17 @@ pub fn analyse(
                 // shows red - the same outcome as a document extraction that failed - instead of
                 // staying "not analysed yet" for ever.
                 Ok(bytes) => {
-                    index.put_tabular_inventory(&TabularInventory {
-                        workbook_id: tabular::hash_bytes(&bytes),
-                        relative_path: file.relative_path.clone(),
-                        format: format_of(&file.extension),
-                        sheets: Vec::new(),
-                    })?;
+                    let (stored, write_ms) = timed_ms(|| {
+                        index.put_tabular_inventory(&TabularInventory {
+                            workbook_id: tabular::hash_bytes(&bytes),
+                            relative_path: file.relative_path.clone(),
+                            format: format_of(&file.extension),
+                            sheets: Vec::new(),
+                        })
+                    });
+                    stored?;
+                    workbook_timing.write_ms = write_ms;
+                    timings.write_ms += write_ms;
                     unusable.push(file.relative_path.clone());
                 }
                 // Could not even be read: a file still being written, or locked. Nothing is
@@ -225,6 +253,8 @@ pub fn analyse(
                 Err(_) => {}
             },
         }
+        workbook_timing.total_ms = elapsed_ms(workbook_started.elapsed());
+        timings.note_file(workbook_timing);
         on_progress(IndexProgress {
             processed_files: position + 1,
             total_files,
@@ -237,7 +267,10 @@ pub fn analyse(
         .iter()
         .map(|file| file.relative_path.clone())
         .collect();
-    let removed_files = index.retain_tabular_inventories(&present)?;
+    let (retained, retain_ms) = timed_ms(|| index.retain_tabular_inventories(&present));
+    let removed_files = retained?;
+    timings.write_ms += retain_ms;
+    timings.total_ms = pass_timer.total_ms();
 
     Ok(IndexSummary {
         scanned_files: total_files,
@@ -252,6 +285,7 @@ pub fn analyse(
         failed_files: Vec::new(),
         unavailable_capabilities: Vec::new(),
         chunk_count: 0,
+        timings: Some(timings),
     })
 }
 

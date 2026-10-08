@@ -259,5 +259,7 @@ Outside the documents and data folders, in the application's local data folder (
 Windows, `~/Library/Application Support/com.assistantcabinetai.desktop/` on macOS; it is a hidden folder on Windows): the local index
 (`index.sqlite3`, `workbooks.sqlite3`, `tabular.sqlite3`), the log of file renames (`renamed-files.jsonl`, original and new name of every
 file the clean-names pass renamed) and the log of generated letters (`generated-files.jsonl`: time, template, data file, key and output name
-of every letter written; never a cell value). `settings.json` is in the configuration folder instead (`%APPDATA%\com.assistantcabinetai.desktop\` on
+of every letter written; never a cell value). With `writeTimingLog` switched on in `settings.json` (off by default), also
+`retrieval-timings.jsonl` (one line per question) and `analysis-timings.jsonl` (one line per Analyse pass): a timestamp, milliseconds, counts
+and machine codes, never a question, a file name or a passage; delete them when a measurement is done. `settings.json` is in the configuration folder instead (`%APPDATA%\com.assistantcabinetai.desktop\` on
 Windows). None of them holds the text of a document.

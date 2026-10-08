@@ -54,6 +54,17 @@ The index is SQLite: full-text search for lexical matching, plus stored vectors 
 folder holds tens of files, not millions, so brute-force cosine is fast enough and avoids a vector-database
 dependency for the prototype. Chunks keep file, page and section so that a citation can point at them.
 
+**The lexical bonus is held to the scope.** The full-text search only decides which chunks earn a small bonus
+(0.2) on top of their vector score, and it keeps six places. Run over the whole index and filtered afterwards, a
+file outside the user's selection that repeats the question's words takes all six places and the match the
+selection really holds goes without its bonus. So for a named file, a chosen set of files and the current folder
+the full-text query itself is restricted to those files' paths (`IndexStore::search_lexical_in`, a join on
+`chunks` with the path set passed as one JSON value, `bm25` unchanged); only "the whole index" keeps the
+unrestricted search. "Each document" runs that query once for its whole list of files, not once per file. Ranking,
+the caps, the four-character minimum for a query term and the order in which "each document" takes files are
+**unchanged**: those change what the user gets and are decided with measurements
+(`docs/DECISIONS.md`, "Settled by KB lot 0").
+
 **Embeddings.** First implementation is a no-store call to the gateway: the server computes vectors and
 discards them, storing nothing. A local ONNX computation with a small model can replace it later behind the
 same interface, which would also make indexing work with the server switched off. Since the Mac mini sits at

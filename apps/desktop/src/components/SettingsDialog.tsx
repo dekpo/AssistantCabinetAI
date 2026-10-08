@@ -224,6 +224,30 @@ export function SettingsDialog({
           />
         </label>
 
+        {/* Measurement switches, kept apart under their own heading: neither changes what an answer
+            says. They are off unless she turns them on (`docs/DECISIONS.md`, "KB lot 0"). */}
+        <div className="field">
+          <span className="field__label">{t("settings.advancedLabel")}</span>
+          <label className="field__row">
+            <input
+              type="checkbox"
+              checked={settings.writeTimingLog}
+              onChange={(event) => onUpdate({ writeTimingLog: event.target.checked })}
+            />
+            <span>{t("settings.timingLogLabel")}</span>
+          </label>
+          <span className="field__description">{t("settings.timingLogDescription")}</span>
+          <label className="field__row">
+            <input
+              type="checkbox"
+              checked={settings.showDiagnostics}
+              onChange={(event) => onUpdate({ showDiagnostics: event.target.checked })}
+            />
+            <span>{t("settings.showDiagnosticsLabel")}</span>
+          </label>
+          <span className="field__description">{t("settings.showDiagnosticsDescription")}</span>
+        </div>
+
         <WorkFolderCard
           workFolder={settings.workFolder}
           suggestedWorkFolder={suggestedWorkFolder}

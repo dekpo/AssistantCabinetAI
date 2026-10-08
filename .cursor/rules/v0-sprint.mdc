@@ -1,17 +1,21 @@
 ---
-description: v0 sprint — milestones 30 September and 14 October 2026, code layout and boundaries
+description: v0 prototype and the Knowledge Base programme — capability milestones, code layout and boundaries
 alwaysApply: true
 ---
 
 # v0 — installable prototype
 
-Canonical direction: `docs/BRIEF-V0-PROTOTYPE.md`. Dated plan, acceptance criteria and risks: `docs/ROADMAP.md`.
+Canonical direction: `docs/BRIEF-V0-PROTOTYPE.md`. Plan, acceptance criteria and risks: `docs/ROADMAP.md`.
 
-Two milestones. **30 September 2026:** the chain holds end to end on `fixtures/gp-sandbox/`.
-**14 October 2026:** the pilot GP uses it on her own documents, with a Windows installer and deployment
-at her practice.
+**Milestones are capabilities, not dates (8 October 2026).** The chain holding end to end on
+`fixtures/gp-sandbox/` (30 September) is reached. **The 14 October 2026 milestone is withdrawn**: the
+Windows installer and the work on real documents continue as their own track, gated by the DPIA draft, a
+named data controller and disk encryption, not by a date. The product now grows a local, source-grounded
+Knowledge Base, in lots whose milestones K-A to K-E are in `docs/ROADMAP.md` and whose decisions are in
+`docs/DECISIONS.md` ("Knowledge Base and the product direction"). Work on it is allowed; the ritual for a
+lot is `.cursor/rules/kb-programme.mdc`.
 
-One goal: an **installable** prototype on her workstation, with a Mac mini **at her practice** as the
+One goal still: an **installable** prototype on her workstation, with a Mac mini **at her practice** as the
 server. Given a choice between one more impressive feature and making the existing flow more reliable,
 private, testable and replaceable, choose the latter. Do not rewrite what works.
 
@@ -41,10 +45,18 @@ server URL, the model alias, the work folder and the locale are settings.
   producing a validated artefact in the work folder or on the clipboard; **she** sends it from her own
   software. No MSSanté, no Medilink, no Ameli.
 
-# Frozen until 14 October 2026
+# Frozen
 
-Open WebUI development, voice, vision, certificates, referral letters, Ameli, accounting, mobile, app
-stores, RBAC, billing, analytics, large model catalogues, commercial packaging.
+Open WebUI development, vision, certificates, referral letters, Ameli, accounting, mobile, app stores,
+RBAC, billing, analytics, large model catalogues, commercial packaging. No date lifts this list: it is
+lifted item by item, by an owner decision recorded in `docs/DECISIONS.md`.
+
+**No longer frozen, as of 8 October 2026 — planned, each behind its own decision when its turn comes:**
+voice (speech runs on the workstation, Whisper first, free licences only; **cloud speech stays
+forbidden**), file organisation (a plan and a human approval, never a destructive write), a calendar (a
+local adapter first; Google needs a separate owner decision and the DPIA) and external connectors (the
+user sees the exact outbound text before anything is sent). Building the Knowledge Base is allowed; building
+those features is not, until their own decision exists.
 
 **Scan OCR left this list on 19 September 2026** and became sprint 2.5, 20–30 September. It is local,
 behind the `OcrProvider` port, and it is ingestion rather than a GP workflow: no workflow contains OCR

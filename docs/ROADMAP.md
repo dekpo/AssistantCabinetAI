@@ -660,6 +660,15 @@ Sprint 2b (tabular data) comes first, then **saved conversations** (create, save
 selection - the in-memory history of sprint 2a.8 is what they will store). The rest of the original list
 is in the paragraph above.
 
+**Recorded on 9 October 2026, to be designed later, not now: logs for a maintenance operator.** The
+application should one day be able to hand an operator a log of its incidents (an index that failed to
+open, a knowledge step that was bypassed, an embedding that timed out) so that a failure at a practice can
+be traced. Open questions for that day: what an incident record may hold (codes, counts and timings, never a
+passage, a name or a file name, as in `docs/PRIVACY-AND-SECURITY.md`), where it lives, how the user hands it
+over, and how it relates to the opt-in timing logs of KB lot 0. Nothing is built for it; the knowledge-base
+rule that a failed step is reported to the user (`docs/DECISIONS.md`, "The knowledge base never blocks
+indexing") is the first thing such a log would record.
+
 Scan OCR left this list on 19 September 2026 and became sprint 2.5. What stays out of v0 is everything
 *around* it: layout-aware OCR, tables read from images, handwriting, GPU acceleration, camera capture,
 batch OCR tooling and a second engine.

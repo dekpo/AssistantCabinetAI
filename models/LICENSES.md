@@ -6,10 +6,18 @@ How to add or remove a model without restarting Compose: `models/README.md`.
 
 Review date: 2026-09-21. **Licence policy of 7 October 2026: only the free-licence families (Apache 2.0, MIT) listed in `docs/MODELS.md`, "Licence policy", are used from now on.** A row for each model the owner pulls from that list is still required before it is loaded on a practice machine; the register below predates the policy and still holds rows for families that are now out (Llama, Gemma 3): they are kept as history, not as candidates.
 
-**Currently loaded** (matches `.env`'s `MODEL_ALIASES` on this machine, 21 September 2026):
-`mistral`, `llama3.1-8b-instruct`, `nomic-embed-text`, `qwen2.5:1.5b`. Everything else below is a
-past or future bench candidate, kept for its licence review, not necessarily on disk right now —
+**Currently loaded** (matches `.env`'s `MODEL_ALIASES` on this machine, 9 October 2026): `ministral-3:3b`,
+`granite3.1-moe:3b`, `granite3.1-moe:1b`, `qwen2.5:1.5b`, `qwen3:1.7b`, `qwen3:0.6b`, `gemma4:e2b`, and the
+embedding weight `nomic-embed-text` (`bge-m3` is also on disk, not the active embedding alias). Everything else
+below is a past or future bench candidate, kept for its licence review, not necessarily on disk right now —
 check `docker compose exec ollama ollama list` for what is actually pulled.
+
+**Licence check of 9 October 2026 (agent):** the eight chat tags above, plus `qwen3.5:2b` which the owner pulled
+and removed, are all **Apache License 2.0**. Source of each: the upstream Hugging Face model card. The Ollama
+library page states the licence for `ministral-3`, `granite3.1-moe` and `qwen2.5` only; for `gemma4`, `qwen3`
+and `qwen3.5` it states none, so the card of the upstream weight is the evidence. The licence file inside each
+Ollama conversion was not read. Measured comparison of these tags:
+`docs/test-reports/small-model-comparison-1/README.md`.
 
 ## mistral (witness)
 
@@ -51,7 +59,7 @@ docker compose exec ollama ollama pull nomic-embed-text
 | Hugging Face source | [Qwen/Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) |
 | Licence | Apache License 2.0 |
 | Commercial use | Allowed under Apache 2.0 |
-| Why this one | Fast and reasonably accurate on this low-resource dev machine behind `assistant-turbo`; the current `DEFAULT_MODEL_ALIAS`. Not a pilot quality candidate at this size — a latency witness while waiting for the Mac mini |
+| Why this one | Fast and reasonably accurate on this low-resource dev machine behind `assistant-turbo`; the current `DEFAULT_MODEL_ALIAS`. Not a pilot quality candidate at this size — a latency witness while waiting for the Mac mini. Measured on 9 October 2026 (`docs/test-reports/small-model-comparison-1/README.md`): a wrong or invented fact in 4 of its 13 answers, so it should not stay the default for human tests |
 | Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. Do not use for diagnosis, prescriptions, or any send (mail, MSSanté, DMP). |
 | Next review | After the bake-off on `fixtures/gp-sandbox/`. Before a Mac mini deploy and before any sale |
 
@@ -59,7 +67,89 @@ docker compose exec ollama ollama pull nomic-embed-text
 docker compose exec ollama ollama pull qwen2.5:1.5b
 ```
 
-## bge-m3 (embedding candidate, not yet pulled)
+## ministral-3:3b (quality candidate of the comparison of 9 October 2026, currently loaded)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `ministral-3:3b` (library pull, 3.0 GB) |
+| Hugging Face source | [mistralai/Ministral-3-3B-Instruct-2512](https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512) |
+| Licence | Apache License 2.0 (stated on the Ollama page and on the card) |
+| Commercial use | Allowed under Apache 2.0 |
+| Why this one | Best of the eight small tags tried on the owner's PC: no contradiction of the engine's figures, clean drafts, about 1m45 per answer on CPU. 256K native window; 8192 set in `.env`. Accepts images (not used) |
+| Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. Do not use for diagnosis, prescriptions, or any send (mail, MSSanté, DMP). |
+| Next review | Second pass of the comparison at one window size, thinking switched off where possible; before a Mac mini deploy |
+
+```text
+docker compose exec ollama ollama pull ministral-3:3b
+```
+
+## granite3.1-moe:3b and granite3.1-moe:1b (IBM Granite MoE, currently loaded)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `granite3.1-moe:3b` (2.0 GB), `granite3.1-moe:1b` (1.4 GB) |
+| Hugging Face source | [ibm-granite/granite-3.1-3b-a800m-instruct](https://huggingface.co/ibm-granite/granite-3.1-3b-a800m-instruct) (3.3B total, 0.8B active), [ibm-granite/granite-3.1-1b-a400m-instruct](https://huggingface.co/ibm-granite/granite-3.1-1b-a400m-instruct) (1.3B total, 0.4B active) |
+| Licence | Apache License 2.0 (Ollama page and cards) |
+| Commercial use | Allowed under Apache 2.0 |
+| Why these | Fast mixture-of-experts witnesses, 128K native window (8192 for the 3b and 4096 for the 1b in `.env`). The 3b copies excerpts well but contradicts the engine's figures on mixed questions; the 1b invents and repeats. Neither is a quality candidate |
+| Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. Do not use for diagnosis, prescriptions, or any send (mail, MSSanté, DMP). |
+| Next review | Dropped after the comparison of 9 October 2026 unless a second pass changes the picture |
+
+```text
+docker compose exec ollama ollama pull granite3.1-moe:3b
+docker compose exec ollama ollama pull granite3.1-moe:1b
+```
+
+## qwen3:1.7b and qwen3:0.6b (Qwen 3, currently loaded)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `qwen3:1.7b` (1.4 GB), `qwen3:0.6b` (522 MB) |
+| Hugging Face source | [Qwen/Qwen3-1.7B](https://huggingface.co/Qwen/Qwen3-1.7B), [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) |
+| Licence | Apache License 2.0 (card metadata `apache-2.0`; the Ollama page states none) |
+| Commercial use | Allowed under Apache 2.0 |
+| Why these | Fastest usable small models (1.7b about one minute per answer, 0.6b about half a minute). Native window 32 768. **Thinking is on by default on the card**; the gateway does not switch it off, which may cost time (not measured) |
+| Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. Do not use for diagnosis, prescriptions, or any send (mail, MSSanté, DMP). |
+| Next review | The 1.7b is the speed challenger of the second comparison pass; the 0.6b answered in English and invented a subject, dropped |
+
+```text
+docker compose exec ollama ollama pull qwen3:1.7b
+docker compose exec ollama ollama pull qwen3:0.6b
+```
+
+## gemma4:e2b (Gemma 4, currently loaded)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `gemma4:e2b` (4.6 GB on disk; 2.3B effective, 5.1B with embeddings) |
+| Hugging Face source | [google/gemma-4-E2B-it](https://huggingface.co/google/gemma-4-E2B-it) |
+| Licence | **Apache License 2.0** per the card metadata. The card's text also links "Gemma 4's license terms": the Gemma 2 and Gemma 3 weights were under the Gemma Terms of Use, so **read that link before any sale** |
+| Commercial use | Allowed under Apache 2.0 |
+| Why this one | Accurate, quotes the file faithfully. Too slow on this CPU (2m14 to 5m34 per answer). 128K native window; 4096 set in `.env`. The card lists a configurable thinking mode |
+| Health / legal limits | Not a medical device. Not MedGemma. Admin drafting only. A human must review every letter. |
+| Next review | Retest on the Mac mini; read the linked licence terms before any paid offer |
+
+```text
+docker compose exec ollama ollama pull gemma4:e2b
+```
+
+## qwen3.5:2b (tried, removed from `MODEL_ALIASES` on 9 October 2026)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `qwen3.5:2b` (2.7 to 3.1 GB) |
+| Hugging Face source | [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) |
+| Licence | Apache License 2.0 (card metadata `apache-2.0`; the Ollama page states none) |
+| Commercial use | Allowed under Apache 2.0 |
+| Why it was tried | Newer Qwen generation, 256K native window, non-thinking by default on the card |
+| Health / legal limits | Same as the other small models |
+| Disk | **Removed** by the owner: it returned empty answers; its one answer that was kept (JAN) added two sentences that are not in the file. Cause of the empty answers not established |
+
+```text
+docker compose exec ollama ollama pull qwen3.5:2b
+```
+
+## bge-m3 (embedding candidate, pulled, not the active alias)
 
 | Field | Value |
 | --- | --- |

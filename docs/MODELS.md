@@ -50,9 +50,19 @@ model cards: **read the card of the exact tag**, and add its row to `models/LICE
 | GLM | `glm4:9b` is the 2024 GLM-4-9B, whose licence is the GLM-4 custom licence (commercial use subject to registration), not MIT; the MIT licence belongs to later releases (4.5 and after). Confirm the tag and the sizes | The table lists the family as MIT |
 | Phi, Ministral 3, Mistral Nemo | Nothing to add | MIT and Apache 2.0 respectively |
 
+### Checked on 9 October 2026 (agent, from the live model cards)
+
+The reservations above are settled for the tags the owner pulled. All of them are **Apache License 2.0**: `ministral-3:3b`,
+`granite3.1-moe:1b` and `:3b`, `qwen2.5:1.5b` (the Qwen 2.5 card says every size except 3B and 72B is Apache 2.0), `qwen3:0.6b`
+and `:1.7b`, `qwen3.5:2b`, and `gemma4:e2b`, whose upstream card metadata says `apache-2.0` (the card text also links "Gemma 4's
+license terms": read that link before any sale, since Gemma 2 and 3 were under the Gemma Terms of Use). The Ollama library pages
+of `gemma4`, `qwen3` and `qwen3.5` state no licence, so the evidence is the upstream card; the licence file inside each Ollama
+conversion was not read. Rows: `models/LICENSES.md`. Quality and speed of the eight on the owner's PC:
+`docs/test-reports/small-model-comparison-1/README.md` (best: `ministral-3:3b`).
+
 ### Not on the list any more, and where they still are on the owner's machine
 
-`gemma2:2b`, `gemma3:1b`, `llama3.2:3b`, `llama3.2:1b`, `medgemma:4b` are in the owner's `.env` (`MODEL_ALIASES`) and were used in the
+`gemma2:2b`, `gemma3:1b`, `llama3.2:3b`, `llama3.2:1b`, `medgemma:4b` were in the owner's `.env` (`MODEL_ALIASES`) until 9 October 2026 and were used in the
 human passes. They stay usable **as test witnesses on the development machine only** until the owner replaces them; they are never
 a pilot or a shipped model. The aliases that already comply: `ministral-3:3b` (Ministral 3), `granite3.1-moe:3b` (Granite),
 `qwen2.5:1.5b` (Qwen 2.5, Apache), `gemma4:e2b` (Gemma 4, if its card confirms Apache 2.0), and the embedding model `nomic-embed-text` (Apache 2.0).

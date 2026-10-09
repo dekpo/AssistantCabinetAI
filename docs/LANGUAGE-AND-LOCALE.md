@@ -132,6 +132,17 @@ English instructions. Both must be templated in sprint 3:
    not to write one. Asking a model to reproduce a fixed legal sentence verbatim is unreliable and it
    hardcodes French into an English prompt; rendering it is both safer and translatable.
 
+## Consumer 4 — comparing names
+
+Names are compared by `knowledge::normalize` (accents, case, order, titles, particles, initials) and heard by
+`knowledge::phonetic` (a key per locale). Both are pure functions: the language-dependent words (titles,
+particles, file-name stop-words) are data the caller passes in, from the lexicon packs, never literals in Rust.
+The phonetic encoder is chosen by `locale`: French rules for `fr-*` and for any locale without its own, a
+conventional Soundex for `en-*`. A new language is a new encoder behind `PhoneticEncoder` and a new pack, not a
+change to the callers. A phonetic key is a hint that two names may be the same, never proof; the
+expectations (names that must and must not share a key) are a JSON file the product owner edits
+(`apps/desktop/src-tauri/tests/fixtures/knowledge/phonetic-fr.json`). See `docs/DECISIONS.md`, "Settled by KB lot 2".
+
 ## Never translated
 
 System prompts and prompt keys. Machine codes, JSON field names, API routes. Audit and log fields. The

@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "about": "The contract of the French phonetic key. 'collide' groups must all get the same key; 'differ' pairs must get different keys; 'observe' names are only printed in the collision table. Add a row, run: cargo test --test knowledge_names -- --nocapture. A collision is a hint to the resolver (a 'did you mean'), never a merge. Names are invented or very common; none is a real person's record.",
+  "collide": [
+    ["Dupont", "Dupond", "Dupon"],
+    ["Dupuis", "Dupuy"],
+    ["Lefebvre", "Lefèvre", "Lefevre"],
+    ["Thibault", "Thibaut", "Tibo"],
+    ["Philippe", "Filip"],
+    ["Caroline", "Karoline"],
+    ["Bernard", "Bernar"],
+    ["Rousseau", "Rousso"],
+    ["Durand", "Durant"],
+    ["François", "Francois"],
+    ["Françoise", "Francoise"],
+    ["Jean Dupont", "Jean Dupond", "Dr Jean Dupon"]
+  ],
+  "differ": [
+    ["Dupont", "Dumont"],
+    ["Martin", "Mercier"],
+    ["Martin", "Martine"],
+    ["Simon", "Simone"],
+    ["François", "Françoise"],
+    ["Laurent", "Laurence"],
+    ["Durand", "Durbin"],
+    ["Jean Dupont", "Jean Dumont"]
+  ],
+  "observe": [
+    "Lefort", "Lemaire", "Leclerc", "Moreau", "Fournier", "Girard", "Bonnet", "Garcia",
+    "Nguyen", "Benali", "Haddad", "Ng", "Roy", "Lee", "Petit", "Roux", "Morel", "Fontaine",
+    "Dubois", "Duboit", "Michel", "Michelle", "Gautier", "Gauthier", "Henri", "Henry",
+    "Nathalie", "Natalie", "Stéphane", "Stefan", "Sophie", "Sofi", "Guillaume", "Guyom"
+  ]
+}

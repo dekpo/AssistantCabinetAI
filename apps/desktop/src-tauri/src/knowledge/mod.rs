@@ -9,6 +9,8 @@
 //! is an interface catalogue entry (`docs/SESSION-KB-00-master.md`, I9 and I10).
 
 pub mod diagnostics;
+pub mod normalize;
+pub mod phonetic;
 pub mod store;
 
 /// What the extractor of the current build knows how to read. A source whose `kb_version` is lower

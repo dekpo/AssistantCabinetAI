@@ -373,13 +373,11 @@ fn path_like_tokens(question: &str) -> Vec<String> {
 /// Lowercase, accents removed, one canonical form for every spelling of an accent. What she types
 /// and what the folder holds are compared through this, so an accented "Esaie", "Esaie" and "ESAIE" are one
 /// name, and a Mac's two-code-point accent is the same as Windows's one.
+///
+/// The body lives in `knowledge::normalize::fold`, the one place the product turns text into a
+/// comparable form; this path stays because a dozen modules already import it.
 pub(crate) fn fold_text(text: &str) -> String {
-    use unicode_normalization::char::is_combining_mark;
-    use unicode_normalization::UnicodeNormalization;
-    text.nfd()
-        .filter(|c| !is_combining_mark(*c))
-        .flat_map(char::to_lowercase)
-        .collect()
+    crate::knowledge::normalize::fold(text)
 }
 
 /// `fold_text`, with every run of anything that is not a letter or digit reduced to one `-`, so a
@@ -839,5 +837,48 @@ mod tests {
         assert!(resolver
             .resolve_in_question("What dose was given to Esaie ?")
             .is_none());
+    }
+
+    /// The body `fold_text` had before it moved to `knowledge::normalize::fold`, kept verbatim so
+    /// the move is proved rather than believed.
+    fn fold_text_before_the_move(text: &str) -> String {
+        use unicode_normalization::char::is_combining_mark;
+        use unicode_normalization::UnicodeNormalization;
+        text.nfd()
+            .filter(|c| !is_combining_mark(*c))
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+
+    #[test]
+    fn fold_text_gives_the_same_output_on_the_names_of_every_fixture_folder() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let roots = [
+            manifest.join("../../../fixtures"),
+            manifest.join("../../../docs/test-reports/human-acceptance-pass-1/fixtures"),
+            manifest.join("tests/fixtures"),
+        ];
+        let mut names: Vec<String> = Vec::new();
+        for root in roots {
+            for entry in walkdir::WalkDir::new(root).into_iter().flatten() {
+                names.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+        // A Mac stores an accent as two code points; a Windows folder as one. Both must keep
+        // going through the same door.
+        names.extend(
+            [
+                "Compte-rendu \u{c9}sa\u{ef}e.pdf",
+                "Compte-rendu E\u{301}sai\u{308}e.pdf",
+                "\u{152}UVRE-d\u{2019}Aubign\u{e9}.docx",
+                "ma\u{ee}tre_Fran\u{e7}ois_2026-03.txt",
+            ]
+            .map(String::from),
+        );
+
+        assert!(names.len() > 20, "the fixture folders were not found");
+        for name in names {
+            assert_eq!(fold_text(&name), fold_text_before_the_move(&name), "{name}");
+        }
     }
 }

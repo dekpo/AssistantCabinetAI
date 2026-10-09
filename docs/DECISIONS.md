@@ -780,6 +780,17 @@ milestones give way to capabilities (`docs/ROADMAP.md`).
 | Machine codes | `knowledge_unavailable`, `knowledge_entity_not_found`, `knowledge_merge_refused`, localised in both catalogues. A knowledge failure never replaces the index's own `index_unavailable` for an index failure |
 | Nothing is visible yet | No command, no setting, no screen reads the knowledge base: lot 1 is the foundation. The tables fill in lot 4 (documents) and lot 5 (tables) |
 
+## The knowledge base never blocks indexing (owner decision, 9 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| The rule | Indexing and analysis keep working, even in a minimal way, whatever happens to the knowledge base. If a knowledge step fails (extraction, writing the knowledge delta, a locked or damaged `kb_*` table), the pass **bypasses the knowledge steps** and still indexes the document's chunks, so questions, retrieval and the Resets go on as before. The knowledge base is an addition to the product, never a condition of it |
+| The user is told | A bypassed step is reported at the end of the pass, in the user's language, as a partial failure: part of the analysis did not complete and running the analysis again is advised. It is not an error that stops the pass, and it is not silent. The report carries a machine code and counts (how many files), never a name or a passage |
+| Retrying is natural | A document whose knowledge step was bypassed is recorded with `kb_version = 0` or has no `kb_sources` row, so the next pass sees it as due (`should_skip` must take that into account in lot 4). No separate retry queue |
+| Where it is built | Lot 4 (document ingestion), which owns the extraction and extends `IndexSummary` with the knowledge summary and its interface strings: a knowledge failure is applied in a savepoint inside the document's transaction, rolled back alone, and the chunks are committed. Lot 5 does the same for tables. Lot 6 already falls back to the full selection when a lookup fails (invariant I4) |
+| Lot 1 as merged | The one case that still rolls the chunks back with the knowledge is a database error while applying the delta in `replace_document_with_knowledge`. With the empty delta lot 1 writes this is practically unreachable (a source upsert and a collection query). It is lot 4's first job to remove it, with a test that corrupts a `kb_*` table and checks that the document is still indexed and the pass reports the partial failure |
+| Operator logs | An incident log a maintenance operator could read is wanted, to trace failures at a practice. Deliberately **not** designed now: recorded in `docs/ROADMAP.md`, "Later, with no date" |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

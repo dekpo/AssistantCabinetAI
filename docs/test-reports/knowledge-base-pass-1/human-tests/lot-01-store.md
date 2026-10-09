@@ -82,7 +82,7 @@ is what you watch; every row has `kb_version=0` because no extractor exists yet.
 | B5 | Start. On the Documents card press **Réinitialiser** and confirm. Close, run the script | `documents` 0, `chunks` 0, `kb_sources` 0, **`tabular_inventories` still I0 and `tabular_workbooks` still W0** (the Data side is untouched); the 18 `kb_*` objects are still there | A `kb_*` object missing, the Data counts changed |
 | B6 | Start. **Analyser** on the Documents card again | All the files are analysed again, as in a first pass. Close, run the script: `kb_sources` equals the number of files analysed (D0 if you had the 6 fixtures, plus any other file in the folder), all `kb_version=0` | `kb_sources` different from `documents` |
 | B7 | Start. On the Data card press **Réinitialiser** and confirm. Close, run the script | `tabular_inventories` 0, `tabular_workbooks` 0; **`documents`, `chunks` and `kb_sources` unchanged from B6** | The Documents side moved |
-| B8 | Start. **Analyser** on the Data card | The 2 workbooks are analysed again. Script: `tabular_inventories` 2. `kb_sources` is **unchanged** (workbooks register in lot 5, not now) | A data source appears, or an error |
+| B8 | Start. **Analyser** on the Data card | The workbooks are analysed again. Script: `tabular_inventories` back to I0. `kb_sources` is **unchanged** (workbooks register in lot 5, not now) | A data source appears, or an error |
 
 ## Smoke test - the product as before
 
@@ -134,3 +134,25 @@ idea goes to the open questions of `lots/lot-01-store.md`.
 | # | What was seen | Bug or idea | Fixed in |
 | --- | --- | --- | --- |
 | | | | |
+
+## Run of 9 October 2026 (the owner)
+
+Branch `feat/kb-store`, her own index (backup taken first). Her folders held 8 documents and 5 files in the Data folder (3 analysed, 2 unreadable: the mail-merge template and its text copy, as before this lot). The settings had been reset by an earlier session, so both folders were chosen again before A1.
+
+| Step | Observed | OK? |
+| --- | --- | --- |
+| Prep 5 | `No knowledge base table`; D0 = 8, C0 = 8, I0 = 3, W0 = 1 | yes |
+| A1 | Cards as expected after choosing the folders again (8 analysed documents; 3 analysed workbooks); nothing new on screen | yes |
+| A2 | 4 old counts unchanged; 18 `kb_*` objects; `kb_entity_types 6`, `kb_source_domains 2`, `kb_meta 5`, the rest 0; `schema_version '1'`; journal `delete`, nothing beside; 0 foreign-key violations | yes |
+| A3 | Identical after a second start | yes |
+| B1 | `kb_sources 0` after Analyser (files unchanged) | yes |
+| B2 | New note: `documents 9`, `chunks 9`, `kb_sources 1` (`documents kb_version=0`), `kb_entities 0` | yes |
+| B3 | A word added: `kb_sources` still 1 | yes |
+| B4 | Message "1 document retiré du dossier, oublié de l'analyse" visible; `documents 8`, `kb_sources 0` | yes |
+| B5 | `documents 0`, `chunks 0`, `kb_sources 0`; `tabular_inventories 3` and `tabular_workbooks 1` untouched; 18 objects still there | yes |
+| B6 | `documents 8`, `kb_sources 8`, all `kb_version=0` | yes |
+| B7 | `tabular_inventories 0`, `tabular_workbooks 0`; `documents 8`, `kb_sources 8` unchanged | yes |
+| B8 | `tabular_inventories 3`, `tabular_workbooks 0`, `kb_sources 8` unchanged | yes |
+| S1-S7 | Count answered without the AI (8 files in her folder, not 6); CPAM radiation 1 February 2026 with its source; lease nine years, 1 April 2024 to 31 March 2033; maximum 620 on 8 rows; invoices against quote: engine sum 1 450 on 3 rows, quote 1 200,00 HT cited; the lease file answered from itself; the e-mail labelled "Réponse sans vos documents" | yes |
+
+Remarks: the wording of the model's answer to the invoices-against-quote question starts with "Non", which the sums do not support; that is the model (`gemma2:2b`), the figures printed by the engine and the quote are the expected ones, and it is not something this lot touches. The agent could not compare with a run on `main`. Findings: none.

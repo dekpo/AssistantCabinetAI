@@ -251,6 +251,10 @@ fn encode_french(token: &str) -> String {
         word.truncate(word.len() - 2);
         word.push(SOUNDED_E);
     }
+    // A doubled "l" before a final mute "e" after "e" ("Michelle", "Danielle", "Gabrielle") is the
+    // feminine form of a name that sounds the same ("Michel"). The people are not the same, so
+    // the key ends with a sounded vowel that the masculine form lacks.
+    let feminine_elle = word.len() >= 6 && word.ends_with(&['e', 'l', 'l', 'e']);
     let mut mute_e_stripped = false;
     if word.len() > 2 && word.last() == Some(&'e') {
         word.pop();
@@ -405,6 +409,9 @@ fn encode_french(token: &str) -> String {
         if key.chars().last() != Some(c) || c.is_ascii_digit() {
             key.push(c);
         }
+    }
+    if feminine_elle {
+        key.push('E');
     }
     key
 }

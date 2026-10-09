@@ -315,10 +315,12 @@ mod tests {
         assert!(block.starts_with("WORK_FOLDER_CONTEXT"));
         // The root travels as a folder name, so no separator and no home directory can appear.
         assert!(block.contains("\"root\":\"cabinet\""), "block: {block}");
-        assert!(
-            !block.contains(std::path::MAIN_SEPARATOR),
-            "no machine path: {block}"
-        );
+        // Paths in the block are relative and always use `/`, so the platform separator proves
+        // nothing: check the shapes of a machine path instead, the same on every system.
+        assert!(!block.contains('\\'), "no Windows path: {block}");
+        assert!(!block.contains(":/"), "no drive letter or URL: {block}");
+        assert!(!block.contains("\":\"/"), "no absolute path value: {block}");
+        assert!(!block.contains("root/"), "no parent of the root: {block}");
         assert!(!block.contains(&"a".repeat(64)), "no content hash");
         assert!(!block.contains("sha256"));
         assert!(!block.contains("sizeBytes"));

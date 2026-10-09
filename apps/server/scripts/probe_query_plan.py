@@ -8,7 +8,8 @@ misreading a good one. Never run against a real workbook; the schema here is a s
 fixture of its own, independent of `fixtures/`.
 
     uv run python scripts/probe_query_plan.py --url http://127.0.0.1:8080 --alias gemma2:2b
-    uv run python scripts/probe_query_plan.py --url http://127.0.0.1:8080 --alias gemma2:2b --question q2-beta-fr
+    uv run python scripts/probe_query_plan.py --url http://127.0.0.1:8080 --alias gemma2:2b
+        --question q2-beta-fr
 
 When this finds a real model writing a reply `tabular::query_plan` does not handle well, the
 established pattern (`src-tauri/src/tabular/query_plan.rs`, every test named
@@ -56,7 +57,9 @@ SCHEMA = [
 
 QUESTIONS = {
     "q1-total-en": "What's the grand total we've taken in altogether?",
-    "q1-total-fr": "Quel est le total general que nous avons encaisse, toutes societes confondues ?",
+    "q1-total-fr": (
+        "Quel est le total general que nous avons encaisse, toutes societes confondues ?"
+    ),
     "q2-beta-en": "How much have we taken in from Beta specifically?",
     "q2-beta-fr": "Quelle est la somme encaissee avec Beta uniquement ?",
     "q5-group-en": "Which trading partner brought in the most money?",
@@ -73,7 +76,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:8080")
     parser.add_argument("--alias", required=True)
-    parser.add_argument("--question", choices=sorted(QUESTIONS), default=None, help="one key, or every one if omitted")
+    parser.add_argument(
+        "--question",
+        choices=sorted(QUESTIONS),
+        default=None,
+        help="one key, or every one if omitted",
+    )
     arguments = parser.parse_args()
 
     keys = [arguments.question] if arguments.question else list(QUESTIONS)

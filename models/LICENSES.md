@@ -108,7 +108,7 @@ docker compose exec ollama ollama pull granite3.1-moe:1b
 | Hugging Face source | [Qwen/Qwen3-1.7B](https://huggingface.co/Qwen/Qwen3-1.7B), [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) |
 | Licence | Apache License 2.0 (card metadata `apache-2.0`; the Ollama page states none) |
 | Commercial use | Allowed under Apache 2.0 |
-| Why these | Fastest usable small models (1.7b about one minute per answer, 0.6b about half a minute). Native window 32 768. **Thinking is on by default on the card**; the gateway does not switch it off, which may cost time (not measured) |
+| Why these | Fastest usable small models (1.7b about one minute per answer, 0.6b about half a minute). Native window 32 768. **Thinking is on by default on the card**; the gateway does not switch it off. Measured on 9 October 2026: 44.8 s with it, 10.9 s with `think: false`, on a 2 000-token prompt (`small-model-comparison-1`, section 10) |
 | Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. Do not use for diagnosis, prescriptions, or any send (mail, MSSanté, DMP). |
 | Next review | The 1.7b is the speed challenger of the second comparison pass; the 0.6b answered in English and invented a subject, dropped |
 

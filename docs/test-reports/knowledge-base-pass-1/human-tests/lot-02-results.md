@@ -7,7 +7,7 @@ Protocol: `lot-02-normalize-phonetic.md`. Verbatim conversations: `docs/test-rep
 ## What was run, what was not
 
 - **Part B, the essential subset: all 26 starred steps were run** (D1, D4, D5, D6, D8, D9, C1, C3, C6, C7, C9, C10, T1, T2, T4, T5, T7, T9, T10, T12, T15, T16, M1, M2, M3, N1). The unstarred steps D2, D3, D7, D10, D11, C2, C4, C5, C8, T3, T6, T8, T11, T13 and T14 were **not run**. P1 and P2 were not reported separately; D4 shows the eight documents as analysed.
-- **Part A (A1 to A8): not reported yet.** The table of sounds was read before; `git status` shows `phonetic-fr.json` unmodified, which is the state A6 asks for. The owner confirms A1 to A8 in one line before the merge.
+- **Part A (A1 to A8): waived by the owner on 9 October 2026 ("A abandonnée, lot 2 accepté"); lot 2 accepted.** The agent replayed A1, A4, A5, A7 and A8 itself on a backed-up copy of the file (22 and 16 tests pass, the wrong row fails by name, the file restored); A2 and A3 were read by the owner, who decided the table (only `Michel`/`Michelle` moved to `differ`). Original note: The table of sounds was read before; `git status` shows `phonetic-fr.json` unmodified, which is the state A6 asks for. The owner confirms A1 to A8 in one line before the merge.
 - **The Sources disclosure was not pasted** for any answer. The criterion "the only source is X" is therefore **not verified** anywhere below; the content of each answer comes from the expected file in every case.
 - The default alias that day was `qwen2.5:1.5b`. Block C, D5 to D9 and N1 were also asked to other models; see the comparison.
 
@@ -52,7 +52,7 @@ Two verdicts are given where an AI wrote the answer: the **product** (routing, e
 
 | Step | Model | Expected (see protocol) | Observed | Verdict |
 | --- | --- | --- | --- | --- |
-| A1 to A8 | n/a | see Part A | not reported | **NOT-RUN** (owner to confirm) |
+| A1 to A8 | n/a | see Part A | A2 and A3 read by the owner; A1, A4, A5, A7, A8 replayed by the agent | **WAIVED** by the owner, lot accepted |
 | P1, P2 | n/a | 8 files; 3 tables + 2 unreadable | D4 lists 8 analysed; the unreadable pair not shown | NOT-RUN (P1 implied PASS) |
 | D1 to D11 | various | as above | D1, D4, D5, D6, D8, D9 run | PASS, with KBD-05 on D9; D2, D3, D7, D10, D11 NOT-RUN |
 | C1 to C10 | `qwen2.5:1.5b` | as above | C1, C3, C6, C7, C9, C10 run | C1 and C3 PASS; C6, C7, C9 PASS-WITH-ISSUES; **C10 FAIL** (model); C2, C4, C5, C8 NOT-RUN |
@@ -70,4 +70,4 @@ Two verdicts are given where an AI wrote the answer: the **product** (routing, e
 | 4 | CI has never been green (0 of 40 runs): `pnpm` 9 in the workflow against the project's `pnpm-workspace.yaml`, and 3 `ruff` findings in a script | Pre-existing, process | KBD-07, open |
 | 5 | The default model `qwen2.5:1.5b` gives a wrong or invented fact in 2 of its 8 wider answers (D8, C10) and in 2 of the 5 shared questions (D6, M1) | Idea: change `DEFAULT_MODEL_ALIAS` for human tests | comparison README, section 9 |
 | 6 | A model returning an empty answer (`qwen3.5:2b`): what the product showed was not reported | Question to the owner | comparison README, section 8 |
-| 7 | A name the encoder gets wrong | None seen: Part A not reported | to add to `phonetic-fr.json` if any |
+| 7 | A2 read by the owner: she judged eight lines as "not the same sound"; six are French homophones and stay (the key is a code, `Y` is the sound "u"). Only `Michel`/`Michelle` (a man and a woman) was moved to `differ` | Owner decision, done in the lot | `phonetic-fr.json` and a rule in `phonetic.rs` (key `MIXELE`); the table now has 51 keys |

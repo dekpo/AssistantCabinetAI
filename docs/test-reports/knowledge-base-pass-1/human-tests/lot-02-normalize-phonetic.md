@@ -29,16 +29,16 @@ It does not prove that names are found in your documents (lot 4), that two spell
 
 Type: `cargo test --test knowledge_names -- --nocapture`
 
-Expected (you did this one, it matched): `test result: ok. 22 passed; 0 failed`, and in the middle a table starting `French phonetic key (fr-rules:1), 72 names, 50 keys`.
+Expected (you did this one, it matched): `test result: ok. 22 passed; 0 failed`, and in the middle a table starting `French phonetic key (fr-rules:1), 72 names, 51 keys`.
 
 ### A2 - Read the first block ("names that sound alike")
 
-Nothing to type. In the output of A1, find the first block. Expected lines, among others: `DYPo  Dupon = Dupond = Dupont`, `LEFEVR  Lefebvre = Lefevre = Lefèvre`, `TIBO  Thibault = Thibaut = Tibo`, `FILI  Filip = Philippe`, `DYRa  Durand = Durant`, `DYBUA  Dubois = Duboit`, `MIXEL  Michel = Michelle`, `aRI  Henri = Henry`, `FRaSUA  Francois = François`.
+Nothing to type. In the output of A1, find the first block. Expected lines, among others: `DYPo  Dupon = Dupond = Dupont`, `LEFEVR  Lefebvre = Lefevre = Lefèvre`, `TIBO  Thibault = Thibaut = Tibo`, `FILI  Filip = Philippe`, `DYRa  Durand = Durant`, `DYBUA  Dubois = Duboit`, `aRI  Henri = Henry`, `FRaSUA  Francois = François`.
 **Your decision, not a bug:** for each line, would you accept that the product offers the second name as "did you mean?" when it meets the first? If not, write down the line; we move it to `"differ"` (see A5).
 
 ### A3 - Read the second block ("names with a key of their own")
 
-Nothing to type. Expected: `DYMo  Dumont` is not on the line of Dupont; `MARTe  Martin` and `MARTIN  Martine` are two lines; `SIMo  Simon` and `SIMON  Simone` are two lines; `LORa  Laurent` and `LORaS  Laurence` are two lines; `FRaSUAZ  Francoise = Françoise` is a different line from `FRaSUA  Francois = François`.
+Nothing to type. Expected: `DYMo  Dumont` is not on the line of Dupont; `MARTe  Martin` and `MARTIN  Martine` are two lines; `SIMo  Simon` and `SIMON  Simone` are two lines; `LORa  Laurent` and `LORaS  Laurence` are two lines; `MIXEL  Michel` and `MIXELE  Michelle` are two lines (the owner's decision of 9 October 2026: same sound, different people, so a rule keeps them apart); `FRaSUAZ  Francoise = Françoise` is a different line from `FRaSUA  Francois = François`.
 
 ### A4 - Add a row that must pass
 

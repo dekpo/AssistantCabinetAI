@@ -12,7 +12,7 @@ It is **one run per cell**, five shared questions, a rubric written by the agent
 
 | Item | Value |
 | --- | --- |
-| Machine | The owner's development PC. Docker VM of about 11.5 GiB, **CPU only** (`.env` comment of 7 October), `OLLAMA_MAX_LOADED_MODELS=1`: a model is loaded when it is asked for, so the first answer of a model may include the load time (the order the owner asked in was not recorded) |
+| Machine | The owner's development PC. Docker VM of about 11.5 GiB, **CPU only** (`.env` comment of 7 October), `OLLAMA_MAX_LOADED_MODELS=1`: a model is loaded when it is asked for, and **unloaded after 5 minutes idle** (`OLLAMA_KEEP_ALIVE` is not set, the Ollama log says `5m0s`). **Measured afterwards (section 10): loading takes 36 to 210 seconds on this PC, so the times below probably include model swaps; the order the owner asked in was not recorded.** Read the speed columns as orders of magnitude, not as inference speed |
 | Gateway | `MAX_OUTPUT_TOKENS=2048`, `LLM_REQUEST_TIMEOUT_SECONDS=300`, `DEFAULT_OUTPUT_LOCALE=fr-FR`; no setting that turns a model's "thinking" on or off (no `think` handling in `apps/server`) |
 | Time | The `Généré par <model> en <time>` line of each answer |
 | Conversation | Cleared before every question |
@@ -65,7 +65,7 @@ By kind of question (mean time, seconds): one file (JAN, MAR) · documents plus 
 | `granite3.1-moe:1b` | 31 | 32 | 47 |
 | `qwen3:0.6b` | 30 | 38 | 28 |
 
-Reading: the file does not change the time much for the small models (an excerpt of one page is short). A longer prompt (documents plus a table) adds about 15 to 20 % on `gemma4:e2b`, `ministral-3:3b` and `qwen3:1.7b`, and nothing visible on the others. The one outlier is `gemma4:e2b` writing an e-mail with nothing selected: 5m34, more than twice its other answers, with the shortest prompt. Unexplained. Two candidate causes, neither measured: the model thinks before it writes (the gateway neither asks for thinking nor hides it), or it simply wrote a longer text.
+Reading: the file does not change the time much for the small models (an excerpt of one page is short). A longer prompt (documents plus a table) adds about 15 to 20 % on `gemma4:e2b`, `ministral-3:3b` and `qwen3:1.7b`, and nothing visible on the others. The one outlier is `gemma4:e2b` writing an e-mail with nothing selected: 5m34, more than twice its other answers, with the shortest prompt. Explained in part by section 10: loading `gemma4:e2b` took 210 s on its own, and on a real prompt it also writes about 1 600 characters of hidden reasoning before answering.
 
 ## 5. The wider battery on `qwen2.5:1.5b` (the default alias)
 
@@ -104,6 +104,7 @@ Recorded in `docs/test-reports/knowledge-base-pass-1/defects-register.md` with t
 - **KBD-04** the file name appended by the "which workbook?" button is read as filter words (`Compris comme : date en 2026`, `date en mars et date en 2026`). The counts were right only because every row of both files matches.
 - **KBD-05** the number guard warns about a correct social security number because the source splits it across a line.
 - **KBD-06** on 7 of 14 mixed answers (M1 and M2, seven models), the model's sentence contradicts or dismisses the engine block printed under it.
+- **KBD-08** a model that returns no text (`qwen3.5:2b`) is shown as a blank message, with no error.
 - **KBD-07** the continuous integration has never been green (0 of 40 runs since 21 September). Not a model matter; found while checking whether lot 2 could be merged.
 
 One thing is **not** a window effect: the Ollama log (`docker logs assistant-cabinet-ollama`, 108 completed requests, chat and embedding, since the container started on 9 October at 15:55 UTC) has **no `truncated = 1`**; the largest prompt-plus-answer was 2 941 tokens, under the 4 096 window; the windows applied were 4096 and 8192 (2048 is the embedding model's). So the 4 096 windows did not cut these prompts. They would on a long document: the desktop may send up to about 8 000 tokens of excerpts plus a 2 048-token answer (the `.env` comment).
@@ -115,22 +116,44 @@ The log covers one container run, not necessarily every question of the afternoo
 1. One run per cell; a model's answer varies from one run to the next. Repeat each question three times.
 2. Five shared questions, three of them on facts. Add the refusals (C7, C10: "the documents do not say"), which matter most for this product, D8 and D9, and a table question the model must phrase.
 3. **Two window sizes are mixed** (8192 for `ministral-3:3b` and `granite3.1-moe:3b`, 4096 for the others). `granite3.1-moe:3b` scores low at 8192, so the window alone does not make a model good, but the data cannot separate the two effects. Run every model at the same window (8192) before concluding that ministral's lead is the model and not the window.
-4. Record the thinking: ask Ollama for the same prompt with thinking off (`think: false`) and compare time and score for `qwen3:*` and `gemma4:e2b`. If the gateway can switch it off, the two thinking models may move a long way.
-5. Warm and cold timings separately (load time included or not), and the time to the first word.
+4. Thinking: **measured in part on the same day (section 10)**: it exists, it is hidden, and `think: false` removes it. Still to do: score the answers of `qwen3:1.7b` and `gemma4:e2b` with thinking off, since the quality may change.
+5. Warm and cold timings separately: **measured in part (section 10)**. Still to do: ask every model its questions in a row (one model at a time, not one question across models) so that only the first answer pays the load.
 6. Open the Sources disclosure and paste it: no answer here was judged on its sources.
 7. Write the machine down (CPU, RAM, Docker memory). **None of the times transfers to the Mac mini M5 Pro**; the order of the models by quality probably does, their order by speed does not.
-8. Find out what the product showed for the `qwen3.5:2b` empty answers (an error, a blank, a spinner?). An empty model answer should be reported to the user in words.
+8. What the product showed for the `qwen3.5:2b` empty answers: the owner reports `Assistant: (vide)`, then Sources, then `Généré par qwen3.5 en 1m25s`. A blank message with no error: KBD-08. The probable cause is the hidden reasoning of section 10 using up the 2 048-token budget; for this model it is not measured, it was removed from disk.
 
 ## 9. Recommendation
 
 - **Most precise and, of the two that are as precise, the faster: `ministral-3:3b`** (9 of 10 at about 1m45 here; `gemma4:e2b` scores the same at 3m07). With `gemma4:e2b` it is the only one that never contradicts the engine block. It is the model to use for the human tests of the lots that follow, and the reference to beat.
-- **Fastest model that stays usable: `qwen3:1.7b`** (5 of 10 at about one minute). Keep it as the speed challenger for the second pass, with thinking switched off if possible.
+- **Fastest model that stays usable: `qwen3:1.7b`** (5 of 10 at about one minute). Keep it as the speed challenger for the second pass **with thinking off**, which made it four times faster on a 2 000-token prompt (section 10); its score may change either way.
 - **`gemma4:e2b`:** keep for the Mac mini, where its time may collapse.
 - **Drop for factual use:** `qwen3:0.6b`, `granite3.1-moe:1b`, `qwen2.5:1.5b`, `qwen3.5:2b`. `granite3.1-moe:3b` has good excerpts and fails on mixed questions.
 - **`DEFAULT_MODEL_ALIAS=qwen2.5:1.5b` should change** (to `ministral-3:3b`) for any human test of a lot that depends on a model's sentence. That is the owner's setting and was not changed. The `models/LICENSES.md` note "latency witness, not a pilot quality candidate" already said as much.
 
 No single model is both the fastest and the most precise on this PC: the fast ones invent, the precise ones take one to three minutes. That gap is what the Mac mini and the thinking test have to close.
 
-## 10. The deterministic steps
+## 10. Measured afterwards: load time and hidden reasoning (same day, same PC)
+
+The agent called Ollama directly (`/api/chat`, the call the gateway makes) with a prompt of about 2 000 tokens (six copies of the January excerpt and the JAN question), using the counters Ollama returns. Cold means another model was resident just before.
+
+| Model | Cold load | Cold, reading the prompt | Warm answer | Hidden reasoning (characters) | Warm with `think: false` |
+| --- | --- | --- | --- | --- | --- |
+| `ministral-3:3b` | 137 s | 98 s | 30 s (148 tokens) | none | not applicable |
+| `qwen3:1.7b` | 64 s | 41 s | 44.8 s (398 tokens) | about 1 100 | **10.9 s (101 tokens)** |
+| `gemma4:e2b` | **210 s** | 51 s | 54.6 s (548 tokens) | about 1 650 | not measured on this prompt |
+| `qwen3:0.6b` (one short question) | n/a | n/a | 4.6 s (157 tokens) | about 500 | 0.8 s (12 tokens) |
+
+Cold load on a one-line question: `granite3.1-moe:1b` 36 s, `qwen2.5:1.5b` 49 s, `ministral-3:3b` 154 s.
+
+What this changes:
+
+1. **The speed column of section 4 mixes loading and answering.** `ministral-3:3b` answered in 30 s warm and 264 s cold; the owner's 85 to 133 s sit between the two. The precision ranking is not affected; the speed ranking is an order of magnitude only.
+2. **The thinking hypothesis is confirmed** for `qwen3` and for `gemma4:e2b` on a real prompt (not on a one-line question, where `gemma4:e2b` did not think). The reasoning is generated, takes time, counts against the 2 048-token answer budget, and is thrown away by the gateway, which reads only `message.content` (`providers/ollama.py`). With thinking off, `qwen3:1.7b` was four times faster on this prompt; the visible answer of the one-line test was identical on `qwen3:0.6b`. Whether the quality holds on the real questions is the second pass's job.
+3. **`think: false` is accepted by every model tried** (`ministral-3:3b`, `granite3.1-moe:1b`, `qwen2.5:1.5b`, `qwen3:*`, `gemma4:e2b`): no error on a model without thinking. Asking for thinking on such a model (`think: true`) is refused with HTTP 400 (`"ministral-3:3b" does not support thinking`), so the setting should only ever send "off".
+4. **Idle time costs a reload.** With the default 5 minutes, the question asked after a quiet moment in a practice waits for the load: 36 to 210 s here. The Mac mini has the memory to keep a model resident for hours; this is the setting `OLLAMA_KEEP_ALIVE`, not set in `compose.yaml` today.
+
+The probe prompt is longer than the product's typical 700 to 1 100 tokens, and a second identical prompt is read from Ollama's cache (0.2 s), so warm figures understate the reading cost.
+
+## 11. The deterministic steps
 
 Not a model matter. Every step answered without the AI matched its expected value: D1, D4, T1, T2, T4, T5, T7, T9, T10, T12, T15, M3 (the totals 2 215, 620, 550 / 1 450 / 215, 3, 4, "Salle 3, 50"). Details: `docs/test-reports/knowledge-base-pass-1/human-tests/lot-02-results.md`.

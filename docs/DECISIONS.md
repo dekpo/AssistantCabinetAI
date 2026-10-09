@@ -807,6 +807,28 @@ milestones give way to capabilities (`docs/ROADMAP.md`).
 | Encoders by locale | `FrenchPhonetic` (`fr-rules`, version 1) and `EnglishPhonetic` (a conventional Soundex, `en-soundex`, version 1) behind `PhoneticEncoder`; `encoder_for_locale` picks one and falls back to French like every other locale lookup. `signature()` is `id:version`, the string lot 3 stores in `kb_meta.phonetic_version` and compares at open to recompute stored keys |
 | No new dependency | About 200 lines of rules, `unicode-normalization` already in use. No phonetic crate was evaluated: the rules are short, readable and the owner's to correct |
 
+## Defects found during the Knowledge Base programme (owner instruction, 9 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Where they live | `docs/test-reports/knowledge-base-pass-1/defects-register.md`, versioned. Every defect found by an agent preparing a test, by a lot's tests or by the owner's replay is recorded there at once, with its evidence, whether or not the KB caused it |
+| What is analysed | Each defect is checked against the lots still to come: does it get in the way of the KB, or will it? The answer, with the lot numbers and the reason, is part of the row |
+| A blocker | Fixed first, in its own `fix/kb-<topic>` branch from `kb/integration`, before the lot it blocks. The agent stops and tells the owner |
+| Anything else | Left alone during the programme (each lot stays reviewable) and marked `deferred`. Lot 11 proposes the **targeted fix battery** for all of them, and its report is not signed off while one has no proposed fix. The fixes are to be done after the KB, not forgotten |
+| Who knows | The always-applied rule `.cursor/rules/kb-programme.mdc` (duty 5), the workflow (section 2.4), the master, the launchers of lots 3 to 11 and the status file |
+
+## Names calibrated on real data (owner decision, 9 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Why | The French phonetic key and the English Soundex of KB lot 2 are checked only against a table written with them. Public lists of real names break that circle, and the speech work that follows the KB (repair of dictated names) depends on the same keys |
+| Where | A lot inserted between lot 2 and lot 3, "lot 2 bis", branch `feat/kb-names-calibration`. It changes the encoders' rules and fixtures and adds a measuring harness; it changes no schema, no other lot's scope and no threshold of another lot |
+| Sources | Insee "Fichier des noms" and "Fichier des prénoms" (Licence Ouverte 2.0), US Census 2010 surnames, US SSA baby names. Licences and what citing them requires: `docs/DATA-SOURCES.md`. Full files are never versioned; only small derived samples, with the citation in the README |
+| French and English together | Same harness, same lot, instead of a second pass later. Reason: one tool, one review, and dictation in English is wanted for the speech work |
+| Owner's time | Kept short: automatic measures first (empty or coarse keys, determinism), then the sex rule (a masculine and a feminine first name that are clearly gendered never share a key, a source of `differ` rows only), then one review of at most 100 pairs with a pre-filled proposal where she marks only the exceptions |
+| Thresholds | The plan uses a minimum token length with "same key and edit distance <= 1" in three places that disagree: 6 characters (master section 7, signal 6), 4 (targeting fallback, lot 6), 4 (transcript repair, lot 9). The lot measures the number of suggestions per realistic selection at lengths 3 to 6 and recommends; the constants stay with lots 3, 6 and 9 |
+| What it does not do | No second encoder for names of other origins, no pronunciation oracle, no clinical vocabulary (drug names are a separate decision, see SpeechLab D-036), no About page |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

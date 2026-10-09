@@ -21,6 +21,7 @@ These hold from the prototype, not "later".
 | --- | --- | --- | --- |
 | Business files | Yes (local disk or existing store) | No | Open WebUI Knowledge upload |
 | Index and embeddings | Yes | No | A central PGVector or Chroma of case files |
+| Knowledge base (names found in her files, where they were found, counts) | Yes, in the same local index file | No | A copy on the server or the gateway, a name in any log, a name in any model-facing string |
 | Chat history | Yes, encrypted (Windows profile) once conversations are saved; today application memory only, lost on restart | Memory only, for the request that carries it (sprint 2a.8 sends recent exchanges with each question, never past excerpts) | Open WebUI chat logs over real files |
 | Excerpts sent to the LLM | Ephemeral on send | Memory only | Log files, clear swap, crash dumps |
 | Request register | Local copy possible | Yes (metadata) | Prompt or answer bodies |
@@ -49,6 +50,33 @@ entirely in Rust, before anything is sent: the gateway never sees the candidate 
 matched, only the already-filtered, already-computed result if one was found. Numeric verification and
 citation checking, after the model writes, read the model's own reply and the evidence already sent -
 nothing new leaves the workstation for either check.
+
+**The knowledge base: a directory of names in the local index (KB programme, lot 1,
+`docs/SESSION-KB-00-master.md`).** The `kb_*` tables live in the same `index.sqlite3` as the chunks, on
+the workstation, under the same protection (application-local data folder, never the roaming profile, disk
+encryption mandatory before a real pilot). They hold the **names** of the people, organisations, places,
+identifiers, items and terms found in the files the user has analysed, their aliases and phonetic keys, which
+file and which chunk or column mentions each one, and counts and extractor codes. They hold **no passage of a
+document**. Because a list of the names found in a doctor's files is personal data in its own right, the DPIA
+draft owed before real documents must carry this line: *names found in the files are kept in a local table,
+per workstation, never synchronised, never sent to the gateway, to Ollama or to Open WebUI, and never
+written to a log as text.* Diagnostics and timing lines hold ids, counts and milliseconds only.
+
+What each reset and each lifecycle event does to it (the same transaction as the event itself, so a failure
+leaves a whole index rather than a half-erased one):
+
+| Event | Knowledge base |
+| --- | --- |
+| A document is analysed, or analysed again after it changed | Its source is recorded with its content hash, in the transaction that writes its chunks. A change replaces the automatic rows of that source; the manual rows stay |
+| A document leaves the Documents folder (start of the next Analyse) | Its source and everything learned only from it are removed; an automatic entity nothing else supports is collected |
+| Documents Reset | Every `documents` source goes, and the automatic entities nothing else supports. Manual entities, aliases and attributes stay (only their mentions in those files disappear). The Data side is untouched |
+| A workbook leaves the Data folder; Data Reset | The same, for the `data` sources. The Documents side is untouched. The typed cell cache is a cache of the file, not knowledge: clearing it removes no knowledge row |
+| "Reset the whole knowledge base" (a later dialog; `IndexStore::clear_knowledge(true)`, no command yet) | Everything, manual entities, aliases, attributes, tombstones and the operation log included. Files, chunks and inventories are never touched |
+| Deleting an entity (a later dialog) | A tombstone: its mentions and relations go, its name stays so that the next Analyse does not recreate it, and a restore brings it back. No file, chunk or inventory row is touched |
+
+After any of these, `knowledge::store::integrity_check` reports zero orphans. The index is per workstation:
+nothing is synchronised, so manual edits differ between machines, and copying `index.sqlite3` copies the
+knowledge base with it.
 
 ## The workstation is not automatically local
 

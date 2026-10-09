@@ -15,10 +15,33 @@ use rusqlite::Connection;
 use crate::chunking::Chunk;
 use crate::error::AppError;
 use crate::extraction::PageOrigin;
+use crate::knowledge::{self, Domain, KnowledgeDelta, SourceRef};
 use crate::tabular::inventory::TabularInventory;
 use crate::tabular::Workbook;
 
 const INDEX_FILE_NAME: &str = "index.sqlite3";
+
+/// How long a connection waits for a lock held by another connection before giving up with a
+/// busy error. Three seconds is longer than any write the application makes and short enough that
+/// a stuck writer shows up as an error rather than as a frozen window.
+const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// The two settings every connection to the index must have. SQLite keeps both per connection and
+/// starts each one with foreign keys off and no waiting, so a connection opened by anything other
+/// than `IndexStore::open_at` (a second reader, a test) calls this itself.
+///
+/// No WAL: the journal mode changes the files that sit beside `index.sqlite3`, which the Reset and
+/// the backup instructions assume do not exist (`docs/OPERATIONS.md`). Measure first, decide
+/// separately.
+pub fn configure_connection(connection: &Connection) -> Result<(), AppError> {
+    connection
+        .pragma_update(None, "foreign_keys", true)
+        .map_err(|_| AppError::IndexUnavailable)?;
+    connection
+        .busy_timeout(BUSY_TIMEOUT)
+        .map_err(|_| AppError::IndexUnavailable)?;
+    Ok(())
+}
 
 pub struct IndexStore {
     connection: Connection,
@@ -73,6 +96,7 @@ impl IndexStore {
             std::fs::create_dir_all(parent).map_err(|_| AppError::IndexUnavailable)?;
         }
         let connection = Connection::open(path).map_err(|_| AppError::IndexUnavailable)?;
+        configure_connection(&connection)?;
         Self::migrate(&connection)?;
         Ok(Self { connection })
     }
@@ -125,7 +149,30 @@ impl IndexStore {
             "TEXT NOT NULL DEFAULT 'text_layer'",
         )?;
         Self::ensure_column(connection, "chunks", "confidence", "REAL")?;
+        // After the index's own tables: the knowledge base lives in the same file and is purely
+        // additive, so a database from before it exists is opened and extended, never rewritten.
+        // A schema that cannot be completed leaves the file in a state nobody has tested, so it is
+        // the index that cannot be opened, not "the knowledge base is unavailable".
+        crate::knowledge::store::ensure_schema(connection)
+            .map_err(|_| AppError::IndexUnavailable)?;
         Ok(())
+    }
+
+    /// The connection, for `knowledge::store` to run its reads beside the index's own. Not public:
+    /// the index stays the owner of the file, and only code inside the crate that belongs to the
+    /// same feature may reach it. Nothing in the product reads the knowledge base yet (lot 6 does),
+    /// hence the allowance.
+    #[allow(dead_code)]
+    pub(crate) fn connection(&self) -> &Connection {
+        &self.connection
+    }
+
+    /// A transaction on the index's connection, for work that must succeed or fail together with
+    /// the index's own rows. Commit it, or drop it to roll everything back.
+    pub(crate) fn transaction(&mut self) -> Result<rusqlite::Transaction<'_>, AppError> {
+        self.connection
+            .transaction()
+            .map_err(|_| AppError::IndexUnavailable)
     }
 
     fn ensure_column(
@@ -186,6 +233,10 @@ impl IndexStore {
     /// Replace everything stored for one file: its chunks, its FTS rows, and its document
     /// record. Called before inserting fresh chunks, so a shrunk or re-worded file cannot leave
     /// a stale chunk behind that later gets cited.
+    ///
+    /// The knowledge base is told that the source exists and that no extractor has read it
+    /// (`KnowledgeDelta::empty`); `replace_document_with_knowledge` is the same write with the
+    /// knowledge the extraction found.
     pub fn replace_document(
         &mut self,
         relative_path: &str,
@@ -196,10 +247,50 @@ impl IndexStore {
         ocr_engine: Option<&str>,
         ocr_engine_version: Option<&str>,
     ) -> Result<(), AppError> {
-        let tx = self
-            .connection
-            .transaction()
-            .map_err(|_| AppError::IndexUnavailable)?;
+        let source = SourceRef {
+            domain: Domain::Documents,
+            relative_path: relative_path.to_string(),
+            content_id: sha256.to_string(),
+        };
+        self.replace_document_with_knowledge(
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            embeddings,
+            ocr_engine,
+            ocr_engine_version,
+            &KnowledgeDelta::empty(source),
+        )
+    }
+
+    /// `replace_document`, with what extraction learned from the file. The chunks, their full-text
+    /// rows, the document record and the knowledge delta are written in **one transaction**: an
+    /// error anywhere (a delta that cannot be applied, a full disk) rolls all of it back, and the
+    /// file keeps exactly what it had. The caller calls this only once every embedding exists, which
+    /// is already the boundary `indexing::run` keeps.
+    ///
+    /// The delta must describe this very file: a different domain, path or content hash is a
+    /// programming error and is refused before anything is written.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_document_with_knowledge(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        embeddings: &[Vec<f32>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+        delta: &KnowledgeDelta,
+    ) -> Result<(), AppError> {
+        if delta.source.domain != Domain::Documents
+            || delta.source.relative_path != relative_path
+            || delta.source.content_id != sha256
+        {
+            return Err(AppError::Internal);
+        }
+        let tx = self.transaction()?;
         tx.execute(
             "DELETE FROM chunks WHERE relative_path = ?1",
             [relative_path],
@@ -259,6 +350,9 @@ impl IndexStore {
             ],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
+
+        // Last, and in the same transaction: if this fails, the chunks above are discarded with it.
+        knowledge::store::apply_delta(&tx, delta)?;
 
         tx.commit().map_err(|_| AppError::IndexUnavailable)?;
         Ok(())
@@ -345,16 +439,34 @@ impl IndexStore {
     /// held open cannot be removed underneath it. One transaction, so a failure halfway leaves a
     /// whole index rather than a half-erased one. Nothing in the work folder is touched - this
     /// forgets what was read, never what was read *from* (`docs/PRIVACY-AND-SECURITY.md`).
+    ///
+    /// What the knowledge base learned from those documents goes in the same transaction
+    /// (`knowledge::store::clear_domain`): the Documents Reset removes the documents' sources and
+    /// the automatic entities nothing else supports. Manual entities and the Data folder's
+    /// knowledge stay.
     pub fn clear(&mut self) -> Result<(), AppError> {
-        let tx = self
-            .connection
-            .transaction()
-            .map_err(|_| AppError::IndexUnavailable)?;
+        let tx = self.transaction()?;
         tx.execute_batch(
             "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;",
         )
         .map_err(|_| AppError::IndexUnavailable)?;
+        knowledge::store::clear_domain(&tx, Domain::Documents)?;
         tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// Forget what the knowledge base holds, on its own. Without `include_manual`, the sources and
+    /// everything automatic go and the user's manual entities, aliases and attributes stay; with
+    /// it, the whole base is emptied. Files, chunks and inventories are never touched. Not wired
+    /// to a command yet: the knowledge dialog of a later lot calls it, after a confirmation.
+    pub fn clear_knowledge(&mut self, include_manual: bool) -> Result<(), AppError> {
+        let tx = self.transaction()?;
+        if include_manual {
+            knowledge::store::clear_everything(&tx)?;
+        } else {
+            knowledge::store::clear_all_automatic(&tx)?;
+        }
+        tx.commit().map_err(|_| AppError::KnowledgeUnavailable)?;
         Ok(())
     }
 
@@ -386,10 +498,7 @@ impl IndexStore {
             return Ok(gone);
         }
 
-        let tx = self
-            .connection
-            .transaction()
-            .map_err(|_| AppError::IndexUnavailable)?;
+        let tx = self.transaction()?;
         for path in &gone {
             // The FTS table mirrors `chunks` by `chunk_id`, so it is cleared from the same list
             // rather than from a second query that could disagree with it.
@@ -404,6 +513,8 @@ impl IndexStore {
             tx.execute("DELETE FROM documents WHERE relative_path = ?1", [path])
                 .map_err(|_| AppError::IndexUnavailable)?;
         }
+        // A vanished file takes its knowledge with it, in the same transaction.
+        knowledge::store::remove_sources(&tx, Domain::Documents, &gone)?;
         tx.commit().map_err(|_| AppError::IndexUnavailable)?;
         Ok(gone)
     }
@@ -645,10 +756,7 @@ impl IndexStore {
         if gone.is_empty() {
             return Ok(gone);
         }
-        let tx = self
-            .connection
-            .transaction()
-            .map_err(|_| AppError::IndexUnavailable)?;
+        let tx = self.transaction()?;
         for path in &gone {
             tx.execute(
                 "DELETE FROM tabular_inventories WHERE relative_path = ?1",
@@ -656,17 +764,21 @@ impl IndexStore {
             )
             .map_err(|_| AppError::IndexUnavailable)?;
         }
+        knowledge::store::remove_sources(&tx, Domain::Data, &gone)?;
         tx.commit().map_err(|_| AppError::IndexUnavailable)?;
         Ok(gone)
     }
 
     /// Forget every cached workbook inventory, and nothing else. The Data Folder card's Reset: the
     /// two folders are reset from two cards, independently, so this must never touch `documents`
-    /// or `chunks` - exactly as `clear` never touches this table.
+    /// or `chunks` - exactly as `clear` never touches this table. The workbooks' knowledge goes
+    /// with the inventories, in the same transaction; the documents' knowledge stays.
     pub fn clear_tabular_inventories(&mut self) -> Result<(), AppError> {
-        self.connection
-            .execute("DELETE FROM tabular_inventories", [])
+        let tx = self.transaction()?;
+        tx.execute("DELETE FROM tabular_inventories", [])
             .map_err(|_| AppError::IndexUnavailable)?;
+        knowledge::store::clear_domain(&tx, Domain::Data)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
         Ok(())
     }
 
@@ -818,6 +930,62 @@ mod tests {
             origin: crate::extraction::PageOrigin::TextLayer,
             confidence: None,
         }
+    }
+
+    #[test]
+    fn the_index_connection_enforces_foreign_keys_and_waits_for_locks() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+
+        let keys: i64 = store
+            .connection()
+            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+            .unwrap();
+        let wait: i64 = store
+            .connection()
+            .pragma_query_value(None, "busy_timeout", |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(keys, 1);
+        assert_eq!(wait, 3000);
+    }
+
+    #[test]
+    fn the_index_does_not_use_write_ahead_logging() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+
+        let mode: String = store
+            .connection()
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(
+            mode, "delete",
+            "no -wal or -shm file may appear beside the index"
+        );
+        assert!(!dir.path().join("index.sqlite3-wal").exists());
+    }
+
+    #[test]
+    fn a_connection_opened_elsewhere_gets_the_same_settings_from_configure_connection() {
+        let connection = Connection::open_in_memory().unwrap();
+        // Whether a fresh connection starts with keys on depends on how SQLite was compiled (the
+        // bundled build turns them on); the index must not depend on that.
+        connection
+            .pragma_update(None, "foreign_keys", false)
+            .unwrap();
+        let before: i64 = connection
+            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+            .unwrap();
+        assert_eq!(before, 0);
+
+        configure_connection(&connection).unwrap();
+
+        let after: i64 = connection
+            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+            .unwrap();
+        assert_eq!(after, 1);
     }
 
     #[test]

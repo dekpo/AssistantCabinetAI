@@ -178,6 +178,20 @@ pub enum AppError {
     /// untouched.
     #[error("fill_write_failed")]
     FillWriteFailed,
+
+    /// The knowledge base could not be read or written (a locked or damaged database). Whatever
+    /// asked falls back to the path that does not use it (`docs/SESSION-KB-00-master.md`, I4).
+    #[error("knowledge_unavailable")]
+    KnowledgeUnavailable,
+
+    /// An operation named an entity the knowledge base does not hold.
+    #[error("knowledge_entity_not_found")]
+    KnowledgeEntityNotFound,
+
+    /// A merge, an unmerge or a deletion that would leave the entities inconsistent: two types, a
+    /// cycle, an entity that is already merged. Nothing was changed.
+    #[error("knowledge_merge_refused")]
+    KnowledgeMergeRefused,
 }
 
 impl AppError {
@@ -225,6 +239,9 @@ impl AppError {
             Self::FillNothingToFill => "fill_nothing_to_fill",
             Self::FillTooMany { .. } => "fill_too_many",
             Self::FillWriteFailed => "fill_write_failed",
+            Self::KnowledgeUnavailable => "knowledge_unavailable",
+            Self::KnowledgeEntityNotFound => "knowledge_entity_not_found",
+            Self::KnowledgeMergeRefused => "knowledge_merge_refused",
         }
     }
 
@@ -250,6 +267,9 @@ impl AppError {
             | Self::FillSourceUnavailable
             | Self::FillNothingToFill
             | Self::FillWriteFailed
+            | Self::KnowledgeUnavailable
+            | Self::KnowledgeEntityNotFound
+            | Self::KnowledgeMergeRefused
             | Self::OcrUnavailable => json!({}),
             Self::FillTemplateUnreadable { path } => json!({ "path": path }),
             Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),

@@ -257,7 +257,9 @@ is published on the practice network, behind a firewall rule and a per-person ac
 
 Outside the documents and data folders, in the application's local data folder (`%LOCALAPPDATA%\com.assistantcabinetai.desktop\` on
 Windows, `~/Library/Application Support/com.assistantcabinetai.desktop/` on macOS; it is a hidden folder on Windows): the local index
-(`index.sqlite3`, `workbooks.sqlite3`, `tabular.sqlite3`), the log of file renames (`renamed-files.jsonl`, original and new name of every
+(`index.sqlite3`, `workbooks.sqlite3`, `tabular.sqlite3`; since the Knowledge Base programme the `kb_*` tables are in `index.sqlite3` too, so
+copying that one file for a backup copies them, and the Reset buttons clear their share, see `docs/PRIVACY-AND-SECURITY.md`; the journal mode stays
+the default, so no `-wal` or `-shm` file appears beside it), the log of file renames (`renamed-files.jsonl`, original and new name of every
 file the clean-names pass renamed) and the log of generated letters (`generated-files.jsonl`: time, template, data file, key and output name
 of every letter written; never a cell value). With `writeTimingLog` switched on in `settings.json` (off by default), also
 `retrieval-timings.jsonl` (one line per question) and `analysis-timings.jsonl` (one line per Analyse pass): a timestamp, milliseconds, counts

@@ -15,10 +15,12 @@ only, no cloud LLM, no telemetry, plan + approval for file actions, Compose envi
 developers and French for users, no real patient file.
 
 **Before any code**, read in this order: `docs/SESSION-KB-WORKFLOW.md` (the ritual), `docs/SESSION-KB-00-master.md`
-(invariants I1-I14, schema, decisions D1-D10), the section of your lot only, and the reports of the lots
-you depend on in `docs/test-reports/knowledge-base-pass-1/lots/`. Do only your lot.
+(invariants I1-I14, schema, decisions D1-D10), the section of your lot only, the reports of the lots
+you depend on in `docs/test-reports/knowledge-base-pass-1/lots/`, and **the defects register**
+(`docs/test-reports/knowledge-base-pass-1/defects-register.md`: every row not `fixed`, and every row that
+names a file your lot touches). Do only your lot.
 
-**Four duties at the end of every lot**, detailed in the workflow file:
+**Five duties at the end of every lot**, detailed in the workflow file:
 
 1. **Branch.** Work on `feat/kb-<topic>` created from `kb/integration`. Never on `main`, never on
    `kb/integration` directly. Git writes are the owner's: hand over the full copy-paste command block.
@@ -29,6 +31,13 @@ you depend on in `docs/test-reports/knowledge-base-pass-1/lots/`. Do only your l
    part of it is visible, propose that part. If nothing is visible, say so and offer the nearest developer
    check. Always include a non-regression smoke test. Never claim a screen works if only unit tests ran.
 4. **Hand over.** Update `docs/SESSION-KB-STATUS.md` and name the next launcher file to drag into a new chat.
+5. **Defects (owner instruction, 9 October 2026).** Record every defect you or the owner find, in
+   `docs/test-reports/knowledge-base-pass-1/defects-register.md`, with its evidence, **the moment you see it**,
+   whether or not the KB caused it. Analyse it against the lots still to come and write the effect: a defect
+   that blocks, or will block, the KB is fixed **first**, in its own `fix/kb-<topic>` branch, and you stop and
+   tell the owner; a defect that does not interfere is marked `deferred`, **not fixed in the middle of the
+   programme**, and lot 11 proposes the targeted fix battery for all of them at the end. Do not fix a deferred
+   defect on the side, and do not forget one: an unrecorded defect is a lost one.
 
 No AI attribution in anything git-facing (`AGENTS.md`). Never run plain `cargo fmt`: format only the files
 you touched with `rustfmt --edition 2021 <files>`.

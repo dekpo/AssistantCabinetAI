@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "about": "The words a name is read with, for the tests of lot 2. Lot 3 moves the real thing into the lexicon packs (resources/knowledge); this file only stands in for a pack until then.",
+  "titles": ["dr", "docteur", "pr", "professeur", "prof", "maitre", "mr", "monsieur", "mme", "madame", "mlle", "mrs", "ms"],
+  "weak_titles": ["me", "m"],
+  "particles": ["de", "du", "des", "la", "le", "van", "von", "d"],
+  "stop_words": ["facture", "devis", "ordonnance", "courrier", "scan", "copie", "lettre", "compte", "rendu", "janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre", "invoice", "report"]
+}

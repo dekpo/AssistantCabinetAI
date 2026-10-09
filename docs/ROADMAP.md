@@ -645,6 +645,10 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | 9 Field pilot | After 14 October |
 | 10 More professions and agents | Unchanged: after real validation |
 
+### After K-E: the fix battery
+
+Defects found during the programme are kept in `docs/test-reports/knowledge-base-pass-1/defects-register.md`. Those that would block the KB are fixed first; the others are deliberately left until the programme ends, then handled as one targeted battery of fixes that lot 11 proposes (owner instruction, 9 October 2026). The first entries: a column whose name contains a "rows" word (`Total_Ligne`) is answered as a row count, and a partial path such as `mars/neurologie.pdf` matches no file.
+
 ## Later, with no date
 
 *(Headed "After 14 October, not before" until 8 October 2026, when that date was withdrawn.)*

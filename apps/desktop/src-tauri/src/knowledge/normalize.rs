@@ -246,7 +246,8 @@ pub struct NormalizedName {
     /// Single-letter words ("j" in "J. Dupont"), in order. An initial is never part of the key.
     pub initials: Vec<String>,
     /// What the phonetic encoder reads: every word that is not a title, a particle or an elided
-    /// article, in order, initials included, in [`sound_form`].
+    /// article, in order, initials included, in [`sound_form`]. A name made only of titles and
+    /// particles keeps them, so that no name has an empty sound.
     pub sounds_like: Vec<String>,
 }
 
@@ -294,10 +295,13 @@ pub fn normalize_name_with(text: &str, set: &TitleSet, weak: WeakTitles) -> Norm
             continue;
         }
         tokens.push(word.clone());
-        if !raw[index].elided {
+        // An elided article is one letter before an apostrophe ("l'", "d'"). A longer word before
+        // one is a name ("Floc'h"), and dropping it would leave nothing to encode.
+        let elided = raw[index].elided && word.chars().count() == 1;
+        if !elided {
             without_elision.push(word.clone());
         }
-        if raw[index].elided || set.particles.contains(word) {
+        if elided || set.particles.contains(word) {
             continue;
         }
         sounds_like.push(sound_form(&raw[index].written));
@@ -306,6 +310,19 @@ pub fn normalize_name_with(text: &str, set: &TitleSet, weak: WeakTitles) -> Norm
         } else {
             key_words.push(word.clone());
         }
+    }
+
+    // A name made only of particles or titles ("Du", "Maitre" alone) still has a sound.
+    if sounds_like.is_empty() {
+        sounds_like = raw
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !title_flags[*index])
+            .map(|(_, token)| sound_form(&token.written))
+            .collect();
+    }
+    if sounds_like.is_empty() {
+        sounds_like = raw.iter().map(|token| sound_form(&token.written)).collect();
     }
 
     key_words.sort();

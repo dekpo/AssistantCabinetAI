@@ -346,16 +346,14 @@ fn names_in(value: &Value) -> Vec<String> {
         .collect()
 }
 
-#[test]
-fn the_phonetic_contract_holds() {
-    let set = french_words();
-    let encoder = FrenchPhonetic;
-    let contract = contract();
+/// The rows of one contract file that the encoder does not respect.
+fn broken_rows(file: &str, encoder: &dyn PhoneticEncoder, set: &TitleSet) -> Vec<String> {
+    let contract = fixture(file);
     let mut broken: Vec<String> = Vec::new();
 
     for group in contract["collide"].as_array().expect("collide") {
         let names = names_in(group);
-        let keys: Vec<String> = names.iter().map(|n| key_of(&encoder, n, &set)).collect();
+        let keys: Vec<String> = names.iter().map(|n| key_of(encoder, n, set)).collect();
         if keys.iter().any(|key| key != &keys[0]) {
             let shown: Vec<String> = names
                 .iter()
@@ -368,8 +366,8 @@ fn the_phonetic_contract_holds() {
     for pair in contract["differ"].as_array().expect("differ") {
         let names = names_in(pair);
         let (a, b) = (
-            key_of(&encoder, &names[0], &set),
-            key_of(&encoder, &names[1], &set),
+            key_of(encoder, &names[0], set),
+            key_of(encoder, &names[1], set),
         );
         if a == b {
             broken.push(format!(
@@ -378,10 +376,41 @@ fn the_phonetic_contract_holds() {
             ));
         }
     }
+    // A pair that no rule can separate must leave its list once a rule does, or the list goes stale.
+    for list in ["known_shared", "false_friends"] {
+        for pair in contract[list].as_array().into_iter().flatten() {
+            let names = names_in(pair);
+            let (a, b) = (
+                key_of(encoder, &names[0], set),
+                key_of(encoder, &names[1], set),
+            );
+            if a != b {
+                broken.push(format!(
+                    "{list} is stale: {} ({a}) and {} ({b}) no longer share a key",
+                    names[0], names[1]
+                ));
+            }
+        }
+    }
+    broken
+}
 
+#[test]
+fn the_phonetic_contract_holds() {
+    let broken = broken_rows("phonetic-fr.json", &FrenchPhonetic, &french_words());
     assert!(
         broken.is_empty(),
         "phonetic-fr.json is not respected:\n{}",
+        broken.join("\n")
+    );
+}
+
+#[test]
+fn the_english_phonetic_contract_holds() {
+    let broken = broken_rows("phonetic-en.json", &EnglishPhonetic, &TitleSet::new());
+    assert!(
+        broken.is_empty(),
+        "phonetic-en.json is not respected:\n{}",
         broken.join("\n")
     );
 }
@@ -400,6 +429,97 @@ fn a_phonetic_key_is_ascii_and_never_empty_for_a_name() {
             assert!(key_of(&FrenchPhonetic, &name, &set).is_ascii(), "{name}");
         }
     }
+    let english = fixture("phonetic-en.json");
+    for name in names_in(&english["observe"]) {
+        let key = key_of(&EnglishPhonetic, &name, &TitleSet::new());
+        assert!(!key.is_empty(), "{name}");
+        assert!(key.is_ascii(), "{name}: {key}");
+    }
+}
+
+#[test]
+fn a_name_made_of_a_particle_a_title_or_a_long_elision_still_has_a_key() {
+    let set = french_words();
+    // Found on the Insee list: 75 surnames had an empty key.
+    for name in [
+        "Maitre",
+        "Le",
+        "Le Du",
+        "Le Maitre",
+        "Floc'h",
+        "Le Floc'H",
+        "Du",
+    ] {
+        assert!(!key_of(&FrenchPhonetic, name, &set).is_empty(), "{name}");
+    }
+    // A one-letter elision is still dropped; a longer word before an apostrophe is a name.
+    assert_eq!(
+        key_of(&FrenchPhonetic, "l'Hopital", &set),
+        key_of(&FrenchPhonetic, "Hopital", &set)
+    );
+    assert_eq!(
+        key_of(&FrenchPhonetic, "Floc'h", &set),
+        key_of(&FrenchPhonetic, "Floc", &set)
+    );
+}
+
+#[test]
+fn the_endings_that_tell_two_people_apart_stay_sounded() {
+    let set = french_words();
+    let key = |name: &str| key_of(&FrenchPhonetic, name, &set);
+    // A final mute "e" after a vowel and "l" marks the feminine form.
+    for (masculine, feminine) in [
+        ("Michel", "Michèle"),
+        ("Paul", "Paule"),
+        ("Pascal", "Pascale"),
+        ("Daniel", "Danièle"),
+        ("Raphaël", "Raphaële"),
+        ("Noël", "Noële"),
+        ("Frédéric", "Frédérique"),
+    ] {
+        assert_ne!(key(masculine), key(feminine), "{masculine} / {feminine}");
+    }
+    // The same feminine name written with one l or two is one name.
+    assert_eq!(key("Nicole"), key("Nicolle"));
+    assert_eq!(key("Odile"), key("Odille"));
+    // A sounded final s, d or m.
+    for (silent, sounded) in [
+        ("Ana", "Anas"),
+        ("Elia", "Elias"),
+        ("Gilda", "Gildas"),
+        ("Anna", "Anass"),
+        ("Amy", "Hamid"),
+        ("Karin", "Karim"),
+        ("Marian", "Mariam"),
+        ("Ilan", "Ilham"),
+    ] {
+        assert_ne!(key(silent), key(sounded), "{silent} / {sounded}");
+    }
+    // ... and the ones that stay silent.
+    assert_eq!(key("Thomas"), key("Thoma"));
+    assert_eq!(key("Lucas"), key("Luca"));
+    assert_eq!(key("Schmitt"), key("Schmidt"));
+    assert_eq!(key("Gay"), key("Gai"));
+    assert_eq!(key("Leroy"), key("Leroi"));
+}
+
+#[test]
+fn the_english_key_is_ascii_never_empty_and_drops_silent_letters() {
+    let english = TitleSet::new();
+    for name in [
+        "John", "Joan", "O'Brien", "McLean", "Hugh", "Knight", "Wright", "Xavier",
+    ] {
+        let key = key_of(&EnglishPhonetic, name, &english);
+        assert!(!key.is_empty() && key.is_ascii(), "{name}: {key}");
+    }
+    assert_eq!(
+        key_of(&EnglishPhonetic, "Knight", &english),
+        key_of(&EnglishPhonetic, "Night", &english)
+    );
+    assert_eq!(
+        key_of(&EnglishPhonetic, "Wright", &english),
+        key_of(&EnglishPhonetic, "Right", &english)
+    );
 }
 
 #[test]
@@ -442,10 +562,9 @@ fn a_whole_name_is_encoded_word_by_word_without_titles_or_particles() {
 }
 
 #[test]
-fn the_english_key_is_a_soundex() {
+fn the_english_key_is_selected_by_the_locale() {
     let set = TitleSet::new();
     let encoder = EnglishPhonetic;
-    assert_eq!(key_of(&encoder, "Robert Rupert", &set), "R163-R163");
     assert_eq!(
         key_of(&encoder, "Smith", &set),
         key_of(&encoder, "Smyth", &set)
@@ -454,7 +573,7 @@ fn the_english_key_is_a_soundex() {
         key_of(&encoder, "Smith", &set),
         key_of(&encoder, "Jones", &set)
     );
-    assert_eq!(encoder.signature(), "en-soundex:1");
+    assert_eq!(encoder.signature(), "en-rules:1");
     assert_eq!(encoder_for_locale("en-US").signature(), encoder.signature());
     assert_eq!(
         encoder_for_locale("fr-FR").signature(),

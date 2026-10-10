@@ -137,11 +137,12 @@ English instructions. Both must be templated in sprint 3:
 Names are compared by `knowledge::normalize` (accents, case, order, titles, particles, initials) and heard by
 `knowledge::phonetic` (a key per locale). Both are pure functions: the language-dependent words (titles,
 particles, file-name stop-words) are data the caller passes in, from the lexicon packs, never literals in Rust.
-The phonetic encoder is chosen by `locale`: French rules for `fr-*` and for any locale without its own, a
-conventional Soundex for `en-*`. A new language is a new encoder behind `PhoneticEncoder` and a new pack, not a
+The phonetic encoder is chosen by `locale`: French rules (`fr-rules`) for `fr-*` and for any locale without its
+own, English rules (`en-rules`, own rule set; a conventional Soundex was measured and dropped) for `en-*`. A new language is a new encoder behind `PhoneticEncoder` and a new pack, not a
 change to the callers. A phonetic key is a hint that two names may be the same, never proof; the
-expectations (names that must and must not share a key) are a JSON file the product owner edits
-(`apps/desktop/src-tauri/tests/fixtures/knowledge/phonetic-fr.json`). See `docs/DECISIONS.md`, "Settled by KB lot 2".
+expectations (names that must and must not share a key) are one JSON file per language the product owner edits
+(`apps/desktop/src-tauri/tests/fixtures/knowledge/phonetic-fr.json` and `phonetic-en.json`). Both encoders were calibrated
+on public lists of real names. See `docs/DECISIONS.md`, "Settled by KB lot 2" and "Settled by KB lot 2 bis".
 
 ## Never translated
 

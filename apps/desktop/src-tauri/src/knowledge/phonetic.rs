@@ -7,7 +7,7 @@
 //! name nobody finds.
 //!
 //! The encoder is a port ([`PhoneticEncoder`]). [`FrenchPhonetic`] is the pilot's; [`EnglishPhonetic`]
-//! is a conventional Soundex. A better engine (a trained grapheme-to-phoneme model) would implement
+//! is its English counterpart. A better engine (a trained grapheme-to-phoneme model) would implement
 //! the same trait, and bumping `version` makes lot 3 recompute every stored key.
 //!
 //! **The key alphabet is plain ASCII** so a key can be stored, compared and indexed anywhere:
@@ -76,7 +76,7 @@ impl PhoneticEncoder for FrenchPhonetic {
     }
 
     fn version(&self) -> u32 {
-        1
+        2
     }
 
     fn encode_token(&self, normalized_token: &str) -> String {
@@ -84,14 +84,16 @@ impl PhoneticEncoder for FrenchPhonetic {
     }
 }
 
-/// American Soundex: the first letter, then three digits. Coarse by design - it is the standard
-/// key every English-speaking tool understands.
+/// Rule-based English spelling-to-sound, pure Rust, no dependency. It replaced a conventional
+/// Soundex, which is far too coarse for names: measured on the US Census and SSA lists it put
+/// "John", "Jane", "Jean", "Juan" and "Joan" under one key, and 800 first names under another.
+/// Vowels are kept (in a few classes), so the key still tells "John" from "Joan".
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EnglishPhonetic;
 
 impl PhoneticEncoder for EnglishPhonetic {
     fn id(&self) -> &str {
-        "en-soundex"
+        "en-rules"
     }
 
     fn version(&self) -> u32 {
@@ -99,53 +101,275 @@ impl PhoneticEncoder for EnglishPhonetic {
     }
 
     fn encode_token(&self, normalized_token: &str) -> String {
-        encode_soundex(normalized_token)
+        encode_english(normalized_token)
     }
 }
 
 // ----------------------------------------------------------------------------- English
 
-fn soundex_digit(c: char) -> Option<char> {
-    match c {
-        'b' | 'f' | 'p' | 'v' => Some('1'),
-        'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some('2'),
-        'd' | 't' => Some('3'),
-        'l' => Some('4'),
-        'm' | 'n' => Some('5'),
-        'r' => Some('6'),
-        _ => None,
-    }
+fn is_english_vowel(c: char) -> bool {
+    matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')
 }
 
-fn encode_soundex(token: &str) -> String {
-    let word: Vec<char> = sound_form(token).chars().collect();
-    let Some(&first) = word.first() else {
+/// The alphabet of an English key is plain ASCII:
+///
+/// ```text
+/// consonants   B D F G J K L M N P R S T V W X Y   X = "sh"/"ch", J = "j" and soft "g", S also stands for "z"
+/// vowels       A E I O U   short or plain
+///              a o         the long sound of "ai"/"ay"/"a_e" and of "oa"/"ow"/"o_e"
+///              I           also "ee", "ea", "ie", final "y" and "e_e"
+///              U           also "oo", "ou", "ew", "ue"
+/// ```
+///
+/// The silent letters (`h` outside a digraph, a final `e`, `gh`, `kn`, `wr`) are dropped and
+/// double letters count once. A key is a hint, so the rules favour telling names apart.
+fn encode_english(token: &str) -> String {
+    let mut word: Vec<char> = sound_form(token)
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect();
+    if word.is_empty() {
         return String::new();
-    };
+    }
     if word.iter().all(char::is_ascii_digit) {
         return word.iter().collect();
     }
-    let mut key = String::new();
-    key.extend(first.to_uppercase());
-    let mut previous = soundex_digit(first);
-    for &c in &word[1..] {
-        match soundex_digit(c) {
-            Some(digit) => {
-                if previous != Some(digit) {
-                    key.push(digit);
-                }
-                previous = Some(digit);
+
+    // Beginnings.
+    if word.len() > 2 {
+        match (word[0], word[1]) {
+            ('k' | 'g' | 'p', 'n') | ('w', 'r') => {
+                word.remove(0);
             }
-            // "h" and "w" do not separate two letters of the same code; a vowel does.
-            None if c == 'h' || c == 'w' => {}
-            None => previous = None,
-        }
-        if key.len() == 4 {
-            break;
+            ('w', 'h') => {
+                word.remove(1);
+            }
+            ('x', _) => word[0] = 's',
+            _ => {}
         }
     }
-    while key.len() < 4 {
-        key.push('0');
+    // "Mac" and "Mc" are one prefix: "MacLean", "McLean".
+    if word.len() >= 5
+        && word.starts_with(&['m', 'a', 'c'])
+        && !is_english_vowel(word[3])
+        && word[3] != 'y'
+        && word[3] != 'h'
+    {
+        word.remove(1);
+    }
+
+    let size = word.len();
+    let get = |index: usize| word.get(index).copied();
+    let vowel_at = |index: usize| get(index).is_some_and(|c| is_english_vowel(c) || c == 'y');
+    // A vowel, one consonant, a final "e": "Jane", "Rose", "Pete".
+    let magic_e = |at: usize| {
+        get(at + 1).is_some_and(|c| !is_english_vowel(c) && c != 'y')
+            && get(at + 2) == Some('e')
+            && at + 3 == size
+    };
+
+    let mut out = String::new();
+    let mut at = 0;
+    while at < size {
+        let c = word[at];
+        let (next, after_next) = (get(at + 1), get(at + 2));
+        let previous = if at > 0 { Some(word[at - 1]) } else { None };
+        match c {
+            'a' => match next {
+                Some('i' | 'y') => {
+                    out.push('a');
+                    at += 1;
+                }
+                Some('u' | 'w') => {
+                    out.push('O');
+                    at += 1;
+                }
+                _ if magic_e(at) => out.push('a'),
+                _ => out.push('A'),
+            },
+            'e' => match next {
+                Some('e' | 'a') => {
+                    out.push('e');
+                    at += 1;
+                }
+                Some('y') if after_next.is_none() => {
+                    out.push('I');
+                    at += 1;
+                }
+                // "Keith" is said like "keet", "Leigh" like "lay".
+                Some('i') if after_next == Some('t') && get(at + 3) == Some('h') => {
+                    out.push('e');
+                    at += 1;
+                }
+                Some('i' | 'y') => {
+                    out.push('a');
+                    at += 1;
+                }
+                Some('w' | 'u') => {
+                    out.push('U');
+                    at += 1;
+                }
+                // A silent final "e".
+                None if at >= 2 && !vowel_at(at - 1) => {}
+                _ if magic_e(at) => out.push('e'),
+                _ => out.push('E'),
+            },
+            'i' => {
+                if next == Some('e') {
+                    at += 1;
+                    out.push('I');
+                } else if magic_e(at) {
+                    out.push('i');
+                } else {
+                    out.push('I');
+                }
+            }
+            'o' => match next {
+                Some('a' | 'e') => {
+                    out.push('o');
+                    at += 1;
+                }
+                Some('o' | 'u') => {
+                    out.push('U');
+                    at += 1;
+                }
+                Some('w') => {
+                    out.push(if vowel_at(at + 2) { 'O' } else { 'o' });
+                    at += 1;
+                }
+                _ if magic_e(at) => out.push('o'),
+                _ => out.push('O'),
+            },
+            'u' => {
+                if next == Some('e') {
+                    at += 1;
+                }
+                out.push('U');
+            }
+            'y' => out.push(if at == 0 && vowel_at(1) {
+                'Y'
+            } else if magic_e(at) {
+                'i'
+            } else {
+                'I'
+            }),
+            'b' => {
+                if !(previous == Some('m') && next.is_none()) {
+                    out.push('B');
+                }
+            }
+            'c' => match next {
+                Some('h') => {
+                    // "school", "Christopher", "Michael" and "Nicholas" are said with a "k".
+                    let hard = previous == Some('s')
+                        || (at == 0 && after_next == Some('r'))
+                        || (previous == Some('i')
+                            && at >= 2
+                            && word[at - 2] == 'n'
+                            && after_next == Some('o'))
+                        || (previous == Some('i')
+                            && after_next == Some('a')
+                            && get(at + 3) == Some('e'));
+                    out.push(if hard { 'K' } else { 'X' });
+                    at += 1;
+                }
+                Some('k') => {
+                    out.push('K');
+                    at += 1;
+                }
+                // "science": the "s" already did the work.
+                Some('e' | 'i' | 'y') if previous == Some('s') => {}
+                Some('e' | 'i' | 'y') => out.push('S'),
+                _ => out.push('K'),
+            },
+            'd' => {
+                if next == Some('g') && matches!(after_next, Some('e' | 'i' | 'y')) {
+                    out.push('J');
+                    at += 1;
+                } else {
+                    out.push('D');
+                }
+            }
+            'g' => match next {
+                Some('h') => {
+                    // "Hugh", "Leigh": silent. "Ghana": a "g".
+                    if at == 0 || after_next.is_some_and(is_english_vowel) {
+                        out.push('G');
+                    }
+                    at += 1;
+                }
+                Some('e' | 'i' | 'y') => out.push('J'),
+                _ => out.push('G'),
+            },
+            'h' => {}
+            'k' => {
+                out.push('K');
+                if next == Some('h') {
+                    at += 1;
+                }
+            }
+            'p' => {
+                if next == Some('h') {
+                    out.push('F');
+                    at += 1;
+                } else {
+                    out.push('P');
+                }
+            }
+            'q' => {
+                out.push('K');
+                if next == Some('u') {
+                    at += 1;
+                }
+            }
+            's' => match next {
+                Some('h') => {
+                    out.push('X');
+                    at += 1;
+                }
+                Some('c') if after_next == Some('h') => {
+                    out.push_str("SK");
+                    at += 2;
+                }
+                _ => out.push('S'),
+            },
+            't' => match next {
+                Some('h') => {
+                    out.push('T');
+                    at += 1;
+                }
+                Some('c') if after_next == Some('h') => {
+                    out.push('X');
+                    at += 2;
+                }
+                _ => out.push('T'),
+            },
+            'w' => {
+                if vowel_at(at + 1) {
+                    out.push('W');
+                }
+            }
+            'x' => out.push_str("KS"),
+            'z' => out.push('S'),
+            'f' | 'j' | 'l' | 'm' | 'n' | 'r' | 'v' => out.extend(c.to_uppercase()),
+            digit => out.push(digit),
+        }
+        at += 1;
+    }
+
+    // Double letters are one sound.
+    let mut key = String::with_capacity(out.len());
+    for c in out.chars() {
+        if !key.ends_with(c) || c.is_ascii_digit() {
+            key.push(c);
+        }
+    }
+    // "Danielle", "Michelle", "Brianne", "Julianne" are the feminine forms of "Daniel", "Mitchell",
+    // "Brian", "Julian": the same letters, another person. The key ends with a sounded vowel.
+    if (size >= 6 && word.ends_with(&['e', 'l', 'l', 'e']))
+        || (size >= 7 && word.ends_with(&['i', 'a', 'n', 'n', 'e']))
+    {
+        key.push('E');
     }
     key
 }
@@ -168,6 +392,8 @@ fn is_vowel(c: char) -> bool {
 const VOWEL_RULES: &[(&str, &str, bool)] = &[
     ("eau", "O", false),
     ("oeu", "W", false),
+    // "Noel", "Joel": two vowels, said apart (the diaeresis is gone by the time a word is encoded).
+    ("oel", "OEL", false),
     ("ain", "e", true),
     ("aim", "e", true),
     ("ein", "e", true),
@@ -228,6 +454,27 @@ fn nasal_allowed(word: &[char], after: usize, mute_e_stripped: bool) -> bool {
     }
 }
 
+/// Whether the last letter of a word that does not end in a mute "e" is not pronounced. French
+/// drops most final consonants ("Bernard", "Dupont", "Louis", "Renaud"); the exceptions are the
+/// ones that tell two people apart: a doubled "s" ("Anass", "Idriss"), an "s" after "a" outside
+/// "mas", "cas" and "las" ("Elias", "Anas", "Gildas" against "Thomas", "Lucas", "Nicolas"), and a
+/// "d" that ends the written name after an "i" ("Khalid", "Hamid", "Said", but not "Schmidt").
+fn final_consonant_is_silent(word: &[char], stripped_already: bool) -> bool {
+    let size = word.len();
+    let (last, before) = (word[size - 1], word[size - 2]);
+    match last {
+        't' | 'p' => true,
+        'd' => before != 'i' || stripped_already,
+        's' => {
+            let sounded_after_a =
+                before == 'a' && size >= 4 && !matches!(word[size - 3], 'm' | 'c' | 'l');
+            before != 's' && !sounded_after_a
+        }
+        'x' => before == 'u',
+        _ => false,
+    }
+}
+
 fn encode_french(token: &str) -> String {
     let letters = sound_form(token);
     if letters.is_empty() {
@@ -239,6 +486,12 @@ fn encode_french(token: &str) -> String {
     let mut word: Vec<char> = letters.chars().collect();
 
     // Endings first: they decide what is silent.
+    // A final "y" after "a", "e" or "o" is the second letter of a vowel pair: "Gay", "Grey", "Leroy".
+    if word.len() >= 3 && word.ends_with(&['y']) && matches!(word[word.len() - 2], 'a' | 'e' | 'o')
+    {
+        let last = word.len() - 1;
+        word[last] = 'i';
+    }
     if word.len() >= 4 && word.ends_with(&['a', 'u', 'l', 't']) {
         word.truncate(word.len() - 4);
         word.push('o');
@@ -251,10 +504,26 @@ fn encode_french(token: &str) -> String {
         word.truncate(word.len() - 2);
         word.push(SOUNDED_E);
     }
-    // A doubled "l" before a final mute "e" after "e" ("Michelle", "Danielle", "Gabrielle") is the
-    // feminine form of a name that sounds the same ("Michel"). The people are not the same, so
-    // the key ends with a sounded vowel that the masculine form lacks.
-    let feminine_elle = word.len() >= 6 && word.ends_with(&['e', 'l', 'l', 'e']);
+    // Names of Arabic or Latin origin keep a sounded final "m": "Karim", "Mariam", "Maryam",
+    // "Ilham". Written like a word with a mute "e" after it, the "m" cannot become a nasal.
+    if word.len() >= 4
+        && ((word.ends_with(&['i', 'm']) && !word.ends_with(&['c', 'h', 'i', 'm']))
+            || word.ends_with(&['i', 'a', 'm'])
+            || word.ends_with(&['y', 'a', 'm'])
+            || word.ends_with(&['h', 'a', 'm']))
+    {
+        word.push('e');
+    }
+    // A final mute "e" after a vowel and an "l" ("Michele", "Pascale", "Paule", "Nicole"), a doubled
+    // "l" after "e" ("Michelle", "Danielle") or "ique" ("Frederique") is the feminine form of a
+    // name that sounds the same without it ("Michel", "Pascal", "Paul", "Frederic"). The people are
+    // not the same, so the key ends with a sounded vowel that the masculine form lacks.
+    let size = word.len();
+    let feminine = size >= 5
+        && word.last() == Some(&'e')
+        && ((word[size - 2] == 'l' && is_vowel(word[size - 3]))
+            || (size >= 6 && word.ends_with(&['l', 'l', 'e']) && is_vowel(word[size - 4]))
+            || word.ends_with(&['i', 'q', 'u', 'e']));
     let mut mute_e_stripped = false;
     if word.len() > 2 && word.last() == Some(&'e') {
         word.pop();
@@ -264,18 +533,18 @@ fn encode_french(token: &str) -> String {
     // sound of a key is always the first sound of the name. When a mute "e" was just stripped the
     // consonant before it is pronounced ("Simone", "Louise", "Laurette"), with one exception kept
     // on purpose: the "p" of "Philippe", so that it meets "Filip".
+    let mut stripped_already = false;
     while word.len() > 2 {
-        let last = word[word.len() - 1];
-        let before = word[word.len() - 2];
         let silent = if mute_e_stripped {
-            last == 'p'
+            word[word.len() - 1] == 'p'
         } else {
-            matches!(last, 't' | 'd' | 's' | 'p') || (last == 'x' && before == 'u')
+            final_consonant_is_silent(&word, stripped_already)
         };
         if !silent {
             break;
         }
         word.pop();
+        stripped_already = true;
     }
 
     let mut out = String::new();
@@ -406,11 +675,11 @@ fn encode_french(token: &str) -> String {
     // Double letters are one sound.
     let mut key = String::with_capacity(out.len());
     for c in out.chars() {
-        if key.chars().last() != Some(c) || c.is_ascii_digit() {
+        if !key.ends_with(c) || c.is_ascii_digit() {
             key.push(c);
         }
     }
-    if feminine_elle {
+    if feminine {
         key.push('E');
     }
     key
@@ -494,24 +763,29 @@ mod tests {
     fn digits_and_empty_input_are_left_alone() {
         assert_eq!(french("2026"), "2026");
         assert_eq!(french("..."), "");
-        assert_eq!(FrenchPhonetic.signature(), "fr-rules:1");
+        assert_eq!(FrenchPhonetic.signature(), "fr-rules:2");
     }
 
     #[test]
-    fn soundex_follows_the_convention() {
-        let english = EnglishPhonetic;
-        assert_eq!(english.encode_token("Robert"), "R163");
-        assert_eq!(english.encode_token("Rupert"), "R163");
-        assert_eq!(english.encode_token("Ashcraft"), "A261");
-        assert_eq!(english.encode_token("Tymczak"), "T522");
-        assert_eq!(english.encode_token("Smith"), english.encode_token("Smyth"));
-        assert_eq!(english.signature(), "en-soundex:1");
+    fn english_keeps_the_vowels_that_tell_names_apart() {
+        let english = |word: &str| EnglishPhonetic.encode_token(word);
+        assert_eq!(english("Smith"), english("Smyth"));
+        assert_eq!(english("Jane"), english("Jayne"));
+        assert_eq!(english("Catherine"), english("Katherine"));
+        assert_ne!(english("John"), english("Joan"));
+        assert_ne!(english("John"), english("Jane"));
+        assert_ne!(english("John"), english("Jean"));
+        assert_ne!(english("Michael"), english("Michelle"));
+        assert_eq!(english("2026"), "2026");
+        assert_eq!(english("..."), "");
+        assert!(english("O'Brien").is_ascii());
+        assert_eq!(EnglishPhonetic.signature(), "en-rules:1");
     }
 
     #[test]
     fn the_locale_picks_the_encoder() {
         assert_eq!(encoder_for_locale("fr-FR").id(), "fr-rules");
-        assert_eq!(encoder_for_locale("en-US").id(), "en-soundex");
+        assert_eq!(encoder_for_locale("en-US").id(), "en-rules");
         assert_eq!(encoder_for_locale("de-DE").id(), "fr-rules");
     }
 

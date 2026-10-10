@@ -34,6 +34,14 @@ Docker Compose on localhost (Ollama + Open WebUI, English workbench). Install st
 
 Contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). The English specification lives in [docs/](docs/) — start with [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DECISIONS.md](docs/DECISIONS.md). Personal pilot context and tab handoffs stay local under `docs/private/`. End-user guides go in `docs/user/`, written in the user's language. Field questions put to other professions, and the blank forms used to ask them, live in [docs/DISCOVERY.md](docs/DISCOVERY.md) — information only, no client data, and no change to the v0 scope.
 
+## Sources
+
+Reference data used to test the name-matching rules (small derived samples only, in `apps/desktop/src-tauri/tests/fixtures/knowledge/`; the complete files are never versioned). Details and licences: [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md).
+
+- Source: Insee, "Fichier des noms" (surnames by decade of birth, 1891-2000), updated 22 May 2018, and "Fichier des prenoms" (first names, 1900-2024), updated 9 July 2025. Licence Ouverte 2.0 (Etalab). The 300 most frequent names of each list are kept with their counts, summed over the periods (and, for first names, split by sex); the counts are Insee's, rounded to the nearest 5 for first names. Insee does not endorse this product.
+- US Census Bureau, "Frequently Occurring Surnames from the 2010 Census" (work of the US federal government).
+- US Social Security Administration, "Baby names from Social Security card applications, national data" (CC0).
+
 ## Short verdict
 
 A Mac mini M4 Pro 64 GB can serve about **1–8 seats** depending on mix (especially if retrieval and OCR stay on the PCs). Beyond that: a second node or a GPU. Chat matters, but the product is **Assistant Cabinet AI** (native window) + the **gateway + approved folder plans**. Case files do not live on the AI server. Open WebUI is the owner’s workbench only.

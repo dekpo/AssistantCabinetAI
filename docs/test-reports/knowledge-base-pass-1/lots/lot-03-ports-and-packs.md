@@ -128,6 +128,8 @@ Consequence for lot 6: a question should not load the packs. Build the `PackSet`
 
 ## Open questions
 
+**Answered by the owner on 10 October 2026:** questions 1 (4, confirmed), 2 (the safe choice stands) and 6 (a keyed hash for `personal_key` identifiers) - `docs/DECISIONS.md`, "Owner answers after KB lot 3". The human test was accepted, the pull request merged (PR #26, `dde9ca3`), tag `kb-after-lot-03`.
+
 1. **Confirm 4, not 6,** as the common minimum word length of the fuzzy rule (one constant: `FUZZY_MIN_TOKEN_LEN`).
 2. **Ingestion and a surname alone.** `Dr Martin` in a document where no Martin appears records nothing when Martins are known elsewhere. That is the safe choice (no wrong link) and costs recall: a document that only says `Dr Martin` will not be found when she asks about Pierre Martin. The alternative is a low-confidence link when exactly one Martin exists in the whole store. Lot 11's shadow measurement can decide; until then the safe choice stands.
 3. **The starting vocabulary** is a first draft by an engineer: the stop-words ("oui", "non", "bon"), the organisation markers, the header words, the French wording of the role labels (`Prestataire` for the neutral `provider`, `Partie adverse`, `Expert-comptable`). She can edit any of it as one line; the test says if she broke something.

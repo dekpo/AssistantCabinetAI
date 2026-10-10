@@ -200,6 +200,7 @@ pub fn analyse(
         total_files,
         batch_index: 0,
         batch_total: 0,
+        reading_names: false,
     });
 
     let mut usable = 0;
@@ -260,6 +261,7 @@ pub fn analyse(
             total_files,
             batch_index: 0,
             batch_total: 0,
+            reading_names: false,
         });
     }
 
@@ -286,6 +288,7 @@ pub fn analyse(
         unavailable_capabilities: Vec::new(),
         chunk_count: 0,
         timings: Some(timings),
+        knowledge: None,
     })
 }
 

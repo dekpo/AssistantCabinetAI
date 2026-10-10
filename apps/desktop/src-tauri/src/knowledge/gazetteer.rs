@@ -56,6 +56,9 @@ pub struct Gazetteer {
     /// Phrases keyed by their first word, so a scan looks at a handful of candidates per position.
     by_first_word: HashMap<String, Vec<Phrase>>,
     phrases: usize,
+    /// Every (phrase, entity, kind) the list holds: the measure of whether a pass taught it
+    /// anything, since a new entity behind a known phrase does not change `phrases`.
+    entries: usize,
     epoch: u32,
 }
 
@@ -72,6 +75,11 @@ impl Gazetteer {
     pub fn rebuild_from_store(connection: &Connection) -> Result<Self, AppError> {
         let mut list = Self::new();
         for row in store::name_list_rows(connection)? {
+            // An identifier is found by its pattern, never by its name: its label is not a word of
+            // any text, and for a personal one it must not become a phrase anything is matched on.
+            if row.type_id == super::EntityTypeId::IDENTIFIER {
+                continue;
+            }
             list.insert(
                 &row.normalized,
                 GazetteerEntry {
@@ -102,6 +110,7 @@ impl Gazetteer {
                 .any(|known| known.entity_id == entry.entity_id && known.kind == entry.kind);
             if !known {
                 phrase.entries.push(entry);
+                self.entries += 1;
             }
             return !known;
         }
@@ -110,12 +119,19 @@ impl Gazetteer {
             entries: vec![entry],
         });
         self.phrases += 1;
+        self.entries += 1;
         true
     }
 
     /// The number of distinct phrases.
     pub fn size(&self) -> usize {
         self.phrases
+    }
+
+    /// The number of (phrase, entity, kind) triples. Grows when a name is learned, including for
+    /// an entity that already answers to other phrases.
+    pub fn entry_count(&self) -> usize {
+        self.entries
     }
 
     pub fn is_empty(&self) -> bool {

@@ -9,6 +9,14 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 
 export type ThemeChoice = "light" | "dark" | "system";
 
+/**
+ * Whether the local knowledge base reads the analysed files for names. `off` leaves the product as
+ * it was before it and writes nothing; `suggest` is the default; `auto` also narrows the selection
+ * by itself once that exists. Edited in `settings.json` until the settings dialog has its
+ * "Advanced" group.
+ */
+export type KnowledgeMode = "off" | "suggest" | "auto";
+
 export interface AppSettings {
   /** Chosen locale, or null on a machine where nothing has been chosen yet. */
   locale: string | null;
@@ -33,6 +41,12 @@ export interface AppSettings {
    * `retrieval-timings.jsonl` and `analysis-timings.jsonl` in the app-data folder. Off by default;
    * edited in `settings.json` until the settings dialog has its "Advanced" group. */
   writeTimingLog: boolean;
+  knowledgeMode: KnowledgeMode;
+  /** The optional lexicon packs the knowledge base reads names with, named `<domain>-<country>`:
+   * `health-fr` (France), `health-ch` (Switzerland: AVS / AHV number, Swiss IBAN and telephone),
+   * `legal-fr`, `accounting-fr`, and later `health-eu`, `legal-ch`... Rust keeps only the ids a
+   * build ships and reads an older bare id (`health`) as its French pack. */
+  knowledgePacks: string[];
 }
 
 export interface AppSnapshot {
@@ -209,6 +223,9 @@ export interface IndexProgress {
   /** Inside the file being embedded: batches done and batches in all. Both 0 outside that. */
   batchIndex: number;
   batchTotal: number;
+  /** The pass has read every file and is now reading the names in documents analysed earlier:
+   * `processedFiles` and `totalFiles` then count those documents. */
+  readingNames?: boolean;
 }
 
 /** A file that could not be embedded: the pass went on without it and will try it again. */
@@ -222,6 +239,29 @@ export interface FailedFile {
 export interface RenamedFile {
   from: string;
   to: string;
+}
+
+/**
+ * What a pass learned about names, as counts. Never a name: the interface writes the sentence
+ * (`analysis.knowledge.*`) and Rust builds none.
+ */
+export interface KnowledgeSummary {
+  /** People and organisations named in the files this pass read. */
+  entitiesDetected: number;
+  /** Of those, how many the knowledge base already held. */
+  matchedExisting: number;
+  createdNew: number;
+  /** Of the new ones, how many are only guesses until a second file names them. */
+  candidates: number;
+  /** E-mail addresses, invoice numbers, IBANs and the like. */
+  identifiers: number;
+  relations: number;
+  /** Documents analysed earlier that were read again from their stored text. */
+  refreshedSources: number;
+  truncatedSources: number;
+  /** Files indexed whose names could not all be recorded: analysing again retries them. */
+  errors: number;
+  elapsedMs: number;
 }
 
 export interface IndexSummary {
@@ -245,6 +285,8 @@ export interface IndexSummary {
   chunkCount: number;
   /** Where the pass spent its time. Numbers only. */
   timings: AnalysisTimings | null;
+  /** Null when the knowledge base took no part (`knowledgeMode: "off"`). */
+  knowledge?: KnowledgeSummary | null;
 }
 
 export type AnalysisPass = "documents" | "data";

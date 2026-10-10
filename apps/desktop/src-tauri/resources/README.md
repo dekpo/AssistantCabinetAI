@@ -39,8 +39,15 @@ nothing to fetch, nothing platform-specific, the same file on Windows and macOS.
 ```text
 resources/knowledge/base/<locale>.json              always loaded: profession-neutral
 resources/knowledge/packs/<pack-id>/<locale>.json   optional: adds vocabulary for one domain
-                                                    (health, legal, accounting)
+                                                    (health-fr, health-ch, legal-fr, accounting-fr)
 ```
+
+A pack id is `<domain>-<country>` (`health-fr`, `health-ch`, later `health-eu`, `legal-ch`...), and **modules are never
+mixed**: `health-ch` is the Swiss module, chosen **instead of** `health-fr` (« Réglages » -> « Module santé »), not added
+to it. Each is complete on its own (its own numbers, `nir` or `avs`; its own organisations; the patient and practitioner
+vocabulary). `health-fr` is on by default. The locale of a file (`fr-FR`, `en-US`) is the language of its words; the id
+carries the country. The product serves health professionals in France and in Switzerland; any further country is
+another pack (`docs/DECISIONS.md`, "Knowledge packs are named domain-country").
 
 A pack holds **words and patterns only, never a sentence a person reads** (a sentence is an interface catalogue
 entry). Every file has `schema: 1`, its own `id` and `locale`, and these optional fields:

@@ -67,36 +67,88 @@ const BUNDLED: &[BundledPack] = &[
         body: include_str!("../../resources/knowledge/base/fr-FR.json"),
     },
     BundledPack {
-        id: "health",
+        id: "health-fr",
         locale: "en-US",
-        body: include_str!("../../resources/knowledge/packs/health/en-US.json"),
+        body: include_str!("../../resources/knowledge/packs/health-fr/en-US.json"),
     },
     BundledPack {
-        id: "health",
+        id: "health-fr",
         locale: "fr-FR",
-        body: include_str!("../../resources/knowledge/packs/health/fr-FR.json"),
+        body: include_str!("../../resources/knowledge/packs/health-fr/fr-FR.json"),
     },
     BundledPack {
-        id: "legal",
+        id: "health-ch",
         locale: "en-US",
-        body: include_str!("../../resources/knowledge/packs/legal/en-US.json"),
+        body: include_str!("../../resources/knowledge/packs/health-ch/en-US.json"),
     },
     BundledPack {
-        id: "legal",
+        id: "health-ch",
         locale: "fr-FR",
-        body: include_str!("../../resources/knowledge/packs/legal/fr-FR.json"),
+        body: include_str!("../../resources/knowledge/packs/health-ch/fr-FR.json"),
     },
     BundledPack {
-        id: "accounting",
+        id: "legal-fr",
         locale: "en-US",
-        body: include_str!("../../resources/knowledge/packs/accounting/en-US.json"),
+        body: include_str!("../../resources/knowledge/packs/legal-fr/en-US.json"),
     },
     BundledPack {
-        id: "accounting",
+        id: "legal-fr",
         locale: "fr-FR",
-        body: include_str!("../../resources/knowledge/packs/accounting/fr-FR.json"),
+        body: include_str!("../../resources/knowledge/packs/legal-fr/fr-FR.json"),
+    },
+    BundledPack {
+        id: "accounting-fr",
+        locale: "en-US",
+        body: include_str!("../../resources/knowledge/packs/accounting-fr/en-US.json"),
+    },
+    BundledPack {
+        id: "accounting-fr",
+        locale: "fr-FR",
+        body: include_str!("../../resources/knowledge/packs/accounting-fr/fr-FR.json"),
     },
 ];
+
+/// How a pack is named: `<domain>-<country>`, lower case, for example `health-fr`, `health-ch`,
+/// `legal-fr`. The domain is what the vocabulary is about (`health`, `legal`, `accounting`); the
+/// country is the jurisdiction whose rules and numbers it follows (`fr`, `ch`, and later `eu`, which
+/// is a region and not a country, or `de`, `be`...). A module for another country is **another
+/// pack**, never a switch inside one: `health-ch` is not `health-fr` plus a flag (`AGENTS.md`,
+/// "Markets"; `docs/DECISIONS.md`, "Knowledge packs are named domain-country"). The locale of a pack
+/// file is the *language* its words are written in and is independent of the country.
+pub const COUNTRY_CODES: &[&str] = &["fr", "ch", "eu"];
+
+/// The pack ids an earlier build wrote, each meaning the French pack of its domain.
+const LEGACY_PACK_IDS: &[(&str, &str)] = &[
+    ("health", "health-fr"),
+    ("legal", "legal-fr"),
+    ("accounting", "accounting-fr"),
+];
+
+/// The current name of a pack id: an id written before packs were named domain-country is read as
+/// its French pack, anything else is returned as it is.
+pub fn canonical_pack_id(id: &str) -> &str {
+    LEGACY_PACK_IDS
+        .iter()
+        .find(|(old, _)| *old == id)
+        .map_or(id, |(_, current)| *current)
+}
+
+/// The domain of a pack id: `health` for `health-ch`. An id without a country is its own domain.
+pub fn pack_domain(id: &str) -> &str {
+    id.rsplit_once('-').map_or(id, |(domain, _)| domain)
+}
+
+/// Whether `id` is of the form `<domain>-<country>` with a country code this build knows.
+pub fn is_domain_country_id(id: &str) -> bool {
+    match id.rsplit_once('-') {
+        Some((domain, country)) => {
+            !domain.is_empty()
+                && domain.chars().all(|c| c.is_ascii_lowercase())
+                && COUNTRY_CODES.contains(&country)
+        }
+        None => false,
+    }
+}
 
 /// The ids of the optional packs this build ships, sorted. `base` is not among them: it is always
 /// loaded.
@@ -925,7 +977,10 @@ mod tests {
             code_and_path(parse(&body.replace("\"schema\":1", "\"schema\":2"))).1,
             "schema"
         );
-        assert_eq!(code_and_path(parse_pack("health", "en-US", &body)).1, "id");
+        assert_eq!(
+            code_and_path(parse_pack("health-fr", "en-US", &body)).1,
+            "id"
+        );
         assert_eq!(
             code_and_path(parse_pack("base", "fr-FR", &body)).1,
             "locale"
@@ -1076,7 +1131,7 @@ mod tests {
     fn the_hash_depends_on_content_and_on_the_active_packs() {
         let base = PackSet::load("en-US", &[]).unwrap();
         let again = PackSet::load("en-US", &[]).unwrap();
-        let with_health = PackSet::load("en-US", &["health"]).unwrap();
+        let with_health = PackSet::load("en-US", &["health-fr"]).unwrap();
         let french = PackSet::load("fr-FR", &[]).unwrap();
         assert_eq!(base.hash(), again.hash());
         assert_ne!(base.hash(), with_health.hash());
@@ -1087,7 +1142,7 @@ mod tests {
     #[test]
     fn a_domain_pack_adds_vocabulary_and_relabels_a_role() {
         let base = PackSet::load("en-US", &[]).unwrap();
-        let health = PackSet::load("en-US", &["health"]).unwrap();
+        let health = PackSet::load("en-US", &["health-fr"]).unwrap();
         let client = RoleId::new("client").unwrap();
         assert_eq!(base.role_label_key(&client), Some("knowledge.roles.client"));
         assert_eq!(

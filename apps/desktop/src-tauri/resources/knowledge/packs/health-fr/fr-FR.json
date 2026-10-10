@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "id": "health",
+  "id": "health-fr",
   "locale": "fr-FR",
   "titles": {
     "person": [
@@ -43,7 +43,7 @@
   "identifier_schemes": [
     {
       "id": "nir",
-      "kind": "social_security",
+      "kind": "health_insurance_number",
       "regex": "\\b[12]\\s?\\d{2}\\s?\\d{2}\\s?(?:\\d{2}|2[AB])\\s?\\d{3}\\s?\\d{3}(?:\\s?\\d{2})?\\b",
       "normalise": "digits",
       "strength": "exact",

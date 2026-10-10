@@ -15,7 +15,7 @@ use rusqlite::Connection;
 use crate::chunking::Chunk;
 use crate::error::AppError;
 use crate::extraction::PageOrigin;
-use crate::knowledge::{self, Domain, KnowledgeDelta, SourceRef};
+use crate::knowledge::{self, Domain, KnowledgeDelta, KnowledgeWrite, SourceRef};
 use crate::tabular::inventory::TabularInventory;
 use crate::tabular::Workbook;
 
@@ -88,6 +88,30 @@ pub struct DocumentIndexRow {
 pub struct LexicalHit {
     pub chunk_id: String,
     pub rank: f64,
+}
+
+/// A stored chunk without its vector: what the knowledge base reads back when it learns from
+/// documents that were analysed before it existed. The embedding is the heavy column of the table
+/// and nothing here needs it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredChunkText {
+    pub chunk_id: String,
+    pub page_number: u32,
+    pub section: u32,
+    pub text: String,
+    pub origin: PageOrigin,
+    pub confidence: Option<f32>,
+}
+
+/// What became of a knowledge write made on its own (a refresh from stored text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefreshWrite {
+    Applied(knowledge::ApplyOutcome),
+    /// The knowledge step failed and was rolled back; nothing changed.
+    Bypassed,
+    /// The document changed (or went) while it was being read: the delta describes a version that
+    /// is no longer stored, so it was not written. The newer version has its own pass.
+    Stale,
 }
 
 impl IndexStore {
@@ -262,19 +286,14 @@ impl IndexStore {
             ocr_engine_version,
             &KnowledgeDelta::empty(source),
         )
+        .map(|_| ())
     }
 
-    /// `replace_document`, with what extraction learned from the file. The chunks, their full-text
-    /// rows, the document record and the knowledge delta are written in **one transaction**: an
-    /// error anywhere (a delta that cannot be applied, a full disk) rolls all of it back, and the
-    /// file keeps exactly what it had. The caller calls this only once every embedding exists, which
-    /// is already the boundary `indexing::run` keeps.
-    ///
-    /// The delta must describe this very file: a different domain, path or content hash is a
-    /// programming error and is refused before anything is written.
+    /// The chunks, their full-text rows and the document record of one file, replaced inside the
+    /// caller's transaction.
     #[allow(clippy::too_many_arguments)]
-    pub fn replace_document_with_knowledge(
-        &mut self,
+    fn write_document_rows(
+        tx: &rusqlite::Transaction<'_>,
         relative_path: &str,
         sha256: &str,
         empty: bool,
@@ -282,15 +301,7 @@ impl IndexStore {
         embeddings: &[Vec<f32>],
         ocr_engine: Option<&str>,
         ocr_engine_version: Option<&str>,
-        delta: &KnowledgeDelta,
     ) -> Result<(), AppError> {
-        if delta.source.domain != Domain::Documents
-            || delta.source.relative_path != relative_path
-            || delta.source.content_id != sha256
-        {
-            return Err(AppError::Internal);
-        }
-        let tx = self.transaction()?;
         tx.execute(
             "DELETE FROM chunks WHERE relative_path = ?1",
             [relative_path],
@@ -350,12 +361,203 @@ impl IndexStore {
             ],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
 
-        // Last, and in the same transaction: if this fails, the chunks above are discarded with it.
-        knowledge::store::apply_delta(&tx, delta)?;
+    /// Apply a delta inside the caller's transaction **without letting it take the transaction
+    /// down**: the delta runs in a savepoint, and if it fails only the savepoint is rolled back.
+    /// The knowledge base is an addition to the product, never a condition of it
+    /// (`docs/DECISIONS.md`, 9 October 2026), so a damaged `kb_*` table must not stop a document
+    /// being indexed. An error from the savepoint statements themselves is a real database failure
+    /// and is returned.
+    fn apply_delta_in_savepoint(
+        tx: &rusqlite::Transaction<'_>,
+        delta: &KnowledgeDelta,
+    ) -> Result<KnowledgeWrite, AppError> {
+        tx.execute_batch("SAVEPOINT knowledge_delta")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        match knowledge::store::apply_delta(tx, delta) {
+            Ok(outcome) => {
+                tx.execute_batch("RELEASE knowledge_delta")
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                Ok(KnowledgeWrite::Applied(outcome))
+            }
+            Err(_) => {
+                tx.execute_batch("ROLLBACK TO knowledge_delta; RELEASE knowledge_delta")
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                // What the source's previous version taught the knowledge base describes text
+                // that is no longer stored. Forget it if that works; if the knowledge tables are
+                // the problem it will not, and the stale rows stay behind a source whose content
+                // no longer matches the document (every reader checks that, and the next pass
+                // reads the document again).
+                Self::forget_source(tx, &delta.source)?;
+                Ok(KnowledgeWrite::Bypassed)
+            }
+        }
+    }
 
+    /// Best effort, in a savepoint of its own: a failure here is not a failure of the write.
+    fn forget_source(tx: &rusqlite::Transaction<'_>, source: &SourceRef) -> Result<(), AppError> {
+        tx.execute_batch("SAVEPOINT knowledge_forget")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        if knowledge::store::remove_source(tx, source.domain, &source.relative_path).is_ok() {
+            tx.execute_batch("RELEASE knowledge_forget")
+                .map_err(|_| AppError::IndexUnavailable)?;
+        } else {
+            tx.execute_batch("ROLLBACK TO knowledge_forget; RELEASE knowledge_forget")
+                .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        Ok(())
+    }
+
+    /// `replace_document`, with what extraction learned from the file. The chunks, their full-text
+    /// rows, the document record and the knowledge delta are written in **one transaction**, so the
+    /// file keeps exactly what it had if the *index* part fails (a full disk, a locked file). The
+    /// caller calls this only once every embedding exists, which is already the boundary
+    /// `indexing::run` keeps.
+    ///
+    /// The knowledge part is different: it is applied in a savepoint, and a failure there rolls
+    /// back the knowledge alone. The chunks are committed, the answer is `Bypassed`, and the source
+    /// is left due so a later pass reads it again. A document is never lost to a knowledge error.
+    ///
+    /// The delta must describe this very file: a different domain, path or content hash is a
+    /// programming error and is refused before anything is written.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_document_with_knowledge(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        embeddings: &[Vec<f32>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+        delta: &KnowledgeDelta,
+    ) -> Result<KnowledgeWrite, AppError> {
+        if delta.source.domain != Domain::Documents
+            || delta.source.relative_path != relative_path
+            || delta.source.content_id != sha256
+        {
+            return Err(AppError::Internal);
+        }
+        let tx = self.transaction()?;
+        Self::write_document_rows(
+            &tx,
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            embeddings,
+            ocr_engine,
+            ocr_engine_version,
+        )?;
+        // Last, and in a savepoint of the same transaction.
+        let write = Self::apply_delta_in_savepoint(&tx, delta)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(write)
+    }
+
+    /// `replace_document` for a pass that must not touch the knowledge base at all
+    /// (`KnowledgeMode::Off`): the same rows, and no `kb_*` row written. What the knowledge base
+    /// learned from the *previous* version of the file is dropped (a delete, never a write), so it
+    /// cannot outlive the text it described; switching the mode back on reads the file again.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_document_plain(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        embeddings: &[Vec<f32>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+    ) -> Result<(), AppError> {
+        let tx = self.transaction()?;
+        Self::write_document_rows(
+            &tx,
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            embeddings,
+            ocr_engine,
+            ocr_engine_version,
+        )?;
+        // Same savepoint rule: a damaged knowledge table cannot stop a document being indexed.
+        Self::forget_source(
+            &tx,
+            &SourceRef {
+                domain: Domain::Documents,
+                relative_path: relative_path.to_string(),
+                content_id: sha256.to_string(),
+            },
+        )?;
         tx.commit().map_err(|_| AppError::IndexUnavailable)?;
         Ok(())
+    }
+
+    /// Write the knowledge of a document that is already indexed, learned from its stored chunks
+    /// (`knowledge::backfill`). Touches no chunk, makes no request. The delta is applied only if
+    /// the document is still the one it was read from, checked inside the transaction: a pass
+    /// that replaced the file in the meantime wins, and this write is dropped as `Stale`.
+    pub fn apply_knowledge_refresh(
+        &mut self,
+        delta: &KnowledgeDelta,
+    ) -> Result<RefreshWrite, AppError> {
+        if delta.source.domain != Domain::Documents {
+            return Err(AppError::Internal);
+        }
+        let tx = self.transaction()?;
+        let current: Option<String> = tx
+            .query_row(
+                "SELECT sha256 FROM documents WHERE relative_path = ?1",
+                [&delta.source.relative_path],
+                |row| row.get(0),
+            )
+            .map(Some)
+            .or_else(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                _ => Err(AppError::IndexUnavailable),
+            })?;
+        if current.as_deref() != Some(delta.source.content_id.as_str()) {
+            return Ok(RefreshWrite::Stale);
+        }
+        let write = Self::apply_delta_in_savepoint(&tx, delta)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(match write {
+            KnowledgeWrite::Applied(outcome) => RefreshWrite::Applied(outcome),
+            KnowledgeWrite::Bypassed => RefreshWrite::Bypassed,
+        })
+    }
+
+    /// The stored chunks of one file in reading order, without their vectors.
+    pub fn chunk_texts_for_document(
+        &self,
+        relative_path: &str,
+    ) -> Result<Vec<StoredChunkText>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT chunk_id, page_number, section, text, origin, confidence
+                 FROM chunks WHERE relative_path = ?1
+                 ORDER BY page_number, section",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([relative_path], |row| {
+                let origin: String = row.get(4)?;
+                Ok(StoredChunkText {
+                    chunk_id: row.get(0)?,
+                    page_number: row.get::<_, i64>(1)? as u32,
+                    section: row.get::<_, i64>(2)? as u32,
+                    text: row.get(3)?,
+                    origin: PageOrigin::from_db_str(&origin),
+                    confidence: row.get(5)?,
+                })
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
     }
 
     pub fn empty_documents(&self) -> Result<Vec<String>, AppError> {

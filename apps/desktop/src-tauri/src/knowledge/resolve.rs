@@ -1235,6 +1235,13 @@ impl InMemoryLookup {
         }
     }
 
+    /// The first id this lookup hands out (the next ones follow). Lets a lookup layered over the
+    /// real store use ids that cannot be a row's.
+    pub fn starting_at(mut self, first_id: i64) -> Self {
+        self.next_id = first_id;
+        self
+    }
+
     /// An active, automatic entity with the aliases `aliases_for` makes. Returns its id.
     pub fn add(&mut self, type_id: &str, name: &str) -> i64 {
         self.add_with(type_id, name, EntityStatus::Active, Origin::Automatic, "")

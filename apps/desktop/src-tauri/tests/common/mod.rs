@@ -2,4 +2,5 @@
 //! crate of its own.
 
 pub mod fake_gateway;
+pub mod knowledge;
 pub mod tabular_fixtures;

@@ -71,7 +71,7 @@ pub fn sound_form(text: &str) -> String {
 }
 
 /// `fold` of one word, ligatures expanded, punctuation gone.
-fn fold_word(text: &str) -> String {
+pub(crate) fn fold_word(text: &str) -> String {
     let mut out = String::new();
     for c in fold(text).chars() {
         push_letter(&mut out, c);
@@ -210,6 +210,21 @@ impl TitleSet {
 
     pub fn is_particle(&self, folded_word: &str) -> bool {
         self.particles.contains(folded_word)
+    }
+
+    /// A title that is never anything else ("Docteur"), by its folded word.
+    pub fn is_title(&self, folded_word: &str) -> bool {
+        self.titles.contains(folded_word)
+    }
+
+    /// A title that is also an ordinary word or an initial ("Me", "M"), by its folded word.
+    pub fn is_weak_title(&self, folded_word: &str) -> bool {
+        self.weak_titles.contains(folded_word)
+    }
+
+    /// A word that says a text is not a name: a month, a document word, a null-like value.
+    pub fn is_stop_word(&self, folded_word: &str) -> bool {
+        self.stop_words.contains(folded_word)
     }
 }
 

@@ -208,6 +208,26 @@ resolver never writes. Whatever creates a row does so in the transaction that st
 (`IndexStore::replace_document_with_knowledge`), and a knowledge step that fails never stops the document from
 being indexed. See `docs/DECISIONS.md`, "Settled by KB lot 1", "Settled by KB lot 3".
 
+**Ingestion from documents (lot 4).** One Analyse pass, per file, once every embedding exists:
+
+```text
+chunks in memory --DeterministicTextExtractor--> candidates --DeterministicResolver--> one KnowledgeDelta
+                                                  (names, titles,       (against the store and the entities
+                                                   organisations,        this document has just drafted)
+                                                   identifiers)
+IndexStore::replace_document_with_knowledge( chunks + FTS + document row + delta )   one transaction,
+                                             the delta in a savepoint: a failure there loses only the names
+after the last file: backfill::refresh_documents  -- stored chunks, no gateway, no original file --
+                                             for every document that has no source row, other content, an
+                                             older extractor or an older list of names
+```
+
+`knowledge::ingest::KnowledgeContext` holds what a pass needs and builds it once (packs and encoder for the
+locale, the gazetteer, the key that hashes personal identifiers); `knowledge::backfill` brings documents analysed
+earlier up to date; `knowledge::secret` keeps the key. Nothing in this path imports an NLP engine or a gateway
+client. `indexing::run` is the pass as it was before; the application calls `indexing::run_with_knowledge`, and
+`knowledge_mode = off` writes documents without touching a `kb_*` row.
+
 ## Deterministic before generative
 
 For anything the workstation can retrieve or compute locally, deterministic computation comes first.

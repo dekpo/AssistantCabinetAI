@@ -5,9 +5,9 @@
 //! decide whether a candidate is a new entity or one the knowledge base already holds: that is the
 //! resolver's job (`knowledge::resolve`), and keeping the two apart is what lets either be replaced.
 //!
-//! This lot ships the port and the plumbing around it, not an extractor that reads a file. The
-//! deterministic text extractor is lot 4, the table extractor lot 5. A local NER model or a spaCy
-//! adapter would implement the same trait later and be registered beside them in a
+//! The port and the plumbing around it came with lot 3; the deterministic text extractor
+//! (`text::DeterministicTextExtractor`) is lot 4's, the table extractor lot 5's. A local NER model
+//! or a spaCy adapter would implement the same trait later and be registered beside them in a
 //! [`CompositeExtractor`]; no NLP engine is a dependency of the client, and business code never
 //! imports one.
 //!
@@ -20,15 +20,33 @@ use super::packs::PackSet;
 use super::phonetic::PhoneticEncoder;
 use super::{Confidence, EntityTypeId, MentionLocator, Method, RoleId, SignalDraft, SourceRef};
 
+pub mod text;
+
 /// One chunk of a document, as the index stores it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChunkInput {
     pub chunk_id: String,
     pub text: String,
+    /// How sure the OCR engine was of this chunk's page, when a machine read it rather than copied
+    /// it from a text layer. `None` for native text. A name read from a poor scan is likelier a
+    /// misreading than a person, so an extractor trusts such a chunk less.
+    pub ocr_confidence: Option<f32>,
 }
 
-/// A document to read: its source and its chunks, in order.
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl ChunkInput {
+    /// A chunk of native text.
+    pub fn native(chunk_id: &str, text: &str) -> Self {
+        Self {
+            chunk_id: chunk_id.to_string(),
+            text: text.to_string(),
+            ocr_confidence: None,
+        }
+    }
+}
+
+/// A document to read: its source and its chunks, in order. The file name is the source's own
+/// relative path; the extractor never opens the file.
+#[derive(Debug, Clone, PartialEq)]
 pub struct DocumentInput {
     pub source: SourceRef,
     pub chunks: Vec<ChunkInput>,
@@ -145,6 +163,9 @@ pub struct ExtractedKnowledge {
     pub candidates: Vec<Candidate>,
     pub relations: Vec<CandidateRelation>,
     pub signals: Vec<SignalDraft>,
+    /// The source held more than the extractor keeps (a hard cap on entities and mentions): what
+    /// is here is the most confident part. Reported as a count, never silently.
+    pub truncated: bool,
 }
 
 impl ExtractedKnowledge {
@@ -222,6 +243,7 @@ impl CompositeExtractor {
         let mut origin: Vec<usize> = Vec::new();
 
         for (extractor, part) in parts.into_iter().enumerate() {
+            merged.truncated |= part.truncated;
             let mut remap: Vec<usize> = Vec::with_capacity(part.candidates.len());
             for candidate in part.candidates {
                 let twin = merged
@@ -377,10 +399,7 @@ mod tests {
                 relative_path: "a.txt".to_string(),
                 content_id: "sha-a".to_string(),
             },
-            chunks: vec![ChunkInput {
-                chunk_id: "a.txt#p1#s1".to_string(),
-                text: "irrelevant".to_string(),
-            }],
+            chunks: vec![ChunkInput::native("a.txt#p1#s1", "irrelevant")],
         }
     }
 
@@ -560,6 +579,7 @@ mod tests {
                 confidence: Confidence::new(0.9),
             }],
             signals: Vec::new(),
+            truncated: false,
         };
         let second = ExtractedKnowledge {
             // Index 0 is a twin of the first extractor's candidate 0; index 1 is new.
@@ -587,6 +607,7 @@ mod tests {
                 },
             ],
             signals: Vec::new(),
+            truncated: false,
         };
         let composite = CompositeExtractor::new()
             .with(Box::new(Scripted {
@@ -612,7 +633,7 @@ mod tests {
     #[test]
     fn signals_of_the_same_pack_keep_the_larger_count() {
         let signal = |hits, distinct_terms| SignalDraft {
-            pack_id: "health".to_string(),
+            pack_id: "health-fr".to_string(),
             hits,
             distinct_terms,
         };

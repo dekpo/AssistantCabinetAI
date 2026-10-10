@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "about": "The resolver contract, one row per situation. 'world' is a tiny invented knowledge base: each name is an entity, 'sources' are the files (numbered) that mention it. 'deleted' names are tombstones. A case asks the resolver about 'text' in 'query' mode (a name written in a question, inside the files of 'selection'; leave it out for no restriction) or in 'ingestion' mode (a name read in a file; 'in_source' lists the entities already seen in that same file; leave it out when unknown). 'outcome' is existing, possible_match, ambiguous, new_entity or unresolved; 'who' the names it must point at (any order); 'reason' the code of a possible match or of an unresolved answer. Add a row, run `cargo test --test knowledge_resolver the_resolver_cases_hold -- --nocapture`, and read the table. A phonetic key is never written here: two names either sound alike to the encoder or they do not.",
+  "world": [
+    { "name": "Jean Dupont", "type": "person", "sources": [1] },
+    { "name": "Marie Dupont", "type": "person", "sources": [2] },
+    { "name": "Pierre Martin", "type": "person", "sources": [1] },
+    { "name": "Paul Martin", "type": "person", "sources": [2] },
+    { "name": "Hélène Moreau", "type": "person", "sources": [1, 2] },
+    { "name": "Clinique Saint Michel", "type": "organization", "sources": [2] }
+  ],
+  "deleted": [
+    { "name": "Camille Exemple", "type": "person" }
+  ],
+  "cases": [
+    { "mode": "query", "text": "Dr Jean Dupont", "selection": [1], "outcome": "existing", "who": ["Jean Dupont"], "note": "a full name inside the selection" },
+    { "mode": "query", "text": "DUPONT, Jean", "selection": [1], "outcome": "existing", "who": ["Jean Dupont"], "note": "the other order is an alias" },
+    { "mode": "query", "text": "helene moreau", "selection": [2], "outcome": "existing", "who": ["Hélène Moreau"], "note": "accents and case do not matter" },
+    { "mode": "query", "text": "Dupont", "selection": [1], "outcome": "existing", "who": ["Jean Dupont"], "note": "a surname is enough when only one answers inside the selection" },
+    { "mode": "query", "text": "Dupont", "selection": [1, 2], "outcome": "ambiguous", "who": ["Jean Dupont", "Marie Dupont"], "note": "two Duponts inside the selection: ask" },
+    { "mode": "query", "text": "Dupont", "selection": [3], "outcome": "unresolved", "reason": "not_in_selection", "note": "known, but not in these files; nobody is named" },
+    { "mode": "query", "text": "Dr Martin", "selection": [1], "outcome": "existing", "who": ["Pierre Martin"], "note": "the other Martin is in a file that is not selected, and is never shown" },
+    { "mode": "query", "text": "Martin", "selection": [1, 2], "outcome": "ambiguous", "who": ["Pierre Martin", "Paul Martin"] },
+    { "mode": "query", "text": "Moreau", "outcome": "existing", "who": ["Hélène Moreau"], "note": "no selection: the whole knowledge base answers" },
+    { "mode": "query", "text": "J. Dupont", "selection": [1], "outcome": "possible_match", "reason": "initial", "who": ["Jean Dupont"], "note": "an initial is offered, never assumed" },
+    { "mode": "query", "text": "Jean Dupond", "selection": [1], "outcome": "possible_match", "reason": "phonetic", "who": ["Jean Dupont"], "note": "one letter off and the same sound: did you mean" },
+    { "mode": "query", "text": "Dupond", "outcome": "possible_match", "reason": "phonetic", "who": ["Jean Dupont", "Marie Dupont"] },
+    { "mode": "query", "text": "Clinique Saint-Michel", "type": "organization", "outcome": "existing", "who": ["Clinique Saint Michel"] },
+    { "mode": "query", "text": "Clinique Saint Michel", "type": "organization", "selection": [1], "outcome": "unresolved", "reason": "not_in_selection" },
+    { "mode": "query", "text": "Zoe Quinn", "outcome": "unresolved", "reason": "no_match" },
+    { "mode": "query", "text": "Camille Exemple", "outcome": "unresolved", "reason": "suppressed", "note": "the user deleted this name" },
+
+    { "mode": "ingestion", "text": "Jean Dupont", "outcome": "existing", "who": ["Jean Dupont"] },
+    { "mode": "ingestion", "text": "Dr. Hélène Moreau", "outcome": "existing", "who": ["Hélène Moreau"] },
+    { "mode": "ingestion", "text": "J. Dupont", "in_source": ["Jean Dupont"], "outcome": "existing", "who": ["Jean Dupont"], "note": "nobody else in this file answers to Dupont" },
+    { "mode": "ingestion", "text": "J. Dupont", "in_source": ["Jean Dupont", "Marie Dupont"], "outcome": "new_entity", "note": "Marie Dupont is in the same file: not safe, stays apart" },
+    { "mode": "ingestion", "text": "J. Dupont", "outcome": "new_entity", "note": "the file's entities are not known: decline" },
+    { "mode": "ingestion", "text": "Dr Martin", "in_source": ["Pierre Martin"], "outcome": "existing", "who": ["Pierre Martin"] },
+    { "mode": "ingestion", "text": "Dr Martin", "in_source": ["Pierre Martin", "Paul Martin"], "outcome": "unresolved", "reason": "surname_only" },
+    { "mode": "ingestion", "text": "Dr Martin", "in_source": [], "outcome": "unresolved", "reason": "surname_only", "note": "known elsewhere, absent here: no guess" },
+    { "mode": "ingestion", "text": "Jean Dupond", "outcome": "possible_match", "reason": "phonetic", "who": ["Jean Dupont"], "note": "never merged; a separate entity is created next to it" },
+    { "mode": "ingestion", "text": "Zoe Quinn", "outcome": "new_entity" },
+    { "mode": "ingestion", "text": "Camille Exemple", "outcome": "unresolved", "reason": "suppressed" },
+    { "mode": "ingestion", "text": "Dr", "outcome": "unresolved", "reason": "empty" }
+  ]
+}

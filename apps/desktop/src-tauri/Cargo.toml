@@ -43,6 +43,11 @@ walkdir = "2.5.0"
 sha2 = "0.10.9"
 # Accent-free, single-form file names and matching (`filename_sanitizer`, `file_reference`).
 unicode-normalization = "0.1"
+# The identifier patterns of the knowledge base's lexicon packs (`knowledge::packs`). Already in the
+# dependency tree through tauri-utils, so this adds no new code to the build. Linear-time matching
+# (no backtracking, hence no ReDoS) and pure Rust on both platforms; `unicode-perl` and
+# `unicode-case` are the two features a pattern with `\d`, `\s` or `(?i)` needs.
+regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 
 # Tabular pipeline (docs/ARCHITECTURE.md): CSV/XLSX are a first-class source with their own
 # adapters, never flattened into text chunks and never routed through document embeddings.

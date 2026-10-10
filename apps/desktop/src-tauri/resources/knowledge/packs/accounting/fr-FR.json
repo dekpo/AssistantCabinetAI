@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "id": "accounting",
+  "locale": "fr-FR",
+  "titles": {
+    "person": []
+  },
+  "weak_titles": [],
+  "particles": [],
+  "title_spoken": {},
+  "stop_words": [
+    "bilan",
+    "balance",
+    "grand",
+    "livre",
+    "journal",
+    "écriture",
+    "tva",
+    "exercice",
+    "acompte",
+    "règlement",
+    "échéance",
+    "paiement"
+  ],
+  "org_markers": {
+    "prefix": [],
+    "suffix": []
+  },
+  "identifier_schemes": [
+    {
+      "id": "siret",
+      "kind": "company_id",
+      "regex": "\\b\\d{3}\\s?\\d{3}\\s?\\d{3}\\s?\\d{5}\\b",
+      "normalise": "digits",
+      "strength": "exact",
+      "personal_key": false
+    },
+    {
+      "id": "vat_number",
+      "kind": "vat",
+      "regex": "\\bFR\\s?\\d{2}\\s?\\d{9}\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": false
+    }
+  ],
+  "columns": [
+    {
+      "headers": [
+        "tiers",
+        "compte tiers"
+      ],
+      "semantic": {
+        "type": "organization"
+      },
+      "confidence": 0.8
+    },
+    {
+      "headers": [
+        "devis",
+        "numéro de devis",
+        "n° devis"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "quote"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "siret",
+        "siren"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "company_id"
+      },
+      "confidence": 0.9
+    }
+  ],
+  "relations": [],
+  "roles": [
+    {
+      "id": "provider",
+      "label_key": "knowledge.roles.accounting.provider"
+    }
+  ],
+  "detection_terms": [
+    "facture",
+    "tva",
+    "bilan",
+    "grand livre",
+    "écriture",
+    "comptabilité",
+    "acompte",
+    "échéance",
+    "règlement",
+    "avoir",
+    "devis",
+    "fournisseur",
+    "exercice",
+    "journal",
+    "paiement"
+  ]
+}

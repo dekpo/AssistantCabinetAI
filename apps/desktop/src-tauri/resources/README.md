@@ -29,3 +29,40 @@ and a CI step, not on anything wrong with the resources themselves.
 See `docs/SPRINT-2.5-ASSESSMENT.md` sections E and L for where these files come from and their
 licences (`fra.traineddata`: Apache 2.0; pdfium: BSD-3-Clause / Apache-2.0; Tesseract: Apache 2.0).
 `macOS` equivalents are not yet scripted - see `../binaries/README.md`.
+
+# Bundled knowledge packs
+
+`resources/knowledge/` holds the lexicon packs of the knowledge base (`src/knowledge/packs.rs`). They are text,
+committed, and embedded into the application with `include_str!` exactly like `resources/tabular-questions/`:
+nothing to fetch, nothing platform-specific, the same file on Windows and macOS.
+
+```text
+resources/knowledge/base/<locale>.json              always loaded: profession-neutral
+resources/knowledge/packs/<pack-id>/<locale>.json   optional: adds vocabulary for one domain
+                                                    (health, legal, accounting)
+```
+
+A pack holds **words and patterns only, never a sentence a person reads** (a sentence is an interface catalogue
+entry). Every file has `schema: 1`, its own `id` and `locale`, and these optional fields:
+
+```text
+titles            { person: [...] }    honorifics: "Docteur", "Mrs"
+weak_titles       [...]                titles that are also ordinary words or initials: "Me", "M"
+particles         [...]                small words inside a name: "de", "van"
+title_spoken      { "dr": "docteur" }  how a title is said aloud (words, for text to speech)
+stop_words        [...]                months, document words, null-like values; never names
+org_markers       { prefix, suffix }   "association", "clinique" / "SARL", "Inc"
+identifier_schemes [ { id, kind, regex, normalise: alnum|digits, strength: exact|possible, personal_key } ]
+columns           [ { headers: [...], semantic: { type, subtype?, role? }, confidence } ]
+relations         [ { from_role, to_role, predicate } ]
+roles             [ { id, label_key } ]   label_key is an interface catalogue key under "knowledge."
+detection_terms   [...]                   words that point at a domain (activity profiles)
+```
+
+Rules the loader enforces (a violation is the machine code `knowledge_pack_invalid`, with the pack id and the place
+in the file, and a test that loads every pack in both languages fails the build): no unknown field; a list entry is
+a word or a phrase of at most four words with no sentence punctuation; a pattern compiles, matches something and
+matches nothing empty; a role used by a column or a relation exists; a domain pack never changes an entity type
+(one header cannot mean two types across the active packs); every role `label_key` exists in both interface
+catalogues. Edit a pack, run `cargo test --test knowledge_packs`, and
+`cargo test --test knowledge_packs print_the_summary_of_every_pack -- --nocapture` to see the counts.

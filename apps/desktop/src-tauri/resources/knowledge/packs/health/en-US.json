@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "id": "health",
+  "locale": "en-US",
+  "titles": {
+    "person": [
+      "Nurse",
+      "Midwife"
+    ]
+  },
+  "weak_titles": [],
+  "particles": [],
+  "title_spoken": {},
+  "stop_words": [
+    "prescription",
+    "consultation",
+    "medical",
+    "lab",
+    "results",
+    "analysis",
+    "xray",
+    "scan",
+    "care"
+  ],
+  "org_markers": {
+    "prefix": [
+      "clinic",
+      "hospital",
+      "medical center",
+      "laboratory",
+      "pharmacy",
+      "health center"
+    ],
+    "suffix": []
+  },
+  "identifier_schemes": [
+    {
+      "id": "ssn",
+      "kind": "social_security",
+      "regex": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+      "normalise": "digits",
+      "strength": "exact",
+      "personal_key": true
+    }
+  ],
+  "columns": [
+    {
+      "headers": [
+        "patient",
+        "patient name"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "client"
+      },
+      "confidence": 0.9
+    },
+    {
+      "headers": [
+        "physician",
+        "doctor",
+        "practitioner",
+        "provider",
+        "referring doctor",
+        "primary care"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "provider"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "medication",
+        "drug",
+        "treatment",
+        "prescription"
+      ],
+      "semantic": {
+        "type": "item",
+        "subtype": "medication"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "insurer",
+        "insurance",
+        "health plan"
+      ],
+      "semantic": {
+        "type": "organization",
+        "subtype": "insurer"
+      },
+      "confidence": 0.8
+    }
+  ],
+  "relations": [],
+  "roles": [
+    {
+      "id": "client",
+      "label_key": "knowledge.roles.health.client"
+    },
+    {
+      "id": "provider",
+      "label_key": "knowledge.roles.health.provider"
+    }
+  ],
+  "detection_terms": [
+    "patient",
+    "prescription",
+    "consultation",
+    "medication",
+    "treatment",
+    "diagnosis",
+    "physician",
+    "dosage",
+    "sick leave",
+    "insurance card",
+    "history",
+    "examination",
+    "symptom",
+    "vaccine"
+  ]
+}

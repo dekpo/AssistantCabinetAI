@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "id": "accounting",
+  "locale": "en-US",
+  "titles": {
+    "person": []
+  },
+  "weak_titles": [],
+  "particles": [],
+  "title_spoken": {},
+  "stop_words": [
+    "balance",
+    "ledger",
+    "journal",
+    "entry",
+    "vat",
+    "fiscal",
+    "deposit",
+    "payment",
+    "due"
+  ],
+  "org_markers": {
+    "prefix": [],
+    "suffix": []
+  },
+  "identifier_schemes": [
+    {
+      "id": "ein",
+      "kind": "company_id",
+      "regex": "\\b\\d{2}-\\d{7}\\b",
+      "normalise": "digits",
+      "strength": "exact",
+      "personal_key": false
+    },
+    {
+      "id": "vat_number",
+      "kind": "vat",
+      "regex": "\\bGB\\s?\\d{9}\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": false
+    }
+  ],
+  "columns": [
+    {
+      "headers": [
+        "account",
+        "ledger account",
+        "counterparty"
+      ],
+      "semantic": {
+        "type": "organization"
+      },
+      "confidence": 0.75
+    },
+    {
+      "headers": [
+        "quote number",
+        "quote no",
+        "estimate number"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "quote"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "ein",
+        "tax id",
+        "vat number"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "company_id"
+      },
+      "confidence": 0.9
+    }
+  ],
+  "relations": [],
+  "roles": [
+    {
+      "id": "provider",
+      "label_key": "knowledge.roles.accounting.provider"
+    }
+  ],
+  "detection_terms": [
+    "invoice",
+    "vat",
+    "balance sheet",
+    "ledger",
+    "journal entry",
+    "accounting",
+    "deposit",
+    "due date",
+    "payment",
+    "credit note",
+    "quote",
+    "supplier",
+    "fiscal year",
+    "journal",
+    "payable"
+  ]
+}

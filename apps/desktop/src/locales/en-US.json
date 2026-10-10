@@ -320,6 +320,7 @@
     "knowledge_unavailable": "The local knowledge base is not available right now. Your documents and your answers are not affected. Try again; if it persists, restart the application.",
     "knowledge_entity_not_found": "This item no longer exists in the knowledge base.",
     "knowledge_merge_refused": "This merge is not possible: nothing was changed.",
+    "knowledge_pack_invalid": "A vocabulary file shipped with the application is invalid ({pack}, {path}). The knowledge base stays inactive; your documents are not affected. Please report it.",
     "ocr_page_unreadable": "This page has no text recognition could keep.",
     "ocr_unavailable": "Text recognition is not available. Scanned pages are reported as unreadable until it is fixed.",
     "output_locale_not_supported": "This software cannot yet answer in the language {requested}.",
@@ -451,5 +452,27 @@
     "topGroups": "The {count} {group} with the largest total {column}:",
     "topGroupsCapped": "The requested top {requested} was capped at 50.",
     "countPerGroup": "Number of rows per {group}:"
+  },
+  "knowledge": {
+    "roles": {
+      "client": "Client",
+      "provider": "Provider",
+      "counterparty": "Counterparty",
+      "sender": "Sender",
+      "recipient": "Recipient",
+      "author": "Author",
+      "supplier": "Supplier",
+      "health": {
+        "client": "Patient",
+        "provider": "Practitioner"
+      },
+      "legal": {
+        "provider": "Lawyer",
+        "counterparty": "Opposing party"
+      },
+      "accounting": {
+        "provider": "Accountant"
+      }
+    }
   }
 }

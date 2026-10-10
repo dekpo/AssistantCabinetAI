@@ -1538,6 +1538,207 @@ pub fn find_entities_by_phonetic(
     db(rows.collect())
 }
 
+/// The columns of a joined `(entity, alias)` row: the nine entity columns of the survivor, then the
+/// eight alias columns.
+fn entity_alias_columns() -> String {
+    format!(
+        "{}, a.alias_id, a.entity_id, a.display, a.normalized, a.phonetic_key, a.kind, a.origin, a.confidence",
+        entity_columns("s")
+    )
+}
+
+fn entity_alias_from_row(row: &Row<'_>) -> rusqlite::Result<(Entity, Alias)> {
+    let entity = entity_from_row(row)?;
+    let kind: String = row.get(14)?;
+    let origin: String = row.get(15)?;
+    let alias = Alias {
+        alias_id: row.get(9)?,
+        entity_id: row.get(10)?,
+        display: row.get(11)?,
+        normalized: row.get(12)?,
+        phonetic_key: row.get(13)?,
+        kind: AliasKind::from_code(&kind).ok_or_else(|| bad_code(14, &kind))?,
+        origin: Origin::from_code(&origin).ok_or_else(|| bad_code(15, &origin))?,
+        confidence: row.get::<_, f64>(16)? as f32,
+    };
+    Ok((entity, alias))
+}
+
+/// The live entities that answer to this exact alias, each with the alias that matched, after
+/// following merges. The canonical name is also an alias of its entity, so this finds it too.
+pub fn find_entities_by_alias(
+    connection: &Connection,
+    normalized: &str,
+) -> Result<Vec<(Entity, Alias)>, AppError> {
+    let mut statement = db(connection.prepare(&format!(
+        "SELECT {} FROM kb_aliases a
+         JOIN kb_effective_entity v ON v.entity_id = a.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE a.normalized = ?1 AND s.status IN ('candidate', 'active')
+         ORDER BY s.entity_id, a.alias_id",
+        entity_alias_columns()
+    )))?;
+    let rows = db(statement.query_map([normalized], entity_alias_from_row))?;
+    db(rows.collect())
+}
+
+/// Like `find_entities_by_phonetic`, with the alias whose key matched.
+pub fn find_aliases_by_phonetic(
+    connection: &Connection,
+    phonetic_key: &str,
+) -> Result<Vec<(Entity, Alias)>, AppError> {
+    if phonetic_key.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut statement = db(connection.prepare(&format!(
+        "SELECT {} FROM kb_aliases a
+         JOIN kb_effective_entity v ON v.entity_id = a.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE a.phonetic_key = ?1 AND s.status IN ('candidate', 'active')
+         ORDER BY s.entity_id, a.alias_id",
+        entity_alias_columns()
+    )))?;
+    let rows = db(statement.query_map([phonetic_key], entity_alias_from_row))?;
+    db(rows.collect())
+}
+
+/// The live entities with an alias that contains `word` as a whole word (at most `limit` rows).
+/// The resolver narrows these with an exact comparison; the name index only finds the candidates.
+pub fn find_aliases_with_word(
+    connection: &Connection,
+    word: &str,
+    limit: usize,
+) -> Result<Vec<(Entity, Alias)>, AppError> {
+    let word: String = word.chars().filter(|c| c.is_alphanumeric()).collect();
+    if word.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+    let mut statement = db(connection.prepare(&format!(
+        "SELECT {} FROM kb_names_fts
+         JOIN kb_aliases a ON a.alias_id = kb_names_fts.rowid
+         JOIN kb_effective_entity v ON v.entity_id = a.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE kb_names_fts MATCH ?1 AND s.status IN ('candidate', 'active')
+         ORDER BY s.entity_id, a.alias_id
+         LIMIT ?2",
+        entity_alias_columns()
+    )))?;
+    let rows = db(statement.query_map(
+        params![format!("\"{word}\""), limit as i64],
+        entity_alias_from_row,
+    ))?;
+    db(rows.collect())
+}
+
+/// The live entities that carry the identifier `normalized` of scheme `scheme`: through an
+/// `identifier:<scheme>` attribute, or because the entity *is* the identifier (type `identifier`,
+/// named by its reduced value).
+pub fn find_entities_by_identifier(
+    connection: &Connection,
+    scheme: &str,
+    normalized: &str,
+) -> Result<Vec<Entity>, AppError> {
+    if normalized.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut statement = db(connection.prepare(&format!(
+        "SELECT DISTINCT {columns} FROM kb_attributes t
+         JOIN kb_effective_entity v ON v.entity_id = t.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE t.key = ?1 AND t.value = ?2 AND s.status IN ('candidate', 'active')
+         UNION
+         SELECT DISTINCT {columns} FROM kb_entities e
+         JOIN kb_effective_entity v ON v.entity_id = e.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE e.type_id = 'identifier' AND e.normalized_name = ?2
+           AND s.status IN ('candidate', 'active')
+         ORDER BY 1",
+        columns = entity_columns("s")
+    )))?;
+    let rows = db(statement.query_map(
+        params![format!("identifier:{scheme}"), normalized],
+        entity_from_row,
+    ))?;
+    db(rows.collect())
+}
+
+/// One alias of a live entity as the in-memory name list wants it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameListRow {
+    /// The entity after following merges.
+    pub entity_id: i64,
+    pub type_id: String,
+    pub normalized: String,
+    pub kind: AliasKind,
+    pub origin: Origin,
+}
+
+/// Every alias the gazetteer should know: those of active entities, plus the manual ones (an alias
+/// or an entity the user typed counts even while the entity is still a candidate). Candidates the
+/// extractor guessed are left out, so a guess cannot make the next guess look like a certainty.
+pub fn name_list_rows(connection: &Connection) -> Result<Vec<NameListRow>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT s.entity_id, s.type_id, a.normalized, a.kind, a.origin
+         FROM kb_aliases a
+         JOIN kb_effective_entity v ON v.entity_id = a.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE s.status = 'active'
+            OR (s.status = 'candidate' AND (s.origin = 'manual' OR a.origin = 'manual'))
+         ORDER BY s.entity_id, a.alias_id",
+    ))?;
+    let rows = db(statement.query_map([], |row| {
+        let kind: String = row.get(3)?;
+        let origin: String = row.get(4)?;
+        Ok(NameListRow {
+            entity_id: row.get(0)?,
+            type_id: row.get(1)?,
+            normalized: row.get(2)?,
+            kind: AliasKind::from_code(&kind).ok_or_else(|| bad_code(3, &kind))?,
+            origin: Origin::from_code(&origin).ok_or_else(|| bad_code(4, &origin))?,
+        })
+    }))?;
+    db(rows.collect())
+}
+
+/// One alias as the recomputation of phonetic keys needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AliasKeyRow {
+    pub alias_id: i64,
+    pub display: String,
+    pub kind: AliasKind,
+    pub phonetic_key: String,
+}
+
+/// Every alias with its display form, its kind and its stored key, for the recomputation that
+/// follows a change of encoder.
+pub fn alias_phonetic_rows(connection: &Connection) -> Result<Vec<AliasKeyRow>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT alias_id, display, kind, phonetic_key FROM kb_aliases ORDER BY alias_id",
+    ))?;
+    let rows = db(statement.query_map([], |row| {
+        let kind: String = row.get(2)?;
+        Ok(AliasKeyRow {
+            alias_id: row.get(0)?,
+            display: row.get(1)?,
+            kind: AliasKind::from_code(&kind).ok_or_else(|| bad_code(2, &kind))?,
+            phonetic_key: row.get(3)?,
+        })
+    }))?;
+    db(rows.collect())
+}
+
+pub fn set_alias_phonetic_key(
+    connection: &Connection,
+    alias_id: i64,
+    phonetic_key: &str,
+) -> Result<(), AppError> {
+    db(connection.execute(
+        "UPDATE kb_aliases SET phonetic_key = ?2 WHERE alias_id = ?1 AND phonetic_key <> ?2",
+        params![alias_id, phonetic_key],
+    ))?;
+    Ok(())
+}
+
 /// Whether the user deleted this name for this type, so a re-analysis must not recreate it.
 pub fn is_tombstoned(
     connection: &Connection,

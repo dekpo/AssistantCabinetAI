@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "id": "base",
+  "locale": "en-US",
+  "titles": {
+    "person": ["Dr", "Doctor", "Prof", "Professor", "Mr", "Mister", "Mrs", "Ms", "Miss", "Mx", "Sir", "Madam"]
+  },
+  "weak_titles": [],
+  "particles": ["de", "du", "la", "le", "van", "von", "der", "den", "di", "da", "del", "dos", "el", "al", "st"],
+  "title_spoken": {
+    "dr": "doctor",
+    "prof": "professor",
+    "mr": "mister",
+    "mrs": "missus",
+    "ms": "miss",
+    "mx": "mix"
+  },
+  "stop_words": [
+    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "invoice", "quote", "estimate", "order", "receipt", "statement", "letter", "mail", "note", "memo",
+    "scan", "copy", "original", "draft", "version", "final", "template", "attachment", "report",
+    "account", "contract", "certificate", "table", "list", "total", "summary",
+    "nul", "null", "none", "unknown", "n/a", "na", "blank", "yes", "no"
+  ],
+  "org_markers": {
+    "prefix": ["association", "company", "group", "foundation", "union", "city of", "county of"],
+    "suffix": ["Inc", "LLC", "Ltd", "Corp", "Co", "LLP", "PLC", "GmbH"]
+  },
+  "identifier_schemes": [
+    {
+      "id": "email",
+      "kind": "email",
+      "regex": "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9\\-]+(?:\\.[A-Za-z0-9\\-]+)*\\.[A-Za-z]{2,}",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": true
+    },
+    {
+      "id": "phone",
+      "kind": "phone",
+      "regex": "(?:\\+?1[\\s.\\-]?)?\\(?\\d{3}\\)?[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}",
+      "normalise": "digits",
+      "strength": "possible",
+      "personal_key": false
+    },
+    {
+      "id": "iban",
+      "kind": "iban",
+      "regex": "\\b[A-Z]{2}\\d{2}(?:\\s?[A-Z0-9]{4}){3,7}(?:\\s?[A-Z0-9]{1,3})?\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": true
+    },
+    {
+      "id": "invoice_number",
+      "kind": "invoice",
+      "regex": "\\b[A-Z]{2,4}-\\d{4}-\\d{2,6}\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": false
+    },
+    {
+      "id": "order_number",
+      "kind": "order",
+      "regex": "\\b(?:PO|SO|ORD)[\\-\\s]?\\d{4,10}\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": false
+    }
+  ],
+  "columns": [
+    { "headers": ["last name", "surname", "family name"], "semantic": { "type": "person", "subtype": "family_name" }, "confidence": 0.85 },
+    { "headers": ["first name", "given name", "forename"], "semantic": { "type": "person", "subtype": "given_name" }, "confidence": 0.85 },
+    { "headers": ["full name", "name", "contact name"], "semantic": { "type": "person" }, "confidence": 0.8 },
+    { "headers": ["client", "customer", "customer name", "client name"], "semantic": { "type": "person", "role": "client" }, "confidence": 0.8 },
+    { "headers": ["recipient", "addressee"], "semantic": { "type": "person", "role": "recipient" }, "confidence": 0.8 },
+    { "headers": ["sender", "from"], "semantic": { "type": "person", "role": "sender" }, "confidence": 0.8 },
+    { "headers": ["author", "written by"], "semantic": { "type": "person", "role": "author" }, "confidence": 0.8 },
+    { "headers": ["supplier", "vendor", "supplier name", "vendor name"], "semantic": { "type": "organization", "role": "supplier" }, "confidence": 0.85 },
+    { "headers": ["company", "organisation", "organization", "business", "firm"], "semantic": { "type": "organization" }, "confidence": 0.85 },
+    { "headers": ["address", "street", "street address"], "semantic": { "type": "location", "subtype": "address" }, "confidence": 0.85 },
+    { "headers": ["city", "town"], "semantic": { "type": "location", "subtype": "city" }, "confidence": 0.9 },
+    { "headers": ["zip", "zip code", "postal code", "postcode"], "semantic": { "type": "location", "subtype": "postal_code" }, "confidence": 0.9 },
+    { "headers": ["country"], "semantic": { "type": "location", "subtype": "country" }, "confidence": 0.9 },
+    { "headers": ["email", "e-mail", "email address", "mail"], "semantic": { "type": "identifier", "subtype": "email" }, "confidence": 0.95 },
+    { "headers": ["phone", "telephone", "mobile", "cell", "phone number"], "semantic": { "type": "identifier", "subtype": "phone" }, "confidence": 0.9 },
+    { "headers": ["invoice number", "invoice no", "invoice id", "invoice"], "semantic": { "type": "identifier", "subtype": "invoice" }, "confidence": 0.9 },
+    { "headers": ["reference", "ref", "id", "identifier", "number"], "semantic": { "type": "identifier" }, "confidence": 0.7 },
+    { "headers": ["description", "product", "item", "article"], "semantic": { "type": "item" }, "confidence": 0.8 }
+  ],
+  "relations": [
+    { "from_role": "client", "to_role": "provider", "predicate": "served_by" },
+    { "from_role": "client", "to_role": "supplier", "predicate": "supplied_by" },
+    { "from_role": "sender", "to_role": "recipient", "predicate": "sent_to" }
+  ],
+  "roles": [
+    { "id": "client", "label_key": "knowledge.roles.client" },
+    { "id": "provider", "label_key": "knowledge.roles.provider" },
+    { "id": "counterparty", "label_key": "knowledge.roles.counterparty" },
+    { "id": "sender", "label_key": "knowledge.roles.sender" },
+    { "id": "recipient", "label_key": "knowledge.roles.recipient" },
+    { "id": "author", "label_key": "knowledge.roles.author" },
+    { "id": "supplier", "label_key": "knowledge.roles.supplier" }
+  ],
+  "detection_terms": []
+}

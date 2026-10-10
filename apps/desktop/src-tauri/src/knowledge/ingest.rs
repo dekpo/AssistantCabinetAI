@@ -185,6 +185,11 @@ impl KnowledgeContext {
             return Ok(context);
         }
         maintenance::ensure_phonetic_keys(connection, &context.titles, context.encoder.as_ref())?;
+        maintenance::ensure_alias_generation(
+            connection,
+            &context.titles,
+            context.encoder.as_ref(),
+        )?;
         let packs_changed = maintenance::record_packs(connection, &context.packs)?;
         let key_changed = note_key(connection, &context.key)?;
         context.gazetteer = Gazetteer::rebuild_from_store(connection)?;

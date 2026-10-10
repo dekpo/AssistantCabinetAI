@@ -2123,6 +2123,42 @@ pub fn set_alias_phonetic_key(
     Ok(())
 }
 
+/// The live people whose name ends in a single letter (`dupont j`), as `(entity_id,
+/// canonical_name)`. A superset: the caller reads each name again with the rule that decides
+/// whether it is a surname followed by an initial. Used by the alias refresh, which must not read
+/// every entity of the base.
+pub fn people_ending_in_a_letter(connection: &Connection) -> Result<Vec<(i64, String)>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT entity_id, canonical_name FROM kb_entities
+         WHERE type_id = 'person' AND status IN ('candidate', 'active') AND merged_into IS NULL
+           AND normalized_name GLOB '* ?'
+         ORDER BY entity_id",
+    ))?;
+    let rows = db(statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?))))?;
+    db(rows.collect())
+}
+
+/// Record that two entities might be one, outside a pass (the alias refresh). The pair is stored
+/// in one order and a pair already known, whatever the user decided about it, is left alone.
+/// Returns whether a row was written.
+pub fn record_possible_match(
+    connection: &Connection,
+    one: i64,
+    other: i64,
+    reason: &str,
+    score: f32,
+) -> Result<bool, AppError> {
+    if one == other {
+        return Ok(false);
+    }
+    let (low, high) = (one.min(other), one.max(other));
+    Ok(db(connection.execute(
+        "INSERT OR IGNORE INTO kb_possible_matches (entity_a, entity_b, reason, score, state)
+         VALUES (?1, ?2, ?3, ?4, 'open')",
+        params![low, high, reason, confidence_value(score)],
+    ))? > 0)
+}
+
 /// Whether the user deleted this name for this type, so a re-analysis must not recreate it.
 pub fn is_tombstoned(
     connection: &Connection,

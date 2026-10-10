@@ -35,7 +35,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use rusqlite::Connection;
 
-use super::normalize::{normalize_name, normalize_name_with, NormalizedName, TitleSet, WeakTitles};
+use super::normalize::{
+    normalize_name, normalize_name_with, surname_then_initial, NormalizedName, TitleSet, WeakTitles,
+};
 use super::packs::IdentifierStrength;
 use super::phonetic::{bounded_damerau_levenshtein, PhoneticEncoder};
 use super::{
@@ -71,7 +73,9 @@ const CONFIDENCE_AMBIGUOUS: f32 = 0.50;
 pub const CANDIDATE_CONFIDENCE_CAP: f32 = 0.40;
 const SCORE_PHONETIC: f32 = 0.70;
 const SCORE_TOKEN_SET: f32 = 0.75;
-const SCORE_INITIAL: f32 = 0.60;
+/// What a surname with an initial and a full name that fits it are scored at, in a question and in
+/// the pairs a pass records.
+pub const SCORE_INITIAL: f32 = 0.60;
 const SCORE_SHARED_IDENTIFIER: f32 = 0.70;
 
 // ---------------------------------------------------------------------------------------------
@@ -645,12 +649,79 @@ impl Run<'_, '_> {
             return self.decide_alias(aliases, &name);
         }
 
+        // A surname and an initial against a full name: a hint, never a link.
+        if let Some(possible) = self.initial_compatibility(&name) {
+            return possible;
+        }
+
         // Signal 6: only a hint, never a link.
         if let Some(possible) = self.fuzzy(&name) {
             return possible;
         }
 
         self.nothing_found(&name)
+    }
+
+    /// `Dupont J` and `Jean Dupont`, whichever is stored and whichever is read: the same surname,
+    /// and the initial is the first letter of the given name. The two are never one entity on that
+    /// evidence (master section 7: an initial and a surname links only with support, and a
+    /// compatible name never merges). At ingestion the new name stays a separate entity with a
+    /// `kb_possible_matches` row for each full name it could be; in a question it is offered.
+    /// Two full names that fit (`Jean Dupont`, `Jeanne Dupont`) are a question, never a pick.
+    ///
+    /// Only a person is read this way: an organisation or an item keeps its own rules.
+    fn initial_compatibility(&self, name: &NormalizedName) -> Option<Resolution> {
+        let titles = self.context.titles;
+        let may_be_person = self
+            .surface
+            .type_id
+            .as_ref()
+            .is_none_or(|type_id| type_id.as_str() == EntityTypeId::PERSON);
+        if !may_be_person {
+            return None;
+        }
+        // What is read decides what is looked for: a surname and an initial looks for full names,
+        // a full name looks for the surnames-and-initials that fit it.
+        let (key, wants_surname_initial) = match surname_then_initial(name, titles) {
+            Some(form) => (form.initial_surname_key(), false),
+            None => (initial_surname_key_of_full_name(name, titles)?, true),
+        };
+        let hits: Vec<EntityHit> = self
+            .keep(self.lookup().by_alias(&key))
+            .into_iter()
+            .filter(|hit| {
+                hit.type_id == EntityTypeId::PERSON && hit.alias_kind == Some(AliasKind::Initial)
+            })
+            .filter(|hit| {
+                let stored = normalize_name(&hit.normalized_name, titles);
+                surname_then_initial(&stored, titles).is_some() == wants_surname_initial
+            })
+            .collect();
+        if hits.is_empty() {
+            return None;
+        }
+        Some(if self.is_query() {
+            if hits.len() == 1 {
+                Resolution::PossibleMatch {
+                    entities: hits,
+                    reason: PossibleReason::Initial,
+                    score: Confidence::new(SCORE_INITIAL),
+                    create_separate: false,
+                }
+            } else {
+                Resolution::Ambiguous {
+                    entities: hits,
+                    confidence: Confidence::new(CONFIDENCE_AMBIGUOUS),
+                }
+            }
+        } else {
+            Resolution::PossibleMatch {
+                entities: hits,
+                reason: PossibleReason::Initial,
+                score: Confidence::new(SCORE_INITIAL),
+                create_separate: true,
+            }
+        })
     }
 
     /// Several entities, or one, that answer by name: a clear winner, or a question.
@@ -960,6 +1031,56 @@ fn display_of(words: &[&str]) -> String {
         .join(" ")
 }
 
+/// The surname is the last word with the particles in front of it ("de fontaine"); what comes
+/// before is the given names.
+fn split_given_and_surname<'a, 'b>(
+    words: &'b [&'a str],
+    titles: &TitleSet,
+) -> (&'b [&'a str], &'b [&'a str]) {
+    let mut surname_start = words.len().saturating_sub(1);
+    while surname_start > 0 && titles.is_particle(words[surname_start - 1]) {
+        surname_start -= 1;
+    }
+    words.split_at(surname_start)
+}
+
+/// A title and the surname, for each title that was seen with this person.
+fn push_title_forms(
+    push: &mut impl FnMut(String, String, AliasKind, f32),
+    titles_seen: &[String],
+    surname: &[&str],
+) {
+    for title in titles_seen {
+        let title = title.trim().to_lowercase();
+        if title.is_empty() {
+            continue;
+        }
+        push(
+            format!("{} {}", display_of(&[title.as_str()]), display_of(surname)),
+            format!("{title} {}", surname.join(" ")),
+            AliasKind::TitleForm,
+            0.7,
+        );
+    }
+}
+
+/// The alias a full name carries for "the initial of its first given name and the surname":
+/// `jean dupont` and `jean pierre dupont` both give `j dupont`. `None` for a name that is not a
+/// given name and a surname (one word, an initial first, `Surname Initial`).
+fn initial_surname_key_of_full_name(name: &NormalizedName, titles: &TitleSet) -> Option<String> {
+    if surname_then_initial(name, titles).is_some() {
+        return None;
+    }
+    let words: Vec<&str> = name.tokens.iter().map(String::as_str).collect();
+    let (given, surname) = split_given_and_surname(&words, titles);
+    let first = given.first().filter(|word| word.chars().count() > 1)?;
+    if surname.is_empty() {
+        return None;
+    }
+    let initial = first.chars().next()?;
+    Some(format!("{initial} {}", surname.join(" ")))
+}
+
 /// The aliases a new entity starts with, canonical first, each with the phonetic key of the active
 /// encoder. For a person with a given name and a surname: the name reordered, the initial and the
 /// surname (`j dupont`), the surname alone (flagged ambiguous by nature through its kind), and a
@@ -1008,12 +1129,36 @@ pub fn aliases_for(
 
     if request.type_id.as_str() == EntityTypeId::PERSON {
         let words: Vec<&str> = name.tokens.iter().map(String::as_str).collect();
-        // The surname is the last word with the particles in front of it ("de fontaine").
-        let mut surname_start = words.len().saturating_sub(1);
-        while surname_start > 0 && titles.is_particle(words[surname_start - 1]) {
-            surname_start -= 1;
+        if let Some(form) = surname_then_initial(&name, titles) {
+            // "Dupont J": the surname comes first and the last word is the initial of the given
+            // name. The reordered form ("j dupont") reads the same as the initial and the
+            // surname, so it is that one alias, and no one-letter surname is ever made.
+            let surname: Vec<&str> = form.surname.iter().map(String::as_str).collect();
+            push(
+                format!("{}. {}", form.initial.to_uppercase(), display_of(&surname)),
+                form.initial_surname_key(),
+                AliasKind::Initial,
+                0.7,
+            );
+            push(
+                display_of(&surname),
+                surname.join(" "),
+                AliasKind::PartialSurname,
+                0.6,
+            );
+            if surname.len() > 1 {
+                let last = &surname[surname.len() - 1..];
+                push(
+                    display_of(last),
+                    last.join(" "),
+                    AliasKind::PartialSurname,
+                    0.6,
+                );
+            }
+            push_title_forms(&mut push, request.titles_seen, &surname);
+            return made;
         }
-        let (given, surname) = words.split_at(surname_start);
+        let (given, surname) = split_given_and_surname(&words, titles);
         let first_given_is_a_word = given.first().is_some_and(|word| word.chars().count() > 1);
 
         if !surname.is_empty() && first_given_is_a_word {
@@ -1049,18 +1194,7 @@ pub fn aliases_for(
                     0.6,
                 );
             }
-            for title in request.titles_seen {
-                let title = title.trim().to_lowercase();
-                if title.is_empty() {
-                    continue;
-                }
-                push(
-                    format!("{} {}", display_of(&[title.as_str()]), display_of(surname)),
-                    format!("{title} {}", surname.join(" ")),
-                    AliasKind::TitleForm,
-                    0.7,
-                );
-            }
+            push_title_forms(&mut push, request.titles_seen, surname);
         }
     } else if let Some(acronym) = request.acronym {
         let folded = normalize_name(acronym, titles);
@@ -1561,6 +1695,65 @@ mod tests {
             ]
         );
         assert!(made.iter().all(|alias| !alias.phonetic_key.is_empty()));
+    }
+
+    #[test]
+    fn aliases_of_a_surname_then_initial_name() {
+        let made = aliases("Dupont J", &[]);
+        assert_eq!(
+            kinds(&made),
+            [
+                ("dupont j", AliasKind::CanonicalVariant),
+                // "J Dupont" (reordered) and "J. Dupont" (initial and surname) are one normalised
+                // form: one alias, of the kind that keeps `J. Dupont` a question and not a pick.
+                ("j dupont", AliasKind::Initial),
+                ("dupont", AliasKind::PartialSurname),
+            ]
+        );
+        let initial = made
+            .iter()
+            .find(|alias| alias.kind == AliasKind::Initial)
+            .expect("the initial alias");
+        assert_eq!(initial.display, "J. Dupont");
+        // The surname alone is the first word, and no alias is the single letter.
+        assert!(made.iter().all(|alias| alias.normalized != "j"));
+        assert!(made.iter().all(|alias| alias.normalized != "d j"));
+        assert!(made.iter().all(|alias| !alias.phonetic_key.is_empty()));
+
+        // The same shapes as for "Jean Dupont": a title seen, a particle in the surname.
+        let titled = aliases("DUPONT J.", &["dr"]);
+        assert!(kinds(&titled).contains(&("dr dupont", AliasKind::TitleForm)));
+        assert_eq!(titled[0].normalized, "dupont j");
+        let particle = aliases("de Fontaine R", &[]);
+        let normalized: Vec<&str> = particle
+            .iter()
+            .map(|alias| alias.normalized.as_str())
+            .collect();
+        assert_eq!(
+            normalized,
+            ["de fontaine r", "r de fontaine", "de fontaine", "fontaine"]
+        );
+    }
+
+    #[test]
+    fn the_initial_surname_form_keeps_the_aliases_it_has_always_had() {
+        // "J. Dupont" is Initial then Surname and was never this fix's business.
+        assert_eq!(
+            kinds(&aliases("J. Dupont", &[])),
+            [("j dupont", AliasKind::CanonicalVariant)]
+        );
+        // So are the full names, whatever letter their given name ends in.
+        assert_eq!(
+            kinds(&aliases("Jean Dupont", &[])),
+            [
+                ("jean dupont", AliasKind::CanonicalVariant),
+                ("dupont jean", AliasKind::Reordered),
+                ("j dupont", AliasKind::Initial),
+                ("dupont", AliasKind::PartialSurname),
+            ]
+        );
+        // Two single letters are not the surname-then-initial form either.
+        assert_eq!(aliases("A B", &[]).len(), 1);
     }
 
     #[test]

@@ -141,12 +141,22 @@
       "knownMany": "already known",
       "identifiersOne": "identifier found (e-mail address, invoice number, IBAN...)",
       "identifiersMany": "identifiers found (e-mail addresses, invoice numbers, IBANs...)",
+      "columnsOne": "spreadsheet column recognised (people, organisations, identifiers...) in {workbooks}",
+      "columnsMany": "spreadsheet columns recognised (people, organisations, identifiers...) in {workbooks}",
+      "workbooksOne": "spreadsheet read",
+      "workbooksMany": "spreadsheets read",
+      "relationsOne": "link read between two columns of a spreadsheet",
+      "relationsMany": "links read between two columns of a spreadsheet",
       "refreshedOne": "previously analysed document read again for names, without asking the AI",
       "refreshedMany": "previously analysed documents read again for names, without asking the AI",
       "truncatedOne": "document holds more names than are kept: only the most certain are retained",
       "truncatedMany": "documents hold more names than are kept: only the most certain are retained",
       "errorsOne": "document could not be fully analysed (its names were not found): run the analysis again to retry",
-      "errorsMany": "documents could not be fully analysed (their names were not found): run the analysis again to retry"
+      "errorsMany": "documents could not be fully analysed (their names were not found): run the analysis again to retry",
+      "errorsDataOne": "file could not be fully analysed (its names were not found): run the analysis again to retry",
+      "errorsDataMany": "files could not be fully analysed (their names were not found): run the analysis again to retry",
+      "truncatedDataOne": "spreadsheet holds more values than are kept: only the first ones are retained",
+      "truncatedDataMany": "spreadsheets hold more values than are kept: only the first ones are retained"
     }
   },
   "workFolder": {
@@ -208,6 +218,7 @@
     "resetTitle": "Clear the data analysis?",
     "resetBody": "Everything read from your spreadsheets will be forgotten, and the analysis will have to run again before asking about this data. Your files are neither moved nor deleted, and the analysis of your documents is not affected.",
     "progressLabel": "Data analysis in progress",
+    "progressNamesLabel": "Reading the names in documents analysed earlier",
     "spreadsheetOne": "spreadsheet read",
     "spreadsheetMany": "spreadsheets read",
     "passDone": "{count} on this computer, without the AI: spreadsheets are analysed in a moment.",

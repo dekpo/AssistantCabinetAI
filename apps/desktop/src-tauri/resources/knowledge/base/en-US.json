@@ -63,7 +63,7 @@
     {
       "id": "order_number",
       "kind": "order",
-      "regex": "\\b(?:PO|SO|ORD)[\\-\\s]?\\d{4,10}\\b",
+      "regex": "\\b(?:PO|SO|ORD|CMD|BC)[\\-\\s]?\\d{4,10}(?:[\\-\\s]\\d{2,6})?\\b",
       "normalise": "alnum",
       "strength": "exact",
       "personal_key": false
@@ -86,6 +86,7 @@
     { "headers": ["email", "e-mail", "email address", "mail"], "semantic": { "type": "identifier", "subtype": "email" }, "confidence": 0.95 },
     { "headers": ["phone", "telephone", "mobile", "cell", "phone number"], "semantic": { "type": "identifier", "subtype": "phone" }, "confidence": 0.9 },
     { "headers": ["invoice number", "invoice no", "invoice id", "invoice"], "semantic": { "type": "identifier", "subtype": "invoice" }, "confidence": 0.9 },
+    { "headers": ["order number", "order no", "order id", "po number", "purchase order"], "semantic": { "type": "identifier", "subtype": "order" }, "confidence": 0.9 },
     { "headers": ["reference", "ref", "id", "identifier", "number"], "semantic": { "type": "identifier" }, "confidence": 0.7 },
     { "headers": ["description", "product", "item", "article"], "semantic": { "type": "item" }, "confidence": 0.8 }
   ],

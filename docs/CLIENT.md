@@ -40,6 +40,11 @@ part (`knowledge_mode` is not `off`, KB lot 4) it also says, in counts only and 
 organisations the pass found and how many were already known, how many identifiers (an e-mail address, an invoice
 number, an IBAN), how many documents analysed earlier were read again for names without asking the AI, and, first
 because it asks her to act, how many documents could not be fully analysed and are retried by the next Analyse.
+The Data card's summary says the same for the spreadsheets (KB lot 5): the people and organisations the columns
+named, the identifiers, how many columns of which spreadsheets were recognised (a patient, a supplier, an e-mail
+address...), how many links were read between two columns, and the documents read again because the spreadsheets
+taught the base new names. While those documents are read again the progress bar is labelled with the same
+sentence as the Documents card's (reading the names in documents analysed earlier).
 Nothing is read in the background: documents analysed before the knowledge base existed are read for names, from the text the index already holds, only when she presses Analyse. The settings panel shows the same listing with a **See** button on each file, which shows it selected in
 the file manager without opening it.
 

@@ -94,6 +94,18 @@
         "subtype": "insurer"
       },
       "confidence": 0.8
+    },
+    {
+      "headers": [
+        "ssn",
+        "social security number",
+        "social security no"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "health_insurance_number"
+      },
+      "confidence": 0.95
     }
   ],
   "relations": [],

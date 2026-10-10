@@ -17,6 +17,8 @@ function summary(overrides: Partial<KnowledgeSummary> = {}): KnowledgeSummary {
     candidates: 0,
     identifiers: 0,
     relations: 0,
+    semanticColumns: 0,
+    workbooksAnalysed: 0,
     refreshedSources: 0,
     truncatedSources: 0,
     errors: 0,
@@ -74,6 +76,49 @@ describe("the knowledge lines of the analysis summary", () => {
     expect(lines).toEqual([
       "1 document contient plus de noms que la base n'en retient : seuls les plus sûrs sont conservés.",
     ]);
+  });
+
+  it("say what the Data pass read: columns, in how many spreadsheets, and the links between columns", () => {
+    const lines = knowledgeLines(
+      french,
+      summary({
+        entitiesDetected: 5,
+        matchedExisting: 1,
+        semanticColumns: 4,
+        workbooksAnalysed: 2,
+        relations: 4,
+      }),
+      "data",
+    );
+    expect(lines).toEqual([
+      "5 personnes et organisations repérées, dont 1 déjà connue.",
+      "4 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 2 tableurs lus.",
+      "4 liens lus entre deux colonnes d'un tableur.",
+    ]);
+  });
+
+  it("use the singular for one column, one spreadsheet and one link, in English", () => {
+    const lines = knowledgeLines(
+      english,
+      summary({ semanticColumns: 1, workbooksAnalysed: 1, relations: 1 }),
+      "data",
+    );
+    expect(lines).toEqual([
+      "1 spreadsheet column recognised (people, organisations, identifiers...) in 1 spreadsheet read.",
+      "1 link read between two columns of a spreadsheet.",
+    ]);
+  });
+
+  it("speak of files, not documents, when a Data pass could not record a workbook's names", () => {
+    expect(knowledgeLines(french, summary({ errors: 2 }), "data")[0]).toContain(
+      "2 fichiers n'ont pas pu être entièrement analysés",
+    );
+    expect(knowledgeLines(french, summary({ errors: 1 }), "documents")[0]).toContain(
+      "1 document n'a pas pu être entièrement analysé",
+    );
+    expect(knowledgeLines(french, summary({ truncatedSources: 1 }), "data")[0]).toContain(
+      "tableur contient plus de valeurs",
+    );
   });
 
   it("never carries a name: it is given none", () => {

@@ -501,8 +501,13 @@ pub fn index_data_folder(
     state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let (data_folder, locale) = state.read(|settings| {
-        (settings.data_folder.clone(), settings.locale.clone())
+    let (data_folder, locale, mode, packs) = state.read(|settings| {
+        (
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+            settings.knowledge_mode,
+            settings.knowledge_pack_ids(),
+        )
     })?;
     let Some(data_folder) = data_folder else {
         return Err(AppError::NoDataFolderSet);
@@ -516,14 +521,24 @@ pub fn index_data_folder(
     log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
-    let mut summary = data_folder::analyse(
+    // The knowledge base never blocks a pass: if it cannot start, the workbooks are analysed exactly
+    // as before and the summary says that part of the analysis did not complete.
+    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs).ok();
+    let mut summary = data_folder::analyse_with_knowledge(
         Path::new(&data_folder),
         &mut index,
         locale,
         &|progress| {
             let _ = on_progress.send(progress);
         },
+        knowledge.as_mut(),
     )?;
+    if knowledge.is_none() && mode.reads_files() {
+        summary.knowledge = Some(KnowledgeSummary {
+            errors: summary.scanned_files.max(1),
+            ..KnowledgeSummary::default()
+        });
+    }
     summary.renamed_files = sanitised.renamed;
     summary.rename_failed_files = sanitised.failed;
     log_analysis_timing(&app, &state, &summary);

@@ -1,7 +1,9 @@
 """A read-only look at the NAMES the knowledge base holds in an index.sqlite3.
 
 Unlike show_kb_tables.py, which prints counts only, this prints the names found in the analysed files,
-the files that mention each one and how each was found. It exists for the human tests of the knowledge
+the files that mention each one and how each was found (for a table: the sheet, the column, the first
+row and a few sample rows, counted from 1 under the header), plus how the columns of the Data folder's
+tables were read (and which were not, with the reason) and the links a table states between two columns. It exists for the human tests of the knowledge
 base programme, which use the FICTIONAL fixtures only. Do not point it at an index built from real
 files and paste the output anywhere: a list of the names found in a practice's files is personal data
 (docs/PRIVACY-AND-SECURITY.md).
@@ -52,6 +54,68 @@ def knowledge_tables(connection: sqlite3.Connection) -> list[str]:
     )
 
 
+def describe_mention(path, kind, method, count, sheet, column, first_row, rows, role) -> str:
+    """One mention. A table mention says where in the table: sheet, column, the first row and a
+    few sample rows (rows are counted from 1 under the header), and the role the column gave."""
+    if kind == "cells":
+        place = f"{sheet} / {column}"
+        rows_text = f", rows {rows}" if rows else ""
+        role_text = f", role {role}" if role else ""
+        return f"{path} [cells {place}, first row {first_row}{rows_text}{role_text}, {method}, x{count}]"
+    return f"{path} [{kind}, {method}, x{count}]"
+
+
+READ_REASONS = ("header_exact", "header_partial", "value_shape", "combined")
+
+
+def show_columns(connection: sqlite3.Connection) -> None:
+    """How the columns of the Data folder's tables were read (kb_column_semantics): first the ones
+    whose values were read as entities, then the ones that were not, with the reason."""
+    try:
+        columns = connection.execute(
+            "SELECT s.relative_path, c.sheet, c.column_name, c.semantic_type, COALESCE(c.subtype, ''), "
+            "COALESCE(c.role, ''), c.confidence, c.reason "
+            "FROM kb_column_semantics c JOIN kb_sources s ON s.source_id = c.source_id "
+            "ORDER BY s.relative_path, c.sheet, c.column_name"
+        ).fetchall()
+    except sqlite3.Error:
+        return
+    read = [row for row in columns if row[7] in READ_REASONS and row[6] >= 0.6]
+    unread = [row for row in columns if row not in read]
+    print(f"\nColumns read as something: {len(read)}")
+    for path, sheet, column, kind, subtype, role, confidence, reason in read:
+        label = f"{kind}/{subtype}" if subtype else kind
+        role_text = f" role {role}" if role else ""
+        print(f"  {path} / {sheet} / {column:<22} {label:<26}{role_text}  {confidence:.2f}  {reason}")
+    print(f"\nColumns NOT read, with the reason: {len(unread)}")
+    for path, sheet, column, kind, subtype, role, confidence, reason in unread:
+        hint = ""
+        if reason == "module_off":
+            hint = f"  (a module that is off would read it as {kind}{'/' + role if role else ''})"
+        elif reason == "values_mismatch":
+            hint = f"  (the header says {kind}, the values do not look like it; confidence {confidence:.2f})"
+        elif reason == "number_or_date":
+            hint = f"  (the header says {kind}, the column holds numbers or dates)"
+        print(f"  {path} / {sheet} / {column:<22} {reason}{hint}")
+
+
+def show_relations(connection: sqlite3.Connection) -> None:
+    """Links a table states by two role columns (never from two names in one file)."""
+    try:
+        relations = connection.execute(
+            "SELECT a.canonical_name, r.predicate, b.canonical_name, r.occurrence_count, s.relative_path "
+            "FROM kb_relations r JOIN kb_entities a ON a.entity_id = r.subject "
+            "JOIN kb_entities b ON b.entity_id = r.object "
+            "LEFT JOIN kb_sources s ON s.source_id = r.source_id "
+            "ORDER BY s.relative_path, a.canonical_name, b.canonical_name"
+        ).fetchall()
+    except sqlite3.Error:
+        return
+    print(f"\nRelations stated by a table: {len(relations)}")
+    for subject, predicate, other, count, path in relations:
+        print(f"  {subject}  --{predicate}-->  {other}   [{path}, x{count}]")
+
+
 def show_entities(connection: sqlite3.Connection) -> None:
     sources = connection.execute(
         "SELECT domain, relative_path, kb_version, gazetteer_epoch FROM kb_sources "
@@ -60,6 +124,8 @@ def show_entities(connection: sqlite3.Connection) -> None:
     print(f"Sources the knowledge base has read: {len(sources)}")
     for domain, path, version, epoch in sources:
         print(f"  {domain:<10} {path}   (extractor {version}, names list {epoch})")
+
+    show_columns(connection)
 
     entities = connection.execute(
         "SELECT entity_id, type_id, COALESCE(subtype, ''), status, origin, canonical_name "
@@ -70,16 +136,20 @@ def show_entities(connection: sqlite3.Connection) -> None:
     for entity_id, type_id, subtype, status, origin, name in entities:
         label = f"{type_id}/{subtype}" if subtype else type_id
         files = connection.execute(
-            "SELECT s.relative_path, m.locator_kind, m.method, m.occurrence_count "
+            "SELECT s.relative_path, m.locator_kind, m.method, m.occurrence_count, m.sheet, "
+            "m.column_name, m.first_row, m.sample_rows, m.role "
             "FROM kb_mentions m JOIN kb_sources s ON s.source_id = m.source_id "
-            "WHERE m.entity_id = ? ORDER BY s.relative_path",
+            "WHERE m.entity_id = ? ORDER BY s.relative_path, m.sheet, m.column_name",
             (entity_id,),
         ).fetchall()
         where = "; ".join(
-            f"{path} [{kind}, {method}, x{count}]" for path, kind, method, count in files
+            describe_mention(path, kind, method, count, sheet, column, first_row, rows, role)
+            for path, kind, method, count, sheet, column, first_row, rows, role in files
         )
         flag = "" if origin == "automatic" else f" ({origin})"
         print(f"  {label:<36} {status:<10} {name:<34} {where}{flag}")
+
+    show_relations(connection)
 
     possible = connection.execute(
         "SELECT a.canonical_name, b.canonical_name, p.reason, p.state "

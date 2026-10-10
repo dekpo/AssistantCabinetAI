@@ -1,1 +1,13 @@
 Human tests of the lots, one file per lot (lot-NN-<slug>.md), results filled in by the owner.
+
+## Rule for whoever writes a test
+
+**Exact commands in a human test (owner instruction, 11 October 2026, binding for every agent, in every lot).** The owner ran lot 5's test and lost time looking for commands that were abbreviated. Every step of a human test, in the protocol file **and** in the chat message, is complete and copy-pasteable:
+
+1. **Every command is written in full**, from the repository root, with the exact path of the script and the exact name of the sub-command, for example `python docs\test-reports\knowledge-base-pass-1\human-tests\lot05_helper.py stop-ai`. Never `stop-ai` alone, never `lot05_helper.py ...`, never "the script".
+2. **Every "in the script" or "look at the output" names the script and its arguments**, for example `python docs\test-reports\knowledge-base-pass-1\human-tests\show_kb_entities.py` or `show_kb_tables.py`. Say which of the two to run; if both are needed, say both.
+3. **Every click is named by the exact label of the interface** (button, card, menu, tick box), and the card or screen it is on.
+4. **Every expected result has been checked against what the application really does**, not against what the code should do: for example, with the AI machine stopped the application shows its own red connection banner (« Aucune réponse de l'IA ... ») whatever the analysis does; a test that says "no banner" there is wrong. If you cannot observe it, say so in the step instead of promising it.
+5. **The chat message and the protocol file give the same steps in the same order with the same commands.** The chat message is the one the owner follows; it is never a summary of the file.
+6. A command that must be typed has been run by the agent (on temporary folders) and its output is known; a name that is easy to mistype (`stop-ai`) is written out and copy-pasteable on its own line.
+7. A step that stops or restarts a service gives the full command to put it back.

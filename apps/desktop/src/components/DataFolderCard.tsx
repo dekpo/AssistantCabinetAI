@@ -4,6 +4,7 @@ import { analysisFraction, analysisPending, countPending } from "../lib/analysis
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { normaliseError, type AppError } from "../lib/errors";
 import { abbreviateFolderPath } from "../lib/folderPath";
+import { knowledgeLines } from "../lib/knowledgeSummary";
 import {
   chooseDataFolder,
   dataFolderInventory,
@@ -164,6 +165,8 @@ export function DataFolderCard({
                 )}.`,
               ]
             : []),
+          /* What the knowledge base read in the tables, counts only. */
+          ...knowledgeLines(t, summary.knowledge, "data"),
         ];
 
   const passSummary =
@@ -306,7 +309,11 @@ export function DataFolderCard({
         {indexing.progress === null ? null : (
           <AnalysisProgress
             fraction={analysisFraction(indexing.progress)}
-            label={t("dataFolder.progressLabel")}
+            label={
+              indexing.progress.readingNames === true
+                ? t("dataFolder.progressNamesLabel")
+                : t("dataFolder.progressLabel")
+            }
           />
         )}
       </div>

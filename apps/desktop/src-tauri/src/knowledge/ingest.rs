@@ -30,9 +30,13 @@ use std::time::Instant;
 
 use rusqlite::Connection;
 
+use super::extract::table::{TableEntityExtractor, TableReading};
 use super::extract::text::DeterministicTextExtractor;
-use super::extract::{Candidate, ChunkInput, DocumentInput, EntityExtractor, ExtractContext};
-use super::gazetteer::{Gazetteer, GazetteerEntry};
+use super::extract::{
+    Candidate, ChunkInput, ColumnInput, ColumnKind, DocumentInput, EntityExtractor, ExtractContext,
+    SheetInput, WorkbookInput,
+};
+use super::gazetteer::{is_listed_type, Gazetteer, GazetteerEntry};
 use super::maintenance;
 use super::normalize::{normalize_name, TitleSet};
 use super::packs::PackSet;
@@ -45,14 +49,17 @@ use super::resolve::{
 use super::secret::IdentifierKey;
 use super::store;
 use super::{
-    AliasDraft, AliasKind, AttributeDraft, Domain, EntityDraft, EntityRef, EntityStatus,
-    EntityTypeId, KnowledgeDelta, KnowledgeMode, KnowledgeSummary, MentionDraft, MentionLocator,
-    Method, Origin, PossibleMatchDraft, SourceRef, CURRENT_KB_VERSION,
+    AliasDraft, AliasKind, AttributeDraft, ColumnSemanticsDraft, Domain, EntityDraft, EntityRef,
+    EntityStatus, EntityTypeId, KnowledgeDelta, KnowledgeMode, KnowledgeSummary, MentionDraft,
+    MentionLocator, Method, Origin, PossibleMatchDraft, RelationDraft, SourceRef,
+    CURRENT_KB_VERSION,
 };
 use crate::chunking::Chunk;
 use crate::error::AppError;
 use crate::extraction::PageOrigin;
 use crate::index_store::{IndexStore, StoredChunkText};
+use crate::tabular::inventory::{data_rows, text_value, ColumnType, TabularInventory};
+use crate::tabular::{CellValue, SourceRows, Workbook};
 
 /// Where the ids of entities that exist only inside one document's delta start. Far below any row
 /// id, so a draft can never be mistaken for a stored entity.
@@ -65,6 +72,11 @@ const KEY_CHECK_META: &str = "identifier_key_check";
 /// was last settled. A list that is bigger at the start of a pass was taught by someone else (a
 /// manual edit, the Data Folder's pass) and the documents read before are behind it.
 const GAZETTEER_ENTRIES_META: &str = "gazetteer_entries";
+
+/// `kb_meta` key holding the epoch at which the packs or the identifier key last changed. A
+/// workbook read before it was read with another vocabulary, so it is read again; one read after it
+/// is left alone however much the list of names has grown since (a table does not depend on it).
+const VOCABULARY_EPOCH_META: &str = "vocabulary_epoch";
 
 /// The most rounds a refresh takes: each round reads every document that is behind the list of
 /// names, and learning can make the list grow again. Whatever is still behind is picked up by the
@@ -85,6 +97,12 @@ struct Tally {
     failed: BTreeSet<String>,
     truncated: BTreeSet<String>,
     entity_id_before: i64,
+    /// The Data Folder side of the pass: workbooks whose knowledge this pass wrote, which of them
+    /// failed or held more than is kept, and how many columns were read as something.
+    data_touched: BTreeSet<String>,
+    data_failed: BTreeSet<String>,
+    data_truncated: BTreeSet<String>,
+    semantic_columns: usize,
 }
 
 /// What building a document's delta produced, besides the delta itself.
@@ -96,6 +114,18 @@ pub struct Built {
     /// Candidates the resolver would not place: ambiguous, a lone surname no one in the document
     /// answers to, a name the user deleted. Counted, never named.
     pub unplaced: usize,
+}
+
+/// What building a workbook's delta produced, besides the delta itself.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BuiltWorkbook {
+    pub delta: KnowledgeDelta,
+    /// The workbook held more values than are kept.
+    pub truncated: bool,
+    /// Values the resolver would not place: a deleted name, a surname that is ambiguous.
+    pub unplaced: usize,
+    /// Columns read as a name, an organisation, an identifier, a place or an item.
+    pub semantic_columns: usize,
 }
 
 /// Everything a pass over documents needs to learn names from them. Built once per pass, never per
@@ -110,11 +140,16 @@ pub struct KnowledgeContext {
     titles: TitleSet,
     encoder: Box<dyn PhoneticEncoder>,
     extractor: Box<dyn EntityExtractor>,
+    /// Reads workbooks. `None` when the mode reads nothing: the vocabulary of every shipped pack is
+    /// only loaded for a pass that will use it.
+    tables: Option<TableEntityExtractor>,
     resolver: Box<dyn EntityResolver>,
     gazetteer: Gazetteer,
     /// The gazetteer's size when the epoch was last settled: growth beyond it means the documents
     /// read before are behind.
     counted_entries: usize,
+    /// See [`VOCABULARY_EPOCH_META`].
+    vocabulary_epoch: u32,
     key: IdentifierKey,
     tally: Tally,
     /// Time spent reading names (building deltas and teaching the gazetteer) in this pass: what
@@ -160,6 +195,16 @@ impl KnowledgeContext {
         if packs_changed || key_changed || known > recorded {
             context.gazetteer.bump_epoch(connection)?;
         }
+        if packs_changed || key_changed {
+            store::set_meta(
+                connection,
+                VOCABULARY_EPOCH_META,
+                &context.gazetteer.epoch().to_string(),
+            )?;
+        }
+        context.vocabulary_epoch = store::meta(connection, VOCABULARY_EPOCH_META)?
+            .and_then(|value| value.trim().parse().ok())
+            .unwrap_or(0);
         if known != recorded {
             store::set_meta(connection, GAZETTEER_ENTRIES_META, &known.to_string())?;
         }
@@ -195,9 +240,15 @@ impl KnowledgeContext {
             packs,
             encoder: encoder_for_locale(locale),
             extractor: Box::new(DeterministicTextExtractor),
+            tables: if mode.reads_files() {
+                Some(TableEntityExtractor::for_locale(locale)?)
+            } else {
+                None
+            },
             resolver: Box::new(DeterministicResolver),
             gazetteer: Gazetteer::new(),
             counted_entries: 0,
+            vocabulary_epoch: 0,
             key,
             tally: Tally::default(),
             spent_micros: AtomicU64::new(0),
@@ -221,6 +272,11 @@ impl KnowledgeContext {
 
     pub fn packs(&self) -> &PackSet {
         &self.packs
+    }
+
+    /// The generation of the table extractor, recorded on the mentions it wrote.
+    pub(crate) fn tables_version(&self) -> u32 {
+        self.tables.as_ref().map_or(0, |tables| tables.version())
     }
 
     // ----------------------------------------------------------------------------- the pass
@@ -274,7 +330,7 @@ impl KnowledgeContext {
         self.tally.touched.insert(relative_path.to_string());
     }
 
-    /// The counts for the Analyse summary. `Domain::Documents` only: tables are lot 5's.
+    /// The counts for the Analyse summary of a documents pass.
     pub fn summary(&self, connection: &Connection) -> KnowledgeSummary {
         let touched: Vec<String> = self.tally.touched.iter().cloned().collect();
         let counts = store::entity_counts_for_sources(
@@ -291,11 +347,192 @@ impl KnowledgeContext {
             candidates: counts.created_candidates,
             identifiers: counts.identifiers,
             relations: 0,
+            semantic_columns: 0,
+            workbooks_analysed: 0,
             refreshed_sources: self.tally.refreshed.len(),
             truncated_sources: self.tally.truncated.len(),
             errors: self.tally.failed.len(),
             elapsed_ms: self.spent_micros.load(Ordering::Relaxed) / 1_000,
         }
+    }
+
+    /// The counts for the Analyse summary of a Data Folder pass: what the workbooks gave, plus the
+    /// documents that were read again because the workbooks taught the base new names.
+    pub fn data_summary(&self, connection: &Connection) -> KnowledgeSummary {
+        let touched: Vec<String> = self.tally.data_touched.iter().cloned().collect();
+        let counts = store::entity_counts_for_sources(
+            connection,
+            Domain::Data,
+            &touched,
+            self.tally.entity_id_before,
+        )
+        .unwrap_or_default();
+        let relations =
+            store::relation_count_for_sources(connection, Domain::Data, &touched).unwrap_or(0);
+        KnowledgeSummary {
+            entities_detected: counts.distinct,
+            matched_existing: counts.distinct.saturating_sub(counts.created),
+            created_new: counts.created,
+            candidates: counts.created_candidates,
+            identifiers: counts.identifiers,
+            relations,
+            semantic_columns: self.tally.semantic_columns,
+            workbooks_analysed: self.tally.data_touched.len(),
+            refreshed_sources: self.tally.refreshed.len(),
+            truncated_sources: self.tally.data_truncated.len(),
+            errors: self.tally.data_failed.len() + self.tally.failed.len(),
+            elapsed_ms: self.spent_micros.load(Ordering::Relaxed) / 1_000,
+        }
+    }
+
+    /// A workbook of the Data Folder could not be read for its knowledge.
+    pub fn note_data_failed(&mut self, relative_path: &str) {
+        self.tally.data_failed.insert(relative_path.to_string());
+    }
+
+    // ----------------------------------------------------------------------------- one workbook
+
+    /// Write one workbook's inventory the way the Data pass does: always the inventory, and the
+    /// knowledge when the mode reads files, the workbook is a usable table and its values have not
+    /// been read already. A knowledge failure is applied in a savepoint and never costs the
+    /// inventory (the knowledge base never blocks an analysis). The only error is a failure of the
+    /// index itself.
+    pub fn store_workbook(
+        &mut self,
+        index: &mut IndexStore,
+        inventory: &TabularInventory,
+        workbook: &Workbook,
+        source_rows: &SourceRows,
+    ) -> Result<(), AppError> {
+        if !self.mode.reads_files() || !inventory.has_a_usable_sheet() {
+            // Nothing to read, or nothing worth reading: what an earlier version of the file taught
+            // the base is dropped with it.
+            index.put_tabular_inventory_with_knowledge(inventory, None)?;
+            return Ok(());
+        }
+        let source = SourceRef {
+            domain: Domain::Data,
+            relative_path: inventory.relative_path.clone(),
+            content_id: inventory.workbook_id.clone(),
+        };
+        if self.workbook_is_current(index.connection(), &source) {
+            index.put_tabular_inventory(inventory)?;
+            return Ok(());
+        }
+
+        let input = workbook_input(inventory, workbook, source_rows, &source);
+        let built = self.build_workbook(index.connection(), source.clone(), input);
+        let delta = match &built {
+            Ok(built) => built.delta.clone(),
+            Err(_) => {
+                self.note_data_failed(&inventory.relative_path);
+                // Not extracted: the previous version's knowledge goes with the old content and
+                // the source stays due, so the next pass tries again.
+                KnowledgeDelta::empty(source)
+            }
+        };
+        let write = index.put_tabular_inventory_with_knowledge(inventory, Some(&delta))?;
+        match (write, built) {
+            (crate::knowledge::KnowledgeWrite::Applied(_), Ok(built)) => {
+                self.tally
+                    .data_touched
+                    .insert(inventory.relative_path.clone());
+                self.tally.semantic_columns += built.semantic_columns;
+                if built.truncated {
+                    self.tally
+                        .data_truncated
+                        .insert(inventory.relative_path.clone());
+                }
+                self.learn(index.connection(), &built.delta);
+            }
+            (crate::knowledge::KnowledgeWrite::Applied(_), Err(_)) => {}
+            (crate::knowledge::KnowledgeWrite::Bypassed, _) => {
+                self.note_data_failed(&inventory.relative_path)
+            }
+        }
+        Ok(())
+    }
+
+    /// The workbook was read for its knowledge already: same content, an extractor at least as new,
+    /// and read after the last change of vocabulary. A change of packs makes a workbook due again
+    /// (a column that carried no meaning may carry one now); the list of names growing does not.
+    fn workbook_is_current(&self, connection: &Connection, source: &SourceRef) -> bool {
+        match store::source_row(connection, source.domain, &source.relative_path) {
+            Ok(Some(row)) => {
+                row.source.content_id == source.content_id
+                    && row.kb_version >= self.kb_version
+                    && row.gazetteer_epoch >= self.vocabulary_epoch
+            }
+            _ => false,
+        }
+    }
+
+    /// Read a workbook's columns and values and decide what they mean. Pure with respect to the
+    /// store: it only looks. A panic in the extractor, or a store that cannot be read, is an error
+    /// the caller turns into a bypass.
+    pub fn build_workbook(
+        &self,
+        connection: &Connection,
+        source: SourceRef,
+        input: WorkbookInput,
+    ) -> Result<BuiltWorkbook, AppError> {
+        let started = Instant::now();
+        let built = self.build_workbook_untimed(connection, source, input);
+        self.spend(started);
+        built
+    }
+
+    fn build_workbook_untimed(
+        &self,
+        connection: &Connection,
+        source: SourceRef,
+        input: WorkbookInput,
+    ) -> Result<BuiltWorkbook, AppError> {
+        let Some(tables) = &self.tables else {
+            return Err(AppError::KnowledgeUnavailable);
+        };
+        let mut delta = KnowledgeDelta::empty(source);
+        delta.kb_version = self.kb_version;
+        delta.gazetteer_epoch = self.gazetteer.epoch();
+
+        let reading = catch_unwind(AssertUnwindSafe(|| {
+            tables.read(
+                &input,
+                &ExtractContext {
+                    packs: &self.packs,
+                    locale: &self.locale,
+                    gazetteer: &self.gazetteer,
+                    encoder: self.encoder.as_ref(),
+                },
+            )
+        }))
+        .map_err(|_| AppError::KnowledgeUnavailable)?;
+
+        let semantic_columns = reading.stats.semantic_columns;
+        delta.column_semantics = reading
+            .columns
+            .iter()
+            .map(|column| ColumnSemanticsDraft {
+                sheet: column.sheet.clone(),
+                column_name: column.column.clone(),
+                semantic_type: column.entity_type.as_str().to_string(),
+                subtype: column.subtype.clone(),
+                role: column.role.as_ref().map(|role| role.as_str().to_string()),
+                confidence: column.confidence.value(),
+                reason: column.reason.as_code().to_string(),
+            })
+            .collect();
+
+        let truncated = reading.knowledge.truncated;
+        let mut builder = DeltaBuilder::new(self, connection, delta);
+        builder.place_table(&reading)?;
+        let (delta, unplaced) = builder.finish();
+        Ok(BuiltWorkbook {
+            delta,
+            truncated,
+            unplaced,
+            semantic_columns,
+        })
     }
 
     // ----------------------------------------------------------------------------- one document
@@ -393,7 +630,7 @@ impl KnowledgeContext {
                 continue;
             };
             if record.entity.status != EntityStatus::Active
-                || record.entity.type_id == EntityTypeId::IDENTIFIER
+                || !is_listed_type(&record.entity.type_id)
             {
                 continue;
             }
@@ -493,6 +730,83 @@ pub fn stored_chunk_input(chunk: &StoredChunkText) -> ChunkInput {
         chunk_id: chunk.chunk_id.clone(),
         text: chunk.text.clone(),
         ocr_confidence: ocr_confidence(chunk.origin, chunk.confidence),
+    }
+}
+
+/// A workbook as the table extractor reads it: per sheet, the columns the inventory found, each
+/// with its cells as text in data-row order. An empty cell is an empty string so that a value's
+/// position is its row; a formula cell is empty too and is counted, because what a formula computed
+/// is a claim the file makes, not a name to remember.
+///
+/// Only the sheets the engine itself would answer from are handed over (`looks_tabular`): a sheet of
+/// notes, or one made of formulas, is not a table. The cells of a date column are not copied at all,
+/// since a date is never a name.
+pub fn workbook_input(
+    inventory: &TabularInventory,
+    workbook: &Workbook,
+    source_rows: &SourceRows,
+    source: &SourceRef,
+) -> WorkbookInput {
+    let mut sheets = Vec::with_capacity(inventory.sheets.len());
+    for sheet_inventory in &inventory.sheets {
+        let Some(data) = workbook
+            .sheets
+            .iter()
+            .find(|candidate| candidate.name == sheet_inventory.name)
+        else {
+            continue;
+        };
+        if !sheet_inventory.looks_tabular() {
+            continue;
+        }
+        let rows = data_rows(sheet_inventory, data);
+        let columns = sheet_inventory
+            .columns
+            .iter()
+            .map(|column| {
+                let mut formula_cells = 0;
+                let values = if column.inferred_type == ColumnType::Date {
+                    Vec::new()
+                } else {
+                    rows.iter()
+                        .map(|row| match row.get(column.index) {
+                            None | Some(CellValue::Empty) => String::new(),
+                            Some(CellValue::Formula { .. }) => {
+                                formula_cells += 1;
+                                String::new()
+                            }
+                            Some(other) => text_value(other),
+                        })
+                        .collect()
+                };
+                ColumnInput {
+                    header: column.name.clone(),
+                    values,
+                    kind: match column.inferred_type {
+                        ColumnType::Numeric => ColumnKind::Numeric,
+                        ColumnType::Date => ColumnKind::Date,
+                        ColumnType::Categorical => ColumnKind::Text,
+                    },
+                    formula_cells,
+                }
+            })
+            .collect();
+        // The row of the file each data row came from, aligned with the cells above.
+        let first_data = sheet_inventory.header_row.map_or(0, |header| header + 1);
+        let row_numbers = source_rows
+            .get(&sheet_inventory.name)
+            .map(|all| all.iter().skip(first_data).copied().collect())
+            .unwrap_or_default();
+        sheets.push(SheetInput {
+            name: sheet_inventory.name.clone(),
+            has_header: sheet_inventory.header_row.is_some(),
+            row_numbers,
+            columns,
+        });
+    }
+    WorkbookInput {
+        source: source.clone(),
+        sheets,
     }
 }
 
@@ -675,7 +989,7 @@ impl<'a> DeltaBuilder<'a> {
             }
         }
 
-        self.place_identifiers(&identifiers);
+        self.place_identifiers(&identifiers, Method::Identifier);
 
         let groups = self.group(&names);
         let (short, whole): (Vec<&Group>, Vec<&Group>) = groups
@@ -783,6 +1097,7 @@ impl<'a> DeltaBuilder<'a> {
                         member.occurrence_count,
                         kept_confidence,
                         method,
+                        None,
                     );
                 }
             }
@@ -973,9 +1288,173 @@ impl<'a> DeltaBuilder<'a> {
                 1,
                 candidate.confidence.value(),
                 Method::FilenameToken,
+                None,
             );
         } else {
             self.unplaced += 1;
+        }
+    }
+
+    /// What a workbook's columns named: the same resolution as for a document, with the column as
+    /// the evidence. Identifiers first (they stand on their own), then the names with more than one
+    /// word, then the single words, so that a surname alone can be linked to a person this very
+    /// workbook names in full. A value the resolver will not place is counted and left out.
+    ///
+    /// A mention is the unit "this entity, in this column of this sheet": every value of the column
+    /// that leads to the entity adds to it, so a person written two ways in one column is one
+    /// mention with the rows of both. The method of a table's mention is always the column; unlike
+    /// a document's, it is never rewritten by a later round that reads the names it has just taught
+    /// the base.
+    fn place_table(&mut self, reading: &TableReading) -> Result<(), AppError> {
+        let candidates = &reading.knowledge.candidates;
+        let mut target_of: Vec<Option<EntityRef>> = vec![None; candidates.len()];
+
+        let identifier_positions: Vec<usize> = (0..candidates.len())
+            .filter(|position| candidates[*position].identifier.is_some())
+            .collect();
+        let identifiers: Vec<Candidate> = identifier_positions
+            .iter()
+            .map(|position| candidates[*position].clone())
+            .collect();
+        let placed = self.place_identifiers(&identifiers, Method::ColumnValue);
+        for (position, target) in identifier_positions.iter().zip(placed) {
+            target_of[*position] = target;
+        }
+
+        let words_in = |candidate: &Candidate| {
+            normalize_name(&candidate.surface, &self.context.titles)
+                .tokens
+                .len()
+        };
+        let mut names: Vec<usize> = (0..candidates.len())
+            .filter(|position| candidates[*position].identifier.is_none())
+            .collect();
+        // Stable: within a length, the order of the columns and rows.
+        names.sort_by_key(|position| std::cmp::Reverse(words_in(&candidates[*position]).min(2)));
+        for position in names {
+            let candidate = &candidates[position];
+            match self.place(candidate, &[], true) {
+                Placed::To {
+                    target,
+                    alias,
+                    confidence,
+                    ..
+                } => {
+                    target_of[position] = Some(target);
+                    self.add_cells_mention(
+                        target,
+                        alias,
+                        candidate,
+                        confidence.min(candidate.confidence.value()),
+                    );
+                }
+                Placed::Nowhere => self.unplaced += 1,
+            }
+        }
+
+        for relation in &reading.knowledge.relations {
+            let (Some(Some(subject)), Some(Some(object))) = (
+                target_of.get(relation.subject),
+                target_of.get(relation.object),
+            ) else {
+                continue;
+            };
+            if subject == object {
+                continue;
+            }
+            self.delta.relations.push(RelationDraft {
+                subject: *subject,
+                predicate: relation.predicate.clone(),
+                object: *object,
+                occurrence_count: relation.occurrence_count,
+                confidence: relation.confidence.value(),
+            });
+        }
+
+        for attribute in &reading.attributes {
+            let Some(Some(person)) = target_of.get(attribute.candidate) else {
+                continue;
+            };
+            let Some(scheme) = self.context.packs.identifier_scheme(&attribute.scheme) else {
+                continue;
+            };
+            if !scheme.personal_key {
+                continue;
+            }
+            self.delta.attributes.push(AttributeDraft {
+                entity: *person,
+                key: format!("identifier:{}", scheme.id),
+                value: self.stored_identifier(&scheme.id, &attribute.normalized, true),
+            });
+        }
+
+        if self.lookup.failed() {
+            // Same rule as for a document: a partial delta would erase what the workbook's earlier
+            // version had legitimately recorded.
+            return Err(AppError::KnowledgeUnavailable);
+        }
+        Ok(())
+    }
+
+    /// One mention per entity, sheet, column and role. Occurrences add up, the first row is the
+    /// smallest, the sample is the first three rows in order, the confidence the highest.
+    fn add_cells_mention(
+        &mut self,
+        target: EntityRef,
+        alias: Option<String>,
+        candidate: &Candidate,
+        confidence: f32,
+    ) {
+        let MentionLocator::Cells {
+            sheet,
+            column_name,
+            first_row,
+            sample_rows,
+        } = &candidate.locator
+        else {
+            return;
+        };
+        let role = candidate
+            .role
+            .as_ref()
+            .map(|role| role.as_str().to_string());
+        let key = format!("{target:?}|{sheet}|{column_name}|{role:?}");
+        match self.mention_index.get(&key) {
+            Some(&position) => {
+                let known = &mut self.delta.mentions[position];
+                known.occurrence_count += candidate.occurrence_count;
+                if confidence > known.confidence {
+                    known.confidence = confidence;
+                }
+                if let MentionLocator::Cells {
+                    first_row: known_first,
+                    sample_rows: known_rows,
+                    ..
+                } = &mut known.locator
+                {
+                    *known_first = match (*known_first, *first_row) {
+                        (Some(a), Some(b)) => Some(a.min(b)),
+                        (a, b) => a.or(b),
+                    };
+                    known_rows.extend(sample_rows.iter().copied());
+                    known_rows.sort_unstable();
+                    known_rows.dedup();
+                    known_rows.truncate(3);
+                }
+            }
+            None => {
+                self.mention_index.insert(key, self.delta.mentions.len());
+                self.delta.mentions.push(MentionDraft {
+                    entity: target,
+                    alias_normalized: alias,
+                    role,
+                    locator: candidate.locator.clone(),
+                    occurrence_count: candidate.occurrence_count,
+                    confidence,
+                    method: Method::ColumnValue.as_code().to_string(),
+                    extractor_version: self.context.tables_version(),
+                });
+            }
         }
     }
 
@@ -983,22 +1462,29 @@ impl<'a> DeltaBuilder<'a> {
     /// written. A personal one (an e-mail address, a social security number, an IBAN) is stored as
     /// a keyed hash, and its name is a neutral label that says what kind of identifier it is and
     /// nothing of its value.
-    fn place_identifiers(&mut self, identifiers: &[Candidate]) {
+    ///
+    /// Returns, for each candidate in order, the entity it was placed on (`None` when it was not
+    /// placed). `method` is what the mentions are recorded as: the pattern for a document, the
+    /// column for a table.
+    fn place_identifiers(
+        &mut self,
+        identifiers: &[Candidate],
+        method: Method,
+    ) -> Vec<Option<EntityRef>> {
+        let mut placed: Vec<Option<EntityRef>> = Vec::with_capacity(identifiers.len());
         let mut temp_of: HashMap<String, EntityRef> = HashMap::new();
         for candidate in identifiers {
             let Some(found) = &candidate.identifier else {
+                placed.push(None);
                 continue;
             };
             let Some(scheme) = self.context.packs.identifier_scheme(&found.scheme) else {
                 self.unplaced += 1;
+                placed.push(None);
                 continue;
             };
             let personal = scheme.personal_key;
-            let stored_value = if personal {
-                self.context.key.digest(&scheme.id, &found.normalized)
-            } else {
-                found.normalized.clone()
-            };
+            let stored_value = self.stored_identifier(&found.scheme, &found.normalized, personal);
             let key = format!("{}:{}", scheme.id, stored_value);
 
             let target = match temp_of.get(&key) {
@@ -1010,6 +1496,7 @@ impl<'a> DeltaBuilder<'a> {
                         .is_tombstoned(EntityTypeId::IDENTIFIER, &stored_value);
                     if tombstoned {
                         self.unplaced += 1;
+                        placed.push(None);
                         continue;
                     }
                     let label = if personal {
@@ -1055,13 +1542,28 @@ impl<'a> DeltaBuilder<'a> {
                 candidate.locator.clone(),
                 candidate.occurrence_count,
                 candidate.confidence.value(),
-                Method::Identifier,
+                method,
+                None,
             );
+            placed.push(Some(target));
+        }
+        placed
+    }
+
+    /// What is stored for an identifier: the reduced value, or for a personal one (an e-mail address,
+    /// a social security number, an IBAN) the keyed hash of it. A personal identifier is never
+    /// written as itself.
+    fn stored_identifier(&self, scheme_id: &str, normalized: &str, personal: bool) -> String {
+        if personal {
+            self.context.key.digest(scheme_id, normalized)
+        } else {
+            normalized.to_string()
         }
     }
 
     /// One mention per entity and place: two finds of the same entity in the same chunk are one
     /// mention counted twice.
+    #[allow(clippy::too_many_arguments)]
     fn add_mention(
         &mut self,
         target: EntityRef,
@@ -1070,6 +1572,7 @@ impl<'a> DeltaBuilder<'a> {
         occurrences: u32,
         confidence: f32,
         method: Method,
+        role: Option<String>,
     ) {
         let key = format!("{target:?}|{locator:?}");
         match self.mention_index.get(&key) {
@@ -1089,7 +1592,7 @@ impl<'a> DeltaBuilder<'a> {
                 self.delta.mentions.push(MentionDraft {
                     entity: target,
                     alias_normalized: alias,
-                    role: None,
+                    role,
                     locator,
                     occurrence_count: occurrences,
                     confidence,
@@ -1112,6 +1615,69 @@ mod tests {
         assert_eq!(display_name("Jean Dupont"), "Jean Dupont");
         assert_eq!(display_name("J. Dupont"), "J. Dupont");
         assert_eq!(display_name("McDonald"), "McDonald");
+    }
+
+    #[test]
+    fn a_workbook_is_handed_over_column_by_column_with_formulas_blanked_and_counted() {
+        use crate::tabular::inventory::{TabularFormat, TabularInventory};
+        use crate::tabular::SheetData;
+
+        let text = |value: &str| CellValue::Text(value.to_string());
+        // Twenty-five data rows: one formula among them is under the 5 % a usable sheet may hold.
+        let mut rows = vec![
+            vec![text("client"), text("amount"), text("note")],
+            vec![
+                text("Alice Archer"),
+                CellValue::Number(12.5),
+                CellValue::Formula {
+                    expression: "A1&B1".to_string(),
+                    cached_value: Some(Box::new(text("computed"))),
+                },
+            ],
+            vec![CellValue::Empty, CellValue::Number(30.0), text("plain")],
+        ];
+        for _ in 0..23 {
+            rows.push(vec![
+                text("Bruno Baker"),
+                CellValue::Number(1.0),
+                text("plain"),
+            ]);
+        }
+        let workbook = Workbook {
+            sheets: vec![SheetData {
+                name: "Sheet".to_string(),
+                rows,
+            }],
+        };
+        let inventory =
+            TabularInventory::build("a.csv", "id", TabularFormat::Csv, &workbook, "fr-FR");
+        let source = SourceRef {
+            domain: Domain::Data,
+            relative_path: "a.csv".to_string(),
+            content_id: "id".to_string(),
+        };
+
+        let input = workbook_input(&inventory, &workbook, &SourceRows::new(), &source);
+
+        let sheet = &input.sheets[0];
+        assert!(sheet.has_header);
+        let [client, amount, note] = &sheet.columns[..] else {
+            panic!("three columns expected");
+        };
+        assert_eq!(client.values.len(), 25);
+        assert_eq!(
+            client.values[..2],
+            ["Alice Archer", ""],
+            "an empty cell is an empty string"
+        );
+        assert_eq!(amount.kind, ColumnKind::Numeric);
+        assert_eq!(amount.values[..2], ["12.5", "30"]);
+        assert_eq!(
+            note.values[..2],
+            ["", "plain"],
+            "a formula's result is never read"
+        );
+        assert_eq!(note.formula_cells, 1);
     }
 
     #[test]

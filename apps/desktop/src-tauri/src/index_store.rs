@@ -866,8 +866,15 @@ impl IndexStore {
     /// guarantee `put`/`get_by_hash`/`invalidate` promise (`docs/ARCHITECTURE.md`'s
     /// `InventoryStore`), without a second table to keep in step with this one.
     pub fn put_tabular_inventory(&self, inventory: &TabularInventory) -> Result<(), AppError> {
+        Self::write_inventory_row(&self.connection, inventory)
+    }
+
+    fn write_inventory_row(
+        connection: &Connection,
+        inventory: &TabularInventory,
+    ) -> Result<(), AppError> {
         let json = serde_json::to_string(inventory).map_err(|_| AppError::IndexUnavailable)?;
-        self.connection
+        connection
             .execute(
                 "INSERT INTO tabular_inventories (relative_path, workbook_id, inventory_json)
                  VALUES (?1, ?2, ?3)
@@ -878,6 +885,51 @@ impl IndexStore {
             )
             .map_err(|_| AppError::IndexUnavailable)?;
         Ok(())
+    }
+
+    /// `put_tabular_inventory`, with what extraction learned from the workbook. The inventory and
+    /// the knowledge delta are written in **one transaction**, and the knowledge part is applied in a
+    /// savepoint exactly as for a document: a failure there rolls back the knowledge alone, the
+    /// inventory is committed, the answer is `Bypassed`, and the source is left due so a later pass
+    /// reads the workbook again. A workbook is never lost to a knowledge error.
+    ///
+    /// `delta: None` writes the inventory and **forgets** what an earlier version of the workbook
+    /// taught the base: the call for a workbook with no usable sheet, or for a pass with extraction
+    /// off. It writes no `kb_*` row.
+    ///
+    /// The delta must describe this very workbook: another domain, path or content hash is a
+    /// programming error and is refused before anything is written.
+    pub fn put_tabular_inventory_with_knowledge(
+        &mut self,
+        inventory: &TabularInventory,
+        delta: Option<&KnowledgeDelta>,
+    ) -> Result<KnowledgeWrite, AppError> {
+        if let Some(delta) = delta {
+            if delta.source.domain != Domain::Data
+                || delta.source.relative_path != inventory.relative_path
+                || delta.source.content_id != inventory.workbook_id
+            {
+                return Err(AppError::Internal);
+            }
+        }
+        let tx = self.transaction()?;
+        Self::write_inventory_row(&tx, inventory)?;
+        let write = match delta {
+            Some(delta) => Self::apply_delta_in_savepoint(&tx, delta)?,
+            None => {
+                Self::forget_source(
+                    &tx,
+                    &SourceRef {
+                        domain: Domain::Data,
+                        relative_path: inventory.relative_path.clone(),
+                        content_id: inventory.workbook_id.clone(),
+                    },
+                )?;
+                KnowledgeWrite::Applied(knowledge::ApplyOutcome::default())
+            }
+        };
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(write)
     }
 
     /// The cached inventory for this content hash, if the file at whatever path produced it is

@@ -8,12 +8,24 @@
 
 use std::path::Path;
 
-use super::{CellValue, SheetData, TabularDataSource, TabularError, Workbook};
+use super::{CellValue, SheetData, SourceRows, TabularDataSource, TabularError, Workbook};
 
 pub struct CsvDataSource;
 
 impl TabularDataSource for CsvDataSource {
     fn open(&self, path: &Path) -> Result<Workbook, TabularError> {
+        self.open_with_source_rows(path)
+            .map(|(workbook, _)| workbook)
+    }
+}
+
+impl CsvDataSource {
+    /// [`TabularDataSource::open`], and the line of the file each row started on (a blank line has
+    /// no row and keeps its number; a field that spans lines pushes the next row down).
+    pub fn open_with_source_rows(
+        &self,
+        path: &Path,
+    ) -> Result<(Workbook, SourceRows), TabularError> {
         let bytes = std::fs::read(path).map_err(|_| TabularError::ReadFailed)?;
         let text = decode(&bytes);
         let delimiter = detect_delimiter(&text);
@@ -25,8 +37,29 @@ impl TabularDataSource for CsvDataSource {
             .from_reader(text.as_bytes());
 
         let mut rows = Vec::new();
+        let mut lines: Vec<u32> = Vec::new();
+        // The line each record starts on, counted from the bytes: the reader skips a blank line
+        // without counting it, so its own line numbers would run short after one.
+        let bytes_of_text = text.as_bytes();
+        let (mut scanned, mut newlines) = (0usize, 0u32);
         for record in reader.records() {
             let record = record.map_err(|_| TabularError::ParseFailed)?;
+            if let Some(position) = record.position() {
+                let mut start = (position.byte() as usize).min(bytes_of_text.len());
+                // The position is where the reader began looking, which is the start of any blank
+                // lines it then skipped: the record itself begins after them.
+                while start < bytes_of_text.len() && matches!(bytes_of_text[start], b'\n' | b'\r') {
+                    start += 1;
+                }
+                if start > scanned {
+                    newlines += bytes_of_text[scanned..start]
+                        .iter()
+                        .filter(|byte| **byte == b'\n')
+                        .count() as u32;
+                    scanned = start;
+                }
+            }
+            lines.push(newlines + 1);
             let row = record
                 .iter()
                 .map(|field| {
@@ -45,9 +78,14 @@ impl TabularDataSource for CsvDataSource {
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "sheet".to_string());
 
-        Ok(Workbook {
-            sheets: vec![SheetData { name, rows }],
-        })
+        let mut source_rows = SourceRows::new();
+        source_rows.insert(name.clone(), lines);
+        Ok((
+            Workbook {
+                sheets: vec![SheetData { name, rows }],
+            },
+            source_rows,
+        ))
     }
 }
 

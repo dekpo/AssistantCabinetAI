@@ -141,12 +141,22 @@
       "knownMany": "déjà connues",
       "identifiersOne": "identifiant repéré (adresse e-mail, numéro de facture, IBAN...)",
       "identifiersMany": "identifiants repérés (adresses e-mail, numéros de facture, IBAN...)",
+      "columnsOne": "colonne de tableur reconnue (personnes, organisations, identifiants...) dans {workbooks}",
+      "columnsMany": "colonnes de tableur reconnues (personnes, organisations, identifiants...) dans {workbooks}",
+      "workbooksOne": "tableur lu",
+      "workbooksMany": "tableurs lus",
+      "relationsOne": "lien lu entre deux colonnes d'un tableur",
+      "relationsMany": "liens lus entre deux colonnes d'un tableur",
       "refreshedOne": "document déjà analysé relu pour y repérer les noms, sans solliciter l'IA",
       "refreshedMany": "documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA",
       "truncatedOne": "document contient plus de noms que la base n'en retient : seuls les plus sûrs sont conservés",
       "truncatedMany": "documents contiennent plus de noms que la base n'en retient : seuls les plus sûrs sont conservés",
       "errorsOne": "document n'a pas pu être entièrement analysé (ses noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
-      "errorsMany": "documents n'ont pas pu être entièrement analysés (leurs noms n'ont pas été repérés) : relancez l'analyse pour réessayer"
+      "errorsMany": "documents n'ont pas pu être entièrement analysés (leurs noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
+      "errorsDataOne": "fichier n'a pas pu être entièrement analysé (ses noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
+      "errorsDataMany": "fichiers n'ont pas pu être entièrement analysés (leurs noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
+      "truncatedDataOne": "tableur contient plus de valeurs que la base n'en retient : seules les premières sont conservées",
+      "truncatedDataMany": "tableurs contiennent plus de valeurs que la base n'en retient : seules les premières sont conservées"
     }
   },
   "workFolder": {
@@ -208,6 +218,7 @@
     "resetTitle": "Effacer l'analyse des données ?",
     "resetBody": "Tout ce qui a été lu dans vos tableurs sera oublié, et il faudra relancer l'analyse pour poser des questions sur ces données. Vos fichiers ne sont ni déplacés ni supprimés, et l'analyse de vos documents n'est pas concernée.",
     "progressLabel": "Analyse des données en cours",
+    "progressNamesLabel": "Lecture des noms dans les documents déjà analysés",
     "spreadsheetOne": "tableur lu",
     "spreadsheetMany": "tableurs lus",
     "passDone": "{count} sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.",

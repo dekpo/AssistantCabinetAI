@@ -49,6 +49,10 @@ impl KnowledgeMode {
 /// is read again by the next pass, so improving an extractor means raising this number.
 pub const CURRENT_KB_VERSION: u32 = 1;
 
+/// The confidence a column of a table needs for its values to be read as entities. A column below
+/// it is recorded all the same, with the reason it was not read.
+pub const ACCEPTED_COLUMN_CONFIDENCE: f32 = 0.60;
+
 /// The layout of the `kb_*` tables, stored in `kb_meta`. Raised only by an additive migration.
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -286,6 +290,19 @@ pub struct SignalDraft {
     pub distinct_terms: u32,
 }
 
+/// What a column of a table was read as, and why (`kb_column_semantics`). Codes only: the type is a
+/// machine id, the reason one of `header_exact`, `header_partial`, `value_shape`, `combined`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColumnSemanticsDraft {
+    pub sheet: String,
+    pub column_name: String,
+    pub semantic_type: String,
+    pub subtype: Option<String>,
+    pub role: Option<String>,
+    pub confidence: f32,
+    pub reason: String,
+}
+
 /// Two entities the source makes one wonder about but nothing proves the same (a spelling that
 /// sounds alike, the same words in another order). Never a merge: a row in `kb_possible_matches`
 /// for the user to decide on later.
@@ -317,6 +334,8 @@ pub struct KnowledgeDelta {
     pub attributes: Vec<AttributeDraft>,
     pub signals: Vec<SignalDraft>,
     pub possible_matches: Vec<PossibleMatchDraft>,
+    /// How each column of a table was read; empty for a document.
+    pub column_semantics: Vec<ColumnSemanticsDraft>,
 }
 
 impl KnowledgeDelta {
@@ -334,6 +353,7 @@ impl KnowledgeDelta {
             attributes: Vec::new(),
             signals: Vec::new(),
             possible_matches: Vec::new(),
+            column_semantics: Vec::new(),
         }
     }
 }
@@ -378,6 +398,12 @@ pub struct KnowledgeSummary {
     pub identifiers: usize,
     /// Links stated by a file's own structure. Documents state none; tables do (lot 5).
     pub relations: usize,
+    /// Columns of the Data Folder's tables that were read as a name, an organisation, an
+    /// identifier, a place or an item (0 for a documents pass).
+    pub semantic_columns: usize,
+    /// Workbooks whose columns and values were read by this pass (0 for a documents pass). A
+    /// workbook that has not changed since it was last read is not counted.
+    pub workbooks_analysed: usize,
     /// Documents analysed earlier that were read again from their stored text, with no request to
     /// the AI.
     pub refreshed_sources: usize,

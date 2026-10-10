@@ -10,16 +10,30 @@ use std::path::Path;
 
 use calamine::{open_workbook_auto, Data, DataType, Range, Reader};
 
-use super::{CellValue, SheetData, TabularDataSource, TabularError, Workbook};
+use super::{CellValue, SheetData, SourceRows, TabularDataSource, TabularError, Workbook};
 
 pub struct XlsxDataSource;
 
 impl TabularDataSource for XlsxDataSource {
     fn open(&self, path: &Path) -> Result<Workbook, TabularError> {
+        self.open_with_source_rows(path)
+            .map(|(workbook, _)| workbook)
+    }
+}
+
+impl XlsxDataSource {
+    /// [`TabularDataSource::open`], and the row of the sheet each row came from, counted from 1 as
+    /// the spreadsheet program counts them. The range `calamine` returns starts at the first used
+    /// cell, so a sheet that begins on row 3 is numbered from 3.
+    pub fn open_with_source_rows(
+        &self,
+        path: &Path,
+    ) -> Result<(Workbook, SourceRows), TabularError> {
         let mut workbook = open_workbook_auto(path).map_err(|_| TabularError::ReadFailed)?;
         let sheet_names = workbook.sheet_names().to_owned();
 
         let mut sheets = Vec::with_capacity(sheet_names.len());
+        let mut source_rows = SourceRows::new();
         for name in sheet_names {
             let range = workbook
                 .worksheet_range(&name)
@@ -30,6 +44,7 @@ impl TabularDataSource for XlsxDataSource {
             let formulas = workbook.worksheet_formula(&name).ok();
             let value_start = range.start();
             let formula_start = formulas.as_ref().and_then(Range::start);
+            let first_row = value_start.map(|(row, _)| row).unwrap_or(0);
 
             let mut rows = Vec::with_capacity(range.height());
             for (row_index, row) in range.rows().enumerate() {
@@ -49,10 +64,16 @@ impl TabularDataSource for XlsxDataSource {
                     .collect();
                 rows.push(cells);
             }
+            source_rows.insert(
+                name.clone(),
+                (0..rows.len() as u32)
+                    .map(|index| first_row + index + 1)
+                    .collect(),
+            );
             sheets.push(SheetData { name, rows });
         }
 
-        Ok(Workbook { sheets })
+        Ok((Workbook { sheets }, source_rows))
     }
 }
 

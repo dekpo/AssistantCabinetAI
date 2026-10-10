@@ -64,6 +64,11 @@ stop_words        [...]                months, document words, null-like values;
 org_markers       { prefix, suffix }   "association", "clinique" / "SARL", "Inc"
 identifier_schemes [ { id, kind, regex, normalise: alnum|digits, strength: exact|possible, personal_key } ]
 columns           [ { headers: [...], semantic: { type, subtype?, role? }, confidence } ]
+                  (the table extractor reads a column header against these: a header equal to an entry is read at
+                  `confidence`; a header that contains an entry plus other words of headers of the same `type` is
+                  read at 0.9 of it; a header only another module's entries read is left alone, never read as
+                  another type. Add the words people write, not sentences. Edit, then run
+                  `cargo test --test knowledge_tables a_module_never_changes_the_type_of_a_column`)
 relations         [ { from_role, to_role, predicate } ]
 roles             [ { id, label_key } ]   label_key is an interface catalogue key under "knowledge."
 detection_terms   [...]                   words that point at a domain (activity profiles)

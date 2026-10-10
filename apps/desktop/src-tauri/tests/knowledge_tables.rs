@@ -2139,6 +2139,218 @@ fn the_numbers_the_human_test_quotes_hold() {
     clean(&lab);
 }
 
+// -------------------------------------------------------------- the surname-then-initial form (KBD-15)
+
+/// Every open pair recorded as a possible match, by canonical name, with its reason and its state.
+fn possible_pairs(lab: &Lab) -> Vec<(String, String, String, String)> {
+    let side = lab.side();
+    let mut pairs: Vec<(String, String, String, String)> = side
+        .prepare(
+            "SELECT a.canonical_name, b.canonical_name, p.reason, p.state
+             FROM kb_possible_matches p
+             JOIN kb_entities a ON a.entity_id = p.entity_a
+             JOIN kb_entities b ON b.entity_id = p.entity_b",
+        )
+        .expect("prepares")
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .expect("queries")
+        .collect::<Result<_, _>>()
+        .expect("reads");
+    for pair in &mut pairs {
+        if pair.0 > pair.1 {
+            std::mem::swap(&mut pair.0, &mut pair.1);
+        }
+    }
+    pairs.sort();
+    pairs
+}
+
+fn alias_forms_of(lab: &Lab, canonical: &str) -> Vec<(String, String)> {
+    let id = entity(lab, canonical).entity_id;
+    let mut forms: Vec<(String, String)> = kb::entity_with_aliases(&lab.side(), id)
+        .expect("reads")
+        .expect("exists")
+        .aliases
+        .into_iter()
+        .map(|alias| (alias.normalized, alias.kind.as_code().to_string()))
+        .collect();
+    forms.sort();
+    forms
+}
+
+#[test]
+fn the_pilots_appointments_and_mail_merge_files_give_a_possible_match() {
+    let mut lab = Lab::new();
+    lab.packs = vec!["health-fr"];
+    copy_pilot_workbooks(&lab);
+    lab.analyse_data();
+
+    // `Dupont J` of the appointments and `Jean Dupont` of the mail merge: a question, no link.
+    let dupont = entity(&lab, "Dupont J");
+    let jean = entity(&lab, "Jean Dupont");
+    assert_ne!(dupont.entity_id, jean.entity_id, "never one entity");
+    assert_eq!(
+        possible_pairs(&lab),
+        [(
+            "Dupont J".to_string(),
+            "Jean Dupont".to_string(),
+            "initial".to_string(),
+            "open".to_string()
+        )],
+        "`Martin A` is not the initial of `Sophie Martin`, and no other surname is shared"
+    );
+    // Both stay separate people with their own sources.
+    let paths_of = |id: i64| -> Vec<String> {
+        mentions_of(&lab.side(), id)
+            .into_iter()
+            .map(|mention| mention.path)
+            .collect()
+    };
+    assert_eq!(paths_of(dupont.entity_id), ["rdv-mars-2026.xlsx"]);
+    assert_eq!(paths_of(jean.entity_id), ["donnees_publipostage.csv"]);
+
+    // The aliases `Dupont J` carries: its surname alone, `J. Dupont`, and never the letter.
+    assert_eq!(
+        alias_forms_of(&lab, "Dupont J"),
+        [
+            ("dupont".to_string(), "partial_surname".to_string()),
+            ("dupont j".to_string(), "canonical_variant".to_string()),
+            ("j dupont".to_string(), "initial".to_string()),
+        ]
+    );
+    assert!(entity_named(&lab.side(), "Martin A").is_some());
+    assert!(entity_named(&lab.side(), "Sophie Martin").is_some());
+
+    // A second pass changes nothing, and neither does the correction of old data.
+    let after_first = snapshot(&lab.side());
+    lab.analyse_data();
+    assert_eq!(after_first, snapshot(&lab.side()));
+    clean(&lab);
+}
+
+#[test]
+fn a_surname_then_initial_is_a_possible_match_of_the_full_name_in_both_orders() {
+    // The mail merge is read first in one lab, the appointments first in the other, in two passes,
+    // so that each order really happens (the entity written second finds the first in the store).
+    let appointments = lines(&[
+        "date;patient;duree_min",
+        "02/03/2026;Dupont J;20",
+        "03/03/2026;Martin A;25",
+    ]);
+    let mut first_ids = Vec::new();
+    for mailing_first in [true, false] {
+        let mut lab = Lab::new();
+        lab.packs = vec!["health-fr"];
+        let steps: [(&str, String); 2] = if mailing_first {
+            [
+                ("clients.csv", mailing_csv()),
+                ("rdv-sante.csv", appointments.clone()),
+            ]
+        } else {
+            [
+                ("rdv-sante.csv", appointments.clone()),
+                ("clients.csv", mailing_csv()),
+            ]
+        };
+        for (name, text) in &steps {
+            lab.write_data(name, text);
+            lab.analyse_data();
+        }
+
+        let dupont = entity(&lab, "Dupont J");
+        let jean = entity(&lab, "Jean Dupont");
+        assert_ne!(dupont.entity_id, jean.entity_id, "never merged");
+        first_ids.push(dupont.entity_id < jean.entity_id);
+        assert_eq!(
+            possible_pairs(&lab),
+            [(
+                "Dupont J".to_string(),
+                "Jean Dupont".to_string(),
+                "initial".to_string(),
+                "open".to_string()
+            )],
+            "mail merge first: {mailing_first}"
+        );
+        // Each keeps its own file.
+        let paths = |id: i64| -> Vec<String> {
+            mentions_of(&lab.side(), id)
+                .into_iter()
+                .map(|mention| mention.path)
+                .collect()
+        };
+        assert_eq!(paths(dupont.entity_id), ["rdv-sante.csv"]);
+        assert_eq!(paths(jean.entity_id), ["clients.csv"]);
+        // Reading again records nothing more.
+        let before = snapshot(&lab.side());
+        lab.analyse_data();
+        assert_eq!(before, snapshot(&lab.side()));
+        clean(&lab);
+    }
+    // The two labs really differed in which entity was written first.
+    assert_eq!(first_ids, [false, true]);
+}
+
+#[test]
+fn a_base_read_before_this_fix_is_corrected_by_the_next_data_analyse_and_only_then() {
+    let mut lab = Lab::new();
+    lab.packs = vec!["health-fr"];
+    copy_pilot_workbooks(&lab);
+    lab.analyse_data();
+
+    // Put the base back in the state the old alias maker left it in: the letter as a surname, the
+    // initial of the surname, no record of the generation, no pair.
+    {
+        let side = lab.side();
+        let dupont = entity(&lab, "Dupont J").entity_id;
+        side.execute(
+            "DELETE FROM kb_aliases WHERE entity_id = ?1 AND normalized <> 'dupont j'",
+            [dupont],
+        )
+        .expect("clears");
+        for (display, normalized, kind) in [
+            ("J Dupont", "j dupont", "reordered"),
+            ("D. J", "d j", "initial"),
+            ("J", "j", "partial_surname"),
+        ] {
+            side.execute(
+                "INSERT INTO kb_aliases (entity_id, display, normalized, phonetic_key, kind, origin, confidence)
+                 VALUES (?1, ?2, ?3, 'x', ?4, 'automatic', 0.6)",
+                rusqlite::params![dupont, display, normalized, kind],
+            )
+            .expect("writes an old alias");
+        }
+        side.execute("DELETE FROM kb_possible_matches", [])
+            .expect("clears");
+        side.execute("DELETE FROM kb_meta WHERE key = 'alias_generation'", [])
+            .expect("forgets the generation");
+    }
+    assert!(possible_pairs(&lab).is_empty());
+
+    // Nothing runs by itself: building the context of an Analyse is what brings the base up to date,
+    // and it reads no document.
+    let side = lab.side();
+    let before = kb::meta(&side, "alias_generation").expect("reads");
+    assert_eq!(before, None);
+    let summary = lab.analyse_data();
+    assert_eq!(
+        summary.knowledge.expect("took part").workbooks_analysed,
+        0,
+        "no workbook was read again to correct the aliases"
+    );
+    assert_eq!(
+        alias_forms_of(&lab, "Dupont J"),
+        [
+            ("dupont".to_string(), "partial_surname".to_string()),
+            ("dupont j".to_string(), "canonical_variant".to_string()),
+            ("j dupont".to_string(), "initial".to_string()),
+        ]
+    );
+    assert_eq!(possible_pairs(&lab).len(), 1);
+    clean(&lab);
+}
+
 /// Writes an index with the same shape as the human test's (the pilot's fictional workbooks and
 /// documents) and keeps a copy, so that the owner's read-only script can be run against it without
 /// the application: `python show_kb_entities.py <path printed here>`. Kept as a test so the script

@@ -354,6 +354,55 @@ pub fn normalize_name_with(text: &str, set: &TitleSet, weak: WeakTitles) -> Norm
     }
 }
 
+/// A person's name written surname first, then one letter: `Dupont J`, `DUPONT J.`, `de Vries A`.
+/// A table of appointments or a roll call writes names that way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SurnameInitial {
+    /// The surname as folded words, the particles in front of it kept (`de`, `vries`).
+    pub surname: Vec<String>,
+    /// The initial, folded.
+    pub initial: String,
+}
+
+impl SurnameInitial {
+    /// The alias every full name carrying this surname and this initial has: `j dupont`.
+    pub fn initial_surname_key(&self) -> String {
+        format!("{} {}", self.initial, self.surname.join(" "))
+    }
+}
+
+/// Reads the form `Surname Initial`. **The one place that decides it** (aliases and resolution
+/// both ask here), and only for a name that is a person's: the caller checks the type.
+///
+/// The rule, narrow on purpose because a wrong reading would put a given name where a surname
+/// belongs:
+///
+/// - the last word is one letter (a period after it is no different: `Dupont J.`);
+/// - what comes before it is exactly one word of identity, optionally preceded by particles
+///   (`Dupont`, `de Vries`), and that word is not itself a single letter, so `A B` and `J. P.`
+///   stay as they are;
+/// - so `J. Dupont` (Initial Surname, the form handled since lot 3) is never this form, nor is
+///   `Jean Dupont J`, `Jean-Pierre Dupont J` or a name of one word.
+///
+/// Titles are already out of `name.tokens`, so `Dr Martin A` is read as `Martin A`.
+pub fn surname_then_initial(name: &NormalizedName, set: &TitleSet) -> Option<SurnameInitial> {
+    let (initial, before) = name.tokens.split_last()?;
+    if initial.chars().count() != 1 || !initial.chars().all(char::is_alphabetic) {
+        return None;
+    }
+    let (surname_word, particles) = before.split_last()?;
+    if surname_word.chars().count() < 2 || set.is_particle(surname_word) {
+        return None;
+    }
+    if !particles.iter().all(|word| set.is_particle(word)) {
+        return None;
+    }
+    Some(SurnameInitial {
+        surname: before.to_vec(),
+        initial: initial.clone(),
+    })
+}
+
 /// An identifier with everything that is formatting removed: letters and digits only, accents
 /// folded, upper case. "FR76 3000", "fr76-3000" and "FR76.3000" collide. Whether the collision
 /// means "the same identifier" is the scheme's decision (an IBAN: yes; a phone number with and
@@ -516,6 +565,84 @@ mod tests {
             ]
         );
         assert!(filename_name_candidates("2026-03-12", &set).is_empty());
+    }
+
+    fn surname_initial(text: &str) -> Option<(Vec<String>, String)> {
+        let set = titles();
+        surname_then_initial(&normalize_name(text, &set), &set)
+            .map(|form| (form.surname, form.initial))
+    }
+
+    #[test]
+    fn a_surname_then_one_letter_is_read_as_a_surname_and_its_initial() {
+        let words = |list: &[&str]| list.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+        for text in [
+            "Dupont J",
+            "Dupont J.",
+            "DUPONT J",
+            "dupont, j.",
+            "Dr Dupont J",
+        ] {
+            assert_eq!(
+                surname_initial(text),
+                Some((words(&["dupont"]), "j".to_string())),
+                "{text}"
+            );
+        }
+        // Particles stay with the surname.
+        assert_eq!(
+            surname_initial("de Vries A"),
+            Some((words(&["de", "vries"]), "a".to_string()))
+        );
+        // The accent is folded away like in every name.
+        assert_eq!(
+            surname_initial("\u{c9}tienne \u{c9}"),
+            Some((words(&["etienne"]), "e".to_string()))
+        );
+    }
+
+    #[test]
+    fn the_other_forms_are_not_surname_then_initial() {
+        for text in [
+            // Initial then surname: the other way round, handled since lot 3.
+            "J. Dupont",
+            "J Dupont",
+            // A full name, a hyphenated given name, one word, nothing.
+            "Jean Dupont",
+            "Jean-Pierre Dupont",
+            "Dupont",
+            "J",
+            "",
+            // Two single letters stay as they are, with or without periods.
+            "A B",
+            "J. P.",
+            "Dupont J P",
+            // More than one word of identity before the letter: a middle initial, not this form.
+            "Jean Dupont J",
+            // The word before the letter is only a particle.
+            "de A",
+            // A trailing digit is not an initial.
+            "Dupont 7",
+        ] {
+            assert_eq!(surname_initial(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn the_initial_form_and_the_surname_initial_form_never_read_alike() {
+        let set = titles();
+        let after = normalize_name("Dupont J.", &set);
+        let before = normalize_name("J. Dupont", &set);
+        assert_ne!(after.joined, before.joined);
+        assert!(surname_then_initial(&after, &set).is_some());
+        assert!(surname_then_initial(&before, &set).is_none());
+        assert_eq!(
+            surname_then_initial(&after, &set)
+                .expect("the form")
+                .initial_surname_key(),
+            before.joined,
+            "the alias a full name carries for its initial is the other order"
+        );
     }
 
     #[test]

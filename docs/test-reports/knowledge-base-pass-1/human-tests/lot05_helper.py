@@ -23,6 +23,10 @@ Commands
     restore-workbook        put the original back
     hide-workbook           move factures-fournisseurs-2026.xlsx out of the test data folder
     restore-hidden          move it back
+    age-aliases             (fix 3, surname then initial) put the aliases of "Dupont J" back the way
+                            the alias maker of lot 5 left them (a surname "J", an initial "D. J"), and
+                            forget the possible matches and the alias generation, so the next Analyse
+                            has an old base to correct. Index only; reads and sends no document
     stop-ai                 docker compose stop   (the AI machine, so nothing can answer a request)
     start-ai                docker compose up -d
 
@@ -33,6 +37,7 @@ only (docs/test-reports/human-acceptance-pass-1/fixtures).
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import zipfile
@@ -321,6 +326,47 @@ def restore_hidden() -> int:
     return 0
 
 
+def age_aliases() -> int:
+    """Make the index look like one the alias maker of lot 5 filled, for the fix 3 human test."""
+    index = data_dir() / INDEX_FILE
+    if not index.is_file():
+        return fail(f"no index at {index}: start the application and press Analyser first")
+    connection = sqlite3.connect(index)
+    try:
+        row = connection.execute(
+            "SELECT entity_id FROM kb_entities WHERE canonical_name = ? AND type_id = 'person'",
+            ("Dupont J",),
+        ).fetchone()
+        if row is None:
+            return fail(
+                "'Dupont J' is not in the knowledge base: press Analyser on the Data card first, "
+                "with the three fictional workbooks of the test folder"
+            )
+        entity = row[0]
+        with connection:
+            connection.execute(
+                "DELETE FROM kb_aliases WHERE entity_id = ? AND normalized <> 'dupont j'", (entity,)
+            )
+            for display, normalized, kind in (
+                ("J Dupont", "j dupont", "reordered"),
+                ("D. J", "d j", "initial"),
+                ("J", "j", "partial_surname"),
+            ):
+                connection.execute(
+                    "INSERT INTO kb_aliases (entity_id, display, normalized, phonetic_key, kind, "
+                    "origin, confidence) VALUES (?, ?, ?, '', ?, 'automatic', 0.6)",
+                    (entity, display, normalized, kind),
+                )
+            connection.execute("DELETE FROM kb_possible_matches")
+            connection.execute("DELETE FROM kb_meta WHERE key = 'alias_generation'")
+    finally:
+        connection.close()
+    say("The aliases of 'Dupont J' are the old ones again (a surname 'J', an initial 'D. J'),")
+    say("no possible match is recorded, and the alias generation is forgotten.")
+    say("Now start the application and press Analyser on the Data card.")
+    return 0
+
+
 def docker(*arguments: str) -> int:
     try:
         result = subprocess.run(["docker", "compose", *arguments], cwd=repository_root(), check=False)
@@ -338,6 +384,7 @@ COMMANDS = {
     "restore-workbook": (restore_workbook, False),
     "hide-workbook": (hide_workbook, False),
     "restore-hidden": (restore_hidden, False),
+    "age-aliases": (age_aliases, True),
 }
 
 

@@ -11,15 +11,27 @@
 
 use rusqlite::Connection;
 
-use super::normalize::TitleSet;
+use super::normalize::{normalize_name, surname_then_initial, TitleSet};
 use super::packs::PackSet;
 use super::phonetic::PhoneticEncoder;
-use super::resolve::alias_phonetic_key;
+use super::resolve::{
+    alias_phonetic_key, aliases_for, AliasRequest, PossibleReason, SCORE_INITIAL,
+};
 use super::store;
+use super::{AliasKind, EntityTypeId, Origin};
 use crate::error::AppError;
 
 const PHONETIC_KEY: &str = "phonetic_version";
 const PACKS_KEY: &str = "packs_hash";
+const ALIAS_GENERATION_KEY: &str = "alias_generation";
+
+/// The generation of the rules `aliases_for` makes aliases by. An unrecorded base is generation 1.
+/// Raise it when a change of those rules must reach entities that already exist, and add the
+/// correction to [`ensure_alias_generation`].
+///
+/// 2: a name written surname then initial (`Dupont J`) has its surname alone and its initial form,
+/// and no one-letter surname.
+pub const ALIAS_GENERATION: u32 = 2;
 
 /// What a refresh did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +91,132 @@ pub fn ensure_phonetic_keys(
     })
 }
 
+/// What a refresh of the aliases did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AliasRefresh {
+    /// The generation recorded before, empty when none was.
+    pub previous: String,
+    /// People read as a surname followed by an initial.
+    pub entities: usize,
+    /// Automatic aliases the current rules no longer make, deleted.
+    pub removed: usize,
+    /// Automatic aliases written or corrected.
+    pub written: usize,
+    /// Pairs recorded as possible matches (a full name this initial is compatible with).
+    pub possible_matches: usize,
+}
+
+/// Bring the aliases of the people written as `Surname Initial` up to the current rules, if the
+/// rules that made them are not the current generation (`ALIAS_GENERATION`, recorded in `kb_meta`).
+///
+/// Why it exists: re-reading a source finds its people already known, so it never makes their
+/// aliases again, and an entity filed by the old rules (`Dupont J` with a surname `J` and an
+/// initial `D. J`) would keep them for good. Nor would it ever meet `Jean Dupont` as a new name,
+/// which is the moment a possible match is recorded. This pass corrects both, from the names the
+/// base already holds, and reads no document.
+///
+/// Like every function of this module it runs only inside an Analyse the user started
+/// (`KnowledgeContext::standard`), and in **one transaction**: a failure leaves the old aliases and
+/// the old generation, so the next Analyse tries again. Only automatic aliases are removed; a
+/// manual one is never touched. The titles seen with a person are kept: they are read back from the
+/// title aliases it already has.
+pub fn ensure_alias_generation(
+    connection: &Connection,
+    titles: &TitleSet,
+    encoder: &dyn PhoneticEncoder,
+) -> Result<AliasRefresh, AppError> {
+    let previous = store::meta(connection, ALIAS_GENERATION_KEY)?.unwrap_or_default();
+    let mut refresh = AliasRefresh {
+        previous,
+        entities: 0,
+        removed: 0,
+        written: 0,
+        possible_matches: 0,
+    };
+    if refresh.previous == ALIAS_GENERATION.to_string() {
+        return Ok(refresh);
+    }
+
+    let tx = connection
+        .unchecked_transaction()
+        .map_err(|_| AppError::KnowledgeUnavailable)?;
+    let person = EntityTypeId::person();
+    for (entity_id, canonical) in store::people_ending_in_a_letter(&tx)? {
+        let name = normalize_name(&canonical, titles);
+        let Some(form) = surname_then_initial(&name, titles) else {
+            continue;
+        };
+        let Some(record) = store::entity_with_aliases(&tx, entity_id)? else {
+            continue;
+        };
+        refresh.entities += 1;
+
+        let titles_seen: Vec<String> = record
+            .aliases
+            .iter()
+            .filter(|alias| alias.kind == AliasKind::TitleForm)
+            .filter_map(|alias| alias.normalized.split(' ').next().map(str::to_string))
+            .collect();
+        let made = aliases_for(
+            &AliasRequest {
+                type_id: &person,
+                canonical: &record.entity.canonical_name,
+                titles_seen: &titles_seen,
+                acronym: None,
+            },
+            titles,
+            encoder,
+        );
+        for alias in &record.aliases {
+            let rewritable = alias.origin == Origin::Automatic
+                && matches!(
+                    alias.kind,
+                    AliasKind::Reordered
+                        | AliasKind::Initial
+                        | AliasKind::PartialSurname
+                        | AliasKind::TitleForm
+                );
+            if rewritable && !made.iter().any(|new| new.normalized == alias.normalized) {
+                refresh.removed += usize::from(store::remove_alias(&tx, alias.alias_id)?);
+            }
+        }
+        for alias in &made {
+            let unchanged = record.aliases.iter().any(|known| {
+                known.normalized == alias.normalized
+                    && known.kind == alias.kind
+                    && known.display == alias.display
+                    && known.phonetic_key == alias.phonetic_key
+            });
+            if !unchanged {
+                store::add_alias(&tx, entity_id, alias, Origin::Automatic)?;
+                refresh.written += 1;
+            }
+        }
+
+        // The full names this initial fits: the same hint the resolver gives a new name.
+        for (other, alias) in store::find_entities_by_alias(&tx, &form.initial_surname_key())? {
+            let is_a_full_name = other.type_id == EntityTypeId::PERSON
+                && alias.kind == AliasKind::Initial
+                && surname_then_initial(&normalize_name(&other.canonical_name, titles), titles)
+                    .is_none();
+            if is_a_full_name
+                && store::record_possible_match(
+                    &tx,
+                    entity_id,
+                    other.entity_id,
+                    PossibleReason::Initial.as_code(),
+                    SCORE_INITIAL,
+                )?
+            {
+                refresh.possible_matches += 1;
+            }
+        }
+    }
+    store::set_meta(&tx, ALIAS_GENERATION_KEY, &ALIAS_GENERATION.to_string())?;
+    tx.commit().map_err(|_| AppError::KnowledgeUnavailable)?;
+    Ok(refresh)
+}
+
 /// Record the fingerprint of the packs in use. Returns whether it differs from the one stored,
 /// which tells the caller that the vocabulary changed since the last pass (a title added, a pack
 /// activated) and that sources read with the old one may deserve a second reading.
@@ -96,7 +234,7 @@ mod tests {
     use super::*;
     use crate::knowledge::phonetic::{EnglishPhonetic, FrenchPhonetic};
     use crate::knowledge::resolve::{aliases_for, AliasRequest};
-    use crate::knowledge::{EntityStatus, EntityTypeId, NewEntity, Origin};
+    use crate::knowledge::{EntityStatus, EntityTypeId, NewAlias, NewEntity};
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -287,5 +425,163 @@ mod tests {
             base.hash()
         );
         assert!(record_packs(&connection, &health).unwrap());
+    }
+
+    /// A person filed by the rules before generation 2: `Dupont J` with a surname `J`, an initial
+    /// `D. J`, and the reordered form.
+    fn add_person_filed_by_the_old_rules(connection: &Connection, name: &str) -> i64 {
+        let id = store::create_entity(
+            connection,
+            &NewEntity {
+                type_id: "person".to_string(),
+                subtype: None,
+                canonical_name: name.to_string(),
+                normalized_name: name.to_lowercase(),
+                disambiguator: String::new(),
+                status: EntityStatus::Active,
+                origin: Origin::Automatic,
+            },
+        )
+        .unwrap();
+        let old = |display: &str, normalized: &str, kind: AliasKind| NewAlias {
+            display: display.to_string(),
+            normalized: normalized.to_string(),
+            phonetic_key: "old".to_string(),
+            kind,
+            confidence: 0.6,
+        };
+        for alias in [
+            old(name, &name.to_lowercase(), AliasKind::CanonicalVariant),
+            old("J Dupont", "j dupont", AliasKind::Reordered),
+            old("D. J", "d j", AliasKind::Initial),
+            old("J", "j", AliasKind::PartialSurname),
+            old("Dr J", "dr j", AliasKind::TitleForm),
+        ] {
+            store::add_alias(connection, id, &alias, Origin::Automatic).unwrap();
+        }
+        id
+    }
+
+    fn alias_forms(connection: &Connection, entity_id: i64) -> Vec<(String, AliasKind, Origin)> {
+        store::entity_with_aliases(connection, entity_id)
+            .unwrap()
+            .unwrap()
+            .aliases
+            .into_iter()
+            .map(|alias| (alias.normalized, alias.kind, alias.origin))
+            .collect()
+    }
+
+    #[test]
+    fn a_base_filed_by_the_old_rules_is_corrected_once_and_keeps_what_the_user_typed() {
+        let connection = connection();
+        let dupont = add_person_filed_by_the_old_rules(&connection, "Dupont J");
+        store::add_alias(
+            &connection,
+            dupont,
+            &NewAlias {
+                display: "Madame D".to_string(),
+                normalized: "madame d".to_string(),
+                phonetic_key: String::new(),
+                kind: AliasKind::Manual,
+                confidence: 1.0,
+            },
+            Origin::Manual,
+        )
+        .unwrap();
+        let jean = add_person(&connection, "Jean Dupont", &FrenchPhonetic);
+        let sophie = add_person(&connection, "Sophie Martin", &FrenchPhonetic);
+
+        let refresh = ensure_alias_generation(&connection, &titles(), &FrenchPhonetic).unwrap();
+        assert_eq!(refresh.previous, "");
+        assert_eq!(refresh.entities, 1, "only the surname-then-initial person");
+        assert_eq!(refresh.possible_matches, 1, "Jean Dupont fits Dupont J");
+
+        let mut forms = alias_forms(&connection, dupont);
+        forms.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            forms,
+            [
+                ("dr dupont".to_string(), AliasKind::TitleForm, Origin::Automatic),
+                ("dupont".to_string(), AliasKind::PartialSurname, Origin::Automatic),
+                ("dupont j".to_string(), AliasKind::CanonicalVariant, Origin::Automatic),
+                ("j dupont".to_string(), AliasKind::Initial, Origin::Automatic),
+                ("madame d".to_string(), AliasKind::Manual, Origin::Manual),
+            ],
+            "no one-letter surname, no initial of the surname; the title seen is kept, on the surname"
+        );
+        // The other people are untouched, and the pair is recorded once, in one order.
+        assert_eq!(alias_forms(&connection, jean).len(), 4);
+        assert_eq!(alias_forms(&connection, sophie).len(), 4);
+        let pairs: Vec<(i64, i64, String, String)> = connection
+            .prepare("SELECT entity_a, entity_b, reason, state FROM kb_possible_matches")
+            .unwrap()
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            pairs,
+            [(
+                dupont.min(jean),
+                dupont.max(jean),
+                "initial".to_string(),
+                "open".to_string()
+            )]
+        );
+
+        // The next Analyse finds the generation recorded and does nothing, even with a decision the
+        // user took in between.
+        connection
+            .execute("UPDATE kb_possible_matches SET state = 'dismissed'", [])
+            .unwrap();
+        let again = ensure_alias_generation(&connection, &titles(), &FrenchPhonetic).unwrap();
+        assert_eq!(again.previous, ALIAS_GENERATION.to_string());
+        assert_eq!(
+            (
+                again.entities,
+                again.removed,
+                again.written,
+                again.possible_matches
+            ),
+            (0, 0, 0, 0)
+        );
+        let state: String = connection
+            .query_row("SELECT state FROM kb_possible_matches", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(state, "dismissed");
+    }
+
+    #[test]
+    fn an_initial_that_no_full_name_fits_records_no_possible_match() {
+        let connection = connection();
+        add_person_filed_by_the_old_rules(&connection, "Martin A");
+        add_person(&connection, "Sophie Martin", &FrenchPhonetic);
+        let refresh = ensure_alias_generation(&connection, &titles(), &FrenchPhonetic).unwrap();
+        assert_eq!(
+            (refresh.entities, refresh.possible_matches),
+            (1, 0),
+            "A is not the initial of Sophie"
+        );
+    }
+
+    #[test]
+    fn a_failed_alias_refresh_keeps_the_old_aliases_and_the_old_record() {
+        let connection = connection();
+        let dupont = add_person_filed_by_the_old_rules(&connection, "Dupont J");
+        // A trigger that refuses the first deletion stands for any failure half-way.
+        connection
+            .execute_batch(
+                "CREATE TRIGGER refuse_delete BEFORE DELETE ON kb_aliases
+                 BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+            )
+            .unwrap();
+        assert!(ensure_alias_generation(&connection, &titles(), &FrenchPhonetic).is_err());
+        assert_eq!(alias_forms(&connection, dupont).len(), 5);
+        assert_eq!(store::meta(&connection, "alias_generation").unwrap(), None);
     }
 }

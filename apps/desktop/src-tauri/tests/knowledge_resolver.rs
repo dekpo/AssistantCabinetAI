@@ -858,6 +858,238 @@ fn a_resolution_names_its_outcome_and_its_codes() {
     );
 }
 
+// ----------------------------------------------------------------------------- surname then initial (KBD-15)
+
+/// The pilot's appointments workbook writes `Dupont J`; its mail-merge file writes `Jean Dupont`.
+/// The two are compatible and never one entity on that evidence.
+fn possible(answer: &Resolution) -> (BTreeSet<i64>, PossibleReason, bool) {
+    match answer {
+        Resolution::PossibleMatch {
+            entities,
+            reason,
+            create_separate,
+            ..
+        } => (
+            entities.iter().map(|hit| hit.entity_id).collect(),
+            *reason,
+            *create_separate,
+        ),
+        other => panic!("expected a possible match, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_surname_then_initial_is_a_possible_match_of_the_full_name_in_both_orders() {
+    // The full name is stored, the surname and initial arrives.
+    let mut world = memory();
+    let jean = world.add_person("Jean Dupont");
+    for written in [
+        "Dupont J",
+        "Dupont J.",
+        "DUPONT J",
+        "Dr Dupont J",
+        "Dupont, J.",
+    ] {
+        assert_eq!(
+            possible(&resolve(&world, &ingest(), written)),
+            (set(&[jean]), PossibleReason::Initial, true),
+            "{written}"
+        );
+    }
+    // Even when the source can vouch for the person, an initial is never a link.
+    let in_source = set(&[jean]);
+    let supported = Ask {
+        mode: ResolveMode::Ingestion,
+        selection: None,
+        source_entities: Some(&in_source),
+    };
+    assert_eq!(
+        possible(&resolve(&world, &supported, "Dupont J")).1,
+        PossibleReason::Initial
+    );
+
+    // The surname and initial is stored, the full name arrives.
+    let mut world = memory();
+    let dupont = world.add_person("Dupont J");
+    for written in [
+        "Jean Dupont",
+        "Jean Pierre Dupont",
+        "Dr Jean Dupont",
+        "Jeanne Dupont",
+    ] {
+        assert_eq!(
+            possible(&resolve(&world, &ingest(), written)),
+            (set(&[dupont]), PossibleReason::Initial, true),
+            "{written}"
+        );
+    }
+
+    // In a question the same compatibility is offered and creates nothing.
+    for (stored, asked) in [("Jean Dupont", "Dupont J"), ("Dupont J", "Jean Dupont")] {
+        let mut world = memory();
+        let id = world.add_person(stored);
+        world.mention(id, 1);
+        let chosen = selection(&[1]);
+        assert_eq!(
+            possible(&resolve(&world, &query(Some(&chosen)), asked)),
+            (set(&[id]), PossibleReason::Initial, false),
+            "{stored} / {asked}"
+        );
+        // Known, but not in the files she chose.
+        let elsewhere = selection(&[2]);
+        assert!(matches!(
+            resolve(&world, &query(Some(&elsewhere)), asked),
+            Resolution::Unresolved {
+                reason: UnresolvedReason::NotInSelection
+            }
+        ));
+    }
+}
+
+#[test]
+fn a_surname_then_initial_never_picks_between_two_full_names() {
+    let mut world = memory();
+    let jean = world.add_person("Jean Dupont");
+    let jeanne = world.add_person("Jeanne Dupont");
+    // At ingestion: a question about both, and the new name stands apart.
+    assert_eq!(
+        possible(&resolve(&world, &ingest(), "Dupont J")),
+        (set(&[jean, jeanne]), PossibleReason::Initial, true)
+    );
+    // In a question: ambiguous when both are in the selection, a single offer when only one is.
+    world.mention(jean, 1);
+    world.mention(jeanne, 1);
+    let both = selection(&[1]);
+    let answer = resolve(&world, &query(Some(&both)), "Dupont J");
+    assert!(matches!(answer, Resolution::Ambiguous { .. }), "{answer:?}");
+    assert_eq!(ids(&answer), set(&[jean, jeanne]));
+
+    let mut world = memory();
+    let jean = world.add_person("Jean Dupont");
+    let jeanne = world.add_person("Jeanne Dupont");
+    world.mention(jean, 1);
+    world.mention(jeanne, 2);
+    let only_jean = selection(&[1]);
+    assert_eq!(
+        possible(&resolve(&world, &query(Some(&only_jean)), "Dupont J")).0,
+        set(&[jean])
+    );
+}
+
+#[test]
+fn only_the_first_letter_of_the_given_name_and_the_same_surname_make_two_names_compatible() {
+    let mut world = memory();
+    world.add_person("Sophie Martin");
+    // `A` is not the initial of Sophie: a new name, nothing offered.
+    assert!(matches!(
+        resolve(&world, &ingest(), "Martin A"),
+        Resolution::NewEntity { .. }
+    ));
+    // The initial of Sophie, another surname.
+    assert!(matches!(
+        resolve(&world, &ingest(), "Durand S"),
+        Resolution::NewEntity { .. }
+    ));
+    // The right initial.
+    assert_eq!(
+        possible(&resolve(&world, &ingest(), "Martin S")).1,
+        PossibleReason::Initial
+    );
+    // And the reverse: Alice Martin does not fit `Martin S`.
+    let mut world = memory();
+    world.add_person("Martin S");
+    assert!(matches!(
+        resolve(&world, &ingest(), "Alice Martin"),
+        Resolution::NewEntity { .. }
+    ));
+}
+
+#[test]
+fn only_a_person_is_read_as_a_surname_and_an_initial() {
+    let mut world = memory();
+    world.add_person("Jean Dupont");
+    let organisation =
+        SurfaceInput::new("Dupont J").of_type(EntityTypeId::new("organization").unwrap());
+    assert!(matches!(
+        run(&world, &ingest(), &organisation),
+        Resolution::NewEntity { .. }
+    ));
+    // A stored organisation is never offered for a person either.
+    let mut world = memory();
+    world.add("organization", "Jean Dupont");
+    assert!(matches!(
+        resolve(&world, &ingest(), "Dupont J"),
+        Resolution::NewEntity { .. }
+    ));
+}
+
+#[test]
+fn an_initial_then_surname_name_is_read_as_before_beside_a_surname_then_initial_name() {
+    // "J. Dupont" is the form handled since lot 3 and its behaviour does not move.
+    let mut world = memory();
+    let dupont = world.add_person("Dupont J");
+    world.mention(dupont, 1);
+    let chosen = selection(&[1]);
+    // The only candidate: offered, never assumed.
+    assert_eq!(
+        possible(&resolve(&world, &query(Some(&chosen)), "J. Dupont")),
+        (set(&[dupont]), PossibleReason::Initial, false)
+    );
+    // Beside a full name that carries the same initial and surname: two answers, a question.
+    let jean = world.add_person("Jean Dupont");
+    world.mention(jean, 1);
+    let answer = resolve(&world, &query(Some(&chosen)), "J. Dupont");
+    assert!(matches!(answer, Resolution::Ambiguous { .. }), "{answer:?}");
+    assert_eq!(ids(&answer), set(&[dupont, jean]));
+
+    // At ingestion `J. Dupont` still links only when its source cannot mean anyone else, and a
+    // `Dupont J` in the same source is someone else it could mean.
+    let in_source = set(&[jean, dupont]);
+    let ask = Ask {
+        mode: ResolveMode::Ingestion,
+        selection: None,
+        source_entities: Some(&in_source),
+    };
+    assert!(matches!(
+        resolve(&world, &ask, "J. Dupont"),
+        Resolution::NewEntity {
+            status: EntityStatus::Candidate,
+            ..
+        }
+    ));
+    // And the name itself is never taken for a surname and an initial.
+    let mut world = memory();
+    world.add_person("Jean Dupont");
+    assert!(matches!(
+        resolve(&world, &ingest(), "J. Dupont"),
+        Resolution::NewEntity { .. }
+    ));
+}
+
+#[test]
+fn a_surname_alone_asks_when_a_full_name_and_a_surname_then_initial_share_it() {
+    let mut world = memory();
+    let jean = world.add_person("Jean Dupont");
+    let dupont = world.add_person("Dupont J");
+    world.mention(jean, 1);
+    world.mention(dupont, 2);
+    let both = selection(&[1, 2]);
+    let answer = resolve(&world, &query(Some(&both)), "Dupont");
+    assert!(matches!(answer, Resolution::Ambiguous { .. }), "{answer:?}");
+    assert_eq!(ids(&answer), set(&[jean, dupont]));
+    // Inside a selection that holds only one of them, the surname is that one.
+    let second = selection(&[2]);
+    assert_eq!(
+        existing(&resolve(&world, &query(Some(&second)), "Dupont")).0,
+        dupont
+    );
+    // The single letter is no name: nothing answers to it.
+    assert!(matches!(
+        resolve(&world, &query(Some(&both)), "J"),
+        Resolution::Unresolved { .. }
+    ));
+}
+
 // ----------------------------------------------------------------------------- the same rules through the real store
 
 fn connection() -> Connection {
@@ -1054,6 +1286,62 @@ fn the_store_offers_a_misspelling_and_the_other_word_order() {
             other => panic!("unexpected {other:?}"),
         }
     });
+}
+
+#[test]
+fn the_store_offers_a_surname_then_initial_and_the_full_name_to_each_other() {
+    // The full name is learnt first, the surname and initial is read.
+    let mut first = connection();
+    learn(&mut first, "a.txt", &["Jean Dupont", "Sophie Martin"]);
+    let jean = entity_id(&first, "jean dupont");
+    let chosen = source_set(&first, &["a.txt"]);
+    with_store(&first, |lookup| {
+        assert_eq!(
+            possible(&resolve(lookup, &ingest(), "Dupont J")),
+            (set(&[jean]), PossibleReason::Initial, true)
+        );
+        assert_eq!(
+            possible(&resolve(lookup, &query(Some(&chosen)), "Dupont J")),
+            (set(&[jean]), PossibleReason::Initial, false)
+        );
+        assert!(matches!(
+            resolve(lookup, &ingest(), "Martin A"),
+            Resolution::NewEntity { .. }
+        ));
+    });
+
+    // The surname and initial is learnt first, the full name is read.
+    let mut second = connection();
+    learn(&mut second, "b.txt", &["Dupont J"]);
+    let dupont = entity_id(&second, "dupont j");
+    with_store(&second, |lookup| {
+        assert_eq!(
+            possible(&resolve(lookup, &ingest(), "Jean Dupont")),
+            (set(&[dupont]), PossibleReason::Initial, true)
+        );
+        // The single letter answers to nothing.
+        assert!(matches!(
+            resolve(lookup, &ingest(), "J"),
+            Resolution::NewEntity { .. }
+        ));
+    });
+    let aliases = kb::entity_with_aliases(&second, dupont)
+        .unwrap()
+        .unwrap()
+        .aliases;
+    let mut forms: Vec<(String, AliasKind)> = aliases
+        .into_iter()
+        .map(|alias| (alias.normalized, alias.kind))
+        .collect();
+    forms.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        forms,
+        [
+            ("dupont".to_string(), AliasKind::PartialSurname),
+            ("dupont j".to_string(), AliasKind::CanonicalVariant),
+            ("j dupont".to_string(), AliasKind::Initial),
+        ]
+    );
 }
 
 #[test]

@@ -116,6 +116,26 @@ def show_relations(connection: sqlite3.Connection) -> None:
         print(f"  {subject}  --{predicate}-->  {other}   [{path}, x{count}]")
 
 
+def show_surname_initial_aliases(connection: sqlite3.Connection) -> None:
+    """The aliases of the people filed as 'Surname Initial' (Dupont J): their surname alone and
+    'J. Dupont' are there, and the single letter is never an alias by itself."""
+    try:
+        rows = connection.execute(
+            "SELECT e.canonical_name, a.normalized, a.kind "
+            "FROM kb_aliases a JOIN kb_entities e ON e.entity_id = a.entity_id "
+            "WHERE e.type_id = 'person' AND e.status IN ('candidate', 'active') "
+            "AND e.normalized_name GLOB '* ?' ORDER BY e.canonical_name, a.normalized"
+        ).fetchall()
+    except sqlite3.Error:
+        return
+    people: dict[str, list[str]] = {}
+    for name, normalized, kind in rows:
+        people.setdefault(name, []).append(f"{normalized!r} ({kind})")
+    print(f"\nAliases of people filed as surname + initial: {len(people)}")
+    for name, aliases in people.items():
+        print(f"  {name}: " + ", ".join(aliases))
+
+
 def show_entities(connection: sqlite3.Connection) -> None:
     sources = connection.execute(
         "SELECT domain, relative_path, kb_version, gazetteer_epoch FROM kb_sources "
@@ -159,6 +179,8 @@ def show_entities(connection: sqlite3.Connection) -> None:
     print(f"\nPossible matches (never merged): {len(possible)}")
     for first, second, reason, state in possible:
         print(f"  {first}  ~  {second}   [{reason}, {state}]")
+
+    show_surname_initial_aliases(connection)
 
     print("\nkb_meta")
     for key, value in connection.execute("SELECT key, value FROM kb_meta ORDER BY key"):

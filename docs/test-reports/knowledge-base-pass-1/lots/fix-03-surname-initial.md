@@ -88,7 +88,7 @@ Nothing heavy was added. Per new full name at ingestion, one extra indexed looku
 
 ## Human test
 
-`human-tests/fix-03-surname-initial.md` - **proposed**. Partly visible: the script shows the possible match and the aliases; the interface shows nothing new (no "did you mean" before lot 7). The agent did not open the application window.
+`human-tests/fix-03-surname-initial.md` - **run by the owner on 11 October 2026, every step matched, no finding** (pull request #30). Partly visible: the script shows the possible match and the aliases; the interface shows nothing new (no "did you mean" before lot 7). The agent did not open the application window.
 
 ## Open questions
 

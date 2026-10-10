@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "about": "The contract of the English phonetic key (en-rules). 'collide' groups must all get the same key; 'differ' pairs must get different keys; 'known_shared' pairs are opposite-sex first names that are the same sound in English and that no rule can separate (the sex rule of lot 2 bis lists them instead of hiding them); 'observe' names are only printed. Add a row, run: cargo test --test knowledge_names -- --nocapture. A collision is a hint to the resolver (a 'did you mean'), never a merge. Names come from public lists of surnames and first names (US Census 2010, US SSA); none is a real person's record.",
+  "about": "The contract of the English phonetic key (en-rules). 'collide' groups must all get the same key; 'differ' pairs must get different keys; 'known_shared' pairs are opposite-sex first names that are the same sound in English and that no rule can separate (the sex rule of lot 2 bis lists them instead of hiding them); 'observe' names are only printed. Add a row, run: cargo test --test knowledge_names -- --nocapture. A collision is a hint to the resolver (a 'did you mean'), never a merge. Names come from public lists of surnames and first names (US Census 2010, US SSA); none is a real person's record. 'false_friends' are pairs the owner judged to be two different names that the key still cannot separate (kept so that the limit is measured, and so that a rule that separates them is noticed).",
   "collide": [
     ["Smith", "Smyth"],
     ["Catherine", "Katherine"],
@@ -24,7 +24,21 @@
     ["Martinez", "Martines"],
     ["Brown", "Browne"],
     ["Cook", "Cooke"],
-    ["John Smith", "Jon Smyth"]
+    ["John Smith", "Jon Smyth"],
+    ["Diaz", "Dias"],
+    ["Reed", "Read"],
+    ["Lopez", "Lopes"],
+    ["Gonzalez", "Gonzales"],
+    ["Hernandez", "Hernandes"],
+    ["Mary", "Mari"],
+    ["Linda", "Lynda"],
+    ["Susan", "Suzan"],
+    ["Michelle", "Michele"],
+    ["Diane", "Dianne"],
+    ["Cruz", "Crews"],
+    ["Mary", "Marie"],
+    ["Joseph", "Josef"],
+    ["Anna", "Hannah"]
   ],
   "differ": [
     ["John", "Joan"],
@@ -56,23 +70,31 @@
     ["Ty", "Thea"],
     ["Smith", "Jones"],
     ["Garrett", "Jarrett"],
-    ["John Smith", "John Jones"]
+    ["John Smith", "John Jones"],
+    ["Daniel", "Daniele"],
+    ["Mitchell", "Michel"],
+    ["Tran", "Trahan"],
+    ["Reed", "Redd"],
+    ["Stewart", "Steward"],
+    ["Chan", "Khan"],
+    ["Kelly", "Keely"],
+    ["Kyle", "Kylee"],
+    ["Eric", "Erich"],
+    ["Lee", "Le"]
   ],
   "known_shared": [
     ["Jerry", "Jeri"],
     ["Gene", "Jean"],
     ["Gene", "Jeanne"],
     ["Don", "Dawn"],
-    ["Micheal", "Michele"],
     ["Randy", "Randi"],
     ["Tony", "Toni"],
     ["Johnny", "Joni"],
     ["Bobby", "Bobbi"],
     ["Eli", "Ellie"]
   ],
-  "observe": [
-    "Stephen", "Steven", "Sean", "Shawn", "Shaun", "Kathryn", "Aaliyah", "Hannah", "Anna",
-    "Nguyen", "Garcia", "Kowalski", "O'Brien", "OBrien", "Schmidt", "Schmitt", "Johnson",
-    "Johnston", "Jensen", "Hayes", "Casey", "Kacey", "Kaylee", "Kailey"
-  ]
+  "false_friends": [
+    ["Chen", "Shen"]
+  ],
+  "observe": ["Stephen", "Steven", "Sean", "Shawn", "Shaun", "Kathryn", "Aaliyah", "Hannah", "Anna", "Nguyen", "Garcia", "Kowalski", "O'Brien", "OBrien", "Schmidt", "Schmitt", "Johnson", "Johnston", "Jensen", "Hayes", "Casey", "Kacey", "Kaylee", "Kailey"]
 }

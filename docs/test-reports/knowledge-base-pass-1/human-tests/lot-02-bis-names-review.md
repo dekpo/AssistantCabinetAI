@@ -165,7 +165,7 @@ M16 and M18 are the two rows where I think a rule is wrong (both are spellings o
 
 | row | mark | note |
 | --- | --- | --- |
-| (to be filled with the ids you mark) | | |
+| (none) | | The owner agreed with every proposal on 10 October 2026. The six rows where the encoder contradicted a proposal (M16, M18, EF10, H10, H12, H15) were fixed in the rules afterwards; the keys printed above are those of the first run. |
 
 ## Nothing else to run
 

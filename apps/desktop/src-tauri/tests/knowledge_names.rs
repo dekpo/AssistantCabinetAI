@@ -376,18 +376,20 @@ fn broken_rows(file: &str, encoder: &dyn PhoneticEncoder, set: &TitleSet) -> Vec
             ));
         }
     }
-    // A known homophone that a rule now separates must leave the list, or the list goes stale.
-    for pair in contract["known_shared"].as_array().into_iter().flatten() {
-        let names = names_in(pair);
-        let (a, b) = (
-            key_of(encoder, &names[0], set),
-            key_of(encoder, &names[1], set),
-        );
-        if a != b {
-            broken.push(format!(
-                "known_shared is stale: {} ({a}) and {} ({b}) no longer share a key",
-                names[0], names[1]
-            ));
+    // A pair that no rule can separate must leave its list once a rule does, or the list goes stale.
+    for list in ["known_shared", "false_friends"] {
+        for pair in contract[list].as_array().into_iter().flatten() {
+            let names = names_in(pair);
+            let (a, b) = (
+                key_of(encoder, &names[0], set),
+                key_of(encoder, &names[1], set),
+            );
+            if a != b {
+                broken.push(format!(
+                    "{list} is stale: {} ({a}) and {} ({b}) no longer share a key",
+                    names[0], names[1]
+                ));
+            }
         }
     }
     broken

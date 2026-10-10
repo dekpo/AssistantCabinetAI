@@ -114,7 +114,8 @@ fn is_english_vowel(c: char) -> bool {
 /// The alphabet of an English key is plain ASCII:
 ///
 /// ```text
-/// consonants   B D F G J K L M N P R S T V W X Y   X = "sh"/"ch", J = "j" and soft "g", S also stands for "z"
+/// consonants   B C D F G H J K L M N P R S T V W X Y   X = "sh"/"ch", C = "tch", J = "j" and soft "g",
+///              S also stands for "z", H only between two vowels
 /// vowels       A E I O U   short or plain
 ///              a o         the long sound of "ai"/"ay"/"a_e" and of "oa"/"ow"/"o_e"
 ///              I           also "ee", "ea", "ie", final "y" and "e_e"
@@ -184,7 +185,8 @@ fn encode_english(token: &str) -> String {
                     out.push('O');
                     at += 1;
                 }
-                _ if magic_e(at) => out.push('a'),
+                // "Jane" has a long "a", "Diane" and "Julianne" a short one.
+                _ if magic_e(at) && !previous.is_some_and(is_english_vowel) => out.push('a'),
                 _ => out.push('A'),
             },
             'e' => match next {
@@ -212,6 +214,11 @@ fn encode_english(token: &str) -> String {
                 // A silent final "e".
                 None if at >= 2 && !vowel_at(at - 1) => {}
                 _ if magic_e(at) => out.push('e'),
+                Some('l')
+                    if after_next == Some('l') && get(at + 3) == Some('e') && at + 4 == size =>
+                {
+                    out.push('e')
+                }
                 _ => out.push('E'),
             },
             'i' => {
@@ -301,7 +308,11 @@ fn encode_english(token: &str) -> String {
                 Some('e' | 'i' | 'y') => out.push('J'),
                 _ => out.push('G'),
             },
-            'h' => {}
+            'h' => {
+                if previous.is_some_and(is_english_vowel) && next.is_some_and(is_english_vowel) {
+                    out.push('H');
+                }
+            }
             'k' => {
                 out.push('K');
                 if next == Some('h') {
@@ -339,7 +350,7 @@ fn encode_english(token: &str) -> String {
                     at += 1;
                 }
                 Some('c') if after_next == Some('h') => {
-                    out.push('X');
+                    out.push('C');
                     at += 2;
                 }
                 _ => out.push('T'),
@@ -366,7 +377,7 @@ fn encode_english(token: &str) -> String {
     }
     // "Danielle", "Michelle", "Brianne", "Julianne" are the feminine forms of "Daniel", "Mitchell",
     // "Brian", "Julian": the same letters, another person. The key ends with a sounded vowel.
-    if (size >= 6 && word.ends_with(&['e', 'l', 'l', 'e']))
+    if (size >= 6 && (word.ends_with(&['e', 'l', 'l', 'e']) || word.ends_with(&['e', 'l', 'e'])))
         || (size >= 7 && word.ends_with(&['i', 'a', 'n', 'n', 'e']))
     {
         key.push('E');
@@ -447,9 +458,11 @@ fn starts_with_at(word: &[char], at: usize, pattern: &str) -> bool {
 
 /// A nasal needs a consonant (or the end of the word) after its "n"/"m"; a mute "e" that was
 /// stripped from the end still counts as a vowel there ("Martine" keeps its "n").
-fn nasal_allowed(word: &[char], after: usize, mute_e_stripped: bool) -> bool {
+fn nasal_allowed(word: &[char], after: usize, mute_e_stripped: bool, ends_in_m: bool) -> bool {
     match word.get(after) {
         None => !mute_e_stripped,
+        // "Emrys", "Amrani", "Imran": the "m" is said, French spells a nasal "m" before "b" or "p".
+        Some(&next) if ends_in_m && matches!(next, 'r' | 'l') => false,
         Some(&next) => !is_vowel(next) && next != 'n' && next != 'm',
     }
 }
@@ -558,7 +571,12 @@ fn encode_french(token: &str) -> String {
             let rule = VOWEL_RULES.iter().find(|(pattern, _, nasal)| {
                 starts_with_at(&word, at, pattern)
                     && (!nasal
-                        || nasal_allowed(&word, at + pattern.chars().count(), mute_e_stripped))
+                        || nasal_allowed(
+                            &word,
+                            at + pattern.chars().count(),
+                            mute_e_stripped,
+                            pattern.ends_with('m'),
+                        ))
             });
             if let Some((pattern, sound, _)) = rule {
                 out.push_str(sound);

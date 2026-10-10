@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "about": "The contract of the French phonetic key. 'collide' groups must all get the same key; 'differ' pairs must get different keys; 'known_shared' pairs are masculine and feminine first names that are the same sound in French and that no rule can separate (the sex rule of lot 2 bis lists them instead of hiding them); 'observe' names are only printed in the collision table. Add a row, run: cargo test --test knowledge_names -- --nocapture. A collision is a hint to the resolver (a 'did you mean'), never a merge. Names are invented or very common, or come from the Insee lists of surnames and first names (aggregates); none is a real person's record.",
+  "about": "The contract of the French phonetic key. 'collide' groups must all get the same key; 'differ' pairs must get different keys; 'known_shared' pairs are masculine and feminine first names that are the same sound in French and that no rule can separate (the sex rule of lot 2 bis lists them instead of hiding them); 'observe' names are only printed in the collision table. Add a row, run: cargo test --test knowledge_names -- --nocapture. A collision is a hint to the resolver (a 'did you mean'), never a merge. Names are invented or very common, or come from the Insee lists of surnames and first names (aggregates); none is a real person's record. 'false_friends' are pairs the owner judged to be two different names that the key still cannot separate (kept so that the limit is measured, and so that a rule that separates them is noticed).",
   "collide": [
     ["Dupont", "Dupond", "Dupon"],
     ["Dupuis", "Dupuy"],
@@ -20,7 +20,31 @@
     ["Odile", "Odille"],
     ["Mariam", "Maryam"],
     ["Gauthier", "Gautier"],
-    ["Jean Dupont", "Jean Dupond", "Dr Jean Dupon"]
+    ["Jean Dupont", "Jean Dupond", "Dr Jean Dupon"],
+    ["Roux", "Roue"],
+    ["Joly", "Jolly"],
+    ["Marie", "Mari"],
+    ["Roche", "Roch"],
+    ["Thomas", "Tomas"],
+    ["Durand", "Duran"],
+    ["Bonnet", "Bonet"],
+    ["Bernard", "Bernhard"],
+    ["Éric", "Erick"],
+    ["Marc", "Mark"],
+    ["Annie", "Anie"],
+    ["Alain", "Allain"],
+    ["Henri", "Henry"],
+    ["Cathérine", "Katherine"],
+    ["Patrick", "Patric"],
+    ["Moreau", "Moro"],
+    ["Laurent", "Lorand"],
+    ["Morel", "Maurel"],
+    ["Faure", "Fort"],
+    ["Morin", "Maurin"],
+    ["Marie", "Mary"],
+    ["Jeanne", "Jane"],
+    ["Philippe", "Filipe"],
+    ["Paul", "Pol"]
   ],
   "differ": [
     ["Dupont", "Dumont"],
@@ -55,7 +79,18 @@
     ["Hamid", "Amy"],
     ["Ilan", "Ilham"],
     ["Marian", "Maryam"],
-    ["Anass", "Anna"]
+    ["Anass", "Anna"],
+    ["Henri", "Emrys"],
+    ["Richard", "Ricard"],
+    ["Vidal", "Vital"],
+    ["Gros", "Gross"],
+    ["Gay", "Jay"],
+    ["Vallee", "Valle"],
+    ["Jean", "Jéhan"],
+    ["André", "Andrée"],
+    ["Lucas", "Lukas"],
+    ["Denis", "Déniz"],
+    ["Loïc", "Loïs"]
   ],
   "known_shared": [
     ["René", "Reine"],
@@ -78,10 +113,11 @@
     ["Mahdi", "Maddy"],
     ["Billy", "Billie"]
   ],
-  "observe": [
-    "Lefort", "Lemaire", "Leclerc", "Moreau", "Fournier", "Girard", "Bonnet", "Garcia",
-    "Nguyen", "Benali", "Haddad", "Ng", "Roy", "Lee", "Petit", "Roux", "Morel", "Fontaine",
-    "Dubois", "Duboit", "Michel", "Michelle", "Gautier", "Gauthier", "Henri", "Henry",
-    "Nathalie", "Natalie", "Stéphane", "Stefan", "Sophie", "Sofi", "Guillaume", "Guyom"
-  ]
+  "false_friends": [
+    ["Martin", "Martins"],
+    ["David", "Davide"],
+    ["Georges", "Georget"],
+    ["Nicolas", "Nicola"]
+  ],
+  "observe": ["Lefort", "Lemaire", "Leclerc", "Moreau", "Fournier", "Girard", "Bonnet", "Garcia", "Nguyen", "Benali", "Haddad", "Ng", "Roy", "Lee", "Petit", "Roux", "Morel", "Fontaine", "Dubois", "Duboit", "Michel", "Michelle", "Gautier", "Gauthier", "Henri", "Henry", "Nathalie", "Natalie", "Stéphane", "Stefan", "Sophie", "Sofi", "Guillaume", "Guyom"]
 }

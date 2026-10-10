@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     model_context_windows: Annotated[dict[str, int], NoDecode] = Field(
         default_factory=dict, alias="MODEL_CONTEXT_WINDOWS"
     )
+
+    # Hidden reasoning. Some models (the qwen3 family, gemma4 on a long prompt) write a reasoning
+    # before the answer, which the gateway never shows but which costs time and counts against
+    # `MAX_OUTPUT_TOKENS`. `default` leaves the model's own behaviour alone; `off` asks the runtime
+    # not to think. There is no `on`: a model without the capability refuses the request outright.
+    llm_think: Literal["default", "off"] = Field(default="default", alias="LLM_THINK")
 
     # Indexing sends batches of chunks rather than one conversation, so embeddings get their own
     # caps. They exist to stop a client sending a whole folder, not to tune throughput.

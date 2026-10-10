@@ -510,6 +510,17 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_answer_code_in_the_stream_becomes_an_error_with_no_text() {
+        // The gateway ends a generation that produced no visible text with this code; the client
+        // keeps it as it is and the interface localises it.
+        let line = r#"data: {"error":{"code":"empty_answer","message":"empty_answer","data":{}}}"#;
+
+        let error = read_event(line).expect_err("expected a refusal");
+
+        assert_eq!(error.code(), "empty_answer");
+    }
+
+    #[test]
     fn an_empty_delta_carries_nothing() {
         let line = r#"data: {"choices":[{"delta":{"role":"assistant","content":""}}]}"#;
 

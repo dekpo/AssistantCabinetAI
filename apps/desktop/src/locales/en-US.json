@@ -324,6 +324,7 @@
     "ocr_unavailable": "Text recognition is not available. Scanned pages are reported as unreadable until it is fixed.",
     "output_locale_not_supported": "This software cannot yet answer in the language {requested}.",
     "provider_capability_unsupported": "The AI cannot do this yet ({capability}).",
+    "empty_answer": "The model wrote nothing. Ask the question again, or choose another model in the settings.",
     "provider_error": "The model did not answer correctly. Try again.",
     "provider_error_timeout": "The model took too long to start, most often because it was still loading. Try again: it is usually ready the second time.",
     "provider_unreachable": "The AI is running but its model is not answering. Warn whoever looks after the machine.",

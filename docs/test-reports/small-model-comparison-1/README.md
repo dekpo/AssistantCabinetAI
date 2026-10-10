@@ -152,6 +152,8 @@ What this changes:
 3. **`think: false` is accepted by every model tried** (`ministral-3:3b`, `granite3.1-moe:1b`, `qwen2.5:1.5b`, `qwen3:*`, `gemma4:e2b`): no error on a model without thinking. Asking for thinking on such a model (`think: true`) is refused with HTTP 400 (`"ministral-3:3b" does not support thinking`), so the setting should only ever send "off".
 4. **Idle time costs a reload.** With the default 5 minutes, the question asked after a quiet moment in a practice waits for the load: 36 to 210 s here. The Mac mini has the memory to keep a model resident for hours; this is the setting `OLLAMA_KEEP_ALIVE`, not set in `compose.yaml` today.
 
+Follow-up (10 October 2026): the gateway now has `LLM_THINK` (`default` or `off`), reports a generation with no visible text as `empty_answer` and keeps models loaded 30 minutes (`OLLAMA_KEEP_ALIVE`). The tables above were measured before that and are not changed. Defects register KBD-08; `docs/MODELS.md`, "Hidden reasoning and keep-alive".
+
 The probe prompt is longer than the product's typical 700 to 1 100 tokens, and a second identical prompt is read from Ollama's cache (0.2 s), so warm figures understate the reading cost.
 
 ## 11. The deterministic steps

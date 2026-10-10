@@ -22,6 +22,8 @@ class ErrorCode(StrEnum):
     provider_unreachable = "provider_unreachable"
     provider_error = "provider_error"
     provider_capability_unsupported = "provider_capability_unsupported"
+    #: The generation ended and no visible text came out of it.
+    empty_answer = "empty_answer"
     internal_error = "internal_error"
 
 

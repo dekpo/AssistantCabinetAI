@@ -39,6 +39,9 @@ class RegisterEntry(BaseModel):
     completion_sha256: str
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    #: How many characters of hidden reasoning the model wrote. A length like the others: it says
+    #: whether a slow or empty answer went into thinking, never what the model thought.
+    thinking_chars: int = 0
     #: `completed`, or the machine error code that ended the request.
     outcome: str
 
@@ -100,6 +103,7 @@ def build_entry(
     prompt_tokens: int | None,
     completion_tokens: int | None,
     outcome: str,
+    thinking_chars: int = 0,
 ) -> RegisterEntry:
     """Turn a finished request into metadata. The texts leave as lengths and hashes only."""
     duration_ms = int((datetime.now(tz=UTC) - started_at).total_seconds() * 1000)
@@ -117,6 +121,7 @@ def build_entry(
         completion_sha256=sha256_text(completion_text),
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        thinking_chars=thinking_chars,
         outcome=outcome,
     )
 

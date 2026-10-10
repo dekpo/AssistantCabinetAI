@@ -36,6 +36,7 @@ def create_app(*, settings: Settings | None = None, provider: AIProvider | None 
             settings.llm_base_url,
             request_timeout_seconds=settings.llm_request_timeout_seconds,
             health_timeout_seconds=settings.llm_health_timeout_seconds,
+            think=settings.llm_think,
         )
         try:
             yield

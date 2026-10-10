@@ -136,6 +136,19 @@ Swapping which **weight** an alias points to (e.g. `assistant-embed=bge-m3` inst
 sees anything different except (after a re-index) better retrieval. Only renaming the alias itself
 relies on self-heal.
 
+## Hidden reasoning and keep-alive (10 October 2026)
+
+Two runtime behaviours decide how fast a small model feels on a CPU machine, and neither is a quality of the weights.
+Measurements: `docs/test-reports/small-model-comparison-1/README.md`, section 10.
+
+| Setting | What it does | Default | Notes |
+| --- | --- | --- | --- |
+| `LLM_THINK` (gateway) | `off` sends `"think": false` to Ollama, so a model that reasons before answering (`qwen3`, `gemma4` on a long prompt) goes straight to the answer. `default` sends nothing and keeps the model's own behaviour | `default` | Only these two values exist: `think: true` is refused with HTTP 400 by a model without the capability, so the gateway never sends it. Every model tried accepts `off` (`ministral-3:3b`, `granite3.1-moe:1b`, `qwen2.5:1.5b`, `qwen3:*`, `gemma4:e2b`). The hidden reasoning counts against `MAX_OUTPUT_TOKENS`; with `default` a model can spend the whole budget on it and return nothing, which the product now reports as `empty_answer` |
+| `OLLAMA_KEEP_ALIVE` (Compose, `ollama` service) | How long a model stays in memory after the last question | `30m` | Ollama's own default is 5 minutes and loading took 36 to 210 s on the development PC. `-1` keeps the model loaded until the container stops: use it on the Mac mini |
+
+Whether the quality of a thinking model holds with `LLM_THINK=off` on the real questions is not measured yet; it is the second
+pass of the comparison. Do not change `LLM_THINK` for a human test of another lot without saying so in its report.
+
 ## EU AI Act and medical-device avoidance
 
 [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32024R1689) classifies

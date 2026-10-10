@@ -24,8 +24,8 @@ use assistant_cabinet_ai_lib::indexing;
 use assistant_cabinet_ai_lib::knowledge::store as kb;
 use assistant_cabinet_ai_lib::knowledge::{
     AliasDraft, AliasKind, Domain, EntityDraft, EntityFilter, EntityRef, EntityStatus,
-    IntegrityReport, KnowledgeDelta, MentionDraft, MentionLocator, NewAlias, Origin, Page,
-    SourceRef, CURRENT_KB_VERSION, NOT_EXTRACTED,
+    IntegrityReport, KnowledgeDelta, KnowledgeWrite, MentionDraft, MentionLocator, NewAlias,
+    Origin, Page, SourceRef, CURRENT_KB_VERSION, NOT_EXTRACTED,
 };
 use rusqlite::Connection;
 
@@ -151,7 +151,7 @@ fn store_document(
     sha: &str,
     text: &str,
     delta: &KnowledgeDelta,
-) -> Result<(), assistant_cabinet_ai_lib::error::AppError> {
+) -> Result<KnowledgeWrite, assistant_cabinet_ai_lib::error::AppError> {
     store.replace_document_with_knowledge(
         path,
         sha,
@@ -423,7 +423,7 @@ fn a_document_stored_the_old_way_is_a_known_source_nobody_extracted_from() {
 }
 
 #[test]
-fn a_failed_write_rolls_back_chunks_and_knowledge_together() {
+fn a_knowledge_step_that_fails_is_bypassed_and_the_document_is_still_indexed() {
     let mut workspace = Workspace::new();
     store_document(
         &mut workspace.store,
@@ -434,11 +434,11 @@ fn a_failed_write_rolls_back_chunks_and_knowledge_together() {
     )
     .unwrap();
     let connection = workspace.side_connection();
-    let files_before = file_side_counts(&connection);
-    let names_before = live_names(&connection);
 
     // The new version of the file carries a delta that cannot be applied: its mention names an
-    // entity that no draft defines. The chunks were already written when that is discovered.
+    // entity that no draft defines. Until lot 4 this rolled the chunks back with the knowledge;
+    // the owner's rule of 9 October 2026 is that the knowledge base never blocks indexing, so the
+    // chunks are committed and only the knowledge step is undone.
     let mut broken = delta_for("inbox/a.txt", "sha-2", &["Bruno Baker"]);
     broken
         .mentions
@@ -451,29 +451,30 @@ fn a_failed_write_rolls_back_chunks_and_knowledge_together() {
         &broken,
     );
 
-    assert!(result.is_err());
-    assert_eq!(file_side_counts(&connection), files_before);
-    assert_eq!(live_names(&connection), names_before);
+    assert_eq!(result.unwrap(), KnowledgeWrite::Bypassed);
     assert_eq!(
         workspace
             .store
             .stored_hash("inbox/a.txt")
             .unwrap()
             .as_deref(),
-        Some("sha-1"),
-        "the document keeps the version it had"
+        Some("sha-2"),
+        "the document has the version it was given"
     );
     assert_eq!(
         workspace.store.all_chunks().unwrap()[0].text,
-        "Alice Archer first version"
+        "Bruno Baker second version"
     );
-    let source = &kb::sources(&connection, Some(Domain::Documents)).unwrap()[0];
-    assert_eq!(source.source.content_id, "sha-1");
+    // Nothing of the broken delta, and nothing of the old version either: that knowledge described
+    // text that is gone. The source is absent, so a later pass sees the document as due.
+    assert_eq!(count(&connection, "kb_sources"), 0);
+    assert_eq!(count(&connection, "kb_mentions"), 0);
+    assert!(live_names(&connection).is_empty());
     workspace.assert_clean();
 }
 
 #[test]
-fn a_failed_first_write_leaves_neither_chunks_nor_knowledge() {
+fn a_first_write_with_a_failing_knowledge_step_still_indexes_the_document() {
     let mut workspace = Workspace::new();
     let mut broken = delta_for("inbox/new.txt", "sha-n", &["Alice Archer"]);
     broken.mentions.push(chunk_mention(
@@ -489,14 +490,14 @@ fn a_failed_first_write_leaves_neither_chunks_nor_knowledge() {
         &broken,
     );
 
-    assert_eq!(result.unwrap_err().code(), "knowledge_entity_not_found");
+    assert_eq!(result.unwrap(), KnowledgeWrite::Bypassed);
     let connection = workspace.side_connection();
-    assert!(file_side_counts(&connection)
-        .iter()
-        .all(|(_, rows)| *rows == 0));
+    assert_eq!(count(&connection, "documents"), 1);
+    assert_eq!(count(&connection, "chunks"), 1);
     assert_eq!(count(&connection, "kb_sources"), 0);
     assert_eq!(count(&connection, "kb_entities"), 0);
     assert_eq!(count(&connection, "kb_names_fts"), 0);
+    workspace.assert_clean();
 }
 
 #[test]

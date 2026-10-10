@@ -145,7 +145,7 @@ expectations (names that must and must not share a key) are one JSON file per la
 on public lists of real names. See `docs/DECISIONS.md`, "Settled by KB lot 2" and "Settled by KB lot 2 bis".
 
 The words themselves are **lexicon packs** (`apps/desktop/src-tauri/resources/knowledge/`, one JSON file per pack
-and locale: `base` always, then `health`, `legal`, `accounting` when active). A pack is data in the language of
+and locale: `base` always, then the packs named `<domain>-<country>` when active: `health-fr`, `health-ch`, `legal-fr`, `accounting-fr`; the locale of a file is the language of its words, the id carries the country). A pack is data in the language of
 its locale and holds words and patterns only: the titles of a person ("Docteur", "Mrs"), the particles inside a
 name, the stop-words of a file name (months, "invoice"), the markers of an organisation, identifier patterns,
 the vocabulary of column headers, and, for a role, the key of the interface catalogue that labels it

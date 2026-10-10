@@ -15,9 +15,12 @@ use crate::error::AppError;
 use crate::extraction::{self, ExtractionError, PageOrigin};
 use crate::gateway::GatewayClient;
 use crate::index_store::IndexStore;
+use crate::knowledge::backfill;
 use crate::knowledge::diagnostics::{
     elapsed_ms, timed_ms, AnalysisPass, AnalysisTimings, FileTiming, StageTimer,
 };
+use crate::knowledge::ingest::KnowledgeContext;
+use crate::knowledge::KnowledgeSummary;
 use crate::ocr::{ImageFormat, OcrError, OcrInput, OcrPage, OcrProvider};
 use crate::raster::PageRasterizer;
 
@@ -96,6 +99,10 @@ pub struct IndexSummary {
     /// because it costs a few clock reads; written to `analysis-timings.jsonl` only when
     /// `write_timing_log` is on.
     pub timings: Option<AnalysisTimings>,
+    /// What the pass learned about names, as counts. `None` when the knowledge base took no part
+    /// (`knowledge_mode = off`, or a pass that never had a context) and for the Data Folder's pass
+    /// until lot 5. Never a name.
+    pub knowledge: Option<KnowledgeSummary>,
 }
 
 /// How far one pass has got, sent while it runs so a long analysis shows its progress rather than
@@ -111,12 +118,94 @@ pub struct IndexProgress {
     /// between two files instead of standing still for the minutes one long document takes.
     pub batch_index: usize,
     pub batch_total: usize,
+    /// The pass has read every file and is now reading the names in documents analysed earlier
+    /// (`knowledge::backfill`): `processed_files` and `total_files` then count those documents. The
+    /// interface says so instead of showing a bar that seems to start again.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub reading_names: bool,
 }
 
 /// One pass over the work folder. Files whose content hash has not changed since the last pass
 /// are skipped rather than re-extracted and re-embedded, unless the OCR engine that produced
 /// their stored chunks is no longer the one configured.
+///
+/// The pass as it was before the knowledge base: no names are read. Kept with its exact signature
+/// because the tests and the callers that predate lot 4 use it; the application calls
+/// [`run_with_knowledge`].
 pub async fn run(
+    index: &mut IndexStore,
+    gateway: &GatewayClient,
+    server_url: &str,
+    embedding_alias: &str,
+    work_folder: &std::path::Path,
+    ocr: Option<&dyn OcrProvider>,
+    rasterizer: Option<&dyn PageRasterizer>,
+    locale: &str,
+    on_progress: &(dyn Fn(IndexProgress) + Sync),
+) -> Result<IndexSummary, AppError> {
+    run_with_knowledge(
+        index,
+        gateway,
+        server_url,
+        embedding_alias,
+        work_folder,
+        ocr,
+        rasterizer,
+        locale,
+        on_progress,
+        None,
+    )
+    .await
+}
+
+/// Write one document: through the knowledge context when there is one (names learned from the
+/// chunks, in the same transaction), as the pass has always done when there is not.
+#[allow(clippy::too_many_arguments)]
+fn write_document(
+    index: &mut IndexStore,
+    knowledge: &mut Option<&mut KnowledgeContext>,
+    relative_path: &str,
+    sha256: &str,
+    empty: bool,
+    chunks: &[crate::chunking::Chunk],
+    embeddings: &[Vec<f32>],
+    ocr_engine: Option<&str>,
+    ocr_engine_version: Option<&str>,
+) -> Result<(), AppError> {
+    match knowledge {
+        Some(context) => context.store_document(
+            index,
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            embeddings,
+            ocr_engine,
+            ocr_engine_version,
+        ),
+        None => index.replace_document(
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            embeddings,
+            ocr_engine,
+            ocr_engine_version,
+        ),
+    }
+}
+
+/// [`run`], with the knowledge base taking part. For each file, once every embedding exists, the
+/// names in its chunks are read and written in the same transaction as the chunks; a failure of
+/// the knowledge step is bypassed (the chunks are committed, the file is counted in
+/// `knowledge.errors`, the next pass tries the names again). After the last file, documents
+/// analysed earlier that are behind the knowledge base are read again from their stored text, with
+/// no request to the gateway (`knowledge::backfill`).
+///
+/// `knowledge: None` is the pass as it was before the knowledge base. A context whose mode is
+/// `Off` writes the documents without touching a `kb_*` row.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_with_knowledge(
     index: &mut IndexStore,
     gateway: &GatewayClient,
     server_url: &str,
@@ -128,7 +217,13 @@ pub async fn run(
     // `on_progress` is called once before the first file and once after the last. `Sync` rather
     // than a plain closure so the future stays `Send` and can be awaited from a Tauri command.
     on_progress: &(dyn Fn(IndexProgress) + Sync),
+    mut knowledge: Option<&mut KnowledgeContext>,
 ) -> Result<IndexSummary, AppError> {
+    if let Some(context) = knowledge.as_mut() {
+        if context.mode.reads_files() {
+            context.begin_pass(index.connection());
+        }
+    }
     let unavailable_capabilities = unavailable_capabilities(ocr, rasterizer);
     let pass_timer = StageTimer::start();
     // The engine itself is timed from inside, so the time it takes is not counted as extraction.
@@ -158,6 +253,7 @@ pub async fn run(
         total_files,
         batch_index: 0,
         batch_total: 0,
+        reading_names: false,
     });
     let mut indexed_files = 0usize;
     let mut unchanged_files = 0usize;
@@ -186,6 +282,7 @@ pub async fn run(
             total_files,
             batch_index: 0,
             batch_total: 0,
+            reading_names: false,
         });
         let (hashed, hash_ms) = timed_ms(|| hash_file(file));
         timings.hash_ms += hash_ms;
@@ -217,7 +314,9 @@ pub async fn run(
             Ok(document) if document.empty => {
                 let (engine, version) = ocr_identity(ocr, document.used_ocr);
                 let (written, write_ms) = timed_ms(|| {
-                    index.replace_document(
+                    write_document(
+                        index,
+                        &mut knowledge,
                         &file.relative_path,
                         &sha256,
                         true,
@@ -249,7 +348,9 @@ pub async fn run(
                 if chunks.is_empty() {
                     let (engine, version) = ocr_identity(ocr, document.used_ocr);
                     let (written, write_ms) = timed_ms(|| {
-                        index.replace_document(
+                        write_document(
+                            index,
+                            &mut knowledge,
                             &file.relative_path,
                             &sha256,
                             true,
@@ -279,6 +380,7 @@ pub async fn run(
                                 total_files,
                                 batch_index,
                                 batch_total,
+                                reading_names: false,
                             })
                         },
                     )
@@ -313,7 +415,9 @@ pub async fn run(
                     };
                     let (engine, version) = ocr_identity(ocr, document.used_ocr);
                     let (written, write_ms) = timed_ms(|| {
-                        index.replace_document(
+                        write_document(
+                            index,
+                            &mut knowledge,
                             &file.relative_path,
                             &sha256,
                             false,
@@ -347,11 +451,34 @@ pub async fn run(
         &mut file_timing,
         file_started,
     );
+
+    // Documents analysed before this pass that the knowledge base has not read as they are now:
+    // local, from the stored text, no request. Failing here costs nothing but a note in the summary.
+    let knowledge_summary = match knowledge.as_mut() {
+        Some(context) if context.mode.reads_files() => {
+            let announce = |progress: backfill::RefreshProgress| {
+                on_progress(IndexProgress {
+                    processed_files: progress.done,
+                    total_files: progress.total,
+                    batch_index: 0,
+                    batch_total: 0,
+                    reading_names: true,
+                })
+            };
+            if backfill::refresh_documents(index, context, &|| false, &announce).is_err() {
+                context.note_failed("");
+            }
+            Some(context.summary(index.connection()))
+        }
+        _ => None,
+    };
+
     on_progress(IndexProgress {
         processed_files: total_files,
         total_files,
         batch_index: 0,
         batch_total: 0,
+        reading_names: false,
     });
     timings.total_ms = pass_timer.total_ms();
 
@@ -369,6 +496,7 @@ pub async fn run(
         unavailable_capabilities,
         chunk_count: index.chunk_count()?,
         timings: Some(timings),
+        knowledge: knowledge_summary,
     })
 }
 

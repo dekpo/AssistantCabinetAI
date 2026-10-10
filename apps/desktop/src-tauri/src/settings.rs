@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 use crate::error::AppError;
+use crate::knowledge::packs::{available_pack_ids, canonical_pack_id};
+use crate::knowledge::KnowledgeMode;
 use crate::work_folder::{display, WorkFolderPolicy};
 
 const SETTINGS_FILE_NAME: &str = "settings.json";
@@ -92,6 +94,21 @@ pub struct Settings {
     /// (`knowledge::diagnostics`). Off by default; edited in `settings.json` until the settings
     /// dialog gets its "Advanced" group.
     pub write_timing_log: bool,
+    /// Whether the knowledge base reads the analysed files for names (`knowledge::KnowledgeMode`).
+    /// `suggest` by default; `off` is the kill switch that leaves the product as it was before the
+    /// knowledge base and writes no `kb_*` row. Edited in `settings.json` until the settings dialog
+    /// gets its "Advanced" group.
+    pub knowledge_mode: KnowledgeMode,
+    /// The optional lexicon packs the knowledge base reads names with, on top of the neutral base.
+    /// A pack id is `<domain>-<country>`: `health-fr`, `health-ch`, `legal-fr`, `accounting-fr`,
+    /// and later `health-eu`, `legal-ch`... (`docs/DECISIONS.md`, "Knowledge packs are named
+    /// domain-country"). The product serves health professionals in France and in Switzerland, so
+    /// `health-fr` is on by default and the Swiss module is a choice in the settings; both can be on
+    /// (cross-border workers). Only the ids a
+    /// build ships are kept, and an id written by an earlier build (`health`, `legal`,
+    /// `accounting`, which meant the French pack) is read as its `-fr` name
+    /// (`Settings::knowledge_pack_ids`).
+    pub knowledge_packs: Vec<String>,
 }
 
 impl Default for Settings {
@@ -109,11 +126,30 @@ impl Default for Settings {
             generated_folder_name: DEFAULT_GENERATED_FOLDER_NAME.to_string(),
             show_diagnostics: false,
             write_timing_log: false,
+            knowledge_mode: KnowledgeMode::default(),
+            knowledge_packs: vec!["health-fr".to_string()],
         }
     }
 }
 
 impl Settings {
+    /// The pack ids to load: the stored ones that this build ships, once each, in the stored order.
+    /// A `settings.json` edited by hand, or written by a newer build, cannot make the knowledge base
+    /// refuse to start over a pack that does not exist.
+    pub fn knowledge_pack_ids(&self) -> Vec<String> {
+        let shipped = available_pack_ids();
+        let mut kept: Vec<String> = Vec::new();
+        for stored in &self.knowledge_packs {
+            let id = canonical_pack_id(stored);
+            // Any number of countries can be active together (a cross-border worker has a French
+            // and a Swiss number): the packs are cumulative.
+            if shipped.contains(&id) && !kept.iter().any(|known| known == id) {
+                kept.push(id.to_string());
+            }
+        }
+        kept
+    }
+
     /// The generated-letters folder name as it is used: one clean name, never a path, never empty.
     /// Sanitised on the way out as well as on the way in, so a `settings.json` edited by hand cannot
     /// make the program write outside the documents folder.
@@ -152,7 +188,11 @@ pub fn load(app: &AppHandle) -> (Settings, Vec<String>) {
         return (Settings::default(), Vec::new());
     }
     match std::fs::read_to_string(&path).map(|text| serde_json::from_str::<Settings>(&text)) {
-        Ok(Ok(settings)) => (settings, Vec::new()),
+        Ok(Ok(mut settings)) => {
+            // An id written by an earlier build is shown, and later saved, under its current name.
+            settings.knowledge_packs = settings.knowledge_pack_ids();
+            (settings, Vec::new())
+        }
         _ => (
             Settings::default(),
             vec![AppError::SettingsReadFailed.code().to_string()],
@@ -179,6 +219,7 @@ pub fn save(
         MAX_ANSWER_IDLE_TIMEOUT_SECONDS,
     );
     checked.generated_folder_name = clean_folder_name(&checked.generated_folder_name);
+    checked.knowledge_packs = checked.knowledge_pack_ids();
     checked.work_folder = match checked.work_folder.as_deref() {
         None => None,
         Some(chosen) if chosen.trim().is_empty() => None,
@@ -286,12 +327,16 @@ mod tests {
             generated_folder_name: "Courriers".into(),
             show_diagnostics: true,
             write_timing_log: true,
+            knowledge_mode: KnowledgeMode::Auto,
+            knowledge_packs: vec!["health-fr".into(), "health-ch".into()],
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
         assert_eq!(json["generatedFolderName"], "Courriers");
         assert_eq!(json["showDiagnostics"], true);
         assert_eq!(json["writeTimingLog"], true);
+        assert_eq!(json["knowledgeMode"], "auto");
+        assert_eq!(json["knowledgePacks"][1], "health-ch");
 
         assert_eq!(json["locale"], "fr-FR");
         assert_eq!(json["theme"], "system");
@@ -392,6 +437,51 @@ mod tests {
             serde_json::from_str(r#"{"writeTimingLog":true}"#).expect("loads");
         assert!(switched_on.write_timing_log);
         assert!(!switched_on.show_diagnostics);
+    }
+
+    #[test]
+    fn the_knowledge_base_is_on_in_suggest_mode_by_default_and_for_a_file_that_predates_it() {
+        assert_eq!(Settings::default().knowledge_mode, KnowledgeMode::Suggest);
+        let old: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+        assert_eq!(old.knowledge_mode, KnowledgeMode::Suggest);
+
+        for (text, mode) in [
+            ("off", KnowledgeMode::Off),
+            ("suggest", KnowledgeMode::Suggest),
+            ("auto", KnowledgeMode::Auto),
+        ] {
+            let body = format!(r#"{{"knowledgeMode":"{text}"}}"#);
+            let settings: Settings = serde_json::from_str(&body).expect("loads");
+            assert_eq!(settings.knowledge_mode, mode);
+        }
+    }
+
+    #[test]
+    fn the_health_pack_is_on_by_default_and_unknown_packs_are_dropped() {
+        assert_eq!(Settings::default().knowledge_pack_ids(), ["health-fr"]);
+        let old: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+        assert_eq!(old.knowledge_pack_ids(), ["health-fr"]);
+
+        let odd: Settings = serde_json::from_str(
+            r#"{"knowledgePacks":["health-ch","nonsense","health-fr","health-ch"]}"#,
+        )
+        .expect("loads");
+        // Countries are cumulative (a cross-border worker): both stay, once each, in stored order.
+        assert_eq!(odd.knowledge_pack_ids(), ["health-ch", "health-fr"]);
+
+        // An id written before the packs were named domain-country meant the French pack.
+        let legacy: Settings =
+            serde_json::from_str(r#"{"knowledgePacks":["health","legal","accounting","health"]}"#)
+                .expect("loads");
+        assert_eq!(
+            legacy.knowledge_pack_ids(),
+            ["health-fr", "legal-fr", "accounting-fr"]
+        );
+
+        let none: Settings = serde_json::from_str(r#"{"knowledgePacks":[]}"#).expect("loads");
+        assert!(none.knowledge_pack_ids().is_empty());
     }
 
     #[test]

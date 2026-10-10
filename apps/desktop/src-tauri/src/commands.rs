@@ -28,6 +28,9 @@ use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderIn
 use crate::knowledge::diagnostics::{
     self, elapsed_ms, RetrievalDiagnostics, RetrievalPath, RetrievalPlan, StageTimer,
 };
+use crate::knowledge::ingest::KnowledgeContext;
+use crate::knowledge::secret::IdentifierKey;
+use crate::knowledge::{KnowledgeMode, KnowledgeSummary};
 use crate::mixed_answer;
 use crate::number_check;
 use crate::ocr::tesseract::TesseractProvider;
@@ -136,6 +139,29 @@ fn open_index(app: &AppHandle) -> Result<IndexStore, AppError> {
         .app_local_data_dir()
         .map_err(|_| AppError::IndexUnavailable)?;
     IndexStore::open_in_app_data(&directory)
+}
+
+/// The knowledge base's part in a pass: the packs and encoder for the locale, the gazetteer, the
+/// key that hashes personal identifiers (kept in the application's local data folder, never in the
+/// index). `packs` are the optional lexicon packs the settings switch on: `health` by default,
+/// `health-ch` added for a Swiss practice (`Settings::knowledge_pack_ids`).
+fn knowledge_context(
+    app: &AppHandle,
+    index: &IndexStore,
+    mode: KnowledgeMode,
+    locale: &str,
+    packs: &[String],
+) -> Result<KnowledgeContext, AppError> {
+    if !mode.reads_files() {
+        return KnowledgeContext::off(locale);
+    }
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|_| AppError::KnowledgeUnavailable)?;
+    let key = IdentifierKey::load_or_create(&directory)?;
+    let packs: Vec<&str> = packs.iter().map(String::as_str).collect();
+    KnowledgeContext::standard(index.connection(), locale, &packs, mode, key)
 }
 
 /// Built from what the platform reports rather than from written paths, so the same rules hold on
@@ -306,14 +332,17 @@ pub async fn index_work_folder(
     state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let (work_folder, server_url, embedding_alias, locale) = state.read(|settings| {
-        (
-            settings.work_folder.clone(),
-            settings.server_url.clone(),
-            settings.embedding_alias.clone(),
-            settings.locale.clone(),
-        )
-    })?;
+    let (work_folder, server_url, embedding_alias, locale, mode, packs) =
+        state.read(|settings| {
+            (
+                settings.work_folder.clone(),
+                settings.server_url.clone(),
+                settings.embedding_alias.clone(),
+                settings.locale.clone(),
+                settings.knowledge_mode,
+                settings.knowledge_pack_ids(),
+            )
+        })?;
     let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
     };
@@ -334,7 +363,11 @@ pub async fn index_work_folder(
     log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
-    let mut summary = indexing::run(
+    // The knowledge base never blocks a pass: if it cannot start (a damaged pack, a key that cannot
+    // be read) the documents are analysed exactly as before and the summary says that part of the
+    // analysis did not complete.
+    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs).ok();
+    let mut summary = indexing::run_with_knowledge(
         &mut index,
         &state.gateway,
         &server_url,
@@ -347,8 +380,15 @@ pub async fn index_work_folder(
         &|progress| {
             let _ = on_progress.send(progress);
         },
+        knowledge.as_mut(),
     )
     .await?;
+    if knowledge.is_none() && mode.reads_files() {
+        summary.knowledge = Some(KnowledgeSummary {
+            errors: summary.scanned_files.max(1),
+            ..KnowledgeSummary::default()
+        });
+    }
     summary.renamed_files = sanitised.renamed;
     summary.rename_failed_files = sanitised.failed;
     log_analysis_timing(&app, &state, &summary);

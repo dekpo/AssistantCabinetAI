@@ -1,36 +1,37 @@
 {
   "schema": 1,
-  "id": "legal",
-  "locale": "en-US",
+  "id": "legal-fr",
+  "locale": "fr-FR",
   "titles": {
     "person": [
-      "Judge",
-      "Counsel",
-      "Clerk",
-      "Bailiff"
+      "Juge",
+      "Procureur",
+      "Greffier",
+      "Huissier"
     ]
   },
   "weak_titles": [],
   "particles": [],
   "title_spoken": {},
   "stop_words": [
-    "summons",
-    "judgment",
-    "hearing",
-    "motion",
-    "pleading",
-    "proceeding",
-    "mandate",
-    "protocol",
-    "deed"
+    "assignation",
+    "jugement",
+    "audience",
+    "conclusions",
+    "requête",
+    "procédure",
+    "mandat",
+    "protocole",
+    "acte"
   ],
   "org_markers": {
     "prefix": [
-      "law office",
-      "court",
-      "registry",
-      "bar",
-      "chambers"
+      "étude",
+      "tribunal",
+      "cour",
+      "greffe",
+      "cabinet d'avocats",
+      "barreau"
     ],
     "suffix": []
   },
@@ -38,7 +39,7 @@
     {
       "id": "case_number",
       "kind": "case",
-      "regex": "\\b\\d{2}-(?:cv|cr)-\\d{3,6}\\b",
+      "regex": "\\bRG\\s?\\d{2}/\\d{3,6}\\b",
       "normalise": "alnum",
       "strength": "exact",
       "personal_key": false
@@ -47,10 +48,10 @@
   "columns": [
     {
       "headers": [
-        "lawyer",
-        "attorney",
-        "counsel",
-        "solicitor"
+        "avocat",
+        "avocate",
+        "conseil",
+        "maître"
       ],
       "semantic": {
         "type": "person",
@@ -60,9 +61,9 @@
     },
     {
       "headers": [
-        "opposing party",
-        "opponent",
-        "defendant"
+        "partie adverse",
+        "adversaire",
+        "défendeur"
       ],
       "semantic": {
         "type": "person",
@@ -72,10 +73,10 @@
     },
     {
       "headers": [
-        "case",
-        "matter",
-        "case number",
-        "file number"
+        "dossier",
+        "affaire",
+        "numéro de dossier",
+        "n° dossier"
       ],
       "semantic": {
         "type": "identifier",
@@ -85,8 +86,8 @@
     },
     {
       "headers": [
-        "court",
-        "jurisdiction"
+        "juridiction",
+        "tribunal"
       ],
       "semantic": {
         "type": "organization",
@@ -113,19 +114,20 @@
     }
   ],
   "detection_terms": [
-    "case",
-    "matter",
-    "summons",
-    "judgment",
-    "hearing",
-    "motion",
-    "pleading",
-    "lawyer",
-    "court",
-    "opposing party",
-    "demand letter",
-    "contract",
-    "registry",
-    "bailiff"
+    "dossier",
+    "affaire",
+    "assignation",
+    "jugement",
+    "audience",
+    "conclusions",
+    "requête",
+    "procédure",
+    "avocat",
+    "tribunal",
+    "partie adverse",
+    "mise en demeure",
+    "contrat",
+    "greffe",
+    "huissier"
   ]
 }

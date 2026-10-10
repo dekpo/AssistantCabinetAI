@@ -132,6 +132,23 @@
     "excerptMany": "excerpts",
     "dataFolder": "Data folder"
   },
+  "analysis": {
+    "knowledge": {
+      "namesSummary": "{detected}, of which {known}.",
+      "detectedOne": "person or organisation found",
+      "detectedMany": "people and organisations found",
+      "knownOne": "already known",
+      "knownMany": "already known",
+      "identifiersOne": "identifier found (e-mail address, invoice number, IBAN...)",
+      "identifiersMany": "identifiers found (e-mail addresses, invoice numbers, IBANs...)",
+      "refreshedOne": "previously analysed document read again for names, without asking the AI",
+      "refreshedMany": "previously analysed documents read again for names, without asking the AI",
+      "truncatedOne": "document holds more names than are kept: only the most certain are retained",
+      "truncatedMany": "documents hold more names than are kept: only the most certain are retained",
+      "errorsOne": "document could not be fully analysed (its names were not found): run the analysis again to retry",
+      "errorsMany": "documents could not be fully analysed (their names were not found): run the analysis again to retry"
+    }
+  },
   "workFolder": {
     "title": "Documents folder",
     "descriptionFull": "The folder for text: PDF, DOCX, even JPEG... Choose a dedicated folder, not the whole of your documents, and not a folder copied to a cloud service.",
@@ -142,6 +159,7 @@
     "choose": "Choose a folder...",
     "change": "Change",
     "changeHint": "Change the folder",
+    "progressNamesLabel": "Reading the names in documents analysed earlier",
     "progressLabel": "Analysis in progress",
     "analysedOne": "analysed",
     "analysedMany": "analysed",
@@ -286,6 +304,19 @@
     "idleTimeoutUnit": "seconds",
     "generatedFolderLabel": "Generated letters folder",
     "generatedFolderDescription": "The subfolder of your documents folder where letters made from a template and a spreadsheet are written. The name is simplified: letters without accents, digits, hyphens.",
+    "knowledgeModeLabel": "Knowledge base",
+    "knowledgeModeDescription": "At each analysis, finds the names of people and organisations in your documents so they can be found faster. Everything stays on this computer. Applied at the next analysis you start.",
+    "knowledgeMode": {
+      "suggest": "On",
+      "off": "Off",
+      "auto": "Automatic (same as \"On\" for now)"
+    },
+    "healthModuleLabel": "Health module",
+    "healthModuleDescription": "Tick the country or countries of your patients: a cross-border worker can have both a French social security number and an AVS number. A module helps read the numbers and vocabulary of its country, and never removes or changes the type of a name. Applied at the next analysis you start.",
+    "healthModule": {
+      "france": "Health: France",
+      "switzerland": "Health: Switzerland"
+    },
     "advancedLabel": "Advanced",
     "timingLogLabel": "Write the timings to a log",
     "timingLogDescription": "Writes, on this computer only, how long each question and each analysis takes: durations and numbers, never your question, a file name or an excerpt. Off by default; switch it on for a measurement.",

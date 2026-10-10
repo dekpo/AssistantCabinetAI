@@ -279,7 +279,7 @@ mod tests {
     fn the_packs_fingerprint_is_recorded_once_and_changes_with_the_packs() {
         let connection = connection();
         let base = PackSet::load("en-US", &[]).unwrap();
-        let health = PackSet::load("en-US", &["health"]).unwrap();
+        let health = PackSet::load("en-US", &["health-fr"]).unwrap();
         assert!(record_packs(&connection, &base).unwrap());
         assert!(!record_packs(&connection, &base).unwrap());
         assert_eq!(

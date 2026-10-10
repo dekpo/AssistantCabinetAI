@@ -20,8 +20,8 @@ use serde_json::{json, Value};
 use super::{
     Alias, AliasKind, ApplyOutcome, AttributeDraft, Domain, Entity, EntityDraft, EntityFilter,
     EntityRecord, EntityRef, EntityStatus, FileSets, IntegrityReport, KnowledgeDelta, MentionDraft,
-    MentionLocator, NameHit, NewAlias, NewEntity, Origin, Page, RelationDraft, SignalDraft,
-    SourceRef, SourceRow, CURRENT_SCHEMA_VERSION,
+    MentionLocator, NameHit, NewAlias, NewEntity, Origin, Page, PossibleMatchDraft, RelationDraft,
+    SignalDraft, SourceRef, SourceRow, CURRENT_SCHEMA_VERSION,
 };
 use crate::error::AppError;
 
@@ -672,6 +672,8 @@ pub fn apply_delta(tx: &Transaction<'_>, delta: &KnowledgeDelta) -> Result<Apply
     apply_relations(tx, source_id, &delta.relations, &drafts, &mut touched)?;
     apply_attributes(tx, source_id, &delta.attributes, &drafts, &mut touched)?;
     apply_signals(tx, source_id, &delta.signals)?;
+    apply_possible_matches(tx, &drafts, &delta.possible_matches)?;
+    outcome.entities_promoted = promote_candidates(tx)?;
 
     for entity_id in &touched {
         db(tx.execute(
@@ -1078,6 +1080,201 @@ fn apply_signals(
         ))?;
     }
     Ok(())
+}
+
+/// Record that two entities might be one, for the user to decide on later. The pair is stored in
+/// one order, and a pair that is already known (whatever the user decided about it) is left alone.
+fn apply_possible_matches(
+    tx: &Transaction<'_>,
+    drafts: &HashMap<u32, Option<i64>>,
+    matches: &[PossibleMatchDraft],
+) -> Result<(), AppError> {
+    for draft in matches {
+        let (Some(subject), Some(other)) = (
+            resolve_ref(tx, drafts, draft.subject)?,
+            resolve_ref(tx, drafts, draft.other)?,
+        ) else {
+            continue;
+        };
+        if subject == other {
+            continue;
+        }
+        let (low, high) = (subject.min(other), subject.max(other));
+        db(tx.execute(
+            "INSERT OR IGNORE INTO kb_possible_matches (entity_a, entity_b, reason, score, state)
+             VALUES (?1, ?2, ?3, ?4, 'open')",
+            params![low, high, draft.reason, confidence_value(draft.score)],
+        ))?;
+    }
+    Ok(())
+}
+
+/// A guess becomes a fact when a second file names it: an automatic candidate with mentions in two
+/// distinct sources turns active (master section 6, rule 5). One statement, run after every
+/// source, so a name seen in two files is trusted by the time the second one is written. A merged
+/// entity's mentions count for the entity it was merged into.
+pub fn promote_candidates(tx: &Transaction<'_>) -> Result<usize, AppError> {
+    db(tx.execute(
+        "UPDATE kb_entities
+         SET status = 'active', updated_at = CAST(strftime('%s', 'now') AS INTEGER)
+         WHERE status = 'candidate' AND origin = 'automatic'
+           AND (SELECT COUNT(DISTINCT m.source_id) FROM kb_mentions m
+                WHERE m.entity_id = kb_entities.entity_id
+                   OR m.entity_id IN (SELECT x.entity_id FROM kb_entities x
+                                      WHERE x.merged_into = kb_entities.entity_id)) >= 2",
+        [],
+    ))
+}
+
+// ---------------------------------------------------------------------------------------------
+// What a pass needs to know about the sources
+// ---------------------------------------------------------------------------------------------
+
+/// A document the index holds that the knowledge base has not (yet, or any more) read as it is now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueDocument {
+    pub relative_path: String,
+    pub sha256: String,
+    /// The index recorded it as holding no text.
+    pub empty: bool,
+}
+
+/// The documents whose knowledge is out of date, in path order, in one query: no source row, a
+/// source row for other content, a source read by an older extractor, or one read against an older
+/// list of names (`gazetteer_epoch`). The index and the knowledge base live in one file, so this is
+/// a join and not a comparison of two lists.
+pub fn documents_due(
+    connection: &Connection,
+    kb_version: u32,
+    gazetteer_epoch: u32,
+) -> Result<Vec<DueDocument>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT d.relative_path, d.sha256, d.empty
+         FROM documents d
+         LEFT JOIN kb_sources s
+                ON s.domain = 'documents' AND s.relative_path = d.relative_path
+         WHERE s.source_id IS NULL
+            OR s.content_id <> d.sha256
+            OR s.kb_version < ?1
+            OR s.gazetteer_epoch < ?2
+         ORDER BY d.relative_path",
+    ))?;
+    let rows = db(
+        statement.query_map(params![kb_version, gazetteer_epoch], |row| {
+            Ok(DueDocument {
+                relative_path: row.get(0)?,
+                sha256: row.get(1)?,
+                empty: row.get::<_, i64>(2)? != 0,
+            })
+        }),
+    )?;
+    db(rows.collect())
+}
+
+/// The live entity named exactly this, after following merges. `None` when there is none (or it
+/// was deleted).
+pub fn entity_id_by_name(
+    connection: &Connection,
+    type_id: &str,
+    normalized_name: &str,
+    disambiguator: &str,
+) -> Result<Option<i64>, AppError> {
+    let found: Option<i64> = db(connection
+        .query_row(
+            "SELECT entity_id FROM kb_entities
+             WHERE type_id = ?1 AND normalized_name = ?2 AND disambiguator = ?3
+             ORDER BY (status = 'merged') ASC, entity_id ASC LIMIT 1",
+            params![type_id, normalized_name, disambiguator],
+            |row| row.get(0),
+        )
+        .optional())?;
+    match found {
+        None => Ok(None),
+        Some(id) => Ok(effective_entity(connection, id)?
+            .filter(|entity| {
+                matches!(
+                    entity.status,
+                    EntityStatus::Candidate | EntityStatus::Active
+                )
+            })
+            .map(|entity| entity.entity_id)),
+    }
+}
+
+/// The highest entity id, 0 for an empty table. Taken before a pass so that afterwards "new" means
+/// "an id above this".
+pub fn max_entity_id(connection: &Connection) -> Result<i64, AppError> {
+    db(connection.query_row(
+        "SELECT COALESCE(MAX(entity_id), 0) FROM kb_entities",
+        [],
+        |row| row.get(0),
+    ))
+}
+
+/// What the entities named in a set of sources look like, for the Analyse summary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SourceEntityCounts {
+    /// Distinct named entities (people, organisations, places, items, terms), after merges, with a
+    /// mention in one of the sources. Identifiers are counted apart: an invoice number is not a
+    /// name, and a summary line that says "people and organisations" must not include one.
+    pub distinct: usize,
+    /// Of those, the ones created after `created_after_id`.
+    pub created: usize,
+    /// Of the created ones, the ones that are only candidates.
+    pub created_candidates: usize,
+    /// Distinct identifiers with a mention in one of the sources.
+    pub identifiers: usize,
+}
+
+pub fn entity_counts_for_sources(
+    connection: &Connection,
+    domain: Domain,
+    relative_paths: &[String],
+    created_after_id: i64,
+) -> Result<SourceEntityCounts, AppError> {
+    if relative_paths.is_empty() {
+        return Ok(SourceEntityCounts::default());
+    }
+    let paths = db_json(relative_paths)?;
+    let mut statement = db(connection.prepare(
+        "SELECT s.entity_id, s.status, s.type_id FROM kb_entities s
+         WHERE s.entity_id IN (
+             SELECT DISTINCT v.effective_id
+             FROM kb_mentions m
+             JOIN kb_sources src ON src.source_id = m.source_id
+             JOIN kb_effective_entity v ON v.entity_id = m.entity_id
+             WHERE src.domain = ?1
+               AND src.relative_path IN (SELECT value FROM json_each(?2)))",
+    ))?;
+    let rows = db(
+        statement.query_map(params![domain.as_code(), paths], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        }),
+    )?;
+    let mut counts = SourceEntityCounts::default();
+    for row in rows {
+        let (entity_id, status, type_id) = db(row)?;
+        if type_id == "identifier" {
+            counts.identifiers += 1;
+            continue;
+        }
+        counts.distinct += 1;
+        if entity_id > created_after_id {
+            counts.created += 1;
+            if status == EntityStatus::Candidate.as_code() {
+                counts.created_candidates += 1;
+            }
+        }
+    }
+    Ok(counts)
+}
+
+fn db_json(values: &[String]) -> Result<String, AppError> {
+    serde_json::to_string(values).map_err(|_| AppError::Internal)
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -8,15 +8,42 @@
 //! Nothing here is user-facing prose: types, roles and codes are local metadata, and a sentence
 //! is an interface catalogue entry (`docs/SESSION-KB-00-master.md`, I9 and I10).
 
+pub mod backfill;
 pub mod diagnostics;
 pub mod extract;
 pub mod gazetteer;
+pub mod ingest;
 pub mod maintenance;
 pub mod normalize;
 pub mod packs;
 pub mod phonetic;
 pub mod resolve;
+pub mod secret;
 pub mod store;
+
+use serde::{Deserialize, Serialize};
+
+/// Whether the knowledge base reads the files at all (`docs/SESSION-KB-00-master.md`, D4). Stored in
+/// `settings.json`. `Off` is the kill switch: no extraction, no lookup, no `kb_*` row written, the
+/// product as it was before the knowledge base. `Suggest` is the default: extraction on, and (from
+/// lot 6) suggestions and the entity picker, but never an automatic reduction of the user's
+/// selection. `Auto` also reduces automatically when the rules allow; it becomes a default only
+/// after the release gate of lot 11.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KnowledgeMode {
+    Off,
+    #[default]
+    Suggest,
+    Auto,
+}
+
+impl KnowledgeMode {
+    /// Whether the files are read for names. The one question lot 4 asks of the mode.
+    pub fn reads_files(self) -> bool {
+        self != Self::Off
+    }
+}
 
 /// What the extractor of the current build knows how to read. A source whose `kb_version` is lower
 /// is read again by the next pass, so improving an extractor means raising this number.
@@ -259,6 +286,18 @@ pub struct SignalDraft {
     pub distinct_terms: u32,
 }
 
+/// Two entities the source makes one wonder about but nothing proves the same (a spelling that
+/// sounds alike, the same words in another order). Never a merge: a row in `kb_possible_matches`
+/// for the user to decide on later.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PossibleMatchDraft {
+    pub subject: EntityRef,
+    pub other: EntityRef,
+    /// `resolve::PossibleReason::as_code`.
+    pub reason: String,
+    pub score: f32,
+}
+
 /// Everything extraction produced for **one source**, applied in the same transaction as that
 /// source's chunks. Applying a delta makes the automatic rows of the source equal to it: rows that
 /// are already identical are left untouched, the others are written, and the automatic rows the
@@ -277,6 +316,7 @@ pub struct KnowledgeDelta {
     pub relations: Vec<RelationDraft>,
     pub attributes: Vec<AttributeDraft>,
     pub signals: Vec<SignalDraft>,
+    pub possible_matches: Vec<PossibleMatchDraft>,
 }
 
 impl KnowledgeDelta {
@@ -293,6 +333,7 @@ impl KnowledgeDelta {
             relations: Vec::new(),
             attributes: Vec::new(),
             signals: Vec::new(),
+            possible_matches: Vec::new(),
         }
     }
 }
@@ -305,6 +346,47 @@ pub struct ApplyOutcome {
     pub entities_matched: usize,
     /// Drafts dropped because the name was deleted by the user (a tombstone).
     pub entities_suppressed: usize,
+    /// Candidates that became active because a second source named them.
+    pub entities_promoted: usize,
+}
+
+/// What became of the knowledge half of a document's write. The chunks are committed either way
+/// (the knowledge base never blocks indexing, `docs/DECISIONS.md`, 9 October 2026).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KnowledgeWrite {
+    Applied(ApplyOutcome),
+    /// The knowledge step failed and was rolled back alone. The source is left due, so a later
+    /// pass reads it again.
+    Bypassed,
+}
+
+/// What an Analyse pass learned about names, as counts only: no name, no file name. Localised by
+/// the interface (`analysis.knowledge.*`); Rust builds no sentence from it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeSummary {
+    /// Distinct people and organisations (and places, items, terms) named in the files read by
+    /// this pass. Identifiers are in `identifiers`.
+    pub entities_detected: usize,
+    /// Of those, how many the knowledge base already held before the pass.
+    pub matched_existing: usize,
+    pub created_new: usize,
+    /// Of the new ones, how many are only guesses (candidates) until a second file names them.
+    pub candidates: usize,
+    /// Distinct identifiers (an e-mail address, an invoice number, an IBAN) found. Counted, never
+    /// shown: a personal one is stored as a hash.
+    pub identifiers: usize,
+    /// Links stated by a file's own structure. Documents state none; tables do (lot 5).
+    pub relations: usize,
+    /// Documents analysed earlier that were read again from their stored text, with no request to
+    /// the AI.
+    pub refreshed_sources: usize,
+    /// Files that held more names than are kept.
+    pub truncated_sources: usize,
+    /// Files whose names could not all be recorded. The file itself is indexed; analysing again
+    /// retries the names.
+    pub errors: usize,
+    pub elapsed_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -550,8 +632,14 @@ pub enum Method {
     TitleFullName,
     /// A title followed by a surname alone ("Dr Dupont").
     TitleSurname,
-    /// A name with an organisation marker ("Dupont SARL", "Association Dupont").
+    /// A name with a legal-form suffix ("Dupont SARL"): backed by the suffix, so trusted.
     OrganizationMarker,
+    /// A name after a word that usually opens an organisation's name ("Association Dupont"). Such a
+    /// word is also an ordinary one, so the entity stays a candidate until a second source agrees.
+    OrganizationPrefix,
+    /// A surname, an initial and a surname, or a title and a surname, that the same file also
+    /// names in full: it points at that person, never at a new one.
+    CorefInDocument,
     /// A word of a sanitised file name that reads like a name.
     FilenameToken,
     /// A capitalised word run with no support at all.
@@ -569,6 +657,8 @@ impl Method {
             Self::TitleFullName => "title_full_name",
             Self::TitleSurname => "title_surname",
             Self::OrganizationMarker => "organization_marker",
+            Self::OrganizationPrefix => "organization_prefix",
+            Self::CorefInDocument => "coref_in_document",
             Self::FilenameToken => "filename_token",
             Self::CapitalisedName => "capitalised_name",
             Self::Manual => "manual",
@@ -583,6 +673,8 @@ impl Method {
             "title_full_name" => Some(Self::TitleFullName),
             "title_surname" => Some(Self::TitleSurname),
             "organization_marker" => Some(Self::OrganizationMarker),
+            "organization_prefix" => Some(Self::OrganizationPrefix),
+            "coref_in_document" => Some(Self::CorefInDocument),
             "filename_token" => Some(Self::FilenameToken),
             "capitalised_name" => Some(Self::CapitalisedName),
             "manual" => Some(Self::Manual),
@@ -592,7 +684,9 @@ impl Method {
 
     /// Identifier 1.00, column value 0.95, gazetteer hit 0.90, organisation marker 0.80, title and
     /// surname 0.70, filename token 0.50, untitled capitalised name 0.40 (master section 7). A
-    /// title with a full name sits between the gazetteer hit and the organisation marker.
+    /// title with a full name sits between the gazetteer hit and the organisation marker; an
+    /// organisation prefix and a name found again in the same file share the title and surname's
+    /// 0.70 (lot 4 specification, "coref_in_document 0.70").
     pub fn default_confidence(self) -> Confidence {
         Confidence::new(match self {
             Self::Identifier | Self::Manual => 1.0,
@@ -600,7 +694,7 @@ impl Method {
             Self::GazetteerHit => 0.90,
             Self::TitleFullName => 0.85,
             Self::OrganizationMarker => 0.80,
-            Self::TitleSurname => 0.70,
+            Self::TitleSurname | Self::OrganizationPrefix | Self::CorefInDocument => 0.70,
             Self::FilenameToken => 0.50,
             Self::CapitalisedName => 0.40,
         })

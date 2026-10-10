@@ -67,36 +67,85 @@ const BUNDLED: &[BundledPack] = &[
         body: include_str!("../../resources/knowledge/base/fr-FR.json"),
     },
     BundledPack {
-        id: "health",
+        id: "health-fr",
         locale: "en-US",
-        body: include_str!("../../resources/knowledge/packs/health/en-US.json"),
+        body: include_str!("../../resources/knowledge/packs/health-fr/en-US.json"),
     },
     BundledPack {
-        id: "health",
+        id: "health-fr",
         locale: "fr-FR",
-        body: include_str!("../../resources/knowledge/packs/health/fr-FR.json"),
+        body: include_str!("../../resources/knowledge/packs/health-fr/fr-FR.json"),
     },
     BundledPack {
-        id: "legal",
+        id: "health-ch",
         locale: "en-US",
-        body: include_str!("../../resources/knowledge/packs/legal/en-US.json"),
+        body: include_str!("../../resources/knowledge/packs/health-ch/en-US.json"),
     },
     BundledPack {
-        id: "legal",
+        id: "health-ch",
         locale: "fr-FR",
-        body: include_str!("../../resources/knowledge/packs/legal/fr-FR.json"),
+        body: include_str!("../../resources/knowledge/packs/health-ch/fr-FR.json"),
     },
     BundledPack {
-        id: "accounting",
+        id: "legal-fr",
         locale: "en-US",
-        body: include_str!("../../resources/knowledge/packs/accounting/en-US.json"),
+        body: include_str!("../../resources/knowledge/packs/legal-fr/en-US.json"),
     },
     BundledPack {
-        id: "accounting",
+        id: "legal-fr",
         locale: "fr-FR",
-        body: include_str!("../../resources/knowledge/packs/accounting/fr-FR.json"),
+        body: include_str!("../../resources/knowledge/packs/legal-fr/fr-FR.json"),
+    },
+    BundledPack {
+        id: "accounting-fr",
+        locale: "en-US",
+        body: include_str!("../../resources/knowledge/packs/accounting-fr/en-US.json"),
+    },
+    BundledPack {
+        id: "accounting-fr",
+        locale: "fr-FR",
+        body: include_str!("../../resources/knowledge/packs/accounting-fr/fr-FR.json"),
     },
 ];
+
+/// How a pack is named: `<domain>-<country>`, lower case, for example `health-fr`, `health-ch`,
+/// `legal-fr`. The domain is what the vocabulary is about (`health`, `legal`, `accounting`); the
+/// country is the jurisdiction whose rules and numbers it follows (`fr`, `ch`, and later `eu`, which
+/// is a region and not a country, or `de`, `be`...). A module for another country is **another
+/// pack**, never a switch inside one: `health-ch` is not `health-fr` plus a flag (`AGENTS.md`,
+/// "Markets"; `docs/DECISIONS.md`, "Knowledge packs are named domain-country"). The packs are
+/// **cumulative**: a cross-border worker has a French and a Swiss number, so any number of countries
+/// can be active together. The locale of a pack file is the *language* its words are written in and
+/// is independent of the country.
+pub const COUNTRY_CODES: &[&str] = &["fr", "ch", "eu"];
+
+/// The pack ids an earlier build wrote, each meaning the French pack of its domain.
+const LEGACY_PACK_IDS: &[(&str, &str)] = &[
+    ("health", "health-fr"),
+    ("legal", "legal-fr"),
+    ("accounting", "accounting-fr"),
+];
+
+/// The current name of a pack id: an id written before packs were named domain-country is read as
+/// its French pack, anything else is returned as it is.
+pub fn canonical_pack_id(id: &str) -> &str {
+    LEGACY_PACK_IDS
+        .iter()
+        .find(|(old, _)| *old == id)
+        .map_or(id, |(_, current)| *current)
+}
+
+/// Whether `id` is of the form `<domain>-<country>` with a country code this build knows.
+pub fn is_domain_country_id(id: &str) -> bool {
+    match id.rsplit_once('-') {
+        Some((domain, country)) => {
+            !domain.is_empty()
+                && domain.chars().all(|c| c.is_ascii_lowercase())
+                && COUNTRY_CODES.contains(&country)
+        }
+        None => false,
+    }
+}
 
 /// The ids of the optional packs this build ships, sorted. `base` is not among them: it is always
 /// loaded.
@@ -335,6 +384,28 @@ struct LoadedPack {
     relations: Vec<(RelationRule, usize)>,
     roles: Vec<RoleLabel>,
     detection_terms: Vec<String>,
+    /// Only the type vocabulary of this pack is read (see `PackSet::load_with_type_vocabulary`).
+    type_only: bool,
+}
+
+impl LoadedPack {
+    /// What an inactive pack still contributes: the words that say a name is a person's or an
+    /// organisation's. Nothing a module reads (identifiers, columns, roles, terms, stop-words).
+    fn reduced_to_type_vocabulary(self) -> Self {
+        Self {
+            canonical: format!("type-vocabulary\n{}", self.canonical),
+            particles: Vec::new(),
+            title_spoken: BTreeMap::new(),
+            stop_words: Vec::new(),
+            schemes: Vec::new(),
+            columns: Vec::new(),
+            relations: Vec::new(),
+            roles: Vec::new(),
+            detection_terms: Vec::new(),
+            type_only: true,
+            ..self
+        }
+    }
 }
 
 fn invalid(pack: &str, path: &str) -> AppError {
@@ -570,6 +641,7 @@ fn parse_pack(
         relations,
         roles,
         detection_terms: raw.detection_terms,
+        type_only: false,
     })
 }
 
@@ -656,6 +728,30 @@ impl PackSet {
     /// Load `base` and every pack of `active_pack_ids`, in that order, for `locale`. An id twice is
     /// read once. An id no bundled pack has is `knowledge_pack_invalid`.
     pub fn load(locale: &str, active_pack_ids: &[&str]) -> Result<Self, AppError> {
+        Self::load_inner(locale, active_pack_ids, false)
+    }
+
+    /// [`PackSet::load`], plus the **type vocabulary** of every other pack this build ships: the
+    /// titles and the organisation markers, and nothing else. This is what an Analyse reads names with.
+    ///
+    /// The rule behind it (owner, 11 October 2026): *a module improves the interpretation and the
+    /// detection of entities, it never excludes or transforms an entity type.* An organisation is an
+    /// organisation whichever modules are active, so "CPAM du Rhone" is never filed as a person
+    /// because only the Swiss module is on, or none. What a module switches on is what only it can
+    /// read: its identifier patterns (the French or the Swiss insurance number), its column
+    /// vocabulary, its role labels, its detection terms and its stop-words.
+    pub fn load_with_type_vocabulary(
+        locale: &str,
+        active_pack_ids: &[&str],
+    ) -> Result<Self, AppError> {
+        Self::load_inner(locale, active_pack_ids, true)
+    }
+
+    fn load_inner(
+        locale: &str,
+        active_pack_ids: &[&str],
+        with_type_vocabulary: bool,
+    ) -> Result<Self, AppError> {
         let mut ids: Vec<&str> = vec![BASE_PACK_ID];
         for id in active_pack_ids {
             if !ids.contains(id) {
@@ -667,6 +763,16 @@ impl PackSet {
         for id in &ids {
             let bundled = bundled_for(id, locale).ok_or_else(|| invalid(id, "pack"))?;
             parsed.push(parse_pack(bundled.id, bundled.locale, bundled.body)?);
+        }
+        if with_type_vocabulary {
+            for id in available_pack_ids() {
+                if ids.contains(&id) {
+                    continue;
+                }
+                let bundled = bundled_for(id, locale).ok_or_else(|| invalid(id, "pack"))?;
+                let pack = parse_pack(bundled.id, bundled.locale, bundled.body)?;
+                parsed.push(pack.reduced_to_type_vocabulary());
+            }
         }
         Self::merge(locale, parsed)
     }
@@ -698,7 +804,9 @@ impl PackSet {
 
         for pack in parsed {
             hasher.update(format!("{}:{}\n{}\n", pack.id, pack.locale, pack.canonical));
-            set.loaded.push((pack.id.clone(), pack.locale.clone()));
+            if !pack.type_only {
+                set.loaded.push((pack.id.clone(), pack.locale.clone()));
+            }
             set.titles.extend(pack.titles);
             set.weak_titles.extend(pack.weak_titles);
             set.particles.extend(pack.particles);
@@ -925,7 +1033,10 @@ mod tests {
             code_and_path(parse(&body.replace("\"schema\":1", "\"schema\":2"))).1,
             "schema"
         );
-        assert_eq!(code_and_path(parse_pack("health", "en-US", &body)).1, "id");
+        assert_eq!(
+            code_and_path(parse_pack("health-fr", "en-US", &body)).1,
+            "id"
+        );
         assert_eq!(
             code_and_path(parse_pack("base", "fr-FR", &body)).1,
             "locale"
@@ -1076,7 +1187,7 @@ mod tests {
     fn the_hash_depends_on_content_and_on_the_active_packs() {
         let base = PackSet::load("en-US", &[]).unwrap();
         let again = PackSet::load("en-US", &[]).unwrap();
-        let with_health = PackSet::load("en-US", &["health"]).unwrap();
+        let with_health = PackSet::load("en-US", &["health-fr"]).unwrap();
         let french = PackSet::load("fr-FR", &[]).unwrap();
         assert_eq!(base.hash(), again.hash());
         assert_ne!(base.hash(), with_health.hash());
@@ -1087,7 +1198,7 @@ mod tests {
     #[test]
     fn a_domain_pack_adds_vocabulary_and_relabels_a_role() {
         let base = PackSet::load("en-US", &[]).unwrap();
-        let health = PackSet::load("en-US", &["health"]).unwrap();
+        let health = PackSet::load("en-US", &["health-fr"]).unwrap();
         let client = RoleId::new("client").unwrap();
         assert_eq!(base.role_label_key(&client), Some("knowledge.roles.client"));
         assert_eq!(

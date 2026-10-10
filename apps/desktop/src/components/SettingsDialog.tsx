@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
-import type { AppSettings, ThemeChoice } from "../lib/ipc";
+import type { AppSettings, KnowledgeMode, ThemeChoice } from "../lib/ipc";
+import { HEALTH_MODULES, isModuleOn, withModule } from "../lib/knowledgePacks";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DataFolderCard } from "./DataFolderCard";
@@ -10,6 +11,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { WorkFolderCard } from "./WorkFolderCard";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
+const KNOWLEDGE_MODES: KnowledgeMode[] = ["suggest", "off", "auto"];
 
 /* The same bounds Rust clamps to, so the control offers only what will actually be stored. They
    are duplicated rather than fetched because a number input needs them before anything is saved;
@@ -223,6 +225,51 @@ export function SettingsDialog({
             onBlur={() => onUpdate({ generatedFolderName: generatedFolderDraft })}
           />
         </label>
+
+        {/* What the analysis learns from the documents. Both are read at the next Analyse: nothing
+            runs in the background when one is changed. */}
+        <label className="field">
+          <span className="field__label">{t("settings.knowledgeModeLabel")}</span>
+          <span className="field__description">{t("settings.knowledgeModeDescription")}</span>
+          <select
+            className="field__control"
+            value={settings.knowledgeMode}
+            onChange={(event) =>
+              onUpdate({ knowledgeMode: event.target.value as KnowledgeMode })
+            }
+          >
+            {KNOWLEDGE_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {t(`settings.knowledgeMode.${mode}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* One tick per country: a cross-border worker has both a French and a Swiss number, so the
+            modules add up and never exclude one another. Nothing ticked is no health module. */}
+        <div className="field">
+          <span className="field__label">{t("settings.healthModuleLabel")}</span>
+          <span className="field__description">{t("settings.healthModuleDescription")}</span>
+          {HEALTH_MODULES.map((module) => (
+            <label className="field__row" key={module.id}>
+              <input
+                type="checkbox"
+                checked={isModuleOn(settings.knowledgePacks, module.id)}
+                onChange={(event) =>
+                  onUpdate({
+                    knowledgePacks: withModule(
+                      settings.knowledgePacks,
+                      module.id,
+                      event.target.checked,
+                    ),
+                  })
+                }
+              />
+              <span>{t(module.labelKey)}</span>
+            </label>
+          ))}
+        </div>
 
         {/* Measurement switches, kept apart under their own heading: neither changes what an answer
             says. They are off unless she turns them on (`docs/DECISIONS.md`, "KB lot 0"). */}

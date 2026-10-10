@@ -48,6 +48,13 @@ unicode-normalization = "0.1"
 # (no backtracking, hence no ReDoS) and pure Rust on both platforms; `unicode-perl` and
 # `unicode-case` are the two features a pattern with `\d`, `\s` or `(?i)` needs.
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
+# The keyed hash that stands in for a personal identifier (an e-mail address, a social security
+# number, an IBAN) in the knowledge base, and the operating system's random source that makes its
+# per-workstation key (`knowledge::secret`). Both are already in the dependency tree (`hmac` through
+# `zip`, `getrandom` through the TLS stack), so this adds no new code to the build, and both are the
+# same code on Windows and macOS.
+hmac = "0.12"
+getrandom = "0.2"
 
 # Tabular pipeline (docs/ARCHITECTURE.md): CSV/XLSX are a first-class source with their own
 # adapters, never flattened into text chunks and never routed through document embeddings.

@@ -62,12 +62,42 @@ draft owed before real documents must carry this line: *names found in the files
 per workstation, never synchronised, never sent to the gateway, to Ollama or to Open WebUI, and never
 written to a log as text.* Diagnostics and timing lines hold ids, counts and milliseconds only.
 
+**Personal identifiers are stored as a keyed hash, never as the value (KB lot 4, owner decision of
+10 October 2026).** An identifier whose scheme is marked `personal_key` in the lexicon packs (an e-mail address,
+a social security number, an IBAN) points at one person. The knowledge base needs only to know that two documents
+carry the *same* one, so for these it stores `HMAC-SHA256(key, scheme + reduced value)` as 64 hexadecimal digits:
+that is the entity's name and the value of its `identifier:<scheme>` attribute, and its display label is the kind
+of identifier and the first six digits of the hash (`email 90cd1f`). Nothing derived from the value is written
+anywhere else in the knowledge tables: no alias, no mention, no summary, no log line. Invoice and order numbers
+(`personal_key: false`) are stored as values, as before; the bundled phone number pattern is not flagged, because
+a household shares one.
+
+The key is 32 random bytes from the operating system's random source, made the first time it is needed and kept in
+a file of its own, `knowledge-identifier.key`, in the application's local data folder **beside the index and never
+inside it**, so a copy of `index.sqlite3` does not carry it. The product sets no permission of its own on it: the
+folder is the user's own on both systems. The key is never logged (its `Debug` prints nothing), never part of a
+summary, a prompt or a message to the gateway, and survives every Reset (it is not knowledge). A fingerprint of it
+that reveals nothing usable is kept in `kb_meta`; if the file is lost or replaced the fingerprint changes, the
+documents are read again with the new key and the old hashes disappear with the entities that held them.
+
+What this protects: a copy of the index file on its own (a backup, a sync client, a support copy, a database
+browser, the management dialog of a later lot) no longer contains a ready-made list of addresses, numbers and IBANs
+in the knowledge tables, and a guess cannot be tested against it without the key. What it does **not** protect, and
+what the DPIA draft must say: (1) the `chunks` table of the same file holds the text of every analysed document,
+so a number written in a document is in the index in clear whatever the knowledge tables hold; the hash removes a
+structured list, not the text; (2) someone who holds both the index and the key file, which sit in the same user
+profile, can test guesses, and a low-entropy number (a social security number has a rigid structure) can be
+enumerated; (3) names of people and organisations stay in clear, because matching a name needs the name. The
+protection that counts is disk encryption on the workstation, which stays mandatory before a real pilot.
+
 What each reset and each lifecycle event does to it (the same transaction as the event itself, so a failure
 leaves a whole index rather than a half-erased one):
 
 | Event | Knowledge base |
 | --- | --- |
-| A document is analysed, or analysed again after it changed | Its source is recorded with its content hash, in the transaction that writes its chunks. A change replaces the automatic rows of that source; the manual rows stay |
+| A document is analysed, or analysed again after it changed | Its source is recorded with its content hash, in the transaction that writes its chunks, and the names found in those chunks are written with it (lot 4; `knowledge_mode` is not `off`). A change replaces the automatic rows of that source; the manual rows stay. If the knowledge step fails it is rolled back alone: the chunks are committed, the failure is counted in the Analyse summary, and the next Analyse reads the document for names again |
+| Documents analysed before the knowledge base existed, or while it was off | Read again from the text the index already holds, with no request to the gateway and without opening the original file, **only at the end of an Analyse the user starts** (never at launch, never in the background; owner instruction of 11 October 2026). Also when the extractor of the build is newer, when the lexicon packs or the identifier key changed, and when the list of known names grew since the document was read |
+| `knowledge_mode` set to `off` in `settings.json` | No extraction, no lookup, and no `kb_*` row written or changed by an Analyse. A document that is analysed again while it is off has its source removed (a delete): knowledge never outlives the text it described. Switching back on reads the documents again from the index |
 | A document leaves the Documents folder (start of the next Analyse) | Its source and everything learned only from it are removed; an automatic entity nothing else supports is collected |
 | Documents Reset | Every `documents` source goes, and the automatic entities nothing else supports. Manual entities, aliases and attributes stay (only their mentions in those files disappear). The Data side is untouched |
 | A workbook leaves the Data folder; Data Reset | The same, for the `data` sources. The Documents side is untouched. The typed cell cache is a cache of the file, not knowledge: clearing it removes no knowledge row |

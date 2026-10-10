@@ -35,8 +35,13 @@ empty at startup and whenever the folder changes, survives Analyse, and applies 
 conversations are not saved yet, and there is no list of them. With nothing selected, questions are answered
 without documents and say so under the answer ("Réponse sans vos documents."). The composer is disabled until a
 documents folder is chosen. Under an answer, **Sources** lists each file once with its pages. Under the Analyse
-button, the summary names any file that was renamed to a clean name, old and new. The settings panel shows the
-same listing with a **See** button on each file, which shows it selected in the file manager without opening it.
+button, the summary names any file that was renamed to a clean name, old and new. When the knowledge base took
+part (`knowledge_mode` is not `off`, KB lot 4) it also says, in counts only and never a name, how many people and
+organisations the pass found and how many were already known, how many identifiers (an e-mail address, an invoice
+number, an IBAN), how many documents analysed earlier were read again for names without asking the AI, and, first
+because it asks her to act, how many documents could not be fully analysed and are retried by the next Analyse.
+Nothing is read in the background: documents analysed before the knowledge base existed are read for names, from the text the index already holds, only when she presses Analyse. The settings panel shows the same listing with a **See** button on each file, which shows it selected in
+the file manager without opening it.
 
 The conversation remembers its recent exchanges, as many as the chosen model's context window allows; past
 excerpts are never resent. Design and budget: `docs/SELECTION-AND-MEMORY.md`.

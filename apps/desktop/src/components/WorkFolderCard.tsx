@@ -3,6 +3,7 @@ import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { errorMessage, normaliseError, type AppError } from "../lib/errors";
+import { knowledgeLines } from "../lib/knowledgeSummary";
 import {
   chooseWorkFolder,
   ensureSuggestedWorkFolder,
@@ -229,6 +230,9 @@ export function WorkFolderCard({
                 )}.`,
               ]
             : []),
+          /* What the knowledge base did with the names, counts only. The line that asks her to act
+             (a document whose names were not recorded) comes first among them. */
+          ...knowledgeLines(t, indexing.summary.knowledge),
           /* Last, and only when something is actually missing: a scan reported unreadable
              because an engine did not start is not the document's fault, and saying so is the
              difference between a five-second diagnosis and an investigation. */
@@ -401,7 +405,11 @@ export function WorkFolderCard({
         {indexing.progress === null ? null : (
           <AnalysisProgress
             fraction={analysisFraction(indexing.progress)}
-            label={t("workFolder.progressLabel")}
+            label={
+              indexing.progress.readingNames === true
+                ? t("workFolder.progressNamesLabel")
+                : t("workFolder.progressLabel")
+            }
           />
         )}
       </div>

@@ -17,7 +17,8 @@ use std::path::{Path, PathBuf};
 
 use assistant_cabinet_ai_lib::error::AppError;
 use assistant_cabinet_ai_lib::knowledge::packs::{
-    available_pack_ids, bundled_packs, IdentifierStrength, PackSet, BASE_PACK_ID,
+    available_pack_ids, bundled_packs, canonical_pack_id, is_domain_country_id, IdentifierStrength,
+    PackSet, BASE_PACK_ID,
 };
 use assistant_cabinet_ai_lib::knowledge::RoleId;
 use serde_json::Value;
@@ -54,7 +55,7 @@ fn locales() -> Vec<&'static str> {
 #[test]
 fn every_pack_loads_in_every_locale_alone_and_together() {
     let all = available_pack_ids();
-    assert_eq!(all, ["accounting", "health", "legal"]);
+    assert_eq!(all, ["accounting-fr", "health-ch", "health-fr", "legal-fr"]);
     for locale in locales() {
         PackSet::load(locale, &[]).unwrap_or_else(|error| panic!("base {locale}: {error:?}"));
         for id in &all {
@@ -361,8 +362,8 @@ fn a_domain_pack_only_adds_and_never_changes_a_type() {
 fn a_domain_label_replaces_the_base_one_only_while_its_pack_is_active() {
     let client = RoleId::new("client").unwrap();
     let base = PackSet::load("fr-FR", &[]).unwrap();
-    let health = PackSet::load("fr-FR", &["health"]).unwrap();
-    let legal = PackSet::load("fr-FR", &["legal"]).unwrap();
+    let health = PackSet::load("fr-FR", &["health-fr"]).unwrap();
+    let legal = PackSet::load("fr-FR", &["legal-fr"]).unwrap();
     assert_eq!(base.role_label_key(&client), Some("knowledge.roles.client"));
     assert_eq!(
         health.role_label_key(&client),
@@ -468,31 +469,66 @@ fn samples() -> Vec<(
         ),
         (
             "fr-FR",
-            "health",
+            "health-fr",
             "nir",
             "NIR 1 85 03 69 123 456 78",
             "185036912345678",
         ),
         (
             "fr-FR",
-            "legal",
+            "legal-fr",
             "case_number",
             "dossier RG 24/01234 audience",
             "RG2401234",
         ),
         (
             "fr-FR",
-            "accounting",
+            "accounting-fr",
             "siret",
             "SIRET 123 456 789 00012",
             "12345678900012",
         ),
         (
             "fr-FR",
-            "accounting",
+            "accounting-fr",
             "vat_number",
             "TVA FR 12 345678901",
             "FR12345678901",
+        ),
+        (
+            "fr-FR",
+            "health-ch",
+            "avs",
+            "Numero AVS 756.1234.5678.97 de la patiente",
+            "7561234567897",
+        ),
+        (
+            "fr-FR",
+            "health-ch",
+            "avs",
+            "AVS 756 1234 5678 97",
+            "7561234567897",
+        ),
+        (
+            "fr-FR",
+            "health-ch",
+            "ch_iban",
+            "IBAN CH93 0076 2011 6238 5295 7",
+            "CH9300762011623852957",
+        ),
+        (
+            "fr-FR",
+            "health-ch",
+            "ch_phone",
+            "appeler le 021 123 45 67 ou le +41 79 123 45 67",
+            "0211234567",
+        ),
+        (
+            "en-US",
+            "health-ch",
+            "avs",
+            "AHV number 756.1234.5678.97 on file",
+            "7561234567897",
         ),
         (
             "en-US",
@@ -510,19 +546,25 @@ fn samples() -> Vec<(
         ),
         (
             "en-US",
-            "health",
+            "health-fr",
             "ssn",
             "ssn 123-45-6789 on file",
             "123456789",
         ),
         (
             "en-US",
-            "legal",
+            "legal-fr",
             "case_number",
             "see 24-cv-01234",
             "24CV01234",
         ),
-        ("en-US", "accounting", "ein", "EIN 12-3456789", "123456789"),
+        (
+            "en-US",
+            "accounting-fr",
+            "ein",
+            "EIN 12-3456789",
+            "123456789",
+        ),
     ]
 }
 
@@ -552,11 +594,113 @@ fn every_scheme_finds_an_invented_sample_and_reduces_it() {
 fn a_social_security_number_split_by_a_line_break_is_still_one_number() {
     // Defect KBD-05: a figure broken across two lines must be read whole. The pattern uses \s, which
     // spans a newline.
-    let packs = PackSet::load("fr-FR", &["health"]).unwrap();
+    let packs = PackSet::load("fr-FR", &["health-fr"]).unwrap();
     let nir = packs.identifier_scheme("nir").unwrap();
     let found = nir.scan("NIR 1 85 03 69\n123 456 78 ouvert");
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].normalized, "185036912345678");
+}
+
+#[test]
+fn every_optional_pack_is_named_domain_dash_country() {
+    // The owner's rule of 11 October 2026: modules never mix countries. A new country is a new
+    // pack (`health-eu`, `legal-ch`...), and its name says which.
+    for id in available_pack_ids() {
+        assert!(is_domain_country_id(id), "{id} is not <domain>-<country>");
+    }
+    assert!(!is_domain_country_id("health"));
+    assert!(!is_domain_country_id("health-xx"));
+    assert_eq!(canonical_pack_id("health"), "health-fr");
+    assert_eq!(canonical_pack_id("legal"), "legal-fr");
+    assert_eq!(canonical_pack_id("accounting"), "accounting-fr");
+    assert_eq!(canonical_pack_id("health-ch"), "health-ch");
+    assert_eq!(canonical_pack_id("nonsense"), "nonsense");
+}
+
+#[test]
+fn each_health_module_is_complete_alone_and_both_can_be_on_together() {
+    for locale in locales() {
+        let france = PackSet::load(locale, &["health-fr"]).unwrap();
+        let switzerland = PackSet::load(locale, &["health-ch"]).unwrap();
+        let both = PackSet::load(locale, &["health-fr", "health-ch"]).unwrap();
+        let ids = |set: &PackSet| -> BTreeSet<String> {
+            set.identifier_schemes()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect()
+        };
+        // Each country brings its own number and not the other's...
+        assert!(ids(&switzerland).contains("avs"), "{locale}");
+        assert!(!ids(&france).contains("avs"), "{locale}");
+        assert!(
+            !ids(&switzerland).contains("nir") && !ids(&switzerland).contains("ssn"),
+            "{locale}"
+        );
+        // ...each is usable alone...
+        for (name, set) in [("health-fr", &france), ("health-ch", &switzerland)] {
+            assert!(set.column_rule_for("patient").is_some(), "{locale} {name}");
+            assert!(set.roles().count() >= 2, "{locale} {name}");
+        }
+        // ...and both together read both numbers, as for a cross-border worker.
+        let together = ids(&both);
+        assert!(together.contains("avs"), "{locale}");
+        assert!(
+            together.contains("nir") || together.contains("ssn"),
+            "{locale}"
+        );
+    }
+}
+
+#[test]
+fn the_type_vocabulary_of_every_pack_is_read_whatever_modules_are_on() {
+    // A module never excludes or transforms an entity type (owner, 11 October 2026): the words that
+    // make an organisation an organisation come from every shipped pack, active or not.
+    let prefixes = |set: &PackSet| -> Vec<String> {
+        set.org_markers()
+            .prefix
+            .iter()
+            .map(|words| words.join(" "))
+            .collect()
+    };
+    for active in [
+        vec![],
+        vec!["health-ch"],
+        vec!["health-fr"],
+        vec!["legal-fr"],
+    ] {
+        let set = PackSet::load_with_type_vocabulary("fr-FR", &active).unwrap();
+        assert!(prefixes(&set).contains(&"cpam".to_string()), "{active:?}");
+        assert!(
+            prefixes(&set).contains(&"caisse maladie".to_string()),
+            "{active:?}"
+        );
+        // What only a module reads is still switched by it.
+        let schemes: Vec<_> = set
+            .identifier_schemes()
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect();
+        assert_eq!(
+            schemes.contains(&"nir"),
+            active.contains(&"health-fr"),
+            "{active:?}"
+        );
+        assert_eq!(
+            schemes.contains(&"avs"),
+            active.contains(&"health-ch"),
+            "{active:?}"
+        );
+        assert!(
+            set.loaded()
+                .iter()
+                .all(|(id, _)| id == "base" || active.contains(&id.as_str())),
+            "an inactive pack is not listed as loaded: {:?}",
+            set.loaded()
+        );
+    }
+    // The plain loader stays exactly what was asked for.
+    let plain = PackSet::load("fr-FR", &["health-ch"]).unwrap();
+    assert!(!prefixes(&plain).contains(&"cpam".to_string()));
 }
 
 #[test]

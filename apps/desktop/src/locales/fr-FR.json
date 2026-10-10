@@ -132,6 +132,23 @@
     "excerptMany": "extraits",
     "dataFolder": "Dossier des données"
   },
+  "analysis": {
+    "knowledge": {
+      "namesSummary": "{detected}, dont {known}.",
+      "detectedOne": "personne ou organisation repérée",
+      "detectedMany": "personnes et organisations repérées",
+      "knownOne": "déjà connue",
+      "knownMany": "déjà connues",
+      "identifiersOne": "identifiant repéré (adresse e-mail, numéro de facture, IBAN...)",
+      "identifiersMany": "identifiants repérés (adresses e-mail, numéros de facture, IBAN...)",
+      "refreshedOne": "document déjà analysé relu pour y repérer les noms, sans solliciter l'IA",
+      "refreshedMany": "documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA",
+      "truncatedOne": "document contient plus de noms que la base n'en retient : seuls les plus sûrs sont conservés",
+      "truncatedMany": "documents contiennent plus de noms que la base n'en retient : seuls les plus sûrs sont conservés",
+      "errorsOne": "document n'a pas pu être entièrement analysé (ses noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
+      "errorsMany": "documents n'ont pas pu être entièrement analysés (leurs noms n'ont pas été repérés) : relancez l'analyse pour réessayer"
+    }
+  },
   "workFolder": {
     "title": "Dossier des documents",
     "descriptionFull": "Le dossier des textes PDF, DOCX, même JPEG... Choisissez un dossier dédié, pas la totalité de vos documents, et jamais un dossier recopié vers un service en ligne.",
@@ -142,6 +159,7 @@
     "choose": "Choisir un dossier...",
     "change": "Changer",
     "changeHint": "Changer de dossier",
+    "progressNamesLabel": "Lecture des noms dans les documents déjà analysés",
     "progressLabel": "Analyse en cours",
     "analysedOne": "analysé",
     "analysedMany": "analysés",
@@ -286,6 +304,19 @@
     "idleTimeoutUnit": "secondes",
     "generatedFolderLabel": "Dossier des courriers générés",
     "generatedFolderDescription": "Le sous-dossier de votre dossier de documents où sont écrits les courriers générés à partir d'un modèle et d'un tableur. Le nom est simplifié : lettres sans accent, chiffres, tirets.",
+    "knowledgeModeLabel": "Base de connaissances",
+    "knowledgeModeDescription": "À chaque analyse, repère les noms de personnes et d'organisations de vos documents pour les retrouver plus vite. Tout reste sur cet ordinateur. Pris en compte à la prochaine analyse que vous lancez.",
+    "knowledgeMode": {
+      "suggest": "Activée",
+      "off": "Désactivée",
+      "auto": "Automatique (identique à « Activée » pour l'instant)"
+    },
+    "healthModuleLabel": "Module santé",
+    "healthModuleDescription": "Cochez le ou les pays de vos patients : un frontalier peut avoir un numéro de sécurité sociale français et un numéro AVS. Un module aide à mieux lire les numéros et le vocabulaire de son pays, sans jamais retirer ni changer le type d'un nom. Pris en compte à la prochaine analyse que vous lancez.",
+    "healthModule": {
+      "france": "Santé : France",
+      "switzerland": "Santé : Suisse"
+    },
     "advancedLabel": "Avancé",
     "timingLogLabel": "Noter les durées dans un journal",
     "timingLogDescription": "Écrit, sur cet ordinateur seulement, combien de temps prend chaque question et chaque analyse : des durées et des nombres, jamais votre question, un nom de fichier ou un extrait. Désactivé par défaut ; à activer pour une mesure.",

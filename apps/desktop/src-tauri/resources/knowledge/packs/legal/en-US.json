@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "id": "legal",
+  "locale": "en-US",
+  "titles": {
+    "person": [
+      "Judge",
+      "Counsel",
+      "Clerk",
+      "Bailiff"
+    ]
+  },
+  "weak_titles": [],
+  "particles": [],
+  "title_spoken": {},
+  "stop_words": [
+    "summons",
+    "judgment",
+    "hearing",
+    "motion",
+    "pleading",
+    "proceeding",
+    "mandate",
+    "protocol",
+    "deed"
+  ],
+  "org_markers": {
+    "prefix": [
+      "law office",
+      "court",
+      "registry",
+      "bar",
+      "chambers"
+    ],
+    "suffix": []
+  },
+  "identifier_schemes": [
+    {
+      "id": "case_number",
+      "kind": "case",
+      "regex": "\\b\\d{2}-(?:cv|cr)-\\d{3,6}\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": false
+    }
+  ],
+  "columns": [
+    {
+      "headers": [
+        "lawyer",
+        "attorney",
+        "counsel",
+        "solicitor"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "provider"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "opposing party",
+        "opponent",
+        "defendant"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "counterparty"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "case",
+        "matter",
+        "case number",
+        "file number"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "case"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "court",
+        "jurisdiction"
+      ],
+      "semantic": {
+        "type": "organization",
+        "subtype": "court"
+      },
+      "confidence": 0.85
+    }
+  ],
+  "relations": [
+    {
+      "from_role": "client",
+      "to_role": "counterparty",
+      "predicate": "opposed_to"
+    }
+  ],
+  "roles": [
+    {
+      "id": "provider",
+      "label_key": "knowledge.roles.legal.provider"
+    },
+    {
+      "id": "counterparty",
+      "label_key": "knowledge.roles.legal.counterparty"
+    }
+  ],
+  "detection_terms": [
+    "case",
+    "matter",
+    "summons",
+    "judgment",
+    "hearing",
+    "motion",
+    "pleading",
+    "lawyer",
+    "court",
+    "opposing party",
+    "demand letter",
+    "contract",
+    "registry",
+    "bailiff"
+  ]
+}

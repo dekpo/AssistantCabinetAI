@@ -176,6 +176,38 @@ is always the engine's full-pass arithmetic; the model only ever widened which q
 certainty. Keeping it as a field rather than as wording means the interface can mark an OCR-sourced
 citation, and the confidence that came with it can gate what enters the index in the first place.
 
+## The knowledge layer and its ports
+
+The client keeps a local, source-grounded directory of the entities (people, organisations, places,
+identifiers, items, terms) found in the files the user has analysed: `apps/desktop/src-tauri/src/knowledge/`,
+persisted in the `kb_*` tables of the same `index.sqlite3`. It is candidate discovery inside the user's own
+selection and a shared vocabulary; it is never an authority over a number and never a memory of
+conversations (`docs/DECISIONS.md`, "Knowledge Base and the product direction"). Three seams are replaceable and
+business code imports no engine behind them:
+
+```text
+EntityExtractor   a source -> Candidate names (a name as written, type, role, method, locator)
+                  deterministic text extractor (lot 4), table extractor (lot 5); a local NER model or a
+                  spaCy adapter would implement the same trait and sit beside them in a CompositeExtractor
+EntityResolver    a name -> NewEntity | Existing | PossibleMatch | Ambiguous | Unresolved
+                  DeterministicResolver today; it reads the store only through EntityLookup, so it is
+                  tested against an in-memory fake and runs against StoreLookup
+PhoneticEncoder   a word -> a key, chosen by locale (fr-rules, en-rules); calibrated on public name lists
+```
+
+What the words are comes from **lexicon packs**, JSON files bundled with the application
+(`resources/knowledge/base` always, `resources/knowledge/packs/<id>` when active), loaded and validated by
+`knowledge::packs`. They hold titles, particles, stop-words, organisation markers, identifier patterns, header
+vocabulary and role label keys - words and patterns, never a sentence a person reads - and a domain pack only
+adds to the neutral base. The schema and the Rust code stay profession-neutral; a profession appears only as a
+pack. `knowledge::resolve` decides, `knowledge::gazetteer` finds known names in a text, `knowledge::maintenance`
+brings stored phonetic keys and the packs fingerprint up to date when the code that derived them changed.
+
+The extractor reads and forgets: a candidate carries a name, a locator and a count, never a passage. The
+resolver never writes. Whatever creates a row does so in the transaction that stores the document's chunks
+(`IndexStore::replace_document_with_knowledge`), and a knowledge step that fails never stops the document from
+being indexed. See `docs/DECISIONS.md`, "Settled by KB lot 1", "Settled by KB lot 3".
+
 ## Deterministic before generative
 
 For anything the workstation can retrieve or compute locally, deterministic computation comes first.

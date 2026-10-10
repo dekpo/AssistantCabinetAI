@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "id": "health",
+  "locale": "fr-FR",
+  "titles": {
+    "person": [
+      "Infirmier",
+      "Infirmière",
+      "Sage-femme"
+    ]
+  },
+  "weak_titles": [],
+  "particles": [],
+  "title_spoken": {},
+  "stop_words": [
+    "ordonnance",
+    "consultation",
+    "arrêt",
+    "maladie",
+    "médical",
+    "bilan",
+    "analyse",
+    "résultat",
+    "radio",
+    "échographie",
+    "soins",
+    "ordo"
+  ],
+  "org_markers": {
+    "prefix": [
+      "clinique",
+      "hôpital",
+      "centre hospitalier",
+      "laboratoire",
+      "pharmacie",
+      "ehpad",
+      "maison de santé",
+      "cabinet médical",
+      "cpam"
+    ],
+    "suffix": []
+  },
+  "identifier_schemes": [
+    {
+      "id": "nir",
+      "kind": "social_security",
+      "regex": "\\b[12]\\s?\\d{2}\\s?\\d{2}\\s?(?:\\d{2}|2[AB])\\s?\\d{3}\\s?\\d{3}(?:\\s?\\d{2})?\\b",
+      "normalise": "digits",
+      "strength": "exact",
+      "personal_key": true
+    }
+  ],
+  "columns": [
+    {
+      "headers": [
+        "patient",
+        "patiente",
+        "nom du patient"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "client"
+      },
+      "confidence": 0.9
+    },
+    {
+      "headers": [
+        "médecin traitant",
+        "médecin",
+        "praticien",
+        "confrère",
+        "correspondant",
+        "docteur"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "provider"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "médicament",
+        "traitement",
+        "molécule",
+        "spécialité"
+      ],
+      "semantic": {
+        "type": "item",
+        "subtype": "medication"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "mutuelle",
+        "assurance complémentaire",
+        "caisse"
+      ],
+      "semantic": {
+        "type": "organization",
+        "subtype": "insurer"
+      },
+      "confidence": 0.8
+    }
+  ],
+  "relations": [],
+  "roles": [
+    {
+      "id": "client",
+      "label_key": "knowledge.roles.health.client"
+    },
+    {
+      "id": "provider",
+      "label_key": "knowledge.roles.health.provider"
+    }
+  ],
+  "detection_terms": [
+    "patient",
+    "ordonnance",
+    "consultation",
+    "médicament",
+    "traitement",
+    "diagnostic",
+    "médecin",
+    "prescription",
+    "posologie",
+    "arrêt de travail",
+    "carte vitale",
+    "antécédents",
+    "examen",
+    "symptôme",
+    "vaccin"
+  ]
+}

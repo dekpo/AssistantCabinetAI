@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "id": "legal",
+  "locale": "fr-FR",
+  "titles": {
+    "person": [
+      "Juge",
+      "Procureur",
+      "Greffier",
+      "Huissier"
+    ]
+  },
+  "weak_titles": [],
+  "particles": [],
+  "title_spoken": {},
+  "stop_words": [
+    "assignation",
+    "jugement",
+    "audience",
+    "conclusions",
+    "requête",
+    "procédure",
+    "mandat",
+    "protocole",
+    "acte"
+  ],
+  "org_markers": {
+    "prefix": [
+      "étude",
+      "tribunal",
+      "cour",
+      "greffe",
+      "cabinet d'avocats",
+      "barreau"
+    ],
+    "suffix": []
+  },
+  "identifier_schemes": [
+    {
+      "id": "case_number",
+      "kind": "case",
+      "regex": "\\bRG\\s?\\d{2}/\\d{3,6}\\b",
+      "normalise": "alnum",
+      "strength": "exact",
+      "personal_key": false
+    }
+  ],
+  "columns": [
+    {
+      "headers": [
+        "avocat",
+        "avocate",
+        "conseil",
+        "maître"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "provider"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "partie adverse",
+        "adversaire",
+        "défendeur"
+      ],
+      "semantic": {
+        "type": "person",
+        "role": "counterparty"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "dossier",
+        "affaire",
+        "numéro de dossier",
+        "n° dossier"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "case"
+      },
+      "confidence": 0.85
+    },
+    {
+      "headers": [
+        "juridiction",
+        "tribunal"
+      ],
+      "semantic": {
+        "type": "organization",
+        "subtype": "court"
+      },
+      "confidence": 0.85
+    }
+  ],
+  "relations": [
+    {
+      "from_role": "client",
+      "to_role": "counterparty",
+      "predicate": "opposed_to"
+    }
+  ],
+  "roles": [
+    {
+      "id": "provider",
+      "label_key": "knowledge.roles.legal.provider"
+    },
+    {
+      "id": "counterparty",
+      "label_key": "knowledge.roles.legal.counterparty"
+    }
+  ],
+  "detection_terms": [
+    "dossier",
+    "affaire",
+    "assignation",
+    "jugement",
+    "audience",
+    "conclusions",
+    "requête",
+    "procédure",
+    "avocat",
+    "tribunal",
+    "partie adverse",
+    "mise en demeure",
+    "contrat",
+    "greffe",
+    "huissier"
+  ]
+}

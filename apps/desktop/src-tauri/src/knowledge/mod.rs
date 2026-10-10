@@ -9,8 +9,13 @@
 //! is an interface catalogue entry (`docs/SESSION-KB-00-master.md`, I9 and I10).
 
 pub mod diagnostics;
+pub mod extract;
+pub mod gazetteer;
+pub mod maintenance;
 pub mod normalize;
+pub mod packs;
 pub mod phonetic;
+pub mod resolve;
 pub mod store;
 
 /// What the extractor of the current build knows how to read. A source whose `kb_version` is lower
@@ -131,6 +136,13 @@ pub enum AliasKind {
 }
 
 impl AliasKind {
+    /// An alias that several people can carry: a surname alone, or a title and a surname. The
+    /// resolver never reads one of them as "this person" without checking how many people in the
+    /// selection (or in the source) answer to it.
+    pub fn is_ambiguous_by_nature(self) -> bool {
+        matches!(self, Self::PartialSurname | Self::TitleForm)
+    }
+
     pub fn as_code(self) -> &'static str {
         match self {
             Self::CanonicalVariant => "canonical_variant",
@@ -413,5 +425,200 @@ pub struct IntegrityReport {
 impl IntegrityReport {
     pub fn is_clean(&self) -> bool {
         *self == Self::default()
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Vocabulary shared by the ports (extractor, resolver) and the lexicon packs
+// ---------------------------------------------------------------------------------------------
+
+/// A machine id of the shape `[a-z][a-z0-9_]*`: what a type, a role, a subtype or a predicate is
+/// called in packs, in the store and in code. Never shown to the user (the interface resolves a
+/// label key).
+fn is_machine_id(code: &str) -> bool {
+    let mut characters = code.chars();
+    characters.next().is_some_and(|c| c.is_ascii_lowercase())
+        && characters.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// The type of an entity. The six built-in ones are fixed by the master plan (D1) and seeded in
+/// `kb_entity_types`; a role is an attribute, never a type. A type is an id, not an enum, so a
+/// future domain does not need a code change in the store.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EntityTypeId(String);
+
+impl EntityTypeId {
+    pub const PERSON: &'static str = "person";
+    pub const ORGANIZATION: &'static str = "organization";
+    pub const LOCATION: &'static str = "location";
+    pub const IDENTIFIER: &'static str = "identifier";
+    pub const ITEM: &'static str = "item";
+    pub const TERM: &'static str = "term";
+
+    /// The built-in types, in the order the store seeds them.
+    pub const BUILTIN: [&'static str; 6] = [
+        Self::PERSON,
+        Self::ORGANIZATION,
+        Self::LOCATION,
+        Self::IDENTIFIER,
+        Self::ITEM,
+        Self::TERM,
+    ];
+
+    /// `None` when `code` is not a machine id.
+    pub fn new(code: &str) -> Option<Self> {
+        is_machine_id(code).then(|| Self(code.to_string()))
+    }
+
+    pub fn person() -> Self {
+        Self(Self::PERSON.to_string())
+    }
+
+    pub fn organization() -> Self {
+        Self(Self::ORGANIZATION.to_string())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        Self::BUILTIN.contains(&self.0.as_str())
+    }
+}
+
+/// The part an entity plays in a file (`client`, `provider`, `counterparty`, `sender`,
+/// `recipient`, `author`, `supplier`, ...). An open vocabulary of neutral ids (D2): the label a
+/// profession shows for one comes from its lexicon pack, never from a Rust enum.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RoleId(String);
+
+impl RoleId {
+    /// `None` when `code` is not a machine id.
+    pub fn new(code: &str) -> Option<Self> {
+        is_machine_id(code).then(|| Self(code.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// How sure a piece of knowledge is, between 0 and 1. Clamped on the way in, so a stored or
+/// computed value can never fall outside the range the thresholds are written for; `NaN` is 0.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Confidence(f32);
+
+impl Confidence {
+    pub const NONE: Self = Self(0.0);
+    pub const CERTAIN: Self = Self(1.0);
+
+    pub fn new(value: f32) -> Self {
+        if value.is_nan() {
+            Self(0.0)
+        } else {
+            Self(value.clamp(0.0, 1.0))
+        }
+    }
+
+    pub fn value(self) -> f32 {
+        self.0
+    }
+
+    /// The lower of two.
+    pub fn min(self, other: Self) -> Self {
+        if other.0 < self.0 {
+            other
+        } else {
+            self
+        }
+    }
+}
+
+/// How an extractor found a mention. The code is what `kb_mentions.method` stores, so it never
+/// changes once released; the confidence is the initial value of `docs/SESSION-KB-00-master.md`
+/// section 7, tuned in lot 11 and kept in one place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Method {
+    /// A pattern of the pack's identifier schemes (an e-mail address, an invoice number).
+    Identifier,
+    /// A cell of a column the semantic layer classified, matched exactly.
+    ColumnValue,
+    /// A name from the in-memory list of names the knowledge base already holds.
+    GazetteerHit,
+    /// A title followed by a full name ("Dr Jean Dupont").
+    TitleFullName,
+    /// A title followed by a surname alone ("Dr Dupont").
+    TitleSurname,
+    /// A name with an organisation marker ("Dupont SARL", "Association Dupont").
+    OrganizationMarker,
+    /// A word of a sanitised file name that reads like a name.
+    FilenameToken,
+    /// A capitalised word run with no support at all.
+    CapitalisedName,
+    /// Typed by the user.
+    Manual,
+}
+
+impl Method {
+    pub fn as_code(self) -> &'static str {
+        match self {
+            Self::Identifier => "identifier",
+            Self::ColumnValue => "column_value",
+            Self::GazetteerHit => "gazetteer_hit",
+            Self::TitleFullName => "title_full_name",
+            Self::TitleSurname => "title_surname",
+            Self::OrganizationMarker => "organization_marker",
+            Self::FilenameToken => "filename_token",
+            Self::CapitalisedName => "capitalised_name",
+            Self::Manual => "manual",
+        }
+    }
+
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "identifier" => Some(Self::Identifier),
+            "column_value" => Some(Self::ColumnValue),
+            "gazetteer_hit" => Some(Self::GazetteerHit),
+            "title_full_name" => Some(Self::TitleFullName),
+            "title_surname" => Some(Self::TitleSurname),
+            "organization_marker" => Some(Self::OrganizationMarker),
+            "filename_token" => Some(Self::FilenameToken),
+            "capitalised_name" => Some(Self::CapitalisedName),
+            "manual" => Some(Self::Manual),
+            _ => None,
+        }
+    }
+
+    /// Identifier 1.00, column value 0.95, gazetteer hit 0.90, organisation marker 0.80, title and
+    /// surname 0.70, filename token 0.50, untitled capitalised name 0.40 (master section 7). A
+    /// title with a full name sits between the gazetteer hit and the organisation marker.
+    pub fn default_confidence(self) -> Confidence {
+        Confidence::new(match self {
+            Self::Identifier | Self::Manual => 1.0,
+            Self::ColumnValue => 0.95,
+            Self::GazetteerHit => 0.90,
+            Self::TitleFullName => 0.85,
+            Self::OrganizationMarker => 0.80,
+            Self::TitleSurname => 0.70,
+            Self::FilenameToken => 0.50,
+            Self::CapitalisedName => 0.40,
+        })
+    }
+
+    /// Whether a name found this way is backed by something besides its own capital letter, so
+    /// that a new entity created from it starts `Active` (master section 6, rule 5). A surname
+    /// alone, a file-name word and an untitled capitalised run stay candidates until a second
+    /// source or a column confirms them.
+    pub fn is_supported(self) -> bool {
+        matches!(
+            self,
+            Self::Identifier
+                | Self::ColumnValue
+                | Self::GazetteerHit
+                | Self::TitleFullName
+                | Self::OrganizationMarker
+                | Self::Manual
+        )
     }
 }

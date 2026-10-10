@@ -192,6 +192,12 @@ pub enum AppError {
     /// cycle, an entity that is already merged. Nothing was changed.
     #[error("knowledge_merge_refused")]
     KnowledgeMergeRefused,
+
+    /// A lexicon pack bundled with the application does not validate. `pack` is its id and `path`
+    /// the place in the file (a JSON path, or a line and column for a syntax error). Both are
+    /// ours, never document text. The knowledge base stays inactive; nothing else is affected.
+    #[error("knowledge_pack_invalid")]
+    KnowledgePackInvalid { pack: String, path: String },
 }
 
 impl AppError {
@@ -242,6 +248,7 @@ impl AppError {
             Self::KnowledgeUnavailable => "knowledge_unavailable",
             Self::KnowledgeEntityNotFound => "knowledge_entity_not_found",
             Self::KnowledgeMergeRefused => "knowledge_merge_refused",
+            Self::KnowledgePackInvalid { .. } => "knowledge_pack_invalid",
         }
     }
 
@@ -271,6 +278,7 @@ impl AppError {
             | Self::KnowledgeEntityNotFound
             | Self::KnowledgeMergeRefused
             | Self::OcrUnavailable => json!({}),
+            Self::KnowledgePackInvalid { pack, path } => json!({ "pack": pack, "path": path }),
             Self::FillTemplateUnreadable { path } => json!({ "path": path }),
             Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {

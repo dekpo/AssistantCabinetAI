@@ -22,6 +22,7 @@ pub mod query_plan;
 pub mod structural;
 pub mod xlsx_adapter;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -91,6 +92,12 @@ pub struct Workbook {
     pub sheets: Vec<SheetData>,
 }
 
+/// For each sheet, the row of the source file every entry of `SheetData::rows` came from, counted
+/// from 1 the way the spreadsheet program counts them: a sheet whose first used cell is on row 3
+/// starts at 3, and a CSV file with a blank line skips its number. The engine never reads this; the
+/// knowledge base uses it to say "row 11" and mean what she sees when she opens the file.
+pub type SourceRows = BTreeMap<String, Vec<u32>>;
+
 /// The adapter boundary between a file on disk and a `Workbook`. A CSV adapter and an XLSX
 /// adapter both implement this and nothing else in the application talks to `csv` or `calamine`
 /// directly.
@@ -115,6 +122,28 @@ pub fn build_inventory(
     relative_path: &str,
     locale: &str,
 ) -> Result<inventory::TabularInventory, TabularError> {
+    build_inventory_with_workbook(path, relative_path, locale).map(|(inventory, _)| inventory)
+}
+
+/// [`build_inventory`], keeping the parsed `Workbook` instead of dropping it: what the Data pass
+/// hands to the knowledge extractor so that a workbook is read from disk once. The inventory is
+/// exactly the one `build_inventory` returns.
+pub fn build_inventory_with_workbook(
+    path: &Path,
+    relative_path: &str,
+    locale: &str,
+) -> Result<(inventory::TabularInventory, Workbook), TabularError> {
+    build_inventory_with_source_rows(path, relative_path, locale)
+        .map(|(inventory, workbook, _)| (inventory, workbook))
+}
+
+/// [`build_inventory_with_workbook`], and for each sheet the row of the file every row came from
+/// ([`SourceRows`]). One read of the file.
+pub fn build_inventory_with_source_rows(
+    path: &Path,
+    relative_path: &str,
+    locale: &str,
+) -> Result<(inventory::TabularInventory, Workbook, SourceRows), TabularError> {
     let bytes = std::fs::read(path).map_err(|_| TabularError::ReadFailed)?;
     let workbook_id = hash_bytes(&bytes);
     let extension = path
@@ -122,25 +151,21 @@ pub fn build_inventory(
         .map(|ext| ext.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    let (format, workbook) = match extension.as_str() {
-        "csv" => (
-            inventory::TabularFormat::Csv,
-            csv_adapter::CsvDataSource.open(path)?,
-        ),
-        "xls" | "xlsx" | "xlsm" => (
-            inventory::TabularFormat::Xlsx,
-            xlsx_adapter::XlsxDataSource.open(path)?,
-        ),
+    let (format, workbook, source_rows) = match extension.as_str() {
+        "csv" => {
+            let (workbook, rows) = csv_adapter::CsvDataSource.open_with_source_rows(path)?;
+            (inventory::TabularFormat::Csv, workbook, rows)
+        }
+        "xls" | "xlsx" | "xlsm" => {
+            let (workbook, rows) = xlsx_adapter::XlsxDataSource.open_with_source_rows(path)?;
+            (inventory::TabularFormat::Xlsx, workbook, rows)
+        }
         _ => return Err(TabularError::UnsupportedExtension),
     };
 
-    Ok(inventory::TabularInventory::build(
-        relative_path,
-        &workbook_id,
-        format,
-        &workbook,
-        locale,
-    ))
+    let inventory =
+        inventory::TabularInventory::build(relative_path, &workbook_id, format, &workbook, locale);
+    Ok((inventory, workbook, source_rows))
 }
 
 /// Re-read a workbook and confirm it still hashes to `expected_workbook_id` before handing back

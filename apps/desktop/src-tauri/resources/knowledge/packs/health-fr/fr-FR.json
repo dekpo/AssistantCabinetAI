@@ -102,6 +102,21 @@
         "subtype": "insurer"
       },
       "confidence": 0.8
+    },
+    {
+      "headers": [
+        "nir",
+        "numéro de sécurité sociale",
+        "n° sécurité sociale",
+        "sécurité sociale",
+        "numéro de sécu",
+        "n° sécu"
+      ],
+      "semantic": {
+        "type": "identifier",
+        "subtype": "health_insurance_number"
+      },
+      "confidence": 0.95
     }
   ],
   "relations": [],

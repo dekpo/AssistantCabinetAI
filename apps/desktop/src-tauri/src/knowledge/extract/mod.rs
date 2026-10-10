@@ -20,6 +20,7 @@ use super::packs::PackSet;
 use super::phonetic::PhoneticEncoder;
 use super::{Confidence, EntityTypeId, MentionLocator, Method, RoleId, SignalDraft, SourceRef};
 
+pub mod table;
 pub mod text;
 
 /// One chunk of a document, as the index stores it.
@@ -52,17 +53,49 @@ pub struct DocumentInput {
     pub chunks: Vec<ChunkInput>,
 }
 
+/// What the workbook inventory decided a column holds. A numeric or a date column is never a column
+/// of names (an identifier column declared by its header is the one exception).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnKind {
+    Text,
+    Numeric,
+    Date,
+}
+
 /// One column of a sheet: its header as written and its cells as text, row by row (the first value
-/// is the first data row). Lot 5 may widen this with the typed cells; the port only needs text.
+/// is the first data row; an empty cell is an empty string, so a value's position is its row). A
+/// formula cell is an empty string too and is counted in `formula_cells`: what a formula computed
+/// is a claim the file makes, never a name to remember.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnInput {
     pub header: String,
     pub values: Vec<String>,
+    pub kind: ColumnKind,
+    pub formula_cells: usize,
+}
+
+impl ColumnInput {
+    /// A column of plain text cells.
+    pub fn text(header: &str, values: &[&str]) -> Self {
+        Self {
+            header: header.to_string(),
+            values: values.iter().map(|value| value.to_string()).collect(),
+            kind: ColumnKind::Text,
+            formula_cells: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SheetInput {
     pub name: String,
+    /// The sheet has a header row. Without one the column names are made up (`column_3`) and say
+    /// nothing, so no column is classified.
+    pub has_header: bool,
+    /// The row of the file each data row came from, counted as the spreadsheet program counts them
+    /// (a title row above the header shifts them). Empty when unknown: a row is then numbered from 1
+    /// among the data rows.
+    pub row_numbers: Vec<u32>,
     pub columns: Vec<ColumnInput>,
 }
 
@@ -155,6 +188,8 @@ pub struct CandidateRelation {
     pub predicate: String,
     pub object: usize,
     pub confidence: Confidence,
+    /// How many rows state this pair.
+    pub occurrence_count: u32,
 }
 
 /// Everything an extractor found in one source.
@@ -577,6 +612,7 @@ mod tests {
                 predicate: "served_by".to_string(),
                 object: 1,
                 confidence: Confidence::new(0.9),
+                occurrence_count: 1,
             }],
             signals: Vec::new(),
             truncated: false,
@@ -590,6 +626,7 @@ mod tests {
                     predicate: "served_by".to_string(),
                     object: 1,
                     confidence: Confidence::new(0.9),
+                    occurrence_count: 1,
                 },
                 // A relation whose two ends merged into one candidate disappears.
                 CandidateRelation {
@@ -597,6 +634,7 @@ mod tests {
                     predicate: "same".to_string(),
                     object: 0,
                     confidence: Confidence::new(0.9),
+                    occurrence_count: 1,
                 },
                 // A relation that points outside the candidates is dropped, not trusted.
                 CandidateRelation {
@@ -604,6 +642,7 @@ mod tests {
                     predicate: "broken".to_string(),
                     object: 9,
                     confidence: Confidence::new(0.9),
+                    occurrence_count: 1,
                 },
             ],
             signals: Vec::new(),

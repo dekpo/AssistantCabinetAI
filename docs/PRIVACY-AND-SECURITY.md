@@ -90,6 +90,15 @@ profile, can test guesses, and a low-entropy number (a social security number ha
 enumerated; (3) names of people and organisations stay in clear, because matching a name needs the name. The
 protection that counts is disk encryption on the workstation, which stays mandatory before a real pilot.
 
+**A personal identifier on the row of a person (lot 5).** When a sheet has exactly one column of people and a
+column of personal identifiers (an e-mail address, a social security number, an AVS number, an IBAN), the person
+gets an attribute `identifier:<scheme>` whose value is the keyed hash, the same hash that names the identifier
+entity: the pair "this person has that number" is therefore readable in the knowledge tables, without the number.
+It is the most sensitive link the base holds, and the management dialog of a later lot must mark such attributes
+as sensitive. The headers of the columns (`kb_column_semantics.column_name`) are stored as written: they are
+labels of the user's own table, not personal data in themselves, but a header a user typed could hold a name, so
+the list is shown only on the user's machine like the rest.
+
 What each reset and each lifecycle event does to it (the same transaction as the event itself, so a failure
 leaves a whole index rather than a half-erased one):
 
@@ -100,6 +109,7 @@ leaves a whole index rather than a half-erased one):
 | `knowledge_mode` set to `off` in `settings.json` | No extraction, no lookup, and no `kb_*` row written or changed by an Analyse. A document that is analysed again while it is off has its source removed (a delete): knowledge never outlives the text it described. Switching back on reads the documents again from the index |
 | A document leaves the Documents folder (start of the next Analyse) | Its source and everything learned only from it are removed; an automatic entity nothing else supports is collected |
 | Documents Reset | Every `documents` source goes, and the automatic entities nothing else supports. Manual entities, aliases and attributes stay (only their mentions in those files disappear). The Data side is untouched |
+| A workbook is analysed, or analysed again after it changed (lot 5) | Its inventory and what its columns and values taught are written in one transaction (`put_tabular_inventory_with_knowledge`); a change replaces the automatic rows of that source. The knowledge holds the names, the way each column was read **or why it was not** (`kb_column_semantics`: a sheet, a header, a type, a reason, for every column of a sheet that has a header row) and, for each name, the sheet, the column, a first row and up to three row numbers (the rows of the file): **never a cell's text beyond the name itself**. A workbook with no usable sheet, unreadable, or analysed with the mode `off` leaves no knowledge (what it taught earlier is deleted). If the knowledge step fails it is rolled back alone and the inventory is committed |
 | A workbook leaves the Data folder; Data Reset | The same, for the `data` sources. The Documents side is untouched. The typed cell cache is a cache of the file, not knowledge: clearing it removes no knowledge row |
 | "Reset the whole knowledge base" (a later dialog; `IndexStore::clear_knowledge(true)`, no command yet) | Everything, manual entities, aliases, attributes, tombstones and the operation log included. Files, chunks and inventories are never touched |
 | Deleting an entity (a later dialog) | A tombstone: its mentions and relations go, its name stays so that the next Analyse does not recreate it, and a restore brings it back. No file, chunk or inventory row is touched |

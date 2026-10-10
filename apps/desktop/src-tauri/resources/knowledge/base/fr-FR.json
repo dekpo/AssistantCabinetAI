@@ -23,7 +23,7 @@
     "facture", "devis", "commande", "bon", "avoir", "relevé", "courrier", "lettre", "mail", "note",
     "scan", "copie", "original", "brouillon", "version", "final", "modèle", "annexe", "pièce", "rapport",
     "compte", "rendu", "contrat", "attestation", "certificat", "tableau", "liste", "total",
-    "nul", "null", "none", "néant", "inconnu", "n/a", "na", "vide", "oui", "non"
+    "nul", "null", "none", "néant", "inconnu", "unknown", "n/a", "na", "vide", "oui", "non"
   ],
   "org_markers": {
     "prefix": ["association", "cabinet", "société", "entreprise", "groupe", "fondation", "syndicat", "mairie", "ville de"],
@@ -65,7 +65,7 @@
     {
       "id": "order_number",
       "kind": "order",
-      "regex": "\\b(?:CMD|BC|PO)[\\-\\s]?\\d{4,10}\\b",
+      "regex": "\\b(?:CMD|BC|PO)[\\-\\s]?\\d{4,10}(?:[\\-\\s]\\d{2,6})?\\b",
       "normalise": "alnum",
       "strength": "exact",
       "personal_key": false
@@ -88,6 +88,7 @@
     { "headers": ["email", "e-mail", "courriel", "mail", "adresse mail", "adresse email"], "semantic": { "type": "identifier", "subtype": "email" }, "confidence": 0.95 },
     { "headers": ["téléphone", "tel", "tél", "mobile", "portable", "numéro de téléphone"], "semantic": { "type": "identifier", "subtype": "phone" }, "confidence": 0.9 },
     { "headers": ["numéro de facture", "n° facture", "facture n", "référence facture"], "semantic": { "type": "identifier", "subtype": "invoice" }, "confidence": 0.9 },
+    { "headers": ["numéro de commande", "n° commande", "no commande", "référence commande", "bon de commande"], "semantic": { "type": "identifier", "subtype": "order" }, "confidence": 0.9 },
     { "headers": ["référence", "réf", "ref", "identifiant", "numéro"], "semantic": { "type": "identifier" }, "confidence": 0.7 },
     { "headers": ["désignation", "libellé", "produit", "article"], "semantic": { "type": "item" }, "confidence": 0.8 }
   ],

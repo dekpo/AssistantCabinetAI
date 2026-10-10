@@ -27,6 +27,18 @@ pub const MAX_NGRAM: usize = 5;
 
 const EPOCH_KEY: &str = "gazetteer_epoch";
 
+/// Whether the names of entities of this type are words to look for in a text. People and
+/// organisations are: a letter names them. An identifier is found by its pattern, a place or an item
+/// a table lists ("Lyon", "Pen") is an ordinary word in every document, so a value of such a column
+/// is remembered by the base but never scanned for. One rule for the list built at the start of a
+/// pass and for the list a pass teaches as it goes.
+pub fn is_listed_type(type_id: &str) -> bool {
+    matches!(
+        type_id,
+        super::EntityTypeId::PERSON | super::EntityTypeId::ORGANIZATION
+    )
+}
+
 /// One entity a phrase can stand for, and how it came to know the phrase.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GazetteerEntry {
@@ -77,7 +89,7 @@ impl Gazetteer {
         for row in store::name_list_rows(connection)? {
             // An identifier is found by its pattern, never by its name: its label is not a word of
             // any text, and for a personal one it must not become a phrase anything is matched on.
-            if row.type_id == super::EntityTypeId::IDENTIFIER {
+            if !is_listed_type(&row.type_id) {
                 continue;
             }
             list.insert(
@@ -348,6 +360,15 @@ mod tests {
                 .entity_id,
             typed
         );
+    }
+
+    #[test]
+    fn only_people_and_organisations_are_words_to_look_for_in_a_text() {
+        assert!(is_listed_type("person"));
+        assert!(is_listed_type("organization"));
+        for other in ["identifier", "item", "location", "term"] {
+            assert!(!is_listed_type(other), "{other}");
+        }
     }
 
     #[test]

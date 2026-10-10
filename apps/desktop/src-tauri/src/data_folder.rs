@@ -27,9 +27,11 @@ use crate::file_record::{FileKind, FileRecord, ProcessingStatus, Readability};
 use crate::index_store::IndexStore;
 use crate::indexing::{IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, WorkFolderInventory};
+use crate::knowledge::backfill;
 use crate::knowledge::diagnostics::{
     elapsed_ms, timed_ms, AnalysisPass, AnalysisTimings, FileTiming, StageTimer,
 };
+use crate::knowledge::ingest::KnowledgeContext;
 use crate::tabular;
 use crate::tabular::inventory::{TabularFormat, TabularInventory};
 
@@ -177,6 +179,31 @@ pub fn analyse(
     locale: &str,
     on_progress: &dyn Fn(IndexProgress),
 ) -> Result<IndexSummary, AppError> {
+    analyse_with_knowledge(root, index, locale, on_progress, None)
+}
+
+/// [`analyse`], with the knowledge base taking part. After a workbook's inventory is built, its
+/// columns are read for what they mean and its values for the names, organisations and identifiers
+/// they hold; the inventory and that knowledge are written in one transaction
+/// (`IndexStore::put_tabular_inventory_with_knowledge`). A workbook with no usable sheet, or a pass
+/// with extraction off, writes no knowledge and drops what an earlier version taught. The engine's
+/// inventory is the one `analyse` has always built: the knowledge never alters it.
+///
+/// When the workbooks taught the base names the documents were not read against, the documents are
+/// read again from the text the index already stores, with no request to the gateway
+/// (`knowledge::backfill`), and the progress says so. `knowledge: None` is the pass as it was.
+pub fn analyse_with_knowledge(
+    root: &Path,
+    index: &mut IndexStore,
+    locale: &str,
+    on_progress: &dyn Fn(IndexProgress),
+    mut knowledge: Option<&mut KnowledgeContext>,
+) -> Result<IndexSummary, AppError> {
+    if let Some(context) = knowledge.as_mut() {
+        if context.mode.reads_files() {
+            context.begin_pass(index.connection());
+        }
+    }
     // The typed workbook cache (`docs/SESSION-DATA-13-Column-Cache.md`) is forgotten up front,
     // not selectively: a pass rebuilds every inventory below regardless of whether a file
     // changed, so a cell cache that survived it could serve bytes this very pass never looked at
@@ -212,18 +239,28 @@ pub fn analyse(
             position,
             ..FileTiming::default()
         };
-        let (built, build_ms) =
-            timed_ms(|| tabular::build_inventory(path, &file.relative_path, locale));
+        let (built, build_ms) = timed_ms(|| {
+            tabular::build_inventory_with_source_rows(path, &file.relative_path, locale)
+        });
         workbook_timing.extract_ms = build_ms;
         timings.build_inventory_ms += build_ms;
         match built {
-            Ok(inventory) => {
+            Ok((inventory, workbook, source_rows)) => {
                 if inventory.has_a_usable_sheet() {
                     usable += 1;
                 } else {
                     unusable.push(file.relative_path.clone());
                 }
-                let (stored, write_ms) = timed_ms(|| index.put_tabular_inventory(&inventory));
+                let (stored, write_ms) = timed_ms(|| match knowledge.as_mut() {
+                    Some(context) => {
+                        context.store_workbook(index, &inventory, &workbook, &source_rows)
+                    }
+                    // No knowledge base in this pass: the inventory, and whatever an earlier
+                    // version of the workbook taught the base is dropped with it.
+                    None => index
+                        .put_tabular_inventory_with_knowledge(&inventory, None)
+                        .map(|_| ()),
+                });
                 stored?;
                 workbook_timing.write_ms = write_ms;
                 timings.write_ms += write_ms;
@@ -237,12 +274,17 @@ pub fn analyse(
                 // staying "not analysed yet" for ever.
                 Ok(bytes) => {
                     let (stored, write_ms) = timed_ms(|| {
-                        index.put_tabular_inventory(&TabularInventory {
-                            workbook_id: tabular::hash_bytes(&bytes),
-                            relative_path: file.relative_path.clone(),
-                            format: format_of(&file.extension),
-                            sheets: Vec::new(),
-                        })
+                        index
+                            .put_tabular_inventory_with_knowledge(
+                                &TabularInventory {
+                                    workbook_id: tabular::hash_bytes(&bytes),
+                                    relative_path: file.relative_path.clone(),
+                                    format: format_of(&file.extension),
+                                    sheets: Vec::new(),
+                                },
+                                None,
+                            )
+                            .map(|_| ())
                     });
                     stored?;
                     workbook_timing.write_ms = write_ms;
@@ -272,6 +314,42 @@ pub fn analyse(
     let (retained, retain_ms) = timed_ms(|| index.retain_tabular_inventories(&present));
     let removed_files = retained?;
     timings.write_ms += retain_ms;
+
+    // The names the workbooks taught: documents read before them are read again from their stored
+    // text. Local, no request, and announced on the progress channel so the card shows that this is
+    // what is running.
+    let mut announced_names = false;
+    let knowledge_summary = match knowledge.as_mut() {
+        Some(context) if context.mode.reads_files() => {
+            if context.settle_epoch(index.connection()).unwrap_or(false) {
+                announced_names = true;
+                let announce = |progress: backfill::RefreshProgress| {
+                    on_progress(IndexProgress {
+                        processed_files: progress.done,
+                        total_files: progress.total,
+                        batch_index: 0,
+                        batch_total: 0,
+                        reading_names: true,
+                    })
+                };
+                if backfill::refresh_documents(index, context, &|| false, &announce).is_err() {
+                    context.note_failed("");
+                }
+            }
+            Some(context.data_summary(index.connection()))
+        }
+        _ => None,
+    };
+    if announced_names {
+        // The progress was about documents for a while: say it is back to the workbooks, finished.
+        on_progress(IndexProgress {
+            processed_files: total_files,
+            total_files,
+            batch_index: 0,
+            batch_total: 0,
+            reading_names: false,
+        });
+    }
     timings.total_ms = pass_timer.total_ms();
 
     Ok(IndexSummary {
@@ -288,7 +366,7 @@ pub fn analyse(
         unavailable_capabilities: Vec::new(),
         chunk_count: 0,
         timings: Some(timings),
-        knowledge: None,
+        knowledge: knowledge_summary,
     })
 }
 

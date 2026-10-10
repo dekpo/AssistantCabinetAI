@@ -13,15 +13,21 @@ import { counted } from "./plural";
 export function knowledgeLines(
   t: Translator,
   summary: KnowledgeSummary | null | undefined,
+  pass: "documents" | "data" = "documents",
 ): string[] {
   if (summary === null || summary === undefined) {
     return [];
   }
   const lines: string[] = [];
+  const data = pass === "data";
 
   if (summary.errors > 0) {
     lines.push(
-      `${counted(summary.errors, t("analysis.knowledge.errorsOne"), t("analysis.knowledge.errorsMany"))}.`,
+      `${counted(
+        summary.errors,
+        t(data ? "analysis.knowledge.errorsDataOne" : "analysis.knowledge.errorsOne"),
+        t(data ? "analysis.knowledge.errorsDataMany" : "analysis.knowledge.errorsMany"),
+      )}.`,
     );
   }
   if (summary.entitiesDetected > 0) {
@@ -49,6 +55,24 @@ export function knowledgeLines(
       )}.`,
     );
   }
+  if (summary.semanticColumns > 0) {
+    lines.push(
+      `${counted(
+        summary.semanticColumns,
+        t("analysis.knowledge.columnsOne", { workbooks: workbooksRead(t, summary) }),
+        t("analysis.knowledge.columnsMany", { workbooks: workbooksRead(t, summary) }),
+      )}.`,
+    );
+  }
+  if (summary.relations > 0) {
+    lines.push(
+      `${counted(
+        summary.relations,
+        t("analysis.knowledge.relationsOne"),
+        t("analysis.knowledge.relationsMany"),
+      )}.`,
+    );
+  }
   if (summary.refreshedSources > 0) {
     lines.push(
       `${counted(
@@ -62,10 +86,19 @@ export function knowledgeLines(
     lines.push(
       `${counted(
         summary.truncatedSources,
-        t("analysis.knowledge.truncatedOne"),
-        t("analysis.knowledge.truncatedMany"),
+        t(data ? "analysis.knowledge.truncatedDataOne" : "analysis.knowledge.truncatedOne"),
+        t(data ? "analysis.knowledge.truncatedDataMany" : "analysis.knowledge.truncatedMany"),
       )}.`,
     );
   }
   return lines;
+}
+
+/** "2 spreadsheets read": where the recognised columns were found. Zero reads as the plural. */
+function workbooksRead(t: Translator, summary: KnowledgeSummary): string {
+  return counted(
+    summary.workbooksAnalysed,
+    t("analysis.knowledge.workbooksOne"),
+    t("analysis.knowledge.workbooksMany"),
+  );
 }

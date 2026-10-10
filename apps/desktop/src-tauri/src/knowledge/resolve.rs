@@ -31,7 +31,7 @@
 //! [`DeterministicResolver`] without the callers noticing.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use rusqlite::Connection;
 
@@ -1195,8 +1195,24 @@ impl EntityLookup for StoreLookup<'_> {
 struct MemoryAlias {
     normalized: String,
     phonetic_key: String,
+    /// `NormalizedName::token_set_key` of `normalized`, made once when the alias is added.
+    token_set_key: String,
     kind: AliasKind,
     origin: Origin,
+}
+
+/// Where an alias sits: the position of its entity, then its own position in that entity.
+type AliasSlot = (usize, usize);
+
+/// What an in-memory lookup is asked, by key. A pass over a table drafts thousands of entities
+/// before the first of them is written, and the lookup is asked about every one of them in turn, so
+/// scanning every alias of every draft per question is quadratic; these maps make it one hash lookup.
+#[derive(Default)]
+struct MemoryIndex {
+    by_name: HashMap<String, Vec<usize>>,
+    by_alias: HashMap<String, Vec<AliasSlot>>,
+    by_phonetic: HashMap<String, Vec<AliasSlot>>,
+    by_token_set: HashMap<String, Vec<AliasSlot>>,
 }
 
 struct MemoryEntity {
@@ -1220,6 +1236,8 @@ pub struct InMemoryLookup {
     titles: TitleSet,
     encoder: Box<dyn PhoneticEncoder>,
     entities: Vec<MemoryEntity>,
+    positions: HashMap<i64, usize>,
+    index: MemoryIndex,
     tombstones: Vec<(String, String)>,
     next_id: i64,
 }
@@ -1230,6 +1248,8 @@ impl InMemoryLookup {
             titles,
             encoder,
             entities: Vec::new(),
+            positions: HashMap::new(),
+            index: MemoryIndex::default(),
             tombstones: Vec::new(),
             next_id: 1,
         }
@@ -1274,17 +1294,30 @@ impl InMemoryLookup {
         )
         .into_iter()
         .map(|alias| MemoryAlias {
+            token_set_key: normalize_name(&alias.normalized, &self.titles).token_set_key,
             normalized: alias.normalized,
             phonetic_key: alias.phonetic_key,
             kind: alias.kind,
             origin,
         })
         .collect();
+        let normalized_name = normalize_name(name, &self.titles).joined;
+        let position = self.entities.len();
+        self.index
+            .by_name
+            .entry(normalized_name.clone())
+            .or_default()
+            .push(position);
+        let aliases: Vec<MemoryAlias> = aliases;
+        for (slot, alias) in aliases.iter().enumerate() {
+            Self::index_alias(&mut self.index, (position, slot), alias);
+        }
+        self.positions.insert(id, position);
         self.entities.push(MemoryEntity {
             id,
             type_id: type_id.to_string(),
             canonical_name: name.to_string(),
-            normalized_name: normalize_name(name, &self.titles).joined,
+            normalized_name,
             disambiguator: disambiguator.to_string(),
             status,
             origin,
@@ -1295,22 +1328,45 @@ impl InMemoryLookup {
         id
     }
 
+    fn index_alias(index: &mut MemoryIndex, slot: AliasSlot, alias: &MemoryAlias) {
+        index
+            .by_alias
+            .entry(alias.normalized.clone())
+            .or_default()
+            .push(slot);
+        if !alias.phonetic_key.is_empty() {
+            index
+                .by_phonetic
+                .entry(alias.phonetic_key.clone())
+                .or_default()
+                .push(slot);
+        }
+        index
+            .by_token_set
+            .entry(alias.token_set_key.clone())
+            .or_default()
+            .push(slot);
+    }
+
     fn entity_mut(&mut self, id: i64) -> &mut MemoryEntity {
-        self.entities
-            .iter_mut()
-            .find(|entity| entity.id == id)
-            .expect("a known entity")
+        let position = *self.positions.get(&id).expect("a known entity");
+        &mut self.entities[position]
     }
 
     pub fn add_alias(&mut self, id: i64, display: &str, kind: AliasKind, origin: Origin) {
         let name = normalize_name(display, &self.titles);
         let key = alias_phonetic_key(display, kind, &self.titles, self.encoder.as_ref());
-        self.entity_mut(id).aliases.push(MemoryAlias {
+        let alias = MemoryAlias {
             normalized: name.joined,
             phonetic_key: key,
+            token_set_key: name.token_set_key,
             kind,
             origin,
-        });
+        };
+        let position = *self.positions.get(&id).expect("a known entity");
+        let slot = (position, self.entities[position].aliases.len());
+        Self::index_alias(&mut self.index, slot, &alias);
+        self.entities[position].aliases.push(alias);
     }
 
     pub fn add_identifier(&mut self, id: i64, scheme: &str, normalized: &str) {
@@ -1354,14 +1410,18 @@ impl InMemoryLookup {
         })
     }
 
-    fn aliases_where<F: Fn(&MemoryAlias) -> bool>(&self, matches: F) -> Vec<EntityHit> {
-        self.live()
-            .flat_map(|entity| {
-                entity
-                    .aliases
-                    .iter()
-                    .filter(|alias| matches(alias))
-                    .map(move |alias| Self::hit(entity, Some(alias)))
+    /// The hits for the aliases at these slots, live entities only, in the order they were added.
+    fn hits_for(&self, slots: Option<&Vec<AliasSlot>>) -> Vec<EntityHit> {
+        slots
+            .into_iter()
+            .flatten()
+            .filter_map(|(position, slot)| {
+                let entity = &self.entities[*position];
+                matches!(
+                    entity.status,
+                    EntityStatus::Candidate | EntityStatus::Active
+                )
+                .then(|| Self::hit(entity, Some(&entity.aliases[*slot])))
             })
             .collect()
     }
@@ -1381,27 +1441,35 @@ impl EntityLookup for InMemoryLookup {
     }
 
     fn by_normalized(&self, normalized: &str) -> Vec<EntityHit> {
-        self.live()
-            .filter(|entity| entity.normalized_name == normalized)
+        self.index
+            .by_name
+            .get(normalized)
+            .into_iter()
+            .flatten()
+            .map(|position| &self.entities[*position])
+            .filter(|entity| {
+                matches!(
+                    entity.status,
+                    EntityStatus::Candidate | EntityStatus::Active
+                )
+            })
             .map(|entity| Self::hit(entity, None))
             .collect()
     }
 
     fn by_alias(&self, normalized: &str) -> Vec<EntityHit> {
-        self.aliases_where(|alias| alias.normalized == normalized)
+        self.hits_for(self.index.by_alias.get(normalized))
     }
 
     fn by_token_set(&self, key: &str) -> Vec<EntityHit> {
-        self.aliases_where(|alias| {
-            normalize_name(&alias.normalized, &self.titles).token_set_key == key
-        })
+        self.hits_for(self.index.by_token_set.get(key))
     }
 
     fn by_phonetic(&self, key: &str) -> Vec<EntityHit> {
         if key.is_empty() {
             return Vec::new();
         }
-        self.aliases_where(|alias| alias.phonetic_key == key)
+        self.hits_for(self.index.by_phonetic.get(key))
     }
 
     fn is_tombstoned(&self, type_id: &str, normalized: &str) -> bool {
@@ -1413,9 +1481,9 @@ impl EntityLookup for InMemoryLookup {
     fn restrict_to_selection(&self, hits: Vec<EntityHit>, selection: &SourceSet) -> Vec<EntityHit> {
         hits.into_iter()
             .filter(|hit| {
-                self.entities
-                    .iter()
-                    .find(|entity| entity.id == hit.entity_id)
+                self.positions
+                    .get(&hit.entity_id)
+                    .map(|position| &self.entities[*position])
                     .is_some_and(|entity| entity.sources.iter().any(|id| selection.contains(*id)))
             })
             .collect()

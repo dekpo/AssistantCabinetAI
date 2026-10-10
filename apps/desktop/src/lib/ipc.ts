@@ -255,7 +255,12 @@ export interface KnowledgeSummary {
   candidates: number;
   /** E-mail addresses, invoice numbers, IBANs and the like. */
   identifiers: number;
+  /** Links a table states by two role columns. */
   relations: number;
+  /** Columns of the Data Folder's tables read as a name, an organisation, an identifier... */
+  semanticColumns: number;
+  /** Workbooks whose columns and values were read by this pass (not the unchanged ones). */
+  workbooksAnalysed: number;
   /** Documents analysed earlier that were read again from their stored text. */
   refreshedSources: number;
   truncatedSources: number;

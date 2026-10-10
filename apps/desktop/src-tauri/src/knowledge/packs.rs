@@ -420,6 +420,27 @@ fn words_of(text: &str) -> Vec<String> {
     normalize_name(text, &TitleSet::new()).tokens
 }
 
+/// The folded words of a column header as a person typed it in a spreadsheet: the same words as the
+/// pack entries are read in, plus a split at a camel-case boundary (`NomPatient`, `patientName`,
+/// `IDClient`), so that `nom_patient`, `Nom patient` and `NomPatient` are one header.
+pub fn header_words(text: &str) -> Vec<String> {
+    let characters: Vec<char> = text.chars().collect();
+    let mut spaced = String::with_capacity(text.len() + 4);
+    for (position, &current) in characters.iter().enumerate() {
+        if position > 0 && current.is_uppercase() {
+            let before = characters[position - 1];
+            let after = characters.get(position + 1).copied();
+            let lower_to_upper = before.is_lowercase() || before.is_ascii_digit();
+            let acronym_end = before.is_uppercase() && after.is_some_and(char::is_lowercase);
+            if lower_to_upper || acronym_end {
+                spaced.push(' ');
+            }
+        }
+        spaced.push(current);
+    }
+    words_of(&spaced)
+}
+
 /// A machine id: lower-case ASCII letters, digits and underscores, starting with a letter.
 fn is_machine_id(text: &str) -> bool {
     let mut characters = text.chars();
@@ -714,6 +735,9 @@ pub struct PackSet {
     weak_titles: Vec<String>,
     particles: Vec<String>,
     stop_words: Vec<String>,
+    /// The stop-words as `is_stop_word` compares them (folded words, no separator), made once:
+    /// a table pass asks about every distinct cell.
+    stop_forms: HashSet<String>,
     title_spoken: BTreeMap<String, String>,
     org_markers: OrgMarkers,
     schemes: Vec<IdentifierScheme>,
@@ -785,6 +809,7 @@ impl PackSet {
             weak_titles: Vec::new(),
             particles: Vec::new(),
             stop_words: Vec::new(),
+            stop_forms: HashSet::new(),
             title_spoken: BTreeMap::new(),
             org_markers: OrgMarkers::default(),
             schemes: Vec::new(),
@@ -873,6 +898,12 @@ impl PackSet {
             }
         }
 
+        set.stop_forms = set
+            .stop_words
+            .iter()
+            .map(|word| words_of(word).concat())
+            .collect();
+
         let digest = hasher.finalize();
         set.hash = digest.iter().map(|byte| format!("{byte:02x}")).collect();
         Ok(set)
@@ -908,11 +939,7 @@ impl PackSet {
     /// null-like cell value.
     pub fn is_stop_word(&self, word: &str) -> bool {
         let wanted = words_of(word).concat();
-        !wanted.is_empty()
-            && self
-                .stop_words
-                .iter()
-                .any(|candidate| words_of(candidate).concat() == wanted)
+        !wanted.is_empty() && self.stop_forms.contains(&wanted)
     }
 
     /// How a title is said aloud, for the text-to-speech surface (`title_spoken`), looked up by the
@@ -1002,6 +1029,22 @@ mod tests {
             Err(other) => panic!("unexpected error {other:?}"),
             Ok(_) => panic!("the pack was accepted"),
         }
+    }
+
+    #[test]
+    fn a_header_is_split_at_separators_and_at_camel_case_boundaries() {
+        let words = |text: &str| header_words(text).join(" ");
+        assert_eq!(words("nom_patient"), "nom patient");
+        assert_eq!(words("NomPatient"), "nom patient");
+        assert_eq!(words("patientName"), "patient name");
+        assert_eq!(words("IDClient"), "id client");
+        assert_eq!(words("ID_Client"), "id client");
+        assert_eq!(words("PATIENT"), "patient");
+        assert_eq!(words("Nom du patient"), "nom du patient");
+        assert_eq!(words("E-mail"), "e mail");
+        assert_eq!(words("Total_Ligne"), "total ligne");
+        assert_eq!(words("  "), "");
+        assert_eq!(words("?"), "");
     }
 
     #[test]

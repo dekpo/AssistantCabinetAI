@@ -203,6 +203,23 @@ adds to the neutral base. The schema and the Rust code stay profession-neutral; 
 pack. `knowledge::resolve` decides, `knowledge::gazetteer` finds known names in a text, `knowledge::maintenance`
 brings stored phonetic keys and the packs fingerprint up to date when the code that derived them changed.
 
+**Ingestion from tables (lot 5).** The Data Analyse, per workbook, after its inventory is built:
+
+```text
+parsed Workbook --workbook_input--> columns as text --TableEntityExtractor--> column readings + candidates
+ (build_inventory_with_workbook)    (formulas blanked)   header words x packs, value shape   + relations
+                                                              |
+        DeltaBuilder::place_table: the same resolver and the same hashing as for a document
+                                                              |
+              one KnowledgeDelta, written with the inventory (IndexStore::put_tabular_inventory_with_knowledge)
+```
+
+`kb_column_semantics` records how each column was read and why; a mention points at a sheet, a column, a
+first row and up to three sample rows, never at a cell's text. The engine's inventory is not touched, and a
+column is read by the vocabulary of the active packs only (a module never changes a type: the header is also
+looked up in the vocabulary of every shipped pack, and the column is left alone if the two disagree). See
+`docs/DECISIONS.md`, "Settled by KB lot 5".
+
 The extractor reads and forgets: a candidate carries a name, a locator and a count, never a passage. The
 resolver never writes. Whatever creates a row does so in the transaction that stores the document's chunks
 (`IndexStore::replace_document_with_knowledge`), and a knowledge step that fails never stops the document from

@@ -18,10 +18,10 @@ use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde_json::{json, Value};
 
 use super::{
-    Alias, AliasKind, ApplyOutcome, AttributeDraft, Domain, Entity, EntityDraft, EntityFilter,
-    EntityRecord, EntityRef, EntityStatus, FileSets, IntegrityReport, KnowledgeDelta, MentionDraft,
-    MentionLocator, NameHit, NewAlias, NewEntity, Origin, Page, PossibleMatchDraft, RelationDraft,
-    SignalDraft, SourceRef, SourceRow, CURRENT_SCHEMA_VERSION,
+    Alias, AliasKind, ApplyOutcome, AttributeDraft, ColumnSemanticsDraft, Domain, Entity,
+    EntityDraft, EntityFilter, EntityRecord, EntityRef, EntityStatus, FileSets, IntegrityReport,
+    KnowledgeDelta, MentionDraft, MentionLocator, NameHit, NewAlias, NewEntity, Origin, Page,
+    PossibleMatchDraft, RelationDraft, SignalDraft, SourceRef, SourceRow, CURRENT_SCHEMA_VERSION,
 };
 use crate::error::AppError;
 
@@ -672,6 +672,7 @@ pub fn apply_delta(tx: &Transaction<'_>, delta: &KnowledgeDelta) -> Result<Apply
     apply_relations(tx, source_id, &delta.relations, &drafts, &mut touched)?;
     apply_attributes(tx, source_id, &delta.attributes, &drafts, &mut touched)?;
     apply_signals(tx, source_id, &delta.signals)?;
+    apply_column_semantics(tx, source_id, &delta.column_semantics)?;
     apply_possible_matches(tx, &drafts, &delta.possible_matches)?;
     outcome.entities_promoted = promote_candidates(tx)?;
 
@@ -1082,6 +1083,165 @@ fn apply_signals(
     Ok(())
 }
 
+/// How the columns of a table were read, made equal to the draft: identical rows are not written, the
+/// others are, and the columns the table no longer has (or no longer reads as anything) are removed.
+fn apply_column_semantics(
+    tx: &Transaction<'_>,
+    source_id: i64,
+    drafts: &[ColumnSemanticsDraft],
+) -> Result<(), AppError> {
+    type Value = (String, Option<String>, Option<String>, f64, String);
+    let mut existing: HashMap<(String, String), Value> = HashMap::new();
+    {
+        let mut statement = db(tx.prepare(
+            "SELECT sheet, column_name, semantic_type, subtype, role, confidence, reason
+             FROM kb_column_semantics WHERE source_id = ?1",
+        ))?;
+        let rows = db(statement.query_map([source_id], |row| {
+            Ok((
+                (row.get::<_, String>(0)?, row.get::<_, String>(1)?),
+                (
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, f64>(5)?,
+                    row.get::<_, String>(6)?,
+                ),
+            ))
+        }))?;
+        for row in rows {
+            let (key, value) = db(row)?;
+            existing.insert(key, value);
+        }
+    }
+    for draft in drafts {
+        let key = (draft.sheet.clone(), draft.column_name.clone());
+        let wanted: Value = (
+            draft.semantic_type.clone(),
+            draft.subtype.clone(),
+            draft.role.clone(),
+            confidence_value(draft.confidence),
+            draft.reason.clone(),
+        );
+        match existing.remove(&key) {
+            Some(current) if current == wanted => {}
+            _ => {
+                db(tx.execute(
+                    "INSERT INTO kb_column_semantics
+                        (source_id, sheet, column_name, semantic_type, subtype, role, confidence, reason)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                     ON CONFLICT (source_id, sheet, column_name) DO UPDATE SET
+                        semantic_type = excluded.semantic_type, subtype = excluded.subtype,
+                        role = excluded.role, confidence = excluded.confidence,
+                        reason = excluded.reason",
+                    params![
+                        source_id,
+                        draft.sheet,
+                        draft.column_name,
+                        draft.semantic_type,
+                        draft.subtype,
+                        draft.role,
+                        wanted.3,
+                        draft.reason,
+                    ],
+                ))?;
+            }
+        }
+    }
+    for (sheet, column_name) in existing.keys() {
+        db(tx.execute(
+            "DELETE FROM kb_column_semantics
+             WHERE source_id = ?1 AND sheet = ?2 AND column_name = ?3",
+            params![source_id, sheet, column_name],
+        ))?;
+    }
+    Ok(())
+}
+
+/// One row of `kb_column_semantics`: how a column of a workbook was read and why.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColumnSemanticsRow {
+    pub sheet: String,
+    pub column_name: String,
+    pub semantic_type: String,
+    pub subtype: Option<String>,
+    pub role: Option<String>,
+    pub confidence: f64,
+    pub reason: String,
+}
+
+impl ColumnSemanticsRow {
+    /// Whether the column's values were read as entities. The table also holds the columns that were
+    /// **not** read, with the reason (`no_header_match`, `module_off`, `values_mismatch`...), so a
+    /// reader that wants only the readings filters with this.
+    pub fn is_read(&self) -> bool {
+        self.confidence >= f64::from(super::ACCEPTED_COLUMN_CONFIDENCE)
+            && matches!(
+                self.reason.as_str(),
+                "header_exact" | "header_partial" | "value_shape" | "combined"
+            )
+    }
+}
+
+/// How the columns of one workbook were read, in sheet and column-name order, **including the
+/// columns that were not read and why** (`ColumnSemanticsRow::is_read`). Empty when the source is
+/// unknown.
+pub fn column_semantics_for(
+    connection: &Connection,
+    domain: Domain,
+    relative_path: &str,
+) -> Result<Vec<ColumnSemanticsRow>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT c.sheet, c.column_name, c.semantic_type, c.subtype, c.role, c.confidence, c.reason
+         FROM kb_column_semantics c
+         JOIN kb_sources s ON s.source_id = c.source_id
+         WHERE s.domain = ?1 AND s.relative_path = ?2
+         ORDER BY c.sheet, c.column_name",
+    ))?;
+    let rows = db(
+        statement.query_map(params![domain.as_code(), relative_path], |row| {
+            Ok(ColumnSemanticsRow {
+                sheet: row.get(0)?,
+                column_name: row.get(1)?,
+                semantic_type: row.get(2)?,
+                subtype: row.get(3)?,
+                role: row.get(4)?,
+                confidence: row.get(5)?,
+                reason: row.get(6)?,
+            })
+        }),
+    )?;
+    db(rows.collect())
+}
+
+/// The row of one source, if the knowledge base knows it. What the Data pass asks to decide whether a
+/// workbook it has just re-read still needs its values read again.
+pub fn source_row(
+    connection: &Connection,
+    domain: Domain,
+    relative_path: &str,
+) -> Result<Option<SourceRow>, AppError> {
+    db(connection
+        .query_row(
+            "SELECT source_id, content_id, kb_version, gazetteer_epoch
+             FROM kb_sources WHERE domain = ?1 AND relative_path = ?2",
+            params![domain.as_code(), relative_path],
+            |row| {
+                Ok(SourceRow {
+                    source_id: row.get(0)?,
+                    source: SourceRef {
+                        domain,
+                        relative_path: relative_path.to_string(),
+                        content_id: row.get(1)?,
+                    },
+                    kb_version: row.get(2)?,
+                    gazetteer_epoch: row.get(3)?,
+                })
+            },
+        )
+        .optional())
+}
+
 /// Record that two entities might be one, for the user to decide on later. The pair is stored in
 /// one order, and a pair that is already known (whatever the user decided about it) is left alone.
 fn apply_possible_matches(
@@ -1214,9 +1374,10 @@ pub fn max_entity_id(connection: &Connection) -> Result<i64, AppError> {
 /// What the entities named in a set of sources look like, for the Analyse summary.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SourceEntityCounts {
-    /// Distinct named entities (people, organisations, places, items, terms), after merges, with a
-    /// mention in one of the sources. Identifiers are counted apart: an invoice number is not a
-    /// name, and a summary line that says "people and organisations" must not include one.
+    /// Distinct people and organisations, after merges, with a mention in one of the sources.
+    /// Identifiers and the values of other columns (an article, a city) are counted apart: an
+    /// invoice number is not a name, and a summary line that says "people and organisations" must
+    /// include neither.
     pub distinct: usize,
     /// Of those, the ones created after `created_after_id`.
     pub created: usize,
@@ -1224,6 +1385,8 @@ pub struct SourceEntityCounts {
     pub created_candidates: usize,
     /// Distinct identifiers with a mention in one of the sources.
     pub identifiers: usize,
+    /// Distinct places, items and terms with a mention in one of the sources (tables only).
+    pub others: usize,
 }
 
 pub fn entity_counts_for_sources(
@@ -1262,6 +1425,10 @@ pub fn entity_counts_for_sources(
             counts.identifiers += 1;
             continue;
         }
+        if type_id != "person" && type_id != "organization" {
+            counts.others += 1;
+            continue;
+        }
         counts.distinct += 1;
         if entity_id > created_after_id {
             counts.created += 1;
@@ -1271,6 +1438,26 @@ pub fn entity_counts_for_sources(
         }
     }
     Ok(counts)
+}
+
+/// How many relations the given sources state.
+pub fn relation_count_for_sources(
+    connection: &Connection,
+    domain: Domain,
+    relative_paths: &[String],
+) -> Result<usize, AppError> {
+    if relative_paths.is_empty() {
+        return Ok(0);
+    }
+    let paths = db_json(relative_paths)?;
+    let count: i64 = db(connection.query_row(
+        "SELECT COUNT(*) FROM kb_relations r
+         JOIN kb_sources s ON s.source_id = r.source_id
+         WHERE s.domain = ?1 AND s.relative_path IN (SELECT value FROM json_each(?2))",
+        params![domain.as_code(), paths],
+        |row| row.get(0),
+    ))?;
+    Ok(count.max(0) as usize)
 }
 
 fn db_json(values: &[String]) -> Result<String, AppError> {

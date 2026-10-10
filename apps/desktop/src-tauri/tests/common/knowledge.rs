@@ -11,6 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use assistant_cabinet_ai_lib::data_folder;
 use assistant_cabinet_ai_lib::gateway::{EmbeddingDeadlines, GatewayClient};
 use assistant_cabinet_ai_lib::index_store::{configure_connection, IndexStore};
 use assistant_cabinet_ai_lib::indexing::{self, IndexSummary};
@@ -220,6 +221,8 @@ pub fn gateway_client() -> GatewayClient {
 /// A work folder, an index, a gateway, and the settings of the pass.
 pub struct Lab {
     pub work: tempfile::TempDir,
+    /// The Data Folder, beside the documents folder, sharing its index as in the application.
+    pub data: tempfile::TempDir,
     pub app_data: tempfile::TempDir,
     pub index: IndexStore,
     pub gateway: FakeGateway,
@@ -236,6 +239,7 @@ impl Lab {
             IndexStore::open_at(&app_data.path().join("index.sqlite3")).expect("opens the index");
         Self {
             work: tempfile::tempdir().expect("temp work folder"),
+            data: tempfile::tempdir().expect("temp data folder"),
             app_data,
             index,
             gateway: FakeGateway::start(|_| Reply::vectors()),
@@ -321,4 +325,176 @@ impl Lab {
     pub fn work_path(&self) -> &Path {
         self.work.path()
     }
+
+    // ------------------------------------------------------------------------- the Data Folder
+
+    pub fn write_data(&self, name: &str, text: &str) {
+        self.write_data_bytes(name, text.as_bytes());
+    }
+
+    pub fn write_data_bytes(&self, name: &str, bytes: &[u8]) {
+        let path = self.data.path().join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("creates the folder");
+        }
+        std::fs::write(path, bytes).expect("writes the workbook");
+    }
+
+    pub fn remove_data(&self, name: &str) {
+        std::fs::remove_file(self.data.path().join(name)).expect("removes the workbook");
+    }
+
+    /// A Data Analyse with a fresh knowledge context, as the application builds one.
+    pub fn analyse_data(&mut self) -> IndexSummary {
+        let mut context = self.context();
+        self.analyse_data_with(&mut context)
+    }
+
+    pub fn analyse_data_with(&mut self, context: &mut KnowledgeContext) -> IndexSummary {
+        data_folder::analyse_with_knowledge(
+            self.data.path(),
+            &mut self.index,
+            self.locale,
+            &|_| {},
+            Some(context),
+        )
+        .expect("the data pass completes")
+    }
+}
+
+/// The columns of one workbook the base **read** as something: `(sheet, column, type, subtype,
+/// role, reason)`, in sheet and column order. The columns it did not read are in `column_answers`.
+pub fn column_reading(
+    connection: &Connection,
+    path: &str,
+) -> Vec<(
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+)> {
+    assistant_cabinet_ai_lib::knowledge::store::column_semantics_for(
+        connection,
+        assistant_cabinet_ai_lib::knowledge::Domain::Data,
+        path,
+    )
+    .expect("reads")
+    .into_iter()
+    .filter(|row| row.is_read())
+    .map(|row| {
+        (
+            row.sheet,
+            row.column_name,
+            row.semantic_type,
+            row.subtype,
+            row.role,
+            row.reason,
+        )
+    })
+    .collect()
+}
+
+/// Every column of one workbook, read or not: `(column, type, role, reason, confidence)`.
+pub fn column_answers(
+    connection: &Connection,
+    path: &str,
+) -> Vec<(String, String, Option<String>, String, f64)> {
+    assistant_cabinet_ai_lib::knowledge::store::column_semantics_for(
+        connection,
+        assistant_cabinet_ai_lib::knowledge::Domain::Data,
+        path,
+    )
+    .expect("reads")
+    .into_iter()
+    .map(|row| {
+        (
+            row.column_name,
+            row.semantic_type,
+            row.role,
+            row.reason,
+            row.confidence,
+        )
+    })
+    .collect()
+}
+
+/// Every relation as `(subject, predicate, object, occurrences)` by canonical name.
+pub fn relations(connection: &Connection) -> Vec<(String, String, String, i64)> {
+    let mut statement = connection
+        .prepare(
+            "SELECT a.canonical_name, r.predicate, b.canonical_name, r.occurrence_count
+             FROM kb_relations r
+             JOIN kb_entities a ON a.entity_id = r.subject
+             JOIN kb_entities b ON b.entity_id = r.object
+             ORDER BY a.canonical_name, r.predicate, b.canonical_name",
+        )
+        .expect("prepares");
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .expect("queries")
+        .collect::<Result<_, _>>()
+        .expect("reads");
+    rows
+}
+
+/// The attributes of one entity as `(key, value)`.
+pub fn attributes_of(connection: &Connection, entity_id: i64) -> Vec<(String, String)> {
+    let mut statement = connection
+        .prepare("SELECT key, value FROM kb_attributes WHERE entity_id = ?1 ORDER BY key, value")
+        .expect("prepares");
+    let rows = statement
+        .query_map([entity_id], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("queries")
+        .collect::<Result<_, _>>()
+        .expect("reads");
+    rows
+}
+
+/// A mention with the place it points at inside a table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellsMention {
+    pub path: String,
+    pub sheet: Option<String>,
+    pub column: Option<String>,
+    pub first_row: Option<i64>,
+    pub sample_rows: Option<String>,
+    pub occurrences: i64,
+    pub method: String,
+    pub role: Option<String>,
+    pub confidence: f64,
+}
+
+/// The table mentions of one entity.
+pub fn cells_mentions_of(connection: &Connection, entity_id: i64) -> Vec<CellsMention> {
+    let mut statement = connection
+        .prepare(
+            "SELECT s.relative_path, m.sheet, m.column_name, m.first_row, m.sample_rows,
+                    m.occurrence_count, m.method, m.role, m.confidence
+             FROM kb_mentions m JOIN kb_sources s ON s.source_id = m.source_id
+             WHERE m.entity_id = ?1 AND m.locator_kind = 'cells'
+             ORDER BY s.relative_path, m.sheet, m.column_name, m.mention_id",
+        )
+        .expect("prepares");
+    let rows = statement
+        .query_map([entity_id], |row| {
+            Ok(CellsMention {
+                path: row.get(0)?,
+                sheet: row.get(1)?,
+                column: row.get(2)?,
+                first_row: row.get(3)?,
+                sample_rows: row.get(4)?,
+                occurrences: row.get(5)?,
+                method: row.get(6)?,
+                role: row.get(7)?,
+                confidence: row.get(8)?,
+            })
+        })
+        .expect("queries")
+        .collect::<Result<_, _>>()
+        .expect("reads");
+    rows
 }

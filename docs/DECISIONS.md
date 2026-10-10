@@ -872,6 +872,14 @@ milestones give way to capabilities (`docs/ROADMAP.md`).
 | Keys and packs are refreshed by the pass, not by opening the index | `maintenance::ensure_phonetic_keys` compares the encoder's signature (`fr-rules:2`, which carries the language) with `kb_meta.phonetic_version` and rewrites every alias key from its display form in one transaction when they differ; `maintenance::record_packs` stores the packs fingerprint. Neither runs on `IndexStore::open`, because the locale belongs to the client and the index does not know it. Lot 4 calls both once, before the first file of a pass |
 | The extraction port | `EntityExtractor` (`id`, `version`, `extract_document`, `extract_workbook`, both empty by default) returns `Candidate`s - a name as written, a type, a role, a method, a locator, a count, never a passage. `CompositeExtractor` registers several; candidates two **different** extractors found at the same place (same locator and overlapping span, or the same folded name when there is no span) are merged and the more confident stays, the earlier registered one on a tie. No NLP dependency is added |
 
+## Owner answers after KB lot 3 (10 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Fuzzy minimum word length | **4**, confirmed (`resolve::FUZZY_MIN_TOKEN_LEN`), not the 6 of master section 7. One constant for the resolver and for lots 6 and 9 |
+| A surname alone in a file | In ingestion, "Dr Martin" records nothing unless exactly one entity of the same source answers to it. The recall cost (a document that only says "Dr Martin" is not found when asking about Pierre Martin) is accepted; lot 11's shadow measurement may reopen it |
+| Personal identifiers are stored as a keyed hash | For an identifier scheme with `personal_key: true` (e-mail address, social security number, IBAN) the knowledge base stores a keyed hash of the reduced value, never the value, so the local index does not become a directory of such numbers. Equality is all matching needs. The key is a per-workstation secret kept outside the index file. Limit to state in the DPIA draft: a low-entropy number can be guessed by someone who holds both the index and the key. Schemes without the flag (invoice and order numbers) keep their value. Designed in lot 4 |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

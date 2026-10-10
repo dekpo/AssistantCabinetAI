@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import AsyncIterator
+from typing import Literal
 
 import httpx
 
@@ -33,12 +34,14 @@ class OllamaProvider:
         *,
         request_timeout_seconds: float = 180.0,
         health_timeout_seconds: float = 3.0,
+        think: Literal["default", "off"] = "default",
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=httpx.Timeout(request_timeout_seconds, connect=10.0),
         )
         self._health_timeout_seconds = health_timeout_seconds
+        self._think = think
         #: The largest context each model supports, read once from `/api/show`. Only answers are
         #: kept: a model not pulled yet is asked again next time rather than remembered as
         #: unlimited.
@@ -50,6 +53,11 @@ class OllamaProvider:
             "messages": [message.model_dump() for message in request.messages],
             "stream": True,
         }
+        if self._think == "off":
+            # Top level, not in `options`. Never `true`: a model that cannot think answers a
+            # request to think with HTTP 400, so the only value ever sent is the one every model
+            # accepts.
+            payload["think"] = False
         options: dict[str, object] = {}
         if request.temperature is not None:
             options["temperature"] = request.temperature
@@ -187,8 +195,11 @@ class OllamaProvider:
                 data={"provider": OllamaProvider.name, "reason": "runtime_error"},
             )
         done = bool(event.get("done"))
+        message = event.get("message", {})
         return GenerationChunk(
-            delta=event.get("message", {}).get("content", ""),
+            delta=message.get("content", ""),
+            # A length only: the reasoning itself is dropped here, never carried further.
+            thinking_chars=len(message.get("thinking") or ""),
             done=done,
             prompt_tokens=event.get("prompt_eval_count") if done else None,
             completion_tokens=event.get("eval_count") if done else None,

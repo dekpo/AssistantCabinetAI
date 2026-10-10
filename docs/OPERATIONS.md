@@ -59,6 +59,11 @@ half minutes (`docs/TROUBLESHOOTING.md`, 22 September 2026). A related piece of 
 `MODEL_ALIASES` is a promise that the model works, so weights under about 1B do not belong there
 however fast they are.
 
+`LLM_THINK` (`default` or `off`) and `OLLAMA_KEEP_ALIVE` (default `30m`, `-1` on the Mac mini) are the two settings for the speed
+of the first words: the first stops a model that reasons before answering from doing so, the second keeps it loaded between
+questions (`docs/MODELS.md`, "Hidden reasoning and keep-alive"). A model that returns no text ends in the code `empty_answer`
+and the desktop says so; the register line shows `thinking_chars`, which tells a model that thought from one that stalled.
+
 On a CPU-only server the first request after switching models can stay silent for more than the default
 180 s of `LLM_REQUEST_TIMEOUT_SECONDS` (Ollama unloads one model, loads the other, then reads the prompt before
 the first token). The gateway then answers `provider_error` with `reason: "timeout"`, which the desktop shows as

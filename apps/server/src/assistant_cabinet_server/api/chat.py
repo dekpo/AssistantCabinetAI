@@ -42,8 +42,8 @@ STREAM_MEDIA_TYPE = "text/event-stream"
 STREAM_TERMINATOR = "data: [DONE]\n\n"
 
 FinishReason = Literal["stop", "length"]
-#: `(completion text, usage, outcome)`. The text is hashed, never stored.
-RecordCallback = Callable[[str, "Usage", str], None]
+#: `(completion text, usage, outcome, hidden reasoning chars)`. The text is hashed, never stored.
+RecordCallback = Callable[[str, "Usage", str, int], None]
 
 
 def assemble_messages(pack: LocalePack, requested: list[ChatMessage]) -> list[Message]:
@@ -94,6 +94,16 @@ async def _chunks(
         yield chunk
 
 
+def empty_answer() -> GatewayError:
+    """A generation that ended with no visible text.
+
+    Said as an error rather than returned as a blank message: the reader waited for nothing and
+    must be told so. The usual cause is a model whose hidden reasoning used up the output budget
+    (`LLM_THINK`, `MAX_OUTPUT_TOKENS`), but the gateway cannot know that, so it reports the fact.
+    """
+    return GatewayError(ErrorCode.empty_answer, status_code=502)
+
+
 def _sse(payload: dict[str, object]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -116,7 +126,7 @@ async def create_chat_completion(
     messages = assemble_messages(pack, payload.messages)
     prompt_text = enforce_context_cap(messages, settings.max_context_chars)
 
-    def record(completion: str, usage: Usage, outcome: str) -> None:
+    def record(completion: str, usage: Usage, outcome: str, thinking_chars: int = 0) -> None:
         register.record(
             build_entry(
                 request_id=completion_id,
@@ -130,6 +140,7 @@ async def create_chat_completion(
                 prompt_tokens=usage.prompt_tokens or None,
                 completion_tokens=usage.completion_tokens or None,
                 outcome=outcome,
+                thinking_chars=thinking_chars,
             )
         )
 
@@ -165,17 +176,22 @@ async def create_chat_completion(
 
     parts: list[str] = []
     usage = Usage()
+    thinking_chars = 0
     try:
         async for chunk in _chunks(first, generation):
             parts.append(chunk.delta)
+            thinking_chars += chunk.thinking_chars
             if chunk.done:
                 usage = _usage_from(chunk)
     except GatewayError as error:
-        record("".join(parts), usage, error.code.value)
+        record("".join(parts), usage, error.code.value, thinking_chars)
         raise
 
     completion = "".join(parts)
-    record(completion, usage, "completed")
+    if not completion.strip():
+        record(completion, usage, ErrorCode.empty_answer.value, thinking_chars)
+        raise empty_answer()
+    record(completion, usage, "completed", thinking_chars)
     return ChatCompletionResponse(
         id=completion_id,
         created=created,
@@ -207,6 +223,7 @@ async def _stream_completion(
 ) -> AsyncIterator[str]:
     parts: list[str] = []
     usage = Usage()
+    thinking_chars = 0
     outcome = "completed"
 
     def envelope(delta: ChatCompletionDelta, finish_reason: FinishReason | None = None) -> str:
@@ -222,15 +239,18 @@ async def _stream_completion(
         yield envelope(ChatCompletionDelta(role="assistant", content=""))
         try:
             async for chunk in chunks:
+                thinking_chars += chunk.thinking_chars
                 if chunk.delta:
                     parts.append(chunk.delta)
                     yield envelope(ChatCompletionDelta(content=chunk.delta))
                 if chunk.done:
                     usage = _usage_from(chunk)
+            if not "".join(parts).strip():
+                raise empty_answer()
             yield envelope(ChatCompletionDelta(), finish_reason="stop")
         except GatewayError as error:
             outcome = error.code.value
             yield _sse(error.to_payload())
         yield STREAM_TERMINATOR
     finally:
-        record("".join(parts), usage, outcome)
+        record("".join(parts), usage, outcome, thinking_chars)

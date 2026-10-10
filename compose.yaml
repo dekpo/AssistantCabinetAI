@@ -19,6 +19,11 @@ services:
       # This Docker VM has a fixed memory budget; two large models resident at once can exceed
       # it and crash the model load (see docs/HARDWARE.md). One at a time, evicted on switch.
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      # How long a model stays loaded after the last question. Ollama's own default is 5 minutes,
+      # and loading takes 36 to 210 s on the development PC, so the first question after a quiet
+      # moment waited that long. Memory is plentiful on the Mac mini: set -1 there to keep the
+      # model loaded until the container stops.
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
     ports:
       - "127.0.0.1:${OLLAMA_HOST_PORT:-11434}:11434"
     volumes:
@@ -69,6 +74,9 @@ services:
       # The counterpart: how long an answer may be. Not a tuning knob - without it a model that
       # falls into a repetition loop writes until a client gives up (docs/TROUBLESHOOTING.md).
       MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-2048}
+      # Hidden reasoning of models that think: `default` leaves the model alone, `off` asks the
+      # runtime not to think (docs/MODELS.md, "Hidden reasoning").
+      LLM_THINK: ${LLM_THINK:-default}
       # The longest silence tolerated from the model, before the first word and between chunks.
       # Forwarded so that it can be set in .env: the gateway otherwise keeps its built-in 180 s.
       LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-180}

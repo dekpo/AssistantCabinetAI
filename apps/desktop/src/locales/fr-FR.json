@@ -324,6 +324,7 @@
     "ocr_unavailable": "La reconnaissance de texte n'est pas disponible. Les pages scannées sont signalées comme illisibles en attendant.",
     "output_locale_not_supported": "Ce logiciel ne sait pas encore répondre dans la langue {requested}.",
     "provider_capability_unsupported": "L'IA ne sait pas encore faire cela ({capability}).",
+    "empty_answer": "Le modèle n'a rien écrit. Posez de nouveau la question, ou choisissez un autre modèle dans les réglages.",
     "provider_error": "Le modèle n'a pas répondu correctement. Réessayez.",
     "provider_error_timeout": "Le modèle a mis trop de temps à démarrer, le plus souvent parce qu'il était encore en chargement. Réessayez : il est généralement prêt la seconde fois.",
     "provider_unreachable": "L'IA fonctionne mais son modèle ne répond pas. Prévenez la personne qui s'occupe de la machine.",

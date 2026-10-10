@@ -39,6 +39,9 @@ class GenerationChunk(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     delta: str = ""
+    #: How many characters of hidden reasoning this chunk carried. Only the count leaves the
+    #: provider: what the model wrote while thinking is never read, kept or logged.
+    thinking_chars: int = 0
     done: bool = False
     prompt_tokens: int | None = None
     completion_tokens: int | None = None

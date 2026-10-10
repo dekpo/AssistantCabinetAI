@@ -52,6 +52,20 @@ describe("errorMessage", () => {
     expect(errorMessage(french, error)).toContain("http://mac-mini.local:8080");
   });
 
+  it("says in both languages that the model returned nothing, with its own sentence", () => {
+    // A model that wrote no visible text must not look like a generic failure, nor like a blank
+    // message: the reader is told what happened and what to try.
+    const error = { code: "empty_answer", data: {} };
+
+    for (const translate of [french, english]) {
+      const message = errorMessage(translate, error);
+      expect(message).not.toBe(errorMessage(translate, { code: UNKNOWN_ERROR_CODE, data: {} }));
+      expect(message).not.toBe(errorMessage(translate, { code: "provider_error", data: {} }));
+      expect(message).not.toContain("empty_answer");
+    }
+    expect(errorMessage(french, error)).not.toBe(errorMessage(english, error));
+  });
+
   it("falls back to the generic sentence for a code it does not know", () => {
     const message = errorMessage(french, { code: "invented_tomorrow", data: {} });
 

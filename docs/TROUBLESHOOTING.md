@@ -8,6 +8,48 @@ with the exact command or code where it matters.
 
 ---
 
+## A blank answer, and a first question that waits minutes: hidden reasoning and a model unloaded after 5 minutes
+
+**Found:** 9 October 2026, in the small-model comparison (`docs/test-reports/small-model-comparison-1/`, section 10). The
+product showed `Assistant: (vide)`, then the Sources, then `Généré par qwen3.5 en 1m25s`: the model had worked for 85 seconds
+and the reader got a blank message with no error (KBD-08). Separately, the first question after a quiet moment took one to
+three minutes more than the next ones.
+
+**Cause, two independent things.**
+
+1. **Hidden reasoning.** Some models (`qwen3`, `gemma4:e2b` on a real prompt) write a reasoning into `message.thinking` before
+   the answer. The gateway keeps only `message.content`, so the reasoning is thrown away, but its tokens are generated, take
+   time and count against `num_predict` (`MAX_OUTPUT_TOKENS`, 2048). A model that spends the budget thinking returns no text.
+   Measured on the development PC, 2 000-token prompt, `qwen3:1.7b`: 44.8 s with it, 10.9 s with `think: false`.
+2. **Ollama unloads a model after 5 minutes** (`OLLAMA_KEEP_ALIVE` unset). Loading took 36 to 210 s on that PC
+   (`gemma4:e2b` 210 s, `ministral-3:3b` 137 to 154 s), and the next question pays it.
+
+**Fix.** `LLM_THINK=off` makes the provider send `"think": false` (top level of the `/api/chat` payload, never `true`: a model
+that cannot think answers `true` with HTTP 400, `"<tag>" does not support thinking`). Default `default`, which changes nothing.
+A generation that still ends with no visible text now ends in the machine code `empty_answer` (HTTP 502, or an error event in the
+stream), which the desktop shows as one sentence, and the register line carries `outcome "empty_answer"` and `thinking_chars`
+(a length, never the text). `OLLAMA_KEEP_ALIVE` defaults to `30m` in `compose.yaml`; `-1` keeps the model loaded until the
+container stops. Apply with `docker compose up -d` (the `ollama` service is recreated, so the first question after it loads
+the model again).
+
+**Timing pair through the new gateway code** (10 October 2026, development PC, CPU only, `qwen3:1.7b`, window 4096, a fictional
+1 593-token prompt that changes at its first line so Ollama's prompt cache cannot help, one run per cell):
+
+| `LLM_THINK` | Cold (model loading) | Warm, run 1 | Warm, run 2 | Hidden reasoning (chars) | Answer tokens |
+| --- | --- | --- | --- | --- | --- |
+| `default` | 98.9 s | 54.1 s | 53.6 s | 1 005 to 1 052 | 326 to 342 |
+| `off` | n/a | 33.6 s | 32.5 s | 0 | 81 to 88 |
+
+About 21 s saved per answer, all of it the reasoning. The fourfold gain of the comparison (44.8 s to 10.9 s) was a prompt Ollama
+had already read; here the 1 593 tokens are read each time, which is the larger part of the remaining 33 s. Answer quality with
+`off` was not scored.
+
+**To tell the two apart on a slow answer.** The gateway's `request` line (`docker compose logs server`) now has
+`thinking_chars`: non-zero on a fast-looking `completion_chars` means the time went into thinking. Where the code and the
+setting live: `providers/ollama.py`, `core/config.py` (`llm_think`), `api/chat.py` (`empty_answer`).
+
+---
+
 ## "The AI stopped answering" while indexing a long PDF: one 114 000-character embeddings request against a 60 s deadline
 
 **Found:** 7 October 2026, by the pilot's workstation. She pressed **Analyse** on a 42-page PDF and, after a few minutes, the

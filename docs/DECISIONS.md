@@ -843,6 +843,15 @@ milestones give way to capabilities (`docs/ROADMAP.md`).
 | Lists and citation | The complete lists are never versioned. The repository holds the 300 most frequent names of each list with their counts (`tests/fixtures/knowledge/names-sample-*.tsv`), cited in `README.md`, "Sources". The first look at the Insee first-name file was wrong about its encoding: it is UTF-8 without a byte order mark, upper case with accents; Windows tools that assume another code page show it as damaged. The US SSA site refuses clients that do not look like a browser (HTTP 403 with `curl`); `scripts/fetch_name_lists.py` sends ordinary browser headers and falls back to a manual download |
 | The owner's review | Run on 10 October 2026, 88 rows, **no exception**. Every row became a contract row, and six rules were fixed to match her answers (`Michelle`/`Michele`, `Diane`/`Dianne`, `Daniel`/`Daniele`, `Henri`/`Emrys`, `Mitchell`/`Michel`, `Tran`/`Trahan`). Versions stay `fr-rules:2` and `en-rules:1`: no key is stored yet |
 
+## Settled by the gateway fix "thinking and keep-alive" (10 October 2026)
+
+| Subject | Decision |
+| --- | --- |
+| Thinking switch | `LLM_THINK` in the gateway, `default` (nothing sent, today's behaviour) or `off` (`"think": false` at the top level of the Ollama payload). There is no `on`: a model without the capability refuses `think: true` with HTTP 400. The default stays `default` until the second pass of the small-model comparison shows that answers hold with thinking off |
+| Hidden reasoning is a length, never a text | The provider reads `message.thinking` only to count its characters (`GenerationChunk.thinking_chars`, register field `thinking_chars`). The text is never read further, kept, returned or logged (invariant I8) |
+| A generation with no visible text is an error | The gateway answers `empty_answer` (HTTP 502, or an error event in the stream) instead of a blank message; the desktop shows one plain sentence from its two catalogues. It applies to every chat call, including the query-plan call of the tabular interpreter, which already treated a failed call as "no plan". The register records `outcome "empty_answer"` |
+| Keep-alive | `OLLAMA_KEEP_ALIVE` defaults to `30m` in `compose.yaml` (Ollama's own: 5 minutes, against loads of 36 to 210 s on the development PC). `-1` on the Mac mini keeps the model loaded. The owner's `.env` is never edited by an agent |
+
 ## Out of scope until the pilot holds
 
 Fine-tuning, mobile applications, a multi-practice hosted service, autonomous overnight operation, a cloud

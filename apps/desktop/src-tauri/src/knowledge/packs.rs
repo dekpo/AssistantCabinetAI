@@ -113,8 +113,10 @@ const BUNDLED: &[BundledPack] = &[
 /// country is the jurisdiction whose rules and numbers it follows (`fr`, `ch`, and later `eu`, which
 /// is a region and not a country, or `de`, `be`...). A module for another country is **another
 /// pack**, never a switch inside one: `health-ch` is not `health-fr` plus a flag (`AGENTS.md`,
-/// "Markets"; `docs/DECISIONS.md`, "Knowledge packs are named domain-country"). The locale of a pack
-/// file is the *language* its words are written in and is independent of the country.
+/// "Markets"; `docs/DECISIONS.md`, "Knowledge packs are named domain-country"). The packs are
+/// **cumulative**: a cross-border worker has a French and a Swiss number, so any number of countries
+/// can be active together. The locale of a pack file is the *language* its words are written in and
+/// is independent of the country.
 pub const COUNTRY_CODES: &[&str] = &["fr", "ch", "eu"];
 
 /// The pack ids an earlier build wrote, each meaning the French pack of its domain.
@@ -131,11 +133,6 @@ pub fn canonical_pack_id(id: &str) -> &str {
         .iter()
         .find(|(old, _)| *old == id)
         .map_or(id, |(_, current)| *current)
-}
-
-/// The domain of a pack id: `health` for `health-ch`. An id without a country is its own domain.
-pub fn pack_domain(id: &str) -> &str {
-    id.rsplit_once('-').map_or(id, |(domain, _)| domain)
 }
 
 /// Whether `id` is of the form `<domain>-<country>` with a country code this build knows.
@@ -387,6 +384,28 @@ struct LoadedPack {
     relations: Vec<(RelationRule, usize)>,
     roles: Vec<RoleLabel>,
     detection_terms: Vec<String>,
+    /// Only the type vocabulary of this pack is read (see `PackSet::load_with_type_vocabulary`).
+    type_only: bool,
+}
+
+impl LoadedPack {
+    /// What an inactive pack still contributes: the words that say a name is a person's or an
+    /// organisation's. Nothing a module reads (identifiers, columns, roles, terms, stop-words).
+    fn reduced_to_type_vocabulary(self) -> Self {
+        Self {
+            canonical: format!("type-vocabulary\n{}", self.canonical),
+            particles: Vec::new(),
+            title_spoken: BTreeMap::new(),
+            stop_words: Vec::new(),
+            schemes: Vec::new(),
+            columns: Vec::new(),
+            relations: Vec::new(),
+            roles: Vec::new(),
+            detection_terms: Vec::new(),
+            type_only: true,
+            ..self
+        }
+    }
 }
 
 fn invalid(pack: &str, path: &str) -> AppError {
@@ -622,6 +641,7 @@ fn parse_pack(
         relations,
         roles,
         detection_terms: raw.detection_terms,
+        type_only: false,
     })
 }
 
@@ -708,6 +728,30 @@ impl PackSet {
     /// Load `base` and every pack of `active_pack_ids`, in that order, for `locale`. An id twice is
     /// read once. An id no bundled pack has is `knowledge_pack_invalid`.
     pub fn load(locale: &str, active_pack_ids: &[&str]) -> Result<Self, AppError> {
+        Self::load_inner(locale, active_pack_ids, false)
+    }
+
+    /// [`PackSet::load`], plus the **type vocabulary** of every other pack this build ships: the
+    /// titles and the organisation markers, and nothing else. This is what an Analyse reads names with.
+    ///
+    /// The rule behind it (owner, 11 October 2026): *a module improves the interpretation and the
+    /// detection of entities, it never excludes or transforms an entity type.* An organisation is an
+    /// organisation whichever modules are active, so "CPAM du Rhone" is never filed as a person
+    /// because only the Swiss module is on, or none. What a module switches on is what only it can
+    /// read: its identifier patterns (the French or the Swiss insurance number), its column
+    /// vocabulary, its role labels, its detection terms and its stop-words.
+    pub fn load_with_type_vocabulary(
+        locale: &str,
+        active_pack_ids: &[&str],
+    ) -> Result<Self, AppError> {
+        Self::load_inner(locale, active_pack_ids, true)
+    }
+
+    fn load_inner(
+        locale: &str,
+        active_pack_ids: &[&str],
+        with_type_vocabulary: bool,
+    ) -> Result<Self, AppError> {
         let mut ids: Vec<&str> = vec![BASE_PACK_ID];
         for id in active_pack_ids {
             if !ids.contains(id) {
@@ -719,6 +763,16 @@ impl PackSet {
         for id in &ids {
             let bundled = bundled_for(id, locale).ok_or_else(|| invalid(id, "pack"))?;
             parsed.push(parse_pack(bundled.id, bundled.locale, bundled.body)?);
+        }
+        if with_type_vocabulary {
+            for id in available_pack_ids() {
+                if ids.contains(&id) {
+                    continue;
+                }
+                let bundled = bundled_for(id, locale).ok_or_else(|| invalid(id, "pack"))?;
+                let pack = parse_pack(bundled.id, bundled.locale, bundled.body)?;
+                parsed.push(pack.reduced_to_type_vocabulary());
+            }
         }
         Self::merge(locale, parsed)
     }
@@ -750,7 +804,9 @@ impl PackSet {
 
         for pack in parsed {
             hasher.update(format!("{}:{}\n{}\n", pack.id, pack.locale, pack.canonical));
-            set.loaded.push((pack.id.clone(), pack.locale.clone()));
+            if !pack.type_only {
+                set.loaded.push((pack.id.clone(), pack.locale.clone()));
+            }
             set.titles.extend(pack.titles);
             set.weak_titles.extend(pack.weak_titles);
             set.particles.extend(pack.particles);

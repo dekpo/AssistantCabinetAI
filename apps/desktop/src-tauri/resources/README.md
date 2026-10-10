@@ -42,12 +42,15 @@ resources/knowledge/packs/<pack-id>/<locale>.json   optional: adds vocabulary fo
                                                     (health-fr, health-ch, legal-fr, accounting-fr)
 ```
 
-A pack id is `<domain>-<country>` (`health-fr`, `health-ch`, later `health-eu`, `legal-ch`...), and **modules are never
-mixed**: `health-ch` is the Swiss module, chosen **instead of** `health-fr` (« Réglages » -> « Module santé »), not added
-to it. Each is complete on its own (its own numbers, `nir` or `avs`; its own organisations; the patient and practitioner
-vocabulary). `health-fr` is on by default. The locale of a file (`fr-FR`, `en-US`) is the language of its words; the id
-carries the country. The product serves health professionals in France and in Switzerland; any further country is
-another pack (`docs/DECISIONS.md`, "Knowledge packs are named domain-country").
+A pack id is `<domain>-<country>` (`health-fr`, `health-ch`, later `health-eu`, `legal-ch`...). Each pack is a separate
+file and complete on its own (its own numbers, its own organisations, the patient and practitioner vocabulary), but the
+packs are **cumulative**: « Réglages » has one tick per country (« Santé : France », « Santé : Suisse »), and both can be on, as
+for a French cross-border worker who has a French and a Swiss number. **A module never excludes or transforms an entity
+type**: the titles and the organisation markers of every shipped pack are always read (`PackSet::load_with_type_vocabulary`),
+so a CPAM stays an organisation whatever is ticked; a module switches on only what only it can read (its identifier
+patterns, column vocabulary, role labels, stop-words, detection terms). `health-fr` is on by default. The locale of a file
+(`fr-FR`, `en-US`) is the language of its words; the id carries the country (`docs/DECISIONS.md`, "Knowledge packs are
+named domain-country").
 
 A pack holds **words and patterns only, never a sentence a person reads** (a sentence is an interface catalogue
 entry). Every file has `schema: 1`, its own `id` and `locale`, and these optional fields:

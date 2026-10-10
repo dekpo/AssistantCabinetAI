@@ -3,7 +3,7 @@ import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
 import type { AppSettings, KnowledgeMode, ThemeChoice } from "../lib/ipc";
-import { HEALTH_MODULES, healthModuleOf, packsForHealthModule } from "../lib/knowledgePacks";
+import { HEALTH_MODULES, isModuleOn, withModule } from "../lib/knowledgePacks";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DataFolderCard } from "./DataFolderCard";
@@ -246,28 +246,30 @@ export function SettingsDialog({
           </select>
         </label>
 
-        <label className="field">
+        {/* One tick per country: a cross-border worker has both a French and a Swiss number, so the
+            modules add up and never exclude one another. Nothing ticked is no health module. */}
+        <div className="field">
           <span className="field__label">{t("settings.healthModuleLabel")}</span>
           <span className="field__description">{t("settings.healthModuleDescription")}</span>
-          <select
-            className="field__control"
-            value={healthModuleOf(settings.knowledgePacks)}
-            onChange={(event) =>
-              onUpdate({
-                knowledgePacks: packsForHealthModule(
-                  settings.knowledgePacks,
-                  event.target.value as (typeof HEALTH_MODULES)[number],
-                ),
-              })
-            }
-          >
-            {HEALTH_MODULES.map((choice) => (
-              <option key={choice} value={choice}>
-                {t(`settings.healthModule.${choice}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+          {HEALTH_MODULES.map((module) => (
+            <label className="field__row" key={module.id}>
+              <input
+                type="checkbox"
+                checked={isModuleOn(settings.knowledgePacks, module.id)}
+                onChange={(event) =>
+                  onUpdate({
+                    knowledgePacks: withModule(
+                      settings.knowledgePacks,
+                      module.id,
+                      event.target.checked,
+                    ),
+                  })
+                }
+              />
+              <span>{t(module.labelKey)}</span>
+            </label>
+          ))}
+        </div>
 
         {/* Measurement switches, kept apart under their own heading: neither changes what an answer
             says. They are off unless she turns them on (`docs/DECISIONS.md`, "KB lot 0"). */}

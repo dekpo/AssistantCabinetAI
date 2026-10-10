@@ -312,11 +312,10 @@
       "auto": "Automatique (identique à « Activée » pour l'instant)"
     },
     "healthModuleLabel": "Module santé",
-    "healthModuleDescription": "Le vocabulaire et les numéros propres au pays de vos patients : numéro de sécurité sociale en France, numéro AVS en Suisse. Pris en compte à la prochaine analyse que vous lancez.",
+    "healthModuleDescription": "Cochez le ou les pays de vos patients : un frontalier peut avoir un numéro de sécurité sociale français et un numéro AVS. Un module aide à mieux lire les numéros et le vocabulaire de son pays, sans jamais retirer ni changer le type d'un nom. Pris en compte à la prochaine analyse que vous lancez.",
     "healthModule": {
       "france": "Santé : France",
-      "switzerland": "Santé : Suisse (numéro AVS, IBAN et téléphone suisses)",
-      "none": "Aucun module"
+      "switzerland": "Santé : Suisse"
     },
     "advancedLabel": "Avancé",
     "timingLogLabel": "Noter les durées dans un journal",

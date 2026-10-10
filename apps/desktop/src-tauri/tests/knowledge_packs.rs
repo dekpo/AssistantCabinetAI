@@ -618,36 +618,89 @@ fn every_optional_pack_is_named_domain_dash_country() {
 }
 
 #[test]
-fn the_french_and_the_swiss_health_modules_are_each_complete_and_never_mixed() {
+fn each_health_module_is_complete_alone_and_both_can_be_on_together() {
     for locale in locales() {
         let france = PackSet::load(locale, &["health-fr"]).unwrap();
         let switzerland = PackSet::load(locale, &["health-ch"]).unwrap();
+        let both = PackSet::load(locale, &["health-fr", "health-ch"]).unwrap();
         let ids = |set: &PackSet| -> BTreeSet<String> {
             set.identifier_schemes()
                 .iter()
                 .map(|s| s.id.clone())
                 .collect()
         };
-        // Each country has its own numbers and none of the other's.
+        // Each country brings its own number and not the other's...
         assert!(ids(&switzerland).contains("avs"), "{locale}");
         assert!(!ids(&france).contains("avs"), "{locale}");
         assert!(
             !ids(&switzerland).contains("nir") && !ids(&switzerland).contains("ssn"),
             "{locale}"
         );
-        // Each is usable alone: the patient and the practitioner are known in both.
+        // ...each is usable alone...
         for (name, set) in [("health-fr", &france), ("health-ch", &switzerland)] {
             assert!(set.column_rule_for("patient").is_some(), "{locale} {name}");
             assert!(set.roles().count() >= 2, "{locale} {name}");
         }
+        // ...and both together read both numbers, as for a cross-border worker.
+        let together = ids(&both);
+        assert!(together.contains("avs"), "{locale}");
+        assert!(
+            together.contains("nir") || together.contains("ssn"),
+            "{locale}"
+        );
     }
-    // French-only words stay French.
-    let french_words = PackSet::load("fr-FR", &["health-ch"]).unwrap();
-    assert!(french_words
-        .org_markers()
-        .prefix
-        .iter()
-        .all(|m| m != &vec!["cpam".to_string()]));
+}
+
+#[test]
+fn the_type_vocabulary_of_every_pack_is_read_whatever_modules_are_on() {
+    // A module never excludes or transforms an entity type (owner, 11 October 2026): the words that
+    // make an organisation an organisation come from every shipped pack, active or not.
+    let prefixes = |set: &PackSet| -> Vec<String> {
+        set.org_markers()
+            .prefix
+            .iter()
+            .map(|words| words.join(" "))
+            .collect()
+    };
+    for active in [
+        vec![],
+        vec!["health-ch"],
+        vec!["health-fr"],
+        vec!["legal-fr"],
+    ] {
+        let set = PackSet::load_with_type_vocabulary("fr-FR", &active).unwrap();
+        assert!(prefixes(&set).contains(&"cpam".to_string()), "{active:?}");
+        assert!(
+            prefixes(&set).contains(&"caisse maladie".to_string()),
+            "{active:?}"
+        );
+        // What only a module reads is still switched by it.
+        let schemes: Vec<_> = set
+            .identifier_schemes()
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect();
+        assert_eq!(
+            schemes.contains(&"nir"),
+            active.contains(&"health-fr"),
+            "{active:?}"
+        );
+        assert_eq!(
+            schemes.contains(&"avs"),
+            active.contains(&"health-ch"),
+            "{active:?}"
+        );
+        assert!(
+            set.loaded()
+                .iter()
+                .all(|(id, _)| id == "base" || active.contains(&id.as_str())),
+            "an inactive pack is not listed as loaded: {:?}",
+            set.loaded()
+        );
+    }
+    // The plain loader stays exactly what was asked for.
+    let plain = PackSet::load("fr-FR", &["health-ch"]).unwrap();
+    assert!(!prefixes(&plain).contains(&"cpam".to_string()));
 }
 
 #[test]

@@ -1,28 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { healthModuleOf, packsForHealthModule } from "./knowledgePacks";
+import { HEALTH_MODULES, isModuleOn, withModule } from "./knowledgePacks";
 
-describe("the health module of the knowledge base", () => {
-  it("reads the module from the list of packs", () => {
-    expect(healthModuleOf([])).toBe("none");
-    expect(healthModuleOf(["legal-fr"])).toBe("none");
-    expect(healthModuleOf(["health-fr"])).toBe("france");
-    expect(healthModuleOf(["health-ch"])).toBe("switzerland");
-    // A hand-edited file that lists both: Switzerland decides.
-    expect(healthModuleOf(["health-fr", "health-ch"])).toBe("switzerland");
+describe("the health modules of the knowledge base", () => {
+  it("offers one choice per country", () => {
+    expect(HEALTH_MODULES.map((module) => module.id)).toEqual(["health-fr", "health-ch"]);
   });
 
-  it("writes the list for each choice, one health pack, never two", () => {
-    expect(packsForHealthModule([], "france")).toEqual(["health-fr"]);
-    expect(packsForHealthModule(["health-fr"], "switzerland")).toEqual(["health-ch"]);
-    expect(packsForHealthModule(["health-fr", "health-ch"], "none")).toEqual([]);
-    expect(packsForHealthModule(["health-ch"], "france")).toEqual(["health-fr"]);
+  it("reads each module from the list of packs", () => {
+    expect(isModuleOn([], "health-fr")).toBe(false);
+    expect(isModuleOn(["health-fr"], "health-fr")).toBe(true);
+    expect(isModuleOn(["health-fr"], "health-ch")).toBe(false);
   });
 
-  it("carries any other pack through untouched", () => {
-    expect(packsForHealthModule(["health-fr", "legal-fr"], "switzerland")).toEqual([
+  it("lets both countries be on at once, as for a cross-border worker", () => {
+    const both = withModule(withModule([], "health-fr", true), "health-ch", true);
+    expect(both).toEqual(["health-fr", "health-ch"]);
+    expect(isModuleOn(both, "health-fr") && isModuleOn(both, "health-ch")).toBe(true);
+  });
+
+  it("switches one module off without touching the other, or any other pack", () => {
+    expect(withModule(["health-fr", "health-ch", "legal-fr"], "health-fr", false)).toEqual([
       "health-ch",
       "legal-fr",
     ]);
-    expect(packsForHealthModule(["legal-fr", "accounting-fr"], "none")).toEqual(["legal-fr", "accounting-fr"]);
+    expect(withModule(["health-fr"], "health-ch", false)).toEqual(["health-fr"]);
+    expect(withModule(["health-fr"], "health-fr", true)).toEqual(["health-fr"]);
   });
 });

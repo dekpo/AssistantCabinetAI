@@ -184,7 +184,8 @@ impl KnowledgeContext {
         mode: KnowledgeMode,
         key: IdentifierKey,
     ) -> Result<Self, AppError> {
-        let packs = PackSet::load(locale, active_packs)?;
+        // The type vocabulary of every shipped pack is always read: a module never changes a type.
+        let packs = PackSet::load_with_type_vocabulary(locale, active_packs)?;
         let titles = packs.title_set();
         Ok(Self {
             mode,

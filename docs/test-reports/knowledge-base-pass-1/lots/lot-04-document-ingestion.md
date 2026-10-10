@@ -88,11 +88,11 @@ Windows 11, debug profile, `kb/integration` plus this lot. Baseline measured bef
 
 | Command | Baseline | After |
 | --- | --- | --- |
-| `cargo test` (all targets, from `apps/desktop/src-tauri`) | 894 passed, 0 failed, 7 ignored | **983 passed, 0 failed, 10 ignored** (+89: 44 unit tests, 43 in `tests/knowledge_documents.rs`, 2 in `tests/knowledge_packs.rs`). `tests/chat_idle_timeout.rs` (timing) failed once under load while another build ran and passed on three reruns: flaky, not related |
+| `cargo test` (all targets, from `apps/desktop/src-tauri`) | 894 passed, 0 failed, 7 ignored | **986 passed, 0 failed, 10 ignored** (+92: 44 unit tests, 45 in `tests/knowledge_documents.rs`, 3 in `tests/knowledge_packs.rs`). `tests/chat_idle_timeout.rs` (timing) failed once under load while another build ran and passed on three reruns: flaky, not related |
 | of which `--lib` (what CI runs) | 636 | 680 |
 | `cargo clippy --lib` | 21 warnings (the figure of lot 3's report, not re-run before the first change) | **21** (two new ones were fixed on the way) |
 | `rustfmt --edition 2021 --check` | - | clean on `knowledge/mod.rs` (which formats every module under it), `tests/knowledge_documents.rs`, `tests/common/knowledge.rs`, `tests/knowledge_store.rs`; `commands.rs` (11 hunks) and `index_store.rs` (4) had the same hunks before this lot (measured on `HEAD`); no plain `cargo fmt` was run |
-| `pnpm run test` (from `apps/desktop`) | 342 passed (26 files), the figure of lot 3's report, not re-run before the first change | **357 passed** (28 files; tests for the summary lines and for the health-module choice, plus one per new `.rs` file for the source guard) |
+| `pnpm run test` (from `apps/desktop`) | 342 passed (26 files), the figure of lot 3's report, not re-run before the first change | **358 passed** (28 files; tests for the summary lines and for the health-module choice, plus one per new `.rs` file for the source guard) |
 | `pnpm run build` | OK | OK |
 | `apps/server` `pytest` | not run | not run: nothing there changed |
 
@@ -112,7 +112,7 @@ What it found in the pilot's documents (`cargo test --test knowledge_documents p
 
 ## Added after the owner's replay (11 October 2026)
 
-- **The health pack is on by default**: `Settings.knowledge_packs` (default `["health-fr"]`), the pack `health-ch` (AVS / AHV number, Swiss IBAN and phone, as `health_insurance_number`, `iban`, `phone`), and two choices in « Réglages » (« Base de connaissances », « Module santé »). **Renamed the same day on the owner's instruction:** `health`, `legal`, `accounting` became `health-fr`, `legal-fr`, `accounting-fr` (directories, ids, settings, interface); an id written by an earlier build is read as its `-fr` name; the Swiss module replaces the French one instead of being added to it, `health-ch` was made complete on its own, and `Settings::knowledge_pack_ids` keeps one pack per domain. Done in the same session as the rest of the replay.
+- **The health pack is on by default**: `Settings.knowledge_packs` (default `["health-fr"]`), the pack `health-ch` (AVS / AHV number, Swiss IBAN and phone, as `health_insurance_number`, `iban`, `phone`), and two choices in « Réglages »: « Base de connaissances » and, as one tick per country, « Santé : France » and « Santé : Suisse ». **Reworked twice on the owner's instruction of 11 October 2026.** First, the packs were renamed `health-fr`, `legal-fr`, `accounting-fr` (an older id is read as its `-fr` name). Then, after the replay of B9, the design was corrected: the packs are separate files but **cumulative** (both countries can be on, for a cross-border worker), and **a module never excludes or transforms an entity type** (the titles and organisation markers of every shipped pack are always read, so a CPAM is an organisation whatever is ticked). My first version made Switzerland *replace* France and let `CPAM du Rhone` become a person; that was wrong and is removed. A pack list is read at the next Analyse only.
 - **The start-up refresh is gone**; the Analyse progress bar is labelled while documents analysed earlier are read again (`IndexProgress.reading_names`, a field added to the progress event, sent only when true).
 - **Extractor fixes** found while preparing the replay: small words in capitals (`DU`) are particles, a capitalised particle is not a name, an organisation prefix marker may be followed directly by a small word (`CPAM du Rhone`).
 - **The human test Part B was rewritten** so that nothing is edited by hand: `human-tests/lot04_helper.py` does every file change.
@@ -130,13 +130,13 @@ What it found in the pilot's documents (`cargo test --test knowledge_documents p
 
 ## Human test
 
-`docs/test-reports/knowledge-base-pass-1/human-tests/lot-04-document-ingestion.md` - **proposed, not yet run.** Visible in the application: **partly** (the summary line; the names through the script). Part A (5 minutes, no application): what a pass learns from the pilot's documents. Part B (rewritten on 11 October 2026 so that nothing is edited by hand: a helper script sets the mode, creates and changes the test files and shows the result): the kill switch, the upgrade of an index analysed before the knowledge base, a second Analyse that changes nothing, a changed file, a deleted file, an e-mail address and an IBAN that are not written as themselves, a lost key. Part C: the usual smoke test. The agent ran everything of Parts A and B as automated tests, and every command of the helper script on a temporary copy of the fixtures; it did not open the window.
+`docs/test-reports/knowledge-base-pass-1/human-tests/lot-04-document-ingestion.md` - **run and accepted by the owner on 11 October 2026** (Part A, Part B and the smoke test of Part C). Replays found: the unusable wording of Part B (rewritten with a helper script), the start-up refresh (removed), the pack naming and the Swiss option (reworked twice, final design above), and defect KBD-13. Findings fixed on the lot branch in a second commit before the merge. The agent ran the whole scenario as automated tests; the owner ran it in the application.
 
 ## Open questions
 
 **Answered by the owner on 11 October 2026** (the first replay of the human test, Part A):
 
-1. **Switch the health pack on for the pilot: yes.** It is the default of the new setting `knowledge_packs`. The owner added a binding note: the product also serves **Swiss health professionals** (AVS / AHV number) and the generic term is **health insurance number**. A second note (replay of 11 October): packs are named **`<domain>-<country>`** and **never mixed** (`health-fr`, `health-ch`, later `health-eu`, `legal-ch`...), with knowledge providers as the direction. Written in `AGENTS.md` and `docs/DECISIONS.md`, "Knowledge packs are named domain-country".
+1. **Switch the health pack on for the pilot: yes.** It is the default of the new setting `knowledge_packs`. The owner added a binding note: the product also serves **Swiss health professionals** (AVS / AHV number) and the generic term is **health insurance number**. A second note (replay of 11 October): packs are named **`<domain>-<country>`** (`health-fr`, `health-ch`, later `health-eu`, `legal-ch`...) as separate files, cumulative at run time, and **a module never excludes or transforms an entity type**; knowledge providers are the direction. Written in `AGENTS.md` and `docs/DECISIONS.md`, "Knowledge packs are named domain-country".
 2. **OCR floor to create a name (0.80): kept**, calibrated in lot 11 unless something forces it earlier. Nothing in lot 4 does.
 3. **The start-up refresh is removed.** No silent background task: the relecture runs only inside an Analyse the user starts (a global rule, now in `AGENTS.md`). The two commands, the interface call and the shared state are gone.
 
@@ -164,18 +164,21 @@ Lot 6 needs lots 4 **and 5** merged.
 
 ## Git
 
+First commit (`7bb0311`, pull request #28 on `kb/integration`, CI green on the four jobs): the lot as first delivered. Second commit, on the same branch, with the corrections the owner's replay asked for (cumulative modules that never change a type, one tick per country, the label, the docs):
+
 ```text
 git status
-git add AGENTS.md apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock apps/desktop/src-tauri/resources apps/desktop/src-tauri/src apps/desktop/src-tauri/tests apps/desktop/src docs/ARCHITECTURE.md docs/CLIENT.md docs/DECISIONS.md docs/PRIVACY-AND-SECURITY.md docs/test-reports/knowledge-base-pass-1
-git commit -m "feat: record entities when a document is analysed"
-git push -u origin feat/kb-document-ingestion
-gh pr create --title "feat: record entities when a document is analysed" --body "Lot 4 of the Knowledge Base programme. Analysing a document now teaches the knowledge base the people, organisations and identifiers it names, in the same transaction as its chunks, with the chunk each one was found in (a deterministic text extractor driven by the lexicon packs, resolved against what the base holds and against the entities the document has just drafted). Documents analysed before the knowledge base existed, or while it was off, are read again from the text the index already stores, at the end of an Analyse the user starts, with no request to the gateway. A knowledge failure is applied in a savepoint and never costs a document its place in the index. A surname alone creates nobody. E-mail addresses, social security numbers and IBANs are stored only as a keyed hash, with the key in a file beside the index. knowledge_mode (off, suggest, auto; default suggest) is a new setting; off writes no knowledge row. The Analyse summary gains counts-only lines. hmac and getrandom become direct dependencies (already in the tree). Two lot 1 tests that encoded the old all-or-nothing rollback are rewritten for the new rule." --base kb/integration
+git add AGENTS.md apps/desktop/src-tauri/resources/README.md apps/desktop/src-tauri/src apps/desktop/src-tauri/tests apps/desktop/src docs/DECISIONS.md docs/test-reports/knowledge-base-pass-1
+git commit -m "fix: keep health modules cumulative and never change an entity type"
+git push
+gh pr edit 28 --body "<updated description, see the final message of the lot>"
+gh pr checks 28 --watch
 ```
 
-After the owner has accepted the human test and CI is green:
+After CI is green on the new push:
 
 ```text
-gh pr merge feat/kb-document-ingestion --merge
+gh pr merge 28 --merge
 git switch kb/integration
 git pull
 git tag kb-after-lot-04

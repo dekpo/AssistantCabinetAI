@@ -633,6 +633,79 @@ Le service des affiliations, CPAM du Rhone (fictif).
     assert_eq!(organisation.type_id, "organization");
 }
 
+#[tokio::test]
+async fn a_module_never_changes_the_type_of_a_name() {
+    // Owner rule of 11 October 2026: a module improves detection, it never excludes or transforms an
+    // entity type. The same document gives the same people and organisations with no module, with the
+    // French one, with the Swiss one, with both and with another domain's.
+    let text =
+        "Courrier : Docteur Jean Dupont a ecrit a la CPAM du Rhone et a la Clinique du Parc, \
+                voir aussi Association Les Amis Du Parc et Dupont Freres SARL.\n";
+    let mut seen: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    for packs in [
+        vec![],
+        vec!["health-fr"],
+        vec!["health-ch"],
+        vec!["health-fr", "health-ch"],
+        vec!["legal-fr"],
+    ] {
+        let mut lab = Lab::new();
+        lab.packs = packs.clone();
+        lab.write("courrier.txt", text);
+        lab.analyse().await;
+        let mut names: Vec<(String, String)> = entities(&lab.side())
+            .into_iter()
+            .filter(|row| row.type_id != "identifier")
+            .map(|row| (row.type_id, row.canonical))
+            .collect();
+        names.sort();
+        seen.push((format!("{packs:?}"), names));
+    }
+    let (first_modules, first) = &seen[0];
+    assert!(
+        first.contains(&("organization".to_string(), "CPAM du Rhone".to_string())),
+        "{first:?}"
+    );
+    assert!(
+        !first
+            .iter()
+            .any(|(kind, name)| kind == "person" && name.contains("CPAM")),
+        "an organisation is never a person: {first:?}"
+    );
+    for (modules, names) in &seen[1..] {
+        assert_eq!(
+            names, first,
+            "the modules {modules} changed what {first_modules} found"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_cross_border_worker_has_a_french_and_a_swiss_number_and_both_are_read() {
+    let mut lab = Lab::new();
+    lab.packs = vec!["health-fr", "health-ch"];
+    lab.write(
+        "frontalier.txt",
+        "Patient : securite sociale 1 85 03 69 123 456 78 et numero AVS 756.1234.5678.97.\n",
+    );
+
+    lab.analyse().await;
+
+    let numbers: Vec<_> = entities(&lab.side())
+        .into_iter()
+        .filter(|row| row.subtype.as_deref() == Some("health_insurance_number"))
+        .collect();
+    assert_eq!(numbers.len(), 2, "{numbers:?}");
+    assert!(
+        numbers.iter().all(|row| row.normalized.len() == 64),
+        "hashes only"
+    );
+    let texts = every_text_value(&lab.side());
+    assert!(!texts
+        .iter()
+        .any(|t| t.contains("185036912345678") || t.contains("7561234567897")));
+}
+
 // ------------------------------------------------------------------------------------ lifecycle
 
 #[tokio::test]

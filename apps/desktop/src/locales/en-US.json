@@ -312,11 +312,10 @@
       "auto": "Automatic (same as \"On\" for now)"
     },
     "healthModuleLabel": "Health module",
-    "healthModuleDescription": "The vocabulary and the numbers specific to your patients' country: social security number in France, AVS number in Switzerland. Applied at the next analysis you start.",
+    "healthModuleDescription": "Tick the country or countries of your patients: a cross-border worker can have both a French social security number and an AVS number. A module helps read the numbers and vocabulary of its country, and never removes or changes the type of a name. Applied at the next analysis you start.",
     "healthModule": {
       "france": "Health: France",
-      "switzerland": "Health: Switzerland (AVS number, Swiss IBAN and telephone)",
-      "none": "No module"
+      "switzerland": "Health: Switzerland"
     },
     "advancedLabel": "Advanced",
     "timingLogLabel": "Write the timings to a log",

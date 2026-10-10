@@ -1,50 +1,27 @@
 /**
- * The health module of the knowledge base, as the settings dialog offers it. The product serves
- * health professionals in France and in Switzerland, whose patients carry different numbers (the
- * French social security number, the Swiss AVS / AHV number), so the module has a country option
- * (`docs/DECISIONS.md`, "Health professionals in Switzerland").
+ * The health modules of the knowledge base, as the settings dialog offers them: one choice per
+ * country, any number of them on at once. The product serves health professionals in France and in
+ * Switzerland, and a cross-border worker has both a French and a Swiss number, so the modules are
+ * cumulative, never exclusive (`docs/DECISIONS.md`, "Knowledge packs are named domain-country").
  *
- * What is stored is the list of lexicon pack ids (`knowledgePacks` in the settings). The choice
- * below is only how that list is shown and edited; any other pack in the list (a legal or an
- * accounting pack) is carried through untouched.
- *
- * A pack id is `<domain>-<country>` (`health-fr`, `health-ch`, later `health-eu`, `legal-ch`...): a
- * module for another country is another pack, never a switch inside one
- * (`docs/DECISIONS.md`, "Knowledge packs are named domain-country").
+ * What is stored is the list of lexicon pack ids (`knowledgePacks` in the settings); a pack id is
+ * `<domain>-<country>`. A module only improves what is read (identifiers, columns, vocabulary): it
+ * never removes or changes the type of a name, which Rust guarantees. Any other pack in the list
+ * (a legal or an accounting pack) is carried through untouched.
  */
-export type HealthModule = "none" | "france" | "switzerland";
+export const HEALTH_MODULES = [
+  { id: "health-fr", labelKey: "settings.healthModule.france" },
+  { id: "health-ch", labelKey: "settings.healthModule.switzerland" },
+] as const;
 
-export const HEALTH_PACK = "health-fr";
-export const SWISS_HEALTH_PACK = "health-ch";
+export type HealthModuleId = (typeof HEALTH_MODULES)[number]["id"];
 
-export const HEALTH_MODULES: HealthModule[] = ["france", "switzerland", "none"];
-
-export function healthModuleOf(packs: readonly string[]): HealthModule {
-  if (packs.includes(SWISS_HEALTH_PACK)) {
-    return "switzerland";
-  }
-  return packs.includes(HEALTH_PACK) ? "france" : "none";
+export function isModuleOn(packs: readonly string[], id: HealthModuleId): boolean {
+  return packs.includes(id);
 }
 
-/** The health packs, whatever their country: `health-fr`, `health-ch`, later `health-eu`. */
-function isHealthPack(id: string): boolean {
-  return id.startsWith("health-");
-}
-
-/**
- * The pack list after the user picks a module: the packs of other domains stay, and exactly one
- * health pack is set. Switzerland is `health-ch` **instead of** `health-fr`, never beside it: the
- * modules of two countries are not mixed (`docs/DECISIONS.md`, "Knowledge packs are named
- * domain-country").
- */
-export function packsForHealthModule(packs: readonly string[], choice: HealthModule): string[] {
-  const others = packs.filter((id) => !isHealthPack(id));
-  switch (choice) {
-    case "france":
-      return [HEALTH_PACK, ...others];
-    case "switzerland":
-      return [SWISS_HEALTH_PACK, ...others];
-    case "none":
-      return others;
-  }
+/** The pack list after a module is switched on or off: only that pack changes, once, in order. */
+export function withModule(packs: readonly string[], id: HealthModuleId, on: boolean): string[] {
+  const others = packs.filter((known) => known !== id);
+  return on ? [...others, id] : others;
 }

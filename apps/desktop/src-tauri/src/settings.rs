@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 use crate::error::AppError;
-use crate::knowledge::packs::{available_pack_ids, canonical_pack_id, pack_domain};
+use crate::knowledge::packs::{available_pack_ids, canonical_pack_id};
 use crate::knowledge::KnowledgeMode;
 use crate::work_folder::{display, WorkFolderPolicy};
 
@@ -103,7 +103,8 @@ pub struct Settings {
     /// A pack id is `<domain>-<country>`: `health-fr`, `health-ch`, `legal-fr`, `accounting-fr`,
     /// and later `health-eu`, `legal-ch`... (`docs/DECISIONS.md`, "Knowledge packs are named
     /// domain-country"). The product serves health professionals in France and in Switzerland, so
-    /// `health-fr` is on by default and the Swiss module is a choice in the settings. Only the ids a
+    /// `health-fr` is on by default and the Swiss module is a choice in the settings; both can be on
+    /// (cross-border workers). Only the ids a
     /// build ships are kept, and an id written by an earlier build (`health`, `legal`,
     /// `accounting`, which meant the French pack) is read as its `-fr` name
     /// (`Settings::knowledge_pack_ids`).
@@ -140,10 +141,9 @@ impl Settings {
         let mut kept: Vec<String> = Vec::new();
         for stored in &self.knowledge_packs {
             let id = canonical_pack_id(stored);
-            // One pack per domain: the modules of two countries are never mixed, so a second
-            // `health-*` is dropped whatever its country (the first one stored wins).
-            let domain = pack_domain(id);
-            if shipped.contains(&id) && !kept.iter().any(|known| pack_domain(known) == domain) {
+            // Any number of countries can be active together (a cross-border worker has a French
+            // and a Swiss number): the packs are cumulative.
+            if shipped.contains(&id) && !kept.iter().any(|known| known == id) {
                 kept.push(id.to_string());
             }
         }
@@ -328,7 +328,7 @@ mod tests {
             show_diagnostics: true,
             write_timing_log: true,
             knowledge_mode: KnowledgeMode::Auto,
-            knowledge_packs: vec!["health-ch".into(), "legal-fr".into()],
+            knowledge_packs: vec!["health-fr".into(), "health-ch".into()],
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(json["showDiagnostics"], true);
         assert_eq!(json["writeTimingLog"], true);
         assert_eq!(json["knowledgeMode"], "auto");
-        assert_eq!(json["knowledgePacks"][0], "health-ch");
+        assert_eq!(json["knowledgePacks"][1], "health-ch");
 
         assert_eq!(json["locale"], "fr-FR");
         assert_eq!(json["theme"], "system");
@@ -468,8 +468,8 @@ mod tests {
             r#"{"knowledgePacks":["health-ch","nonsense","health-fr","health-ch"]}"#,
         )
         .expect("loads");
-        // Two countries of one domain are never mixed: the first stored wins.
-        assert_eq!(odd.knowledge_pack_ids(), ["health-ch"]);
+        // Countries are cumulative (a cross-border worker): both stay, once each, in stored order.
+        assert_eq!(odd.knowledge_pack_ids(), ["health-ch", "health-fr"]);
 
         // An id written before the packs were named domain-country meant the French pack.
         let legacy: Settings =

@@ -143,3 +143,10 @@ export function combinedHasSelection(scope: CombinedScope): boolean {
     mode.kind === "whole_folder" || mode.entries.length > 0;
   return some(scope.mode) || some(scope.dataMode);
 }
+
+/** Whether any document is selected (the Data side is not looked at). The suggestions are drawn
+ * under the card of the documents when it is, and under the card of the data otherwise, so that
+ * the same block is never drawn twice. */
+export function documentsSelected(scope: CombinedScope): boolean {
+  return scope.mode.kind === "whole_folder" || scope.mode.entries.length > 0;
+}

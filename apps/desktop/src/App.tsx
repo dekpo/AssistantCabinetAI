@@ -5,10 +5,16 @@ import { ErrorBanner } from "./components/ErrorBanner";
 import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { SuggestionChips } from "./components/SuggestionChips";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
-import { addScopeFiles, combineScopes, noDocumentsScope } from "./lib/analysisScope";
+import {
+  addScopeFiles,
+  combineScopes,
+  documentsSelected,
+  noDocumentsScope,
+} from "./lib/analysisScope";
 import {
   dataFolderInventory,
   indexDataFolder,
@@ -56,6 +62,15 @@ export default function App() {
   /* The workbooks, chosen the same way in the Data Folder card and starting from none too. */
   const [dataScope, setDataScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
+  /* Suggestions that name somebody are hidden by default: a screen can be seen by whoever waits in
+     the room. The user's own click shows them for this session only; nothing is stored, and the
+     setting itself is not changed. */
+  const [revealNames, setRevealNames] = useState(false);
+  /* A suggestion chosen under an analysis summary asks its question in the conversation. */
+  const [requestedQuestion, setRequestedQuestion] = useState<{
+    text: string;
+    nonce: number;
+  } | null>(null);
   const workFolder = snapshot?.settings.workFolder ?? null;
   /* Files chosen in one folder mean nothing in another: their paths would resolve to nothing and
      every question would be refused. A different folder starts from no document again. Analyse
@@ -94,6 +109,29 @@ export default function App() {
       }
     },
     [chatBusy],
+  );
+  /* The questions are looked for again whenever a pass finished (the base may have changed) or a
+     setting that decides what is shown changed (the mode, whether names are hidden, the language),
+     and never while a pass is writing. */
+  const suggestionsRefresh = [
+    indexing.finishedPasses,
+    dataIndexing.finishedPasses,
+    snapshot?.settings.knowledgeMode,
+    snapshot?.settings.knowledgeHideNamesInSuggestions,
+    snapshot?.settings.locale,
+  ].join("-");
+  const suggestionsEnabled = !indexing.running && !dataIndexing.running;
+  const suggestionsInTheCard = (
+    <SuggestionChips
+      compact
+      scope={chatScope}
+      revealNames={revealNames}
+      onRevealNamesChange={setRevealNames}
+      refresh={suggestionsRefresh}
+      enabled={suggestionsEnabled}
+      disabled={chatBusy}
+      onAsk={(text) => setRequestedQuestion({ text, nonce: Date.now() })}
+    />
   );
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
@@ -157,6 +195,7 @@ export default function App() {
               onScopeChange={setScope}
               scopeLocked={chatBusy}
               onOpenKnowledge={() => setKnowledgeOpen(true)}
+              suggestions={suggestionsInTheCard}
             />
             <DataFolderCard
               dataFolder={snapshot.settings.dataFolder}
@@ -168,6 +207,7 @@ export default function App() {
               onScopeChange={setDataScope}
               scopeLocked={chatBusy}
               onOpenKnowledge={() => setKnowledgeOpen(true)}
+              suggestions={documentsSelected(chatScope) ? undefined : suggestionsInTheCard}
             />
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -189,6 +229,12 @@ export default function App() {
             onModelAliasChange={(alias) => void update({ modelAlias: alias })}
             showDiagnostics={snapshot.settings.showDiagnostics}
             onAddToSelection={(outside) => void addOutsideToSelection(outside)}
+            revealNames={revealNames}
+            onRevealNamesChange={setRevealNames}
+            suggestionsRefresh={suggestionsRefresh}
+            suggestionsEnabled={suggestionsEnabled}
+            requestedQuestion={requestedQuestion}
+            onRequestedQuestionHandled={() => setRequestedQuestion(null)}
           />
         </main>
         {settingsOpen ? (

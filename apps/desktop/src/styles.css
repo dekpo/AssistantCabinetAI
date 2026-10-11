@@ -1707,3 +1707,171 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Knowledge base, lot 9: the questions worth asking, and the sheet of a name. Same tokens as the
+   rest, so light and dark need nothing of their own.
+   --------------------------------------------------------------------------------------------- */
+
+/* Buttons that send a question the knowledge base proved has an answer. */
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 40em;
+  margin-top: 16px;
+  text-align: center;
+}
+
+.suggestions--compact {
+  align-items: stretch;
+  max-width: none;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.suggestions__title {
+  margin: 0;
+  font-size: 0.95em;
+  color: var(--text);
+}
+
+.suggestions__intro {
+  margin: 0;
+  font-size: 0.85em;
+}
+
+.suggestions__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestions__item {
+  width: 100%;
+  padding: 6px 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.9em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestions__item:hover:not(:disabled),
+.suggestions__item:focus-visible {
+  border-color: var(--accent);
+}
+
+.suggestions__item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.suggestions__names {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 0.85em;
+}
+
+/* The sheet of a name, over the window like a confirmation but wider. */
+.entity-card {
+  width: min(520px, 100%);
+  max-height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+}
+
+.entity-card__title {
+  margin: 0;
+  font-size: 1.05em;
+}
+
+.entity-card__kind {
+  margin: 2px 0 8px;
+  color: var(--text-quiet);
+  font-size: 0.85em;
+}
+
+.entity-card__section {
+  margin-top: 10px;
+}
+
+.entity-card__heading {
+  margin: 0 0 2px;
+  font-size: 0.85em;
+  color: var(--text-quiet);
+}
+
+.entity-card__line,
+.entity-card__note {
+  margin: 4px 0 0;
+  font-size: 0.9em;
+}
+
+.entity-card__note {
+  color: var(--text-quiet);
+}
+
+.entity-card__list {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  font-size: 0.9em;
+}
+
+/* The small button beside a name that opens its sheet. It has the look of a hovered button all the
+   time (the resting look vanished on the highlighted row of the list and on a chip), with a border,
+   and takes its colours from the tokens so that the dark theme needs nothing of its own. */
+.chip__card,
+.picker__card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 0.8em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip__card {
+  border-color: var(--accent);
+}
+
+.chip__card:hover,
+.chip__card:focus-visible,
+.picker__card:hover,
+.picker__card:focus-visible {
+  border-color: var(--accent);
+}
+
+/* The name keeps the room; its count and its sheet button sit at the right. */
+.picker__item {
+  align-items: center;
+}
+
+.picker__item .picker__name {
+  flex: 1 1 auto;
+}

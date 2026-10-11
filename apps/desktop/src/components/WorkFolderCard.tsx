@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
@@ -59,6 +59,7 @@ export function WorkFolderCard({
   onScopeChange,
   scopeLocked = false,
   onOpenKnowledge,
+  suggestions,
 }: {
   workFolder: string | null;
   suggestedWorkFolder: string | null;
@@ -80,6 +81,9 @@ export function WorkFolderCard({
   /** Opens the knowledge management dialog; the link under the summary shows only when the
    * knowledge base took part in the pass. */
   onOpenKnowledge?: () => void;
+  /** The suggestions, drawn at the end of the card once the folder has been read. Built by the
+   * caller, which owns what a click on one of them does and which card shows them. */
+  suggestions?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [error, setError] = useState<AppError | null>(null);
@@ -524,6 +528,9 @@ export function WorkFolderCard({
           onCancel={() => setConfirmingReset(false)}
         />
       ) : null}
+      {/* Outside the pass summary on purpose: that summary is empty after a pass that changed
+          nothing, and sits inside a disclosure. */}
+      {inventory === null ? null : suggestions}
     </section>
   );
 }

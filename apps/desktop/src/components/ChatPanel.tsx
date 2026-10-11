@@ -10,9 +10,11 @@ import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { EntityCardDialog } from "./EntityCardDialog";
 import { ErrorBanner } from "./ErrorBanner";
 import { KeyGlyph } from "./KeyGlyph";
 import { MessageList } from "./MessageList";
+import { SuggestionChips } from "./SuggestionChips";
 
 export function ChatPanel({
   onFailure,
@@ -25,6 +27,12 @@ export function ChatPanel({
   onModelAliasChange,
   showDiagnostics,
   onAddToSelection,
+  revealNames,
+  onRevealNamesChange,
+  suggestionsRefresh,
+  suggestionsEnabled,
+  requestedQuestion,
+  onRequestedQuestionHandled,
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
@@ -43,6 +51,17 @@ export function ChatPanel({
   /** Adds the files of a name that is only in unselected files to the selection: her own click,
    * made in the name picker. */
   onAddToSelection: (outside: OutsideSelection) => void;
+  /** Whether the user asked, for this session, to see suggestions that name somebody. */
+  revealNames: boolean;
+  onRevealNamesChange: (reveal: boolean) => void;
+  /** Changes whenever the knowledge base may have changed, so the suggestions are looked for again. */
+  suggestionsRefresh: unknown;
+  /** False while an analysis is writing to the base. */
+  suggestionsEnabled: boolean;
+  /** A question chosen outside the conversation (a suggestion under an analysis summary). It is
+   * sent as soon as nothing is being answered, then reported as handled. */
+  requestedQuestion: { text: string; nonce: number } | null;
+  onRequestedQuestionHandled: () => void;
 }) {
   const { t, locale } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -63,9 +82,23 @@ export function ChatPanel({
      and a stop that gives the question back gives them back too. */
   const [chips, setChips] = useState<Chip[]>([]);
   const sentChips = useRef<Chip[]>([]);
+  /* The sheet of a name, opened from a chip or from the list. */
+  const [card, setCard] = useState<{ entityId: number; display: string } | null>(null);
   /* A name counted its files in one selection; in another the count means nothing, so a change of
      selection starts the chips over. */
-  useEffect(() => setChips([]), [scope]);
+  useEffect(() => {
+    setChips([]);
+    setCard(null);
+  }, [scope]);
+  /* A suggestion chosen under an analysis summary asks its question here, once, as soon as nothing
+     is being answered. */
+  useEffect(() => {
+    if (requestedQuestion !== null && phase === "idle" && hasWorkFolder) {
+      void send(requestedQuestion.text);
+      onRequestedQuestionHandled();
+    }
+    // `send` is rebuilt on every render; what matters is the request and the phase.
+  }, [requestedQuestion, phase, hasWorkFolder]);
   /* The sidebar's picker is locked while a question is being answered, and only this panel knows
      when that is. */
   const busy = phase !== "idle";
@@ -131,6 +164,19 @@ export function ChatPanel({
         showDiagnostics={showDiagnostics}
         onAnalyse={(answerEntryId) => void analyseThenAsk(answerEntryId)}
         analysing={indexing.running}
+        emptyExtra={
+          hasWorkFolder ? (
+            <SuggestionChips
+              scope={scope}
+              revealNames={revealNames}
+              onRevealNamesChange={onRevealNamesChange}
+              refresh={suggestionsRefresh}
+              enabled={suggestionsEnabled}
+              disabled={phase !== "idle"}
+              onAsk={(question) => void send(question)}
+            />
+          ) : null
+        }
       />
       {error === null ? null : <ErrorBanner error={error} onDismiss={dismissError} />}
       {entries.length === 0 ? null : (
@@ -188,7 +234,16 @@ export function ChatPanel({
         scope={scope}
         hasSelection={combinedHasSelection(scope)}
         onAddToSelection={onAddToSelection}
+        onOpenCard={setCard}
       />
+      {card === null ? null : (
+        <EntityCardDialog
+          entityId={card.entityId}
+          display={card.display}
+          scope={scope}
+          onClose={() => setCard(null)}
+        />
+      )}
     </section>
   );
 }

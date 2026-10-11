@@ -10,6 +10,7 @@ import {
   toggleAll,
   toggleScopeFile,
   wholeFolderScope,
+  documentsSelected,
 } from "./analysisScope";
 import type { FileRecord } from "./ipc";
 
@@ -203,5 +204,37 @@ describe("whether anything is selected", () => {
     expect(combinedHasSelection(combineScopes(some, noDocumentsScope(1)))).toBe(true);
     expect(combinedHasSelection(combineScopes(noDocumentsScope(1), some))).toBe(true);
     expect(combinedHasSelection(combineScopes(wholeFolderScope(1), noDocumentsScope(1)))).toBe(true);
+  });
+});
+
+
+describe("which card shows the suggestions", () => {
+  const base = { createdAt: 1, updatedAt: 1 };
+
+  it("is the documents card as soon as a document is selected, whatever the data side holds", () => {
+    expect(
+      documentsSelected({
+        ...base,
+        mode: { kind: "whole_folder" },
+        dataMode: { kind: "explicit", entries: [] },
+      }),
+    ).toBe(true);
+    expect(
+      documentsSelected({
+        ...base,
+        mode: { kind: "explicit", entries: [{ relativePath: "a.txt", pinnedId: "x", addedAt: 1 }] },
+        dataMode: { kind: "whole_folder" },
+      }),
+    ).toBe(true);
+  });
+
+  it("is the data card when no document is selected", () => {
+    expect(
+      documentsSelected({
+        ...base,
+        mode: { kind: "explicit", entries: [] },
+        dataMode: { kind: "whole_folder" },
+      }),
+    ).toBe(false);
   });
 });

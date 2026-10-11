@@ -65,6 +65,8 @@ pub fn run() {
             commands::ask_with_sources,
             commands::knowledge_diagnostics,
             commands::knowledge_search_entities,
+            commands::knowledge_suggest_questions,
+            commands::knowledge_entity_card,
             commands::knowledge_overview,
             commands::knowledge_list_entities,
             commands::knowledge_entity_sheet,

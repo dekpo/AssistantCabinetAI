@@ -4,4 +4,5 @@
 pub mod corpus;
 pub mod fake_gateway;
 pub mod knowledge;
+pub mod suggestions;
 pub mod tabular_fixtures;

@@ -18,6 +18,7 @@ use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::data_folder::{self, DataFolder, DataFolderReport};
 use crate::error::AppError;
 use crate::file_record::{FileRecord, ProcessingStatus};
+use crate::file_reference::FileReferenceResolver;
 use crate::fill_plan;
 use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
@@ -32,9 +33,11 @@ use crate::knowledge::ingest::KnowledgeContext;
 use crate::knowledge::manage::{self, NameTools};
 use crate::knowledge::packs::PackSet;
 use crate::knowledge::picker::{self, EntitySearch, PickerFiles};
-use crate::knowledge::query::SelectedFile;
+use crate::knowledge::query::{QuerySelection, SelectedFile};
 use crate::knowledge::reduce::{SideInput, SkipReason, TargetingPolicy};
 use crate::knowledge::secret::IdentifierKey;
+use crate::knowledge::sheet::{self, EntitySheet};
+use crate::knowledge::suggest::{self, SuggestionCache, SuggestionInput, SuggestionSet};
 use crate::knowledge::targeting::{
     self, DocumentPlan, QueryVocabulary, TargetingPlan, TargetingReport, TargetingRequest,
     TargetingTools,
@@ -48,7 +51,7 @@ use crate::raster::{self, PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence, EvidenceCoverage};
 use crate::reveal;
 use crate::settings::{self, Settings};
-use crate::tabular_answer::{self, TabularAnswer};
+use crate::tabular_answer::{self, TabularAnswer, WorkbookChoice};
 use crate::work_folder::{
     self, display, suggested_data_folder, suggested_work_folder, WorkFolderPolicy,
 };
@@ -72,6 +75,9 @@ pub struct AppState {
     /// until either changes (`knowledge::targeting::QueryVocabulary`): loading costs tens of
     /// milliseconds, which is nothing once and far too much per question.
     vocabulary: Mutex<Option<CachedVocabulary>>,
+    /// The last few screens of question suggestions (`knowledge::suggest::SuggestionCache`): in
+    /// memory only, keyed by the selection and the state of the base, never written anywhere.
+    suggestions: SuggestionCache,
 }
 
 struct CachedVocabulary {
@@ -90,6 +96,7 @@ impl AppState {
             data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
             vocabulary: Mutex::new(None),
+            suggestions: SuggestionCache::default(),
         })
     }
 
@@ -865,6 +872,177 @@ pub fn knowledge_search_entities(
             data: &analysed_workbooks,
         },
         limit.unwrap_or(picker::PICKER_LIMIT),
+    )
+}
+
+/// The files a selection covers, in the forms the read-only services of the knowledge base take.
+struct ResolvedSelection {
+    documents: Vec<SelectedFile>,
+    /// The documents folder narrowed to the selection, for the "does this read as a file name" test.
+    scoped_documents: Option<WorkFolderInventory>,
+    data: Option<DataFolder>,
+    workbooks: Vec<WorkbookChoice>,
+}
+
+impl ResolvedSelection {
+    fn workbook_files(&self) -> Vec<SelectedFile> {
+        self.workbooks
+            .iter()
+            .map(|choice| SelectedFile::new(&choice.relative_path, &choice.content_id))
+            .collect()
+    }
+
+    /// Whether the folder router would take this text for the name of a file of either folder.
+    fn names_a_file(&self, text: &str) -> bool {
+        let in_documents = self.scoped_documents.as_ref().is_some_and(|inventory| {
+            FileReferenceResolver::new(inventory)
+                .resolve_in_question(text)
+                .is_some()
+        });
+        let in_data = self.data.as_ref().is_some_and(|folder| {
+            FileReferenceResolver::new(folder.files())
+                .resolve_in_question(text)
+                .is_some()
+        });
+        in_documents || in_data
+    }
+}
+
+/// Resolve a selection exactly as a question resolves it (the inventory with the application's hash
+/// cache, `scope.resolve`, the usable workbooks), so what a read-only service offers is what the
+/// next question could use.
+fn resolve_selection(
+    state: &State<'_, AppState>,
+    index: &IndexStore,
+    scope: &AnalysisScope,
+) -> Result<ResolvedSelection, AppError> {
+    let (work_folder, data_folder) =
+        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
+    let mut resolved = ResolvedSelection {
+        documents: Vec::new(),
+        scoped_documents: None,
+        data: None,
+        workbooks: Vec::new(),
+    };
+    if let Some(work_folder) = work_folder {
+        let full = WorkFolderInventory::discover_with_cache(
+            Path::new(&work_folder),
+            Some(index),
+            &state.file_hashes,
+        )?;
+        let scoped = scope.resolve(&full).inventory;
+        resolved.documents = scoped
+            .indexed_files()
+            .into_iter()
+            .map(|record| SelectedFile::new(&record.relative_path, &record.id))
+            .collect();
+        resolved.scoped_documents = Some(scoped);
+    }
+    if let Some(data_folder) = data_folder {
+        let folder = DataFolder::discover(
+            Path::new(&data_folder),
+            Some(index),
+            &state.data_file_hashes,
+        )?;
+        resolved.workbooks = tabular_answer::selected_workbook_choices(&folder, &scope.data_mode);
+        resolved.data = Some(folder);
+    }
+    Ok(resolved)
+}
+
+/// Questions worth asking about the current selection, as data (`knowledge::suggest`): every one
+/// has passed a dry run on the user's own files, none contains a sentence. A cheap read the
+/// interface starts when it shows an empty conversation or an analysis summary: no model, no
+/// request to the AI, no write. With the knowledge base off, or nothing selected, there are none.
+///
+/// Names are left out while `knowledge_hide_names_in_suggestions` is on, unless the user asked to
+/// see them (`reveal_names`, held by the interface for the session): a screen can be seen by
+/// someone waiting in the room.
+#[tauri::command(async)]
+pub fn knowledge_suggest_questions(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    scope: AnalysisScope,
+    reveal_names: Option<bool>,
+) -> Result<SuggestionSet, AppError> {
+    let (mode, hide_names, locale, packs) = state.read(|settings| {
+        (
+            settings.knowledge_mode,
+            settings.knowledge_hide_names_in_suggestions,
+            settings.locale.clone(),
+            settings.knowledge_pack_ids(),
+        )
+    })?;
+    if !mode.reads_files() {
+        return Ok(SuggestionSet::default());
+    }
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let names_allowed = !hide_names || reveal_names.unwrap_or(false);
+    let index = open_index(&app)?;
+    let selection = resolve_selection(&state, &index, &scope)?;
+
+    let key = suggest::cache_key(
+        index.connection(),
+        &selection.documents,
+        &selection.workbooks,
+        &locale,
+        names_allowed,
+    )?;
+    if let Some(cached) = state.suggestions.get(key) {
+        return Ok(cached);
+    }
+    let vocabulary = state.vocabulary(&locale, &packs)?;
+    let set = suggest::suggest(&SuggestionInput {
+        index: &index,
+        vocabulary: &vocabulary,
+        data: selection.data.as_ref(),
+        documents: &selection.documents,
+        workbooks: &selection.workbooks,
+        locale: &locale,
+        names_allowed,
+        names_a_file: &|text| selection.names_a_file(text),
+        limit: suggest::MAX_SUGGESTIONS,
+        max_dry_runs: suggest::MAX_DRY_RUNS,
+        max_cold_read_bytes: suggest::COLD_READ_LIMIT_BYTES,
+    })?;
+    state.suggestions.put(key, set.clone());
+    Ok(set)
+}
+
+/// What the knowledge base knows about one name **inside the current selection** (`knowledge::sheet`):
+/// the other spellings, the files of the selection that mention it with the pages or the sheet and
+/// column, and only a count for everything outside the selection. Opened from a chip or from the
+/// name list. A read: no model, no write.
+#[tauri::command(async)]
+pub fn knowledge_entity_card(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    entity_id: i64,
+    scope: AnalysisScope,
+) -> Result<Option<EntitySheet>, AppError> {
+    let (mode, locale, packs) = state.read(|settings| {
+        (
+            settings.knowledge_mode,
+            settings.locale.clone(),
+            settings.knowledge_pack_ids(),
+        )
+    })?;
+    if !mode.reads_files() {
+        return Ok(None);
+    }
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let index = open_index(&app)?;
+    let selection = resolve_selection(&state, &index, &scope)?;
+    let workbook_files = selection.workbook_files();
+    let vocabulary = state.vocabulary(&locale, &packs)?;
+    sheet::entity_sheet(
+        index.connection(),
+        &vocabulary.packs,
+        entity_id,
+        &QuerySelection {
+            documents: &selection.documents,
+            data: &workbook_files,
+        },
     )
 }
 

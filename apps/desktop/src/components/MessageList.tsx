@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
@@ -36,6 +36,7 @@ export function MessageList({
   analysing,
   onRetarget,
   showDiagnostics,
+  emptyExtra,
 }: {
   entries: ChatEntry[];
   phase: GenerationPhase;
@@ -55,6 +56,8 @@ export function MessageList({
   onRetarget: (answerEntryId: string, choice: TargetingChoice) => void;
   /** Shows the developer panel under the last answer. Off in normal use. */
   showDiagnostics: boolean;
+  /** Drawn under the welcome text while the conversation is empty: the questions worth asking. */
+  emptyExtra?: ReactNode;
 }) {
   const { t, locale } = useTranslation();
   const messages = useRef<HTMLDivElement>(null);
@@ -164,6 +167,7 @@ export function MessageList({
         <h2 className="empty__title">{t("chat.emptyTitle")}</h2>
         <p className="empty__body">{t("chat.emptyBody")}</p>
         <p className="empty__body">{t("chat.emptyBodyNetwork")}</p>
+        {emptyExtra}
       </div>
     );
   }

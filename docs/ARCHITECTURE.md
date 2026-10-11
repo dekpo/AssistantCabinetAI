@@ -254,6 +254,17 @@ reduced search was too narrow, builds the report and narrows the workbook list t
 `mixed_answer::entity_link` are untouched. Details: `docs/RETRIEVAL.md` ("Targeting inside the selection") and
 `docs/DECISIONS.md` ("Settled by KB lot 6").
 
+
+**Read-only services on the shared vocabulary (lot 9).** Beside the question path, five modules read the
+same names for the features that need a vocabulary: `knowledge::surface` (ranked names for speech hints and
+autocomplete), `knowledge::repair` (proposals to repair a transcript), `knowledge::suggest` (questions proved
+answerable by a dry run through `tabular::engine::execute`), `knowledge::sheet` (what the selection says about
+one name) and `knowledge::guard` (every known name found in a text about to leave; the one global read, see
+`docs/PRIVACY-AND-SECURITY.md`). None writes a row, none reaches the gateway, and none holds a sentence: the
+interface writes the words (`suggestions.*`, `entityCard.*`). `surface`, `repair` and `guard` have no command;
+`commands::knowledge_suggest_questions` and `knowledge_entity_card` serve the other two. Details:
+`docs/DECISIONS.md`, "Settled by KB lot 9".
+
 ## Deterministic before generative
 
 For anything the workstation can retrieve or compute locally, deterministic computation comes first.

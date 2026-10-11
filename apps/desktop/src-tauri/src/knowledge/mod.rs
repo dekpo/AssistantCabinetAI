@@ -17,9 +17,12 @@ pub mod maintenance;
 pub mod normalize;
 pub mod packs;
 pub mod phonetic;
+pub mod query;
+pub mod reduce;
 pub mod resolve;
 pub mod secret;
 pub mod store;
+pub mod targeting;
 
 use serde::{Deserialize, Serialize};
 

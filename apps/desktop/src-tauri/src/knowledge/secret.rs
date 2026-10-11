@@ -70,6 +70,15 @@ impl IdentifierKey {
         Self { bytes }
     }
 
+    /// The key in `directory` if there is one, and nothing otherwise: it makes no file, replaces no
+    /// file and never fails. What a **question** reads the key with, because asking a question must
+    /// not write anything. A directory with no key has no hashed identifier either, so there is
+    /// nothing a question could recognise.
+    pub fn load_if_present(directory: &Path) -> Option<Self> {
+        let text = std::fs::read_to_string(directory.join(KEY_FILE_NAME)).ok()?;
+        from_hex(&text).map(|bytes| Self { bytes })
+    }
+
     /// The key in `directory`, made the first time it is asked for. A file that does not hold a key
     /// (empty, truncated, edited by hand) is replaced: it can never be right again, and the
     /// fingerprint tells the next pass that the identifiers must be hashed again. A file that
@@ -157,6 +166,26 @@ mod tests {
 
     fn key(seed: u8) -> IdentifierKey {
         IdentifierKey::from_bytes([seed; KEY_BYTES])
+    }
+
+    #[test]
+    fn a_question_reads_the_key_without_ever_making_one() {
+        let directory = tempfile::tempdir().expect("temp folder");
+        assert!(IdentifierKey::load_if_present(directory.path()).is_none());
+        assert!(
+            std::fs::read_dir(directory.path())
+                .unwrap()
+                .next()
+                .is_none(),
+            "reading a missing key wrote nothing"
+        );
+
+        let made = IdentifierKey::load_or_create(directory.path()).expect("makes one");
+        let read = IdentifierKey::load_if_present(directory.path()).expect("finds it");
+        assert_eq!(made.digest("email", "A"), read.digest("email", "A"));
+
+        std::fs::write(directory.path().join(KEY_FILE_NAME), "not a key").unwrap();
+        assert!(IdentifierKey::load_if_present(directory.path()).is_none());
     }
 
     #[test]

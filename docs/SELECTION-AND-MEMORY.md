@@ -304,6 +304,31 @@ router did not already answer. The engines compute and cite; the model only writ
   answer, zero gateway calls" guarantee tier 2 already keeps.
 - The engines never call each other, so neither can interfere with the other.
 
+## Targeting inside the selection (KB lot 6)
+
+The knowledge base never widens a selection and never replaces it: `candidate_scope` is a subset of
+`selected_scope`, by construction (the candidate list is built by filtering the selection) and checked a second
+time before it leaves the reducer (invariant I1, `reduced_scope_is_always_a_subset_of_the_selection`). A file
+she named in the question, and a plan about one file, are never reduced (I2). An entity of a file outside the
+selection is never revealed by a chip, an ambiguity or a report (I7): a name is judged inside the selection
+first, so two Martins in the base and one in her files is one Martin, and the other is not mentioned.
+
+Three modes (`knowledge_mode` in `settings.json`): `off` reads nothing; `suggest` (the default) reads the question
+and measures what it would have done, but searches exactly as with the base off, and applies a reduction only when
+she picked an entity chip; `auto` reduces when the rules allow. When the reduced search comes back empty, or its
+closest passage is far from the question in meaning, it is repeated once on the whole selection; the refusal
+for insufficient evidence applies only after the full selection has failed too. A selection with fewer files than
+`knowledge_min_scope_files` on a side is left alone, and so is an entity that names too many of the files
+(`knowledge_max_selectivity`): the user's own name on every letter names none in particular.
+
+**Memory isolation (I3).** The knowledge base is built from analysed files, analysed workbooks and manual edits,
+and from nothing else. A question, a model answer, the history of the conversation, a chip, the widen action and a
+voice transcript change **no row** of it: the question path has no write to a `kb_*` table but the diagnostics log,
+and the tests compare a snapshot of every other `kb_*` table before and after (`tests/knowledge_isolation.rs`). The
+previous answer's entities are held by the client and sent back with a short follow-up (`carryOver`); Rust stores
+nothing about the conversation. What the model is sent is the instruction, the folder's counts, the excerpts and
+the question, as before; no alias, type, role, method or pack reaches it (`no_knowledge_text_reaches_a_model_facing_string`).
+
 ## Deploying to a separate server device (pending)
 
 Today the whole stack runs on one machine. The target is two devices: the **user device** (the desktop app,

@@ -87,6 +87,11 @@ pub struct SearchOutcome {
     pub evidence: Vec<Evidence>,
     /// Stored chunks of the scope that were scored, before the cut to the caps.
     pub chunks_considered: usize,
+    /// The best cosine similarity any chunk of the scope reached, **without** the lexical bonus
+    /// (0 for an empty scope). The bonus says a word of the question was found; this says how close
+    /// the best passage is in meaning. The knowledge base reads it to decide that a reduced search was
+    /// too narrow (`knowledge::targeting::search_documents`).
+    pub best_vector_score: f32,
 }
 
 /// `search_scoped`, reporting how many chunks were scored. Same evidence, same order.
@@ -96,7 +101,22 @@ pub fn search_scoped_counted(
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    let lexical_hits = lexical_hits_in(index, query_text, scope)?;
+    search_scoped_counted_with_terms(index, query_text, &[], query_embedding, scope)
+}
+
+/// `search_scoped_counted`, with extra surface forms for the **lexical** part only: the other
+/// spellings of a name the question resolved to (`knowledge::targeting`). The embedding text is the
+/// question and nothing else, so what the vector half looks for is exactly what it was. With no
+/// extra term this is `search_scoped_counted`, byte for byte.
+pub fn search_scoped_counted_with_terms(
+    index: &IndexStore,
+    query_text: &str,
+    extra_terms: &[String],
+    query_embedding: &[f32],
+    scope: RetrievalScope<'_>,
+) -> Result<SearchOutcome, crate::error::AppError> {
+    let mut lexical_hits = lexical_hits_in(index, query_text, scope)?;
+    lexical_hits.extend(term_hits_in(index, extra_terms, scope)?);
     search_scoped_with_hits(index, query_embedding, scope, &lexical_hits)
 }
 
@@ -117,6 +137,29 @@ fn lexical_hits_in(
         ),
         RetrievalScope::Files(relative_paths) | RetrievalScope::CurrentFolder(relative_paths) => {
             index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)
+        }
+    }
+}
+
+/// The same, for the surface forms of resolved entities. Always held to the scope's own files: the
+/// whole index is never searched for a name (`WholeFolder` has no use for this and gets nothing).
+fn term_hits_in(
+    index: &IndexStore,
+    extra_terms: &[String],
+    scope: RetrievalScope<'_>,
+) -> Result<Vec<LexicalHit>, crate::error::AppError> {
+    if extra_terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    match scope {
+        RetrievalScope::WholeFolder => Ok(Vec::new()),
+        RetrievalScope::File(relative_path) => index.search_lexical_terms_in(
+            extra_terms,
+            MAX_EVIDENCE_CHUNKS,
+            &[relative_path.to_string()],
+        ),
+        RetrievalScope::Files(relative_paths) | RetrievalScope::CurrentFolder(relative_paths) => {
+            index.search_lexical_terms_in(extra_terms, MAX_EVIDENCE_CHUNKS, relative_paths)
         }
     }
 }
@@ -151,10 +194,12 @@ fn search_scoped_with_hits(
     };
 
     let chunks_considered = all_chunks.len();
+    let mut best_vector_score = f32::NEG_INFINITY;
 
     let mut scored: Vec<Evidence> = Vec::new();
     for chunk in &all_chunks {
         let vector_score = cosine_similarity(&chunk.embedding, query_embedding);
+        best_vector_score = best_vector_score.max(vector_score);
         let lexical_bonus = if lexical_hits
             .iter()
             .any(|hit| hit.chunk_id == chunk.chunk_id)
@@ -200,6 +245,11 @@ fn search_scoped_with_hits(
     Ok(SearchOutcome {
         evidence: selected,
         chunks_considered,
+        best_vector_score: if best_vector_score.is_finite() {
+            best_vector_score
+        } else {
+            0.0
+        },
     })
 }
 
@@ -233,13 +283,34 @@ pub fn search_per_document_counted(
     query_embedding: &[f32],
     relative_paths: &[String],
 ) -> Result<SearchOutcome, crate::error::AppError> {
+    search_per_document_counted_with_terms(index, query_text, &[], query_embedding, relative_paths)
+}
+
+/// `search_per_document_counted`, with extra surface forms for the lexical part only (see
+/// `search_scoped_counted_with_terms`). The files are taken in the order given.
+pub fn search_per_document_counted_with_terms(
+    index: &IndexStore,
+    query_text: &str,
+    extra_terms: &[String],
+    query_embedding: &[f32],
+    relative_paths: &[String],
+) -> Result<SearchOutcome, crate::error::AppError> {
     let mut selected: Vec<Evidence> = Vec::new();
     let mut total_chars = 0usize;
     let mut chunks_considered = 0usize;
+    let mut best_vector_score = 0.0f32;
 
     // The full-text query is the same for every file, so it runs once, over all of them. Run per
     // file it repeated one query as many times as there were documents.
-    let lexical_hits = index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)?;
+    let mut lexical_hits =
+        index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)?;
+    if !extra_terms.is_empty() {
+        lexical_hits.extend(index.search_lexical_terms_in(
+            extra_terms,
+            MAX_EVIDENCE_CHUNKS,
+            relative_paths,
+        )?);
+    }
 
     for relative_path in relative_paths {
         let found = search_scoped_with_hits(
@@ -249,6 +320,7 @@ pub fn search_per_document_counted(
             &lexical_hits,
         )?;
         chunks_considered += found.chunks_considered;
+        best_vector_score = best_vector_score.max(found.best_vector_score);
         let mut inside = found.evidence;
         // Ranking inside one file can find nothing above the noise floor - a summary question
         // shares few words with a lab report. The file still has to be represented, so fall back
@@ -271,6 +343,7 @@ pub fn search_per_document_counted(
     Ok(SearchOutcome {
         evidence: selected,
         chunks_considered,
+        best_vector_score,
     })
 }
 
@@ -410,6 +483,40 @@ mod tests {
                 .unwrap();
         }
         store
+    }
+
+    /// The knowledge base widens a reduced search on this number: it must be the closest passage by
+    /// meaning, and the lexical bonus must not be in it.
+    #[test]
+    fn the_best_vector_score_is_the_closest_passage_without_the_lexical_bonus() {
+        let store = store_with_chunks(vec![
+            ("a#p1#s1", "a.pdf", "Dupont Dupont Dupont", vec![0.0, 1.0]),
+            ("b#p1#s1", "b.pdf", "autre chose", vec![1.0, 0.0]),
+        ]);
+        // The question is close to b by meaning and says Dupont, which only a.pdf holds.
+        let found = search_scoped_counted(
+            &store,
+            "Dupont",
+            &[1.0, 0.0],
+            RetrievalScope::Files(&["a.pdf".to_string()]),
+        )
+        .unwrap();
+
+        assert_eq!(found.chunks_considered, 1);
+        assert!(found.evidence[0].score >= 0.2, "the bonus is in the score");
+        assert!(
+            found.best_vector_score < 0.01,
+            "and not in the closest passage"
+        );
+
+        let all = search_scoped_counted(&store, "Dupont", &[1.0, 0.0], RetrievalScope::WholeFolder)
+            .unwrap();
+        assert!((all.best_vector_score - 1.0).abs() < 1e-6);
+
+        let nothing =
+            search_scoped_counted(&store, "Dupont", &[1.0, 0.0], RetrievalScope::Files(&[]))
+                .unwrap();
+        assert_eq!(nothing.best_vector_score, 0.0);
     }
 
     /// The defect `search_lexical_in` exists for. Eight files outside the selection are stuffed

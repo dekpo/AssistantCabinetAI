@@ -245,6 +245,15 @@ earlier up to date; `knowledge::secret` keeps the key. Nothing in this path impo
 client. `indexing::run` is the pass as it was before; the application calls `indexing::run_with_knowledge`, and
 `knowledge_mode = off` writes documents without touching a `kb_*` row.
 
+**At question time (lot 6)** `knowledge::query` reads the question (runs of up to five words looked up in the base
+with one query, then the resolver in query mode, restricted to the selection), `knowledge::reduce` turns the
+entities into a smaller set of files per side (documents and workbooks decided independently, every candidate a
+member of the selection), and `knowledge::targeting` plans, searches, widens once on the full selection when the
+reduced search was too narrow, builds the report and narrows the workbook list the tabular engine receives.
+`commands.rs` only reads the settings and forwards events. The engine, its sheet restrictions and
+`mixed_answer::entity_link` are untouched. Details: `docs/RETRIEVAL.md` ("Targeting inside the selection") and
+`docs/DECISIONS.md` ("Settled by KB lot 6").
+
 ## Deterministic before generative
 
 For anything the workstation can retrieve or compute locally, deterministic computation comes first.

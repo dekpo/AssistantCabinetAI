@@ -320,7 +320,7 @@
     "knowledgeMode": {
       "suggest": "On",
       "off": "Off",
-      "auto": "Automatic (same as \"On\" for now)"
+      "auto": "Automatic (searches only the files the question names)"
     },
     "healthModuleLabel": "Health module",
     "healthModuleDescription": "Tick the country or countries of your patients: a cross-border worker can have both a French social security number and an AVS number. A module helps read the numbers and vocabulary of its country, and never removes or changes the type of a name. Applied at the next analysis you start.",

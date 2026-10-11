@@ -58,6 +58,25 @@ pub struct ModelAssist<'a> {
     pub idle_timeout: Duration,
 }
 
+/// Why the knowledge base points at a workbook: the entities of the question it holds, and the
+/// sheets they appear in. Machine data; the interface writes the sentence.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkbookHint {
+    pub file: String,
+    pub entities: Vec<WorkbookHintEntity>,
+    pub sheets: Vec<String>,
+}
+
+/// An entity of the question, as a workbook hint names it. The display is the entity's own name,
+/// of an entity inside the selection, shown only in the interface.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkbookHintEntity {
+    pub entity_id: i64,
+    pub display: String,
+}
+
 /// What a question about the selected tables came to. `file` is always the workbook's path
 /// relative to the Data Folder, so the interface can cite it beside the sheet.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -145,7 +164,14 @@ pub enum TabularAnswer {
     /// Chosen, but its analysis is gone (the Data Folder was reset) or it was never analysed.
     WorkbookNotAnalysed { file: String },
     /// Several workbooks are selected and the question names none of them. Never picked between.
-    WhichWorkbook { candidates: Vec<String> },
+    /// `hints` come from the knowledge base (`knowledge::targeting`): when the question names an
+    /// entity, the workbooks that hold it come first and say which entity and which sheets. They
+    /// order and annotate the choice and never make it.
+    WhichWorkbook {
+        candidates: Vec<String>,
+        #[serde(default)]
+        hints: Vec<WorkbookHint>,
+    },
     /// The question names a file that more than one selected workbook matches.
     AmbiguousReference {
         query: String,
@@ -834,6 +860,43 @@ fn load_workbook_cached(
     Ok((workbook, fresh))
 }
 
+/// The usable workbooks a selection covers, as `(relative path, content id)` pairs: what the
+/// knowledge base keys a workbook by (`knowledge::targeting`). A workbook the selection names that is
+/// gone, changed, unreadable or never analysed is not in the list: nothing can be searched in it.
+pub fn selected_workbook_files(data: &DataFolder, selection: &ScopeMode) -> Vec<(String, String)> {
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return Vec::new();
+    };
+    chosen
+        .iter()
+        .filter(|each| each.record.processing_status == ProcessingStatus::Indexed)
+        .filter_map(|each| {
+            data.usable_inventory(&each.record.relative_path)
+                .map(|inventory| {
+                    (
+                        each.record.relative_path.clone(),
+                        inventory.workbook_id.clone(),
+                    )
+                })
+        })
+        .collect()
+}
+
+/// Whether the question points at a file of the Data Folder, selected or not. A question that names
+/// a workbook is never narrowed by the knowledge base (`docs/SESSION-KB-00-master.md`, I2).
+pub fn names_a_workbook(question: &str, data: &DataFolder, selection: &ScopeMode) -> bool {
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return false;
+    };
+    let scoped = WorkFolderInventory::from_records(
+        data.files().root(),
+        chosen.iter().map(|each| each.record.clone()).collect(),
+    );
+    FileReferenceResolver::new(&scoped)
+        .resolve_in_question(question)
+        .is_some()
+}
+
 /// The workbooks the selection keeps. "Tous" keeps every green workbook, so an empty result
 /// there means the folder has nothing usable; an explicit selection keeps whatever it pinned that
 /// is still there unchanged, green or not, so that `answer` can say what is wrong with it.
@@ -958,6 +1021,7 @@ fn pick_target<'c, 'a>(
                         .iter()
                         .map(|each| each.record.relative_path.clone())
                         .collect(),
+                    hints: Vec::new(),
                 }),
             }
         }
@@ -2440,7 +2504,8 @@ mod tests {
         assert_eq!(
             result,
             TabularAnswer::WhichWorkbook {
-                candidates: vec!["achats.csv".into(), "ventes.csv".into()]
+                candidates: vec!["achats.csv".into(), "ventes.csv".into()],
+                hints: Vec::new(),
             }
         );
     }

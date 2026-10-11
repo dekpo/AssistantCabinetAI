@@ -320,7 +320,7 @@
     "knowledgeMode": {
       "suggest": "Activée",
       "off": "Désactivée",
-      "auto": "Automatique (identique à « Activée » pour l'instant)"
+      "auto": "Automatique (recherche seulement dans les fichiers cités par la question)"
     },
     "healthModuleLabel": "Module santé",
     "healthModuleDescription": "Cochez le ou les pays de vos patients : un frontalier peut avoir un numéro de sécurité sociale français et un numéro AVS. Un module aide à mieux lire les numéros et le vocabulaire de son pays, sans jamais retirer ni changer le type d'un nom. Pris en compte à la prochaine analyse que vous lancez.",

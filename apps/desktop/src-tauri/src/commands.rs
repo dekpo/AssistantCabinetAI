@@ -5,7 +5,7 @@
 //! alias, the locale and the allow-list stay on this side of the door.
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::ipc::Channel;
@@ -29,14 +29,20 @@ use crate::knowledge::diagnostics::{
     self, elapsed_ms, RetrievalDiagnostics, RetrievalPath, RetrievalPlan, StageTimer,
 };
 use crate::knowledge::ingest::KnowledgeContext;
+use crate::knowledge::query::SelectedFile;
+use crate::knowledge::reduce::{SideInput, SkipReason, TargetingPolicy};
 use crate::knowledge::secret::IdentifierKey;
+use crate::knowledge::targeting::{
+    self, DocumentPlan, QueryVocabulary, TargetingPlan, TargetingReport, TargetingRequest,
+    TargetingTools,
+};
 use crate::knowledge::{KnowledgeMode, KnowledgeSummary};
 use crate::mixed_answer;
 use crate::number_check;
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
 use crate::raster::{self, PageRasterizer, Rasterizer};
-use crate::retrieval::{self, Evidence, EvidenceCoverage, RetrievalScope};
+use crate::retrieval::{self, Evidence, EvidenceCoverage};
 use crate::reveal;
 use crate::settings::{self, Settings};
 use crate::tabular_answer::{self, TabularAnswer};
@@ -59,6 +65,16 @@ pub struct AppState {
     pub data_file_hashes: FileHashCache,
     /// Each model's context budget, as the gateway last published it (`conversation`).
     pub model_budgets: Mutex<ModelBudgets>,
+    /// The words a question is read with, loaded once for a locale and a set of packs and kept
+    /// until either changes (`knowledge::targeting::QueryVocabulary`): loading costs tens of
+    /// milliseconds, which is nothing once and far too much per question.
+    vocabulary: Mutex<Option<CachedVocabulary>>,
+}
+
+struct CachedVocabulary {
+    locale: String,
+    packs: Vec<String>,
+    vocabulary: Arc<QueryVocabulary>,
 }
 
 impl AppState {
@@ -70,7 +86,26 @@ impl AppState {
             file_hashes: FileHashCache::new(),
             data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
+            vocabulary: Mutex::new(None),
         })
+    }
+
+    /// The vocabulary for this locale and these packs, loaded on first use.
+    fn vocabulary(&self, locale: &str, packs: &[String]) -> Result<Arc<QueryVocabulary>, AppError> {
+        let mut cache = self.vocabulary.lock().map_err(|_| AppError::Internal)?;
+        if let Some(cached) = cache.as_ref() {
+            if cached.locale == locale && cached.packs == packs {
+                return Ok(Arc::clone(&cached.vocabulary));
+            }
+        }
+        let names: Vec<&str> = packs.iter().map(String::as_str).collect();
+        let vocabulary = Arc::new(QueryVocabulary::load(locale, &names)?);
+        *cache = Some(CachedVocabulary {
+            locale: locale.to_string(),
+            packs: packs.to_vec(),
+            vocabulary: Arc::clone(&vocabulary),
+        });
+        Ok(vocabulary)
     }
 
     fn read<T>(&self, extract: impl FnOnce(&Settings) -> T) -> Result<T, AppError> {
@@ -107,6 +142,12 @@ pub enum ChatStreamEvent {
     },
     Completed {
         text: String,
+    },
+    /// What the knowledge base did to the search, sent just before `Sources` so an answer that is
+    /// interrupted still shows it. Only when there is something to tell: a reduction that was
+    /// applied, or names to ask about.
+    Targeting {
+        report: Box<TargetingReport>,
     },
     Sources {
         sources: Vec<Evidence>,
@@ -653,6 +694,10 @@ pub struct AskAnswer {
     /// only, never a name or a passage (`knowledge::diagnostics`). Always present on an answer;
     /// nothing in the interface shows it yet.
     pub diagnostics: Option<RetrievalDiagnostics>,
+    /// What the knowledge base did to the search, when there is something to tell the user: an
+    /// applied reduction (and who asked for it), or names that need a question. `None` otherwise;
+    /// in `suggest` an unapplied reduction is invisible by design.
+    pub targeting: Option<TargetingReport>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -663,6 +708,7 @@ pub struct AskAnswer {
 /// The whole chain is stoppable, not only the chat leg: embedding the question is what runs while
 /// the spinner shows, which is precisely the moment she wants the button to answer.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn ask_with_sources(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -677,6 +723,10 @@ pub async fn ask_with_sources(
     // The conversation so far, as she saw it. Untrusted: `conversation::fit_history` keeps only
     // answered questions and fits them to the chosen model's budget.
     history: Option<Vec<ChatTurn>>,
+    // What the knowledge base is asked to do with this question: entities the user picked as chips,
+    // the previous answer's entities for a short follow-up, and `off` for the widen action. Absent
+    // means the automatic behaviour of the knowledge mode in the settings.
+    targeting: Option<TargetingRequest>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let mut stopped = state.cancellation.begin();
@@ -695,6 +745,7 @@ pub async fn ask_with_sources(
                 skip_deterministic: skip_deterministic.unwrap_or(false),
                 scope: scope.unwrap_or_else(|| AnalysisScope::whole_folder(0)),
                 history: history.unwrap_or_default(),
+                targeting: targeting.unwrap_or_default(),
             },
             &on_event,
             &mut measured,
@@ -705,11 +756,41 @@ pub async fn ask_with_sources(
     // A question she stopped is not a timing worth keeping: it measures her patience.
     if !matches!(result, Err(AppError::ChatCancelled)) {
         log_retrieval_timing(&app, state.inner(), &measured);
+        record_knowledge_row(&app, &measured);
     }
     result.map(|mut answer| {
         answer.diagnostics = Some(measured);
         answer
     })
+}
+
+/// One row of numbers and codes in `kb_diagnostics` for a question that went through the knowledge
+/// base. A row that cannot be written never fails the question it describes.
+fn record_knowledge_row(app: &AppHandle, measured: &RetrievalDiagnostics) {
+    if measured.targeting.is_none() {
+        return;
+    }
+    if let Ok(index) = open_index(app) {
+        let _ = crate::knowledge::diagnostics::record_question(
+            index.connection(),
+            now_seconds(),
+            measured,
+        );
+    }
+}
+
+/// What a developer panel reads: the recorded questions added up (`knowledge::diagnostics`).
+/// Counts and ratios only; never a name, a question or a file name.
+#[tauri::command]
+pub fn knowledge_diagnostics(
+    app: AppHandle,
+    limit: Option<usize>,
+) -> Result<crate::knowledge::diagnostics::KnowledgeAggregates, AppError> {
+    let index = open_index(&app)?;
+    crate::knowledge::diagnostics::aggregate(
+        index.connection(),
+        limit.unwrap_or(500).clamp(1, 2_000),
+    )
 }
 
 /// Seconds since the epoch by the workstation clock, for a log line. Zero if the clock is before
@@ -779,6 +860,110 @@ struct Question {
     skip_deterministic: bool,
     scope: AnalysisScope,
     history: Vec<ChatTurn>,
+    targeting: TargetingRequest,
+}
+
+/// What the knowledge base needs for one question, read once from the settings: the mode, the
+/// clamped policy, the words (kept for the session) and the key for personal identifiers. Built
+/// without failing: a vocabulary that cannot load makes the question run as if the base were off.
+struct TargetingSetup {
+    mode: KnowledgeMode,
+    policy: TargetingPolicy,
+    vocabulary: Option<Arc<QueryVocabulary>>,
+    key: Option<IdentifierKey>,
+}
+
+impl TargetingSetup {
+    fn load(app: &AppHandle, state: &AppState) -> Self {
+        let (mode, policy, locale, packs) = state
+            .read(|settings| {
+                (
+                    settings.knowledge_mode,
+                    settings.targeting_policy(),
+                    settings.locale.clone(),
+                    settings.knowledge_pack_ids(),
+                )
+            })
+            .unwrap_or((
+                KnowledgeMode::Off,
+                TargetingPolicy::default(),
+                None,
+                Vec::new(),
+            ));
+        if !mode.reads_files() {
+            return Self {
+                mode,
+                policy,
+                vocabulary: None,
+                key: None,
+            };
+        }
+        let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+        // A question writes nothing, not even a key file: with no key there is no hashed identifier.
+        let key = app
+            .path()
+            .app_local_data_dir()
+            .ok()
+            .and_then(|directory| IdentifierKey::load_if_present(&directory));
+        Self {
+            mode,
+            policy,
+            vocabulary: state.vocabulary(&locale, &packs).ok(),
+            key,
+        }
+    }
+
+    fn plan(
+        &self,
+        index: &IndexStore,
+        request: &TargetingRequest,
+        question: &str,
+        documents: SideInput<'_>,
+        data: SideInput<'_>,
+    ) -> TargetingPlan {
+        match (&self.vocabulary, self.mode.reads_files()) {
+            (Some(vocabulary), true) => targeting::plan(
+                index,
+                &TargetingTools {
+                    vocabulary: vocabulary.as_ref(),
+                    key: self.key.as_ref(),
+                    policy: self.policy,
+                },
+                self.mode,
+                request,
+                question,
+                documents,
+                data,
+            ),
+            _ => TargetingPlan::unplanned(
+                self.mode,
+                self.policy,
+                documents.files.len(),
+                data.files.len(),
+                match self.mode {
+                    KnowledgeMode::Off => SkipReason::Off,
+                    _ => SkipReason::LookupError,
+                },
+            ),
+        }
+    }
+}
+
+/// The selected documents among `paths`, as the knowledge base keys them (path and content id).
+fn selected_documents(inventory: &WorkFolderInventory, paths: &[String]) -> Vec<SelectedFile> {
+    paths
+        .iter()
+        .filter_map(|path| inventory.find_by_relative_path(path))
+        .map(|record| SelectedFile::new(&record.relative_path, &record.id))
+        .collect()
+}
+
+/// The usable workbooks the data selection covers, as the knowledge base keys them.
+fn selected_workbook_files(folder: &DataFolder, mode: &ScopeMode) -> Vec<SelectedFile> {
+    tabular_answer::selected_workbook_files(folder, mode)
+        .into_iter()
+        .map(|(path, id)| SelectedFile::new(&path, &id))
+        .collect()
 }
 
 /// An answer as the model wrote it, with how long it took to start and to finish.
@@ -874,6 +1059,7 @@ async fn sourced_answer(
         skip_deterministic,
         scope,
         history,
+        targeting: targeting_request,
     } = asked;
 
     // Which tier this question is on, decided from the two selections before anything is read
@@ -890,25 +1076,54 @@ async fn sourced_answer(
             // was ignored here until HAP-1 (BUG-04), which left the button doing nothing.
             measured.path = RetrievalPath::Mixed;
             if skip_deterministic {
-                return mixed_tier(app, state, &question, &scope, &history, on_event, measured)
-                    .await;
+                return mixed_tier(
+                    app,
+                    state,
+                    &question,
+                    &scope,
+                    &history,
+                    &targeting_request,
+                    on_event,
+                    measured,
+                )
+                .await;
             }
             // A request for a letter, with the template and the rows it needs found: a plan to
             // approve, not an answer (`fill_plan`, lot E). Nothing is written here.
             if let Some(answer) = fill_tier(app, state, &question, &scope, measured)? {
                 return Ok(answer);
             }
-            match mixed_data_only_tier(app, state, &question, &scope, measured).await? {
+            match mixed_data_only_tier(app, state, &question, &scope, &targeting_request, measured)
+                .await?
+            {
                 Some(answer) => return Ok(answer),
                 None => {
-                    return mixed_tier(app, state, &question, &scope, &history, on_event, measured)
-                        .await
+                    return mixed_tier(
+                        app,
+                        state,
+                        &question,
+                        &scope,
+                        &history,
+                        &targeting_request,
+                        on_event,
+                        measured,
+                    )
+                    .await
                 }
             }
         }
         GroundingTier::TablesOnly => {
             measured.path = RetrievalPath::Tabular;
-            return tabular_tier(app, state, &question, &scope, skip_deterministic, measured).await;
+            return tabular_tier(
+                app,
+                state,
+                &question,
+                &scope,
+                skip_deterministic,
+                &targeting_request,
+                measured,
+            )
+            .await;
         }
         GroundingTier::Documents => {}
     }
@@ -1025,6 +1240,7 @@ async fn sourced_answer(
                 unverified_numbers: Vec::new(),
                 fill_plan: None,
                 diagnostics: None,
+                targeting: None,
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -1070,6 +1286,7 @@ async fn sourced_answer(
             unverified_numbers: Vec::new(),
             fill_plan: None,
             diagnostics: None,
+            targeting: None,
         });
     }
 
@@ -1097,6 +1314,29 @@ async fn sourced_answer(
         return Err(AppError::InsufficientEvidence);
     }
 
+    // The knowledge base reads the question before it is embedded: which files of the selection
+    // mention what it names, and whether that is worth a smaller search. A named file is never
+    // reduced (invariant I2) and the full selection is what runs whenever anything is in doubt
+    // (invariant I4).
+    let plan_files: Vec<String> = match &plan {
+        Plan::OneFile(relative_path) => vec![relative_path.clone()],
+        Plan::EveryDocument(relative_paths) => relative_paths.clone(),
+        Plan::WholeFolder | Plan::WithoutDocuments => scoped_paths.clone(),
+    };
+    let selected_files = selected_documents(&inventory, &plan_files);
+    let documents_side = match &plan {
+        Plan::OneFile(_) => SideInput::new(&selected_files).blocked_by(SkipReason::NamedFile),
+        _ => SideInput::new(&selected_files),
+    };
+    let setup = TargetingSetup::load(app, state);
+    let targeting_plan = setup.plan(
+        &index,
+        &targeting_request,
+        &question,
+        documents_side,
+        SideInput::new(&[]),
+    );
+
     // A short follow-up is searched together with the previous question; the router above and the
     // model below read the question as she wrote it.
     let search_text = conversation::retrieval_query(&question, &history);
@@ -1119,34 +1359,27 @@ async fn sourced_answer(
         .iter()
         .map(|file| file.relative_path.clone())
         .collect();
-    let found = match &plan {
-        Plan::OneFile(relative_path) => retrieval::search_scoped_counted(
-            &index,
-            &search_text,
-            &query_embedding,
-            RetrievalScope::File(relative_path.as_str()),
-        )?,
-        Plan::EveryDocument(relative_paths) => retrieval::search_per_document_counted(
-            &index,
-            &search_text,
-            &query_embedding,
-            relative_paths,
-        )?,
-        Plan::WholeFolder => retrieval::search_scoped_counted(
-            &index,
-            &search_text,
-            &query_embedding,
-            match narrowed {
-                true => RetrievalScope::Files(&scoped_paths),
-                false => RetrievalScope::CurrentFolder(&present_paths),
+    let searched = targeting::search_documents(
+        &index,
+        &targeting_plan,
+        match &plan {
+            Plan::OneFile(relative_path) => DocumentPlan::OneFile(relative_path.as_str()),
+            Plan::EveryDocument(relative_paths) => DocumentPlan::EveryDocument(relative_paths),
+            Plan::WholeFolder => DocumentPlan::WholeFolder {
+                narrowed,
+                scoped_paths: &scoped_paths,
+                present_paths: &present_paths,
             },
-        )?,
-        Plan::WithoutDocuments => retrieval::SearchOutcome {
-            evidence: Vec::new(),
-            chunks_considered: 0,
+            // Returned above: nothing is searched when no document is selected.
+            Plan::WithoutDocuments => DocumentPlan::EveryDocument(&[]),
         },
-    };
+        &search_text,
+        &query_embedding,
+    )?;
     measured.search_ms = stage.lap_ms();
+    targeting::note_documents(&index, &targeting_plan, &searched, measured);
+    let targeting_report = targeting_plan.report(searched.widened);
+    let found = searched.outcome;
     measured.chunks_considered = found.chunks_considered;
     let evidence = found.evidence;
     measured.chunks_selected = evidence.len();
@@ -1175,7 +1408,13 @@ async fn sourced_answer(
 
     // Sent before the answer rather than after it. Retrieval has already finished at this point, so
     // there is nothing to wait for - and an answer she stops halfway still shows which documents it
-    // was being written from, which an answer left on screen has to do.
+    // was being written from, which an answer left on screen has to do. What the knowledge base did
+    // to the search goes first, for the same reason.
+    if let Some(report) = &targeting_report {
+        let _ = on_event.send(ChatStreamEvent::Targeting {
+            report: Box::new(report.clone()),
+        });
+    }
     let _ = on_event.send(ChatStreamEvent::Sources {
         sources: evidence.clone(),
         coverage,
@@ -1222,6 +1461,7 @@ async fn sourced_answer(
         unverified_numbers,
         fill_plan: None,
         diagnostics: None,
+        targeting: targeting_report,
     })
 }
 
@@ -1241,6 +1481,7 @@ async fn tabular_tier(
     question: &str,
     scope: &AnalysisScope,
     skip_deterministic: bool,
+    targeting_request: &TargetingRequest,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<AskAnswer, AppError> {
     let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
@@ -1269,8 +1510,36 @@ async fn tabular_tier(
     // is read, entirely synchronously, so the `&index` borrow never has to survive the `.await`
     // on `resolve` - `IndexStore` is not `Sync`, and this command's future must be `Send`
     // (`tabular_answer`'s own module doc explains why).
-    let pending =
-        tabular_answer::prepare(question, &folder, &scope.data_mode, locale, &index, skip_deterministic)?;
+    // What the question names, among the selected workbooks. A question that names a workbook is
+    // never narrowed (invariant I2); in `suggest` the plan only orders and annotates the choice.
+    let workbook_files = selected_workbook_files(&folder, &scope.data_mode);
+    let data_side = match tabular_answer::names_a_workbook(question, &folder, &scope.data_mode) {
+        true => SideInput::new(&workbook_files).blocked_by(SkipReason::NamedFile),
+        false => SideInput::new(&workbook_files),
+    };
+    let setup = TargetingSetup::load(app, state);
+    let targeting_plan = setup.plan(
+        &index,
+        targeting_request,
+        question,
+        SideInput::new(&[]),
+        data_side,
+    );
+    let effective_selection = match targeting_plan.applied_workbooks() {
+        Some(candidates) => {
+            targeting::narrowed_data_selection(&folder, &scope.data_mode, candidates)
+        }
+        None => scope.data_mode.clone(),
+    };
+    let pending = tabular_answer::prepare(
+        question,
+        &folder,
+        &effective_selection,
+        locale,
+        &index,
+        skip_deterministic,
+    )?;
+    let pending = decorate_pending(pending, &targeting_plan);
     measured.routing_ms += stage.lap_ms();
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
     let assist = tabular_answer::ModelAssist {
@@ -1281,6 +1550,8 @@ async fn tabular_tier(
     };
     let answer = tabular_answer::resolve(pending, question, locale, &assist).await;
     measured.generation_total_ms += stage.lap_ms();
+    let answered = targeting::answered_file(&answer);
+    targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
     Ok(AskAnswer {
         answer: String::new(),
         sources: Vec::new(),
@@ -1295,7 +1566,22 @@ async fn tabular_tier(
         unverified_numbers: Vec::new(),
         fill_plan: None,
         diagnostics: None,
+        targeting: targeting_plan.report(false),
     })
+}
+
+/// A "which workbook?" answer gets the knowledge base's order and notes; any other answer is left
+/// exactly as the engine produced it.
+fn decorate_pending(
+    pending: tabular_answer::PendingAnswer,
+    plan: &TargetingPlan,
+) -> tabular_answer::PendingAnswer {
+    match pending {
+        tabular_answer::PendingAnswer::Done(answer) => {
+            tabular_answer::PendingAnswer::Done(targeting::decorate_which_workbook(answer, plan))
+        }
+        other => other,
+    }
 }
 
 /// The first, low-risk step of D7 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`):
@@ -1310,6 +1596,7 @@ async fn mixed_data_only_tier(
     state: &AppState,
     question: &str,
     scope: &AnalysisScope,
+    targeting_request: &TargetingRequest,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<Option<AskAnswer>, AppError> {
     let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
@@ -1334,8 +1621,33 @@ async fn mixed_data_only_tier(
     measured.inventory_ms += stage.lap_ms();
     measured.selected_workbooks = selected_workbooks(&folder, &scope.data_mode);
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
-    let prepared =
-        tabular_answer::prepare_if_data_only(question, &folder, &scope.data_mode, locale, &index)?;
+    // The documents are not read on this path, so only the workbooks can be narrowed.
+    let workbook_files = selected_workbook_files(&folder, &scope.data_mode);
+    let data_side = match tabular_answer::names_a_workbook(question, &folder, &scope.data_mode) {
+        true => SideInput::new(&workbook_files).blocked_by(SkipReason::NamedFile),
+        false => SideInput::new(&workbook_files),
+    };
+    let setup = TargetingSetup::load(app, state);
+    let targeting_plan = setup.plan(
+        &index,
+        targeting_request,
+        question,
+        SideInput::new(&[]),
+        data_side,
+    );
+    let effective_selection = match targeting_plan.applied_workbooks() {
+        Some(candidates) => {
+            targeting::narrowed_data_selection(&folder, &scope.data_mode, candidates)
+        }
+        None => scope.data_mode.clone(),
+    };
+    let prepared = tabular_answer::prepare_if_data_only(
+        question,
+        &folder,
+        &effective_selection,
+        locale,
+        &index,
+    )?;
     // Counted even when the question turns out not to be data-only: the workbooks were read
     // either way, and the mixed tier that follows reads them from the cache this just filled.
     measured.routing_ms += stage.lap_ms();
@@ -1343,6 +1655,7 @@ async fn mixed_data_only_tier(
     let Some(pending) = prepared else {
         return Ok(None);
     };
+    let pending = decorate_pending(pending, &targeting_plan);
     let assist = tabular_answer::ModelAssist {
         gateway: &state.gateway,
         server_url: &server_url,
@@ -1351,6 +1664,8 @@ async fn mixed_data_only_tier(
     };
     let answer = tabular_answer::resolve(pending, question, locale, &assist).await;
     measured.generation_total_ms += stage.lap_ms();
+    let answered = targeting::answered_file(&answer);
+    targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
     Ok(Some(AskAnswer {
         answer: String::new(),
         sources: Vec::new(),
@@ -1365,6 +1680,7 @@ async fn mixed_data_only_tier(
         unverified_numbers: Vec::new(),
         fill_plan: None,
         diagnostics: None,
+        targeting: targeting_plan.report(false),
     }))
 }
 
@@ -1426,6 +1742,7 @@ fn fill_tier(
         unverified_numbers: Vec::new(),
         fill_plan: Some(plan),
         diagnostics: None,
+        targeting: None,
     }))
 }
 
@@ -1503,12 +1820,14 @@ pub fn fill_generate(
 /// the Tauri-free module that actually decomposes, links an entity, computes, generates and
 /// checks. This function is the thin wrapper around it: settings, the local index, and forwarding
 /// `mixed_answer::answer`'s two callbacks to the real `Channel`.
+#[allow(clippy::too_many_arguments)]
 async fn mixed_tier(
     app: &AppHandle,
     state: &AppState,
     question: &str,
     scope: &AnalysisScope,
     history: &[ChatTurn],
+    targeting_request: &TargetingRequest,
     on_event: &Channel<ChatStreamEvent>,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<AskAnswer, AppError> {
@@ -1572,16 +1891,51 @@ async fn mixed_tier(
     // The tabular part, classified against the selected tables alone - entirely synchronous, so
     // `&index` never has to survive an `.await` to produce it. After the document selection is
     // known, because a word of a document's name designates the document, not a table value.
+    // What the knowledge base makes of the question, on both sides at once. A document or a workbook
+    // the question names is never reduced (invariant I2); the engine only ever receives a shorter
+    // list taken from the selection (invariants I1 and I5); `mixed_answer::entity_link` is untouched
+    // and still ties a document's entity to a table row after retrieval.
+    let document_files = selected_documents(&resolution.inventory, &document_paths);
+    let workbook_files = selected_workbook_files(&folder, &scope.data_mode);
+    let names_a_document = crate::file_reference::FileReferenceResolver::new(&resolution.inventory)
+        .resolve_in_question(question)
+        .is_some();
+    let documents_side = match names_a_document {
+        true => SideInput::new(&document_files).blocked_by(SkipReason::NamedFile),
+        false => SideInput::new(&document_files),
+    };
+    let data_side = match tabular_answer::names_a_workbook(question, &folder, &scope.data_mode) {
+        true => SideInput::new(&workbook_files).blocked_by(SkipReason::NamedFile),
+        false => SideInput::new(&workbook_files),
+    };
+    let setup = TargetingSetup::load(app, state);
+    let targeting_plan = setup.plan(
+        &index,
+        targeting_request,
+        question,
+        documents_side,
+        data_side,
+    );
+    let effective_selection = match targeting_plan.applied_workbooks() {
+        Some(candidates) => {
+            targeting::narrowed_data_selection(&folder, &scope.data_mode, candidates)
+        }
+        None => scope.data_mode.clone(),
+    };
     let pending = tabular_answer::prepare_for_mixed(
         question,
         &folder,
-        &scope.data_mode,
+        &effective_selection,
         &locale,
         &index,
         &document_paths,
     )?;
     measured.routing_ms += stage.lap_ms();
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
+    // Recorded now so that a question whose documents turn out to be unavailable still leaves its
+    // row; the documents' own comparison replaces it below.
+    targeting::note_workbooks(&index, &targeting_plan, None, measured);
+    let mut widened = false;
 
     // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
     // search held to the document selection - `index` borrowed only in the synchronous stretch
@@ -1601,18 +1955,25 @@ async fn mixed_tier(
         match embedded {
             Ok(vectors) => {
                 let query_embedding = vectors.into_iter().next().unwrap_or_default();
-                let searched = retrieval::search_scoped_counted(
+                let searched = targeting::search_documents(
                     &index,
+                    &targeting_plan,
+                    DocumentPlan::WholeFolder {
+                        narrowed: true,
+                        scoped_paths: &document_paths,
+                        present_paths: &document_paths,
+                    },
                     &search_text,
                     &query_embedding,
-                    RetrievalScope::Files(&document_paths),
                 );
                 measured.search_ms = stage.lap_ms();
                 match searched {
                     Ok(found) => {
-                        measured.chunks_considered = found.chunks_considered;
-                        match found.evidence.is_empty() {
-                            false => (found.evidence, None),
+                        measured.chunks_considered = found.outcome.chunks_considered;
+                        widened = found.widened;
+                        targeting::note_documents(&index, &targeting_plan, &found, measured);
+                        match found.outcome.evidence.is_empty() {
+                            false => (found.outcome.evidence, None),
                             true => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence)),
                         }
                     }
@@ -1646,6 +2007,13 @@ async fn mixed_tier(
         .iter()
         .map(|item| item.text.chars().count())
         .sum();
+    // What the knowledge base did to the search, before the answer starts.
+    let targeting_report = targeting_plan.report(widened);
+    if let Some(report) = &targeting_report {
+        let _ = on_event.send(ChatStreamEvent::Targeting {
+            report: Box::new(report.clone()),
+        });
+    }
     // The whole of `mixed_answer::answer`: decomposing, computing, writing and checking. Its first
     // word is the first delta the model sends.
     let generation_started = std::time::Instant::now();
@@ -1692,6 +2060,7 @@ async fn mixed_tier(
         unverified_numbers: Vec::new(),
         fill_plan: None,
         diagnostics: None,
+        targeting: targeting_report,
     })
 }
 
@@ -1829,6 +2198,7 @@ mod answer_shape_tests {
             unverified_numbers: Vec::new(),
             fill_plan: None,
             diagnostics: None,
+            targeting: None,
         }
     }
 
@@ -1850,6 +2220,7 @@ mod answer_shape_tests {
             "mixedAnswer",
             "unverifiedNumbers",
             "fillPlan",
+            "targeting",
         ] {
             assert!(json.get(key).is_some(), "{key} is missing from {json}");
         }

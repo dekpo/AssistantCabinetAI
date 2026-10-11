@@ -62,7 +62,7 @@ const GATEWAY_PROMPT_RESERVE_CHARS: usize = 2_000;
 
 /// A question this short is most likely a follow-up ("and for the second one?"), so it is searched
 /// together with the previous question. A longer one stands on its own.
-const FOLLOW_UP_MAX_WORDS: usize = 8;
+pub const FOLLOW_UP_MAX_WORDS: usize = 8;
 
 /// What one model can read in one request, as the server device publishes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -55,6 +55,20 @@ export function AnalyseButton({
   );
 }
 
+/**
+ * Under the analysis summary, once the knowledge base took part in the pass: one click to the place
+ * where what it found can be seen, with where each name comes from. Opens the management dialog
+ * (`KnowledgeDialog`); changes nothing by itself.
+ */
+export function KnowledgeLink({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button type="button" className="button button--quiet button--compact" onClick={onOpen}>
+      {t("analysis.knowledge.manageLink")}
+    </button>
+  );
+}
+
 /** A hairline that fills as the pass walks the folder. Gone the moment the pass ends. */
 export function AnalysisProgress({ fraction, label }: { fraction: number; label: string }) {
   return (

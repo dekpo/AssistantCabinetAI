@@ -208,7 +208,8 @@
       "errorsDataOne": "file could not be fully analysed (its names were not found): run the analysis again to retry",
       "errorsDataMany": "files could not be fully analysed (their names were not found): run the analysis again to retry",
       "truncatedDataOne": "spreadsheet holds more values than are kept: only the first ones are retained",
-      "truncatedDataMany": "spreadsheets hold more values than are kept: only the first ones are retained"
+      "truncatedDataMany": "spreadsheets hold more values than are kept: only the first ones are retained",
+      "manageLink": "See the knowledge"
     }
   },
   "workFolder": {
@@ -397,7 +398,10 @@
     "maxCandidatesLabel": "Most documents targeted",
     "maxCandidatesDescription": "At most this many documents are searched after a targeting. Workbooks are not limited.",
     "widenBelowScoreLabel": "Widening threshold",
-    "widenBelowScoreDescription": "If the closest passage found in the targeted files resembles the question less than this score (0 to 1.5), the search is repeated on your whole selection. The scale depends on the reading model: 0.65 was measured with nomic-embed-text."
+    "widenBelowScoreDescription": "If the closest passage found in the targeted files resembles the question less than this score (0 to 1.5), the search is repeated on your whole selection. The scale depends on the reading model: 0.65 was measured with nomic-embed-text.",
+    "manageKnowledgeLabel": "Manage the knowledge",
+    "manageKnowledgeDescription": "See what the base found and where it comes from, add a name, merge, split or delete an entity, or reset the base.",
+    "manageKnowledge": "Manage…"
   },
   "errorBanner": {
     "title": "This did not work"
@@ -457,7 +461,11 @@
     "work_folder_path_not_absolute": "This folder path is incomplete ({path}).",
     "work_folder_selection_cancelled": "No folder was chosen.",
     "work_folder_unc_not_supported": "A network folder cannot be the documents folder yet ({path}).",
-    "documents_and_tables_together": "Documents and data are both selected. Every question is now answered across both, computed from your tables and cited from your documents."
+    "documents_and_tables_together": "Documents and data are both selected. Every question is now answered across both, computed from your tables and cited from your documents.",
+    "knowledge_name_invalid": "This name cannot be kept: it is empty, too long, or only a title.",
+    "knowledge_name_taken": "An entity of this type already has this name. Nothing was changed.",
+    "knowledge_operation_refused": "This operation is not possible here: nothing was changed.",
+    "knowledge_nothing_to_undo": "Nothing to undo right now."
   },
   "tabularAnswer": {
     "rowOne": "row",
@@ -668,6 +676,353 @@
       "insignificant": "reduction too small",
       "lookup_error": "lookup failed",
       "user_widened": "widened by the user"
+    }
+  },
+  "manage": {
+    "title": "Knowledge",
+    "intro": "What the application found in the analysed documents and spreadsheets: people, organisations, places, identifiers. Nothing here changes, moves or deletes a file in your folders.",
+    "loading": "Reading the knowledge base…",
+    "offNote": "The knowledge base is switched off in Settings: what you change here will only be used once the mode is switched back on.",
+    "inconsistent": "The base reports an internal inconsistency. Your files are not affected: reset the base (the “Reset” tab) or report it.",
+    "summary": "{entities}, {mentions}, {documents}, {workbooks}.",
+    "countEntityOne": "entity",
+    "countEntityMany": "entities",
+    "countMentionOne": "mention",
+    "countMentionMany": "mentions",
+    "countDocumentOne": "document read",
+    "countDocumentMany": "documents read",
+    "countWorkbookOne": "spreadsheet read",
+    "countWorkbookMany": "spreadsheets read",
+    "pendingOne": "{count} document will be read again at the next analysis, from the text already stored: the AI is not asked.",
+    "pendingMany": "{count} documents will be read again at the next analysis, from the text already stored: the AI is not asked.",
+    "undoButton": "Undo: {operation}",
+    "undoNone": "Nothing to undo",
+    "undoBlocked": "Cannot be undone here: {operation}",
+    "retry": "Try again",
+    "operation": {
+      "create": "adding an entity",
+      "edit": "editing an entity",
+      "add_alias": "adding a name",
+      "remove_alias": "removing a name",
+      "set_attribute": "adding a detail",
+      "remove_attribute": "removing a detail",
+      "merge": "the merge",
+      "unmerge": "ending a merge",
+      "split": "the split",
+      "delete": "the deletion",
+      "restore": "the restoration",
+      "dismiss_match": "dismissing a match",
+      "reset": "the reset",
+      "other": "the last operation"
+    },
+    "tab": {
+      "entities": "Entities",
+      "review": "To check",
+      "types": "Types and roles",
+      "reset": "Reset"
+    },
+    "type": {
+      "person": "Person",
+      "organization": "Organisation",
+      "location": "Place",
+      "identifier": "Identifier",
+      "item": "Item",
+      "term": "Term"
+    },
+    "subtype": {
+      "address": "Address",
+      "avs": "AVS number",
+      "case": "Case",
+      "city": "City",
+      "company_id": "Company number",
+      "country": "Country",
+      "court": "Court",
+      "email": "E-mail address",
+      "family_name": "Family name",
+      "given_name": "Given name",
+      "health_insurance_number": "Health insurance number",
+      "iban": "IBAN",
+      "insurer": "Insurer",
+      "invoice": "Invoice",
+      "medication": "Medication",
+      "order": "Order",
+      "phone": "Telephone",
+      "postal_code": "Postal code",
+      "quote": "Quote",
+      "vat": "VAT number"
+    },
+    "status": {
+      "candidate": "To confirm",
+      "active": "Confirmed",
+      "merged": "Merged",
+      "deleted": "Deleted"
+    },
+    "origin": {
+      "automatic": "Found by the application",
+      "manual": "Typed by hand"
+    },
+    "aliasKind": {
+      "canonical_variant": "Form of the name",
+      "reordered": "Reversed order",
+      "initial": "Initial",
+      "partial_surname": "Family name alone",
+      "title_form": "With a title",
+      "abbreviation": "Abbreviation",
+      "filename_form": "Form from the file name",
+      "manual": "Added by hand"
+    },
+    "method": {
+      "identifier": "identifier recognised by its shape",
+      "column_value": "value of a recognised column",
+      "gazetteer_hit": "name the base already knew",
+      "title_full_name": "title followed by a full name",
+      "title_surname": "title followed by a family name",
+      "organization_marker": "organisation marker (Ltd, association...)",
+      "organization_prefix": "word that often opens an organisation name",
+      "coref_in_document": "same person elsewhere in the document",
+      "filename_token": "word from the file name",
+      "capitalised_name": "capitalised words with no other support",
+      "manual": "typed by hand",
+      "other": "another method"
+    },
+    "reason": {
+      "phonetic": "they sound the same",
+      "token_set": "same words in another order",
+      "initial": "initial and family name fit",
+      "shared_identifier": "same identifier",
+      "other": "they look alike"
+    },
+    "matchState": {
+      "open": "to decide",
+      "dismissed": "dismissed",
+      "merged": "merged"
+    },
+    "columnReason": {
+      "header_exact": "column title recognised",
+      "header_partial": "column title partly recognised",
+      "value_shape": "shape of the values",
+      "combined": "title and values agree",
+      "no_header_match": "column title unknown",
+      "module_off": "module switched off",
+      "ambiguous_header": "ambiguous title",
+      "number_or_date": "numbers or dates",
+      "no_values": "no value",
+      "values_mismatch": "values that do not fit",
+      "other": "not specified"
+    },
+    "predicate": {
+      "served_by": "served by",
+      "supplied_by": "supplied by",
+      "sent_to": "sent to",
+      "opposed_to": "opposite",
+      "other": "linked to"
+    },
+    "attribute": {
+      "spoken_form": "Pronunciation"
+    },
+    "locator": {
+      "page": "page {page}, passage {section}",
+      "pageOnly": "page {page}",
+      "cells": "sheet “{sheet}”, column “{column}”, rows {rows}",
+      "cellsNoRows": "sheet “{sheet}”, column “{column}”",
+      "filename": "in the file name",
+      "metadata": "in the file information",
+      "unknown": "unknown location"
+    },
+    "mention": {
+      "foundBy": "Found by: {method}. Confidence: {confidence}.",
+      "times": "{count} times",
+      "matched": "Name found: “{alias}”",
+      "role": "Role: {role}",
+      "manual": "Typed by hand",
+      "separated": "Separated by hand from another entity",
+      "pick": "Pick for the split",
+      "viaMerged": "Comes from an entity merged into this one"
+    },
+    "entities": {
+      "searchLabel": "Search a name",
+      "searchPlaceholder": "Start of a name, of an abbreviation...",
+      "typeLabel": "Type",
+      "typeAll": "All types",
+      "originLabel": "Origin",
+      "originAll": "All",
+      "originAutomatic": "Found by the application",
+      "originManual": "Typed by hand",
+      "viewLabel": "Show",
+      "viewLive": "Active entities",
+      "viewDeleted": "Deleted entities",
+      "viewMerged": "Merged entities",
+      "problemsOnly": "Only what deserves a look: to confirm, a match to decide, seen once",
+      "resultOne": "result",
+      "resultMany": "results",
+      "previous": "Previous",
+      "next": "Next",
+      "pageOf": "Page {page} of {pages}",
+      "empty": "No entity matches.",
+      "emptyBase": "The base holds no entity yet. Run an analysis so it learns the names in your documents and spreadsheets.",
+      "fileOne": "file",
+      "fileMany": "files",
+      "matchOne": "possible match",
+      "matchMany": "possible matches",
+      "newButton": "Add an entity",
+      "newName": "Name",
+      "newType": "Type",
+      "newCreate": "Add",
+      "newHint": "The entity you add is looked for in your documents at the next analysis. It stays even if the documents change.",
+      "loadFailed": "The list could not be read."
+    },
+    "sheet": {
+      "pick": "Pick an entity in the list to see where it comes from.",
+      "close": "Close the sheet",
+      "mergedInto": "This entity is merged into “{name}”: its names and mentions are read on that one’s sheet.",
+      "openSurvivor": "Open “{name}”",
+      "unmerge": "Undo the merge",
+      "deleted": "This entity was deleted: it no longer appears and the analysis does not create it again.",
+      "restore": "Restore",
+      "edit": "Edit",
+      "addName": "Add a name",
+      "merge": "Merge with…",
+      "split": "Split…",
+      "delete": "Delete",
+      "editName": "Name",
+      "editType": "Type",
+      "editDisambiguator": "Detail to tell two namesakes apart (optional)",
+      "editSave": "Save",
+      "editNote": "Editing an entity the application found keeps it for good; the old name is still recognised.",
+      "names": "Recognised names",
+      "nameAddLabel": "New name",
+      "nameAddButton": "Add",
+      "nameHint": "This name will be looked for in your documents at the next analysis.",
+      "nameShort": "A name of fewer than 3 letters is found in documents, but not in a question.",
+      "nameSharedOne": "This name is already recognised for another entity: a question that uses it will ask you which one.",
+      "nameSharedMany": "This name is already recognised for {count} other entities: a question that uses it will ask you which one.",
+      "removeName": "Remove this name",
+      "automaticName": "Name found by the application: it cannot be removed here.",
+      "mergedIn": "Merged into this entity",
+      "provenance": "Where this entity comes from",
+      "provenanceIntro": "Each line says where the application found this entity and what it relied on.",
+      "provenanceNone": "No mention recorded yet.",
+      "provenanceMore": "{shown} mentions shown out of {total}.",
+      "sourceDocument": "Document",
+      "sourceTable": "Spreadsheet",
+      "relations": "Links read in the spreadsheets",
+      "attributes": "Details",
+      "attributeAdd": "Pronunciation to read aloud",
+      "attributeAddButton": "Save the pronunciation",
+      "attributeRemove": "Remove this detail",
+      "possible": "Perhaps the same entity as",
+      "columns": "How the spreadsheet columns were read",
+      "columnRead": "read as {type}",
+      "columnNotRead": "not read",
+      "columnConfidence": "confidence {confidence}",
+      "loadFailed": "This sheet could not be read."
+    },
+    "merge": {
+      "search": "Search the other entity",
+      "searchHint": "Only entities of the same type can be merged.",
+      "none": "No entity of the same type matches.",
+      "direction": "Keep the name of",
+      "go": "Merge"
+    },
+    "split": {
+      "hint": "Useful when two different people carry the same name. In “Where this entity comes from”, tick the mentions that concern the other person, give them a name, then confirm.",
+      "nameLabel": "Name of the new entity",
+      "nameNote": "This name must differ from every name the base knows.",
+      "pickSome": "Tick at least one mention, but not all of them.",
+      "go": "Split the ticked mentions",
+      "picked": "{count} ticked"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Delete “{name}”?",
+        "body": "The entity disappears from the lists and the analysis does not create it again. Your files are not touched. You can restore it under “Deleted entities”.",
+        "confirm": "Delete"
+      },
+      "merge": {
+        "title": "Merge these two entities?",
+        "body": "“{absorbed}” becomes another name of “{survivor}”. Nothing is moved: you can undo the merge.",
+        "confirm": "Merge"
+      },
+      "split": {
+        "title": "Split {count} mention(s) off “{name}”?",
+        "body": "They move to a new entity, “{newName}”. You can undo this split right afterwards. Your files are not touched.",
+        "confirm": "Split"
+      },
+      "removeAlias": {
+        "title": "Remove this name?",
+        "body": "“{name}” will no longer be recognised for this entity. “Undo” cannot bring it back, but you can add it again.",
+        "confirm": "Remove"
+      },
+      "removeAttribute": {
+        "title": "Remove this detail?",
+        "body": "The pronunciation “{name}” is removed from this entity.",
+        "confirm": "Remove"
+      },
+      "reset": {
+        "title": "Reset what the files taught?",
+        "body": "The entities found in your documents and spreadsheets are erased. What you typed by hand and the entities you deleted are kept. The next analysis reads the already analysed documents again, without asking the AI. Your files are not touched.",
+        "confirm": "Reset"
+      },
+      "resetAll": {
+        "title": "Reset everything?",
+        "body": "The whole knowledge base is emptied: found entities, entities typed by hand, added names, details, deleted entities and the history of operations. This cannot be undone. Your files are not touched.",
+        "confirm": "Reset everything"
+      }
+    },
+    "review": {
+      "pairs": "Possible matches",
+      "pairsIntro": "Two entities that perhaps are the same, without it being certain. Nothing is merged without your agreement.",
+      "pairsNone": "No match to decide.",
+      "mergeInto": "Merge into “{name}”",
+      "distinct": "They are two distinct entities",
+      "open": "Open the sheet",
+      "health": "State of the library",
+      "healthIntro": "Numbers to spot what deserves a look. Nothing is corrected by itself.",
+      "seenOnce": "Entities seen only once",
+      "candidates": "Entities to confirm (found with no sure support)",
+      "documentsWithoutEntity": "Documents where no name was found",
+      "workbooksWithoutColumn": "Spreadsheets where no column was read as a name, a place or an identifier",
+      "duplicates": "Possible matches to decide",
+      "inDocumentsNotInTables": "People and organisations cited in documents but in no spreadsheet",
+      "show": "Show",
+      "hide": "Hide",
+      "showEntities": "Show them in the Entities tab",
+      "more": "{shown} shown out of {total}.",
+      "loadFailed": "This part could not be read.",
+      "countLine": "{label}: {total}",
+      "pairCount": "{name}: {count}"
+    },
+    "types": {
+      "intro": "The vocabulary the base uses. It is not edited here.",
+      "typesTitle": "Types of entity",
+      "rolesTitle": "Roles",
+      "rolesNone": "No role is defined.",
+      "packsTitle": "Vocabulary modules",
+      "packsActive": "read for the interface language",
+      "packsAvailable": "Modules available in this version",
+      "entitiesOne": "entity",
+      "entitiesMany": "entities",
+      "builtin": "base type"
+    },
+    "pack": {
+      "base": "Base vocabulary",
+      "health-fr": "Health, France",
+      "health-ch": "Health, Switzerland",
+      "legal-fr": "Law, France",
+      "accounting-fr": "Accounting, France",
+      "active": "switched on",
+      "inactive": "not switched on (Settings)"
+    },
+    "reset": {
+      "intro": "The knowledge base holds only names and locations, never your files. The two “Reset” buttons on the folder cards empty each folder’s analysis; this one empties the knowledge base itself.",
+      "keepTitle": "What the files taught",
+      "keepBody": "Erases the entities found in your documents and spreadsheets. Keeps what you typed by hand (entities, names, details) and the entities you deleted, which will not come back.",
+      "keepButton": "Reset, keeping what I typed…",
+      "allTitle": "Everything, including what I typed",
+      "allBody": "Also erases the entities typed by hand, the added names, the details, the deleted entities and the history of operations.",
+      "allButton": "Reset everything…",
+      "after": "Either way, the next analysis rebuilds the base from the text already stored: the AI is not asked and your files are never touched.",
+      "done": "The knowledge base was reset."
     }
   }
 }

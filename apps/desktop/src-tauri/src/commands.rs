@@ -29,6 +29,8 @@ use crate::knowledge::diagnostics::{
     self, elapsed_ms, RetrievalDiagnostics, RetrievalPath, RetrievalPlan, StageTimer,
 };
 use crate::knowledge::ingest::KnowledgeContext;
+use crate::knowledge::manage::{self, NameTools};
+use crate::knowledge::packs::PackSet;
 use crate::knowledge::picker::{self, EntitySearch, PickerFiles};
 use crate::knowledge::query::SelectedFile;
 use crate::knowledge::reduce::{SideInput, SkipReason, TargetingPolicy};
@@ -864,6 +866,208 @@ pub fn knowledge_search_entities(
         },
         limit.unwrap_or(picker::PICKER_LIMIT),
     )
+}
+
+// ---------------------------------------------------------------------------------------------
+// The knowledge management dialog (lot 8)
+//
+// An administrative place, not part of the chat: it is opened from the settings and nothing in the
+// conversation can reach it. Every command is one read or one transaction (`knowledge::manage`);
+// none reads or writes a file of either folder, and none starts any work on the documents: a
+// change that adds or removes a name only raises the generation of the name list, and the
+// documents it makes due are read again by the next Analyse the user starts. They run off the
+// main thread because a busy database (an Analyse writing) can make one wait a few seconds.
+// ---------------------------------------------------------------------------------------------
+
+/// The words a manual name is read with: the packs of the language in use, plus the type
+/// vocabulary of every shipped pack (a module never changes a type), and the phonetic encoder.
+fn manage_vocabulary(state: &State<'_, AppState>) -> Result<(NameTools, PackSet), AppError> {
+    let (locale, packs) =
+        state.read(|settings| (settings.locale.clone(), settings.knowledge_pack_ids()))?;
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let ids: Vec<&str> = packs.iter().map(String::as_str).collect();
+    let set = PackSet::load_with_type_vocabulary(&locale, &ids)?;
+    Ok((NameTools::from_packs(&set, &locale), set))
+}
+
+#[tauri::command(async)]
+pub fn knowledge_overview(app: AppHandle) -> Result<manage::Overview, AppError> {
+    manage::overview(open_index(&app)?.connection())
+}
+
+#[tauri::command(async)]
+pub fn knowledge_list_entities(
+    app: AppHandle,
+    query: manage::ListQuery,
+) -> Result<manage::EntityPage, AppError> {
+    manage::list_entities(open_index(&app)?.connection(), &query)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_entity_sheet(
+    app: AppHandle,
+    entity_id: i64,
+) -> Result<manage::EntityDetail, AppError> {
+    manage::entity_detail(open_index(&app)?.connection(), entity_id)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_possible_matches(
+    app: AppHandle,
+    page: Option<usize>,
+) -> Result<manage::PossiblePage, AppError> {
+    manage::possible_matches(open_index(&app)?.connection(), page.unwrap_or(0))
+}
+
+#[tauri::command(async)]
+pub fn knowledge_health(app: AppHandle) -> Result<manage::HealthReport, AppError> {
+    manage::health_report(open_index(&app)?.connection())
+}
+
+#[tauri::command(async)]
+pub fn knowledge_types_and_roles(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<manage::TypesAndRoles, AppError> {
+    let (_, packs) = manage_vocabulary(&state)?;
+    manage::types_and_roles(open_index(&app)?.connection(), &packs)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_create_entity(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: manage::NewManualEntity,
+) -> Result<manage::Outcome, AppError> {
+    let (tools, _) = manage_vocabulary(&state)?;
+    manage::create_entity(open_index(&app)?.connection(), &tools, &input)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_edit_entity(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    entity_id: i64,
+    edit: manage::EditEntity,
+) -> Result<manage::Outcome, AppError> {
+    let (tools, _) = manage_vocabulary(&state)?;
+    manage::edit_entity(open_index(&app)?.connection(), &tools, entity_id, &edit)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_add_alias(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    entity_id: i64,
+    text: String,
+) -> Result<manage::Outcome, AppError> {
+    let (tools, _) = manage_vocabulary(&state)?;
+    manage::add_alias(open_index(&app)?.connection(), &tools, entity_id, &text)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_remove_alias(app: AppHandle, alias_id: i64) -> Result<manage::Outcome, AppError> {
+    manage::remove_alias(open_index(&app)?.connection(), alias_id)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_set_attribute(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    entity_id: i64,
+    key: String,
+    value: String,
+) -> Result<manage::Outcome, AppError> {
+    let (tools, _) = manage_vocabulary(&state)?;
+    manage::set_attribute(
+        open_index(&app)?.connection(),
+        &tools,
+        entity_id,
+        &key,
+        &value,
+    )
+}
+
+#[tauri::command(async)]
+pub fn knowledge_remove_attribute(
+    app: AppHandle,
+    entity_id: i64,
+    key: String,
+    value: String,
+) -> Result<manage::Outcome, AppError> {
+    manage::remove_attribute(open_index(&app)?.connection(), entity_id, &key, &value)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_merge(
+    app: AppHandle,
+    survivor: i64,
+    absorbed: i64,
+) -> Result<manage::Outcome, AppError> {
+    manage::merge(open_index(&app)?.connection(), survivor, absorbed)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_unmerge(app: AppHandle, entity_id: i64) -> Result<manage::Outcome, AppError> {
+    manage::unmerge(open_index(&app)?.connection(), entity_id)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_split(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: manage::SplitRequest,
+) -> Result<manage::Outcome, AppError> {
+    let (tools, _) = manage_vocabulary(&state)?;
+    manage::split(open_index(&app)?.connection(), &tools, &request)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_delete_entity(
+    app: AppHandle,
+    entity_id: i64,
+) -> Result<manage::Outcome, AppError> {
+    manage::delete_entity(open_index(&app)?.connection(), entity_id)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_restore_entity(
+    app: AppHandle,
+    entity_id: i64,
+) -> Result<manage::Outcome, AppError> {
+    manage::restore_entity(open_index(&app)?.connection(), entity_id)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_accept_match(
+    app: AppHandle,
+    survivor: i64,
+    absorbed: i64,
+) -> Result<manage::Outcome, AppError> {
+    manage::accept_possible_match(open_index(&app)?.connection(), survivor, absorbed)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_dismiss_match(
+    app: AppHandle,
+    one: i64,
+    other: i64,
+) -> Result<manage::Outcome, AppError> {
+    manage::dismiss_possible_match(open_index(&app)?.connection(), one, other)
+}
+
+#[tauri::command(async)]
+pub fn knowledge_undo(app: AppHandle) -> Result<manage::Outcome, AppError> {
+    manage::undo_last_operation(open_index(&app)?.connection())
+}
+
+/// "Reset the whole knowledge base". The interface asks first (`ConfirmDialog`); Rust does what it
+/// is told. The difference with the two folder Resets is that this one is about names: they remove
+/// what a folder's files taught the base, this one can also remove what a person wrote
+/// (`include_manual`). Files, chunks and inventories are never touched by any of the three.
+#[tauri::command(async)]
+pub fn knowledge_reset(app: AppHandle, include_manual: bool) -> Result<manage::Outcome, AppError> {
+    manage::reset(open_index(&app)?.connection(), include_manual)
 }
 
 /// Seconds since the epoch by the workstation clock, for a log line. Zero if the clock is before

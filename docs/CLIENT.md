@@ -62,6 +62,8 @@ text is untouched. If the name exists only in files she did not tick, one clearl
 health modules, hiding names in suggestions) and, under **Avancé**, the thresholds and a **diagnostics panel** for
 developers that appears under the last answer. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 7".
 
+**Knowledge management dialog (KB lot 8).** Settings → « Connaissances » → **Gérer…**, or the link **Voir les connaissances** under the analysis summary of either folder card, opens a full-window administrative dialog; nothing in the conversation opens it. Tabs: **Entités** (a searchable, filterable list of 50 per page and the sheet of the chosen entity: its names, where each mention was found with the passage, the method and the confidence, the links, the details, the pairs, how the spreadsheet columns were read; actions Modifier, Ajouter un nom, Fusionner avec…, Séparer…, Supprimer, Restaurer, Défaire la fusion), **À vérifier** (possible matches to merge or dismiss, and library-health counts), **Types et rôles** (read-only) and **Réinitialiser**. A strip under the title counts what the base holds, says how many documents the next Analyse will read again (from the stored text, without the AI) and holds **Annuler : <operation>**. Delete, merge, split, removing a name and both resets ask first through the confirmation dialog. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 8".
+
 The conversation remembers its recent exchanges, as many as the chosen model's context window allows; past
 excerpts are never resent. Design and budget: `docs/SELECTION-AND-MEMORY.md`.
 

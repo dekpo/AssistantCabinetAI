@@ -208,7 +208,8 @@
       "errorsDataOne": "fichier n'a pas pu être entièrement analysé (ses noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
       "errorsDataMany": "fichiers n'ont pas pu être entièrement analysés (leurs noms n'ont pas été repérés) : relancez l'analyse pour réessayer",
       "truncatedDataOne": "tableur contient plus de valeurs que la base n'en retient : seules les premières sont conservées",
-      "truncatedDataMany": "tableurs contiennent plus de valeurs que la base n'en retient : seules les premières sont conservées"
+      "truncatedDataMany": "tableurs contiennent plus de valeurs que la base n'en retient : seules les premières sont conservées",
+      "manageLink": "Voir les connaissances"
     }
   },
   "workFolder": {
@@ -397,7 +398,10 @@
     "maxCandidatesLabel": "Nombre maximal de documents ciblés",
     "maxCandidatesDescription": "Au plus ce nombre de documents sont recherchés après un ciblage. Les classeurs ne sont pas limités.",
     "widenBelowScoreLabel": "Seuil d'élargissement",
-    "widenBelowScoreDescription": "Si le passage le plus proche trouvé dans les fichiers ciblés ressemble moins que ce score à la question (de 0 à 1,5), la recherche est refaite sur toute votre sélection. L'échelle dépend du modèle de lecture : 0,65 a été mesuré avec nomic-embed-text."
+    "widenBelowScoreDescription": "Si le passage le plus proche trouvé dans les fichiers ciblés ressemble moins que ce score à la question (de 0 à 1,5), la recherche est refaite sur toute votre sélection. L'échelle dépend du modèle de lecture : 0,65 a été mesuré avec nomic-embed-text.",
+    "manageKnowledgeLabel": "Gérer les connaissances",
+    "manageKnowledgeDescription": "Voir ce que la base a repéré et d'où cela vient, ajouter un nom, fusionner, séparer ou supprimer une entité, ou réinitialiser la base.",
+    "manageKnowledge": "Gérer…"
   },
   "errorBanner": {
     "title": "Cela n'a pas fonctionné"
@@ -457,7 +461,11 @@
     "work_folder_path_not_absolute": "Le chemin de ce dossier est incomplet ({path}).",
     "work_folder_selection_cancelled": "Aucun dossier n'a été choisi.",
     "work_folder_unc_not_supported": "Un dossier réseau ne peut pas encore être le dossier de documents ({path}).",
-    "documents_and_tables_together": "Des documents et des données sont sélectionnés en même temps. Toute question est désormais répondue en croisant les deux, calculée depuis vos tableaux et citée depuis vos documents."
+    "documents_and_tables_together": "Des documents et des données sont sélectionnés en même temps. Toute question est désormais répondue en croisant les deux, calculée depuis vos tableaux et citée depuis vos documents.",
+    "knowledge_name_invalid": "Ce nom ne peut pas être gardé : il est vide, trop long, ou ne contient qu'un titre.",
+    "knowledge_name_taken": "Une entité de ce type porte déjà ce nom. Rien n'a été modifié.",
+    "knowledge_operation_refused": "Cette opération n'est pas possible ici : rien n'a été modifié.",
+    "knowledge_nothing_to_undo": "Rien à annuler pour le moment."
   },
   "tabularAnswer": {
     "rowOne": "ligne",
@@ -668,6 +676,353 @@
       "insignificant": "réduction trop faible",
       "lookup_error": "lecture impossible",
       "user_widened": "élargi par l'utilisateur"
+    }
+  },
+  "manage": {
+    "title": "Connaissances",
+    "intro": "Ce que l'application a repéré dans les documents et les tableurs analysés : personnes, organisations, lieux, identifiants. Rien ici ne modifie, ne déplace ni ne supprime un fichier de vos dossiers.",
+    "loading": "Lecture de la base de connaissances…",
+    "offNote": "La base de connaissances est désactivée dans les Réglages : ce que vous changez ici ne servira qu'une fois le mode réactivé.",
+    "inconsistent": "La base signale une incohérence interne. Vos fichiers ne sont pas touchés : réinitialisez la base (onglet « Réinitialiser ») ou signalez-le.",
+    "summary": "{entities}, {mentions}, {documents}, {workbooks}.",
+    "countEntityOne": "entité",
+    "countEntityMany": "entités",
+    "countMentionOne": "mention",
+    "countMentionMany": "mentions",
+    "countDocumentOne": "document lu",
+    "countDocumentMany": "documents lus",
+    "countWorkbookOne": "tableur lu",
+    "countWorkbookMany": "tableurs lus",
+    "pendingOne": "{count} document sera relu à la prochaine analyse, à partir du texte déjà conservé : l'IA n'est pas sollicitée.",
+    "pendingMany": "{count} documents seront relus à la prochaine analyse, à partir du texte déjà conservé : l'IA n'est pas sollicitée.",
+    "undoButton": "Annuler : {operation}",
+    "undoNone": "Rien à annuler",
+    "undoBlocked": "Ne peut pas être annulé ici : {operation}",
+    "retry": "Réessayer",
+    "operation": {
+      "create": "l'ajout d'une entité",
+      "edit": "la modification d'une entité",
+      "add_alias": "l'ajout d'un nom",
+      "remove_alias": "le retrait d'un nom",
+      "set_attribute": "l'ajout d'une précision",
+      "remove_attribute": "le retrait d'une précision",
+      "merge": "la fusion",
+      "unmerge": "la fin d'une fusion",
+      "split": "la séparation",
+      "delete": "la suppression",
+      "restore": "la restauration",
+      "dismiss_match": "le rejet d'une correspondance",
+      "reset": "la réinitialisation",
+      "other": "la dernière opération"
+    },
+    "tab": {
+      "entities": "Entités",
+      "review": "À vérifier",
+      "types": "Types et rôles",
+      "reset": "Réinitialiser"
+    },
+    "type": {
+      "person": "Personne",
+      "organization": "Organisation",
+      "location": "Lieu",
+      "identifier": "Identifiant",
+      "item": "Objet",
+      "term": "Terme"
+    },
+    "subtype": {
+      "address": "Adresse",
+      "avs": "Numéro AVS",
+      "case": "Affaire",
+      "city": "Ville",
+      "company_id": "Numéro d'entreprise",
+      "country": "Pays",
+      "court": "Juridiction",
+      "email": "Adresse e-mail",
+      "family_name": "Nom de famille",
+      "given_name": "Prénom",
+      "health_insurance_number": "Numéro d'assurance-maladie",
+      "iban": "IBAN",
+      "insurer": "Assureur",
+      "invoice": "Facture",
+      "medication": "Médicament",
+      "order": "Commande",
+      "phone": "Téléphone",
+      "postal_code": "Code postal",
+      "quote": "Devis",
+      "vat": "Numéro de TVA"
+    },
+    "status": {
+      "candidate": "À confirmer",
+      "active": "Confirmée",
+      "merged": "Fusionnée",
+      "deleted": "Supprimée"
+    },
+    "origin": {
+      "automatic": "Repérée par l'application",
+      "manual": "Saisie à la main"
+    },
+    "aliasKind": {
+      "canonical_variant": "Forme du nom",
+      "reordered": "Ordre inversé",
+      "initial": "Initiale",
+      "partial_surname": "Nom de famille seul",
+      "title_form": "Avec un titre",
+      "abbreviation": "Abréviation",
+      "filename_form": "Forme du nom de fichier",
+      "manual": "Ajouté à la main"
+    },
+    "method": {
+      "identifier": "identifiant reconnu à sa forme",
+      "column_value": "valeur d'une colonne reconnue",
+      "gazetteer_hit": "nom déjà connu de la base",
+      "title_full_name": "titre suivi d'un nom complet",
+      "title_surname": "titre suivi d'un nom de famille",
+      "organization_marker": "marque d'organisation (SARL, association...)",
+      "organization_prefix": "mot qui ouvre souvent un nom d'organisation",
+      "coref_in_document": "même personne ailleurs dans le document",
+      "filename_token": "mot du nom du fichier",
+      "capitalised_name": "mots à majuscule, sans autre appui",
+      "manual": "saisi à la main",
+      "other": "autre méthode"
+    },
+    "reason": {
+      "phonetic": "ils se prononcent de la même façon",
+      "token_set": "mêmes mots dans un autre ordre",
+      "initial": "initiale et nom de famille compatibles",
+      "shared_identifier": "même identifiant",
+      "other": "ils se ressemblent"
+    },
+    "matchState": {
+      "open": "à trancher",
+      "dismissed": "écartée",
+      "merged": "fusionnée"
+    },
+    "columnReason": {
+      "header_exact": "titre de colonne reconnu",
+      "header_partial": "titre de colonne en partie reconnu",
+      "value_shape": "forme des valeurs",
+      "combined": "titre et valeurs concordent",
+      "no_header_match": "titre de colonne inconnu",
+      "module_off": "module désactivé",
+      "ambiguous_header": "titre ambigu",
+      "number_or_date": "nombres ou dates",
+      "no_values": "aucune valeur",
+      "values_mismatch": "valeurs qui ne correspondent pas",
+      "other": "non précisé"
+    },
+    "predicate": {
+      "served_by": "suivi par",
+      "supplied_by": "fourni par",
+      "sent_to": "envoyé à",
+      "opposed_to": "en face de",
+      "other": "lié à"
+    },
+    "attribute": {
+      "spoken_form": "Prononciation"
+    },
+    "locator": {
+      "page": "page {page}, passage {section}",
+      "pageOnly": "page {page}",
+      "cells": "feuille « {sheet} », colonne « {column} », lignes {rows}",
+      "cellsNoRows": "feuille « {sheet} », colonne « {column} »",
+      "filename": "dans le nom du fichier",
+      "metadata": "dans les informations du fichier",
+      "unknown": "emplacement inconnu"
+    },
+    "mention": {
+      "foundBy": "Repéré par : {method}. Confiance : {confidence}.",
+      "times": "{count} fois",
+      "matched": "Nom trouvé : « {alias} »",
+      "role": "Rôle : {role}",
+      "manual": "Saisi à la main",
+      "separated": "Séparé à la main d'une autre entité",
+      "pick": "Choisir pour la séparation",
+      "viaMerged": "Vient d'une entité fusionnée ici"
+    },
+    "entities": {
+      "searchLabel": "Rechercher un nom",
+      "searchPlaceholder": "Début d'un nom, d'une abréviation...",
+      "typeLabel": "Type",
+      "typeAll": "Tous les types",
+      "originLabel": "Origine",
+      "originAll": "Toutes",
+      "originAutomatic": "Repérées par l'application",
+      "originManual": "Saisies à la main",
+      "viewLabel": "Afficher",
+      "viewLive": "Entités actives",
+      "viewDeleted": "Entités supprimées",
+      "viewMerged": "Entités fusionnées",
+      "problemsOnly": "Seulement ce qui mérite un coup d'œil : à confirmer, correspondance à trancher, vu une seule fois",
+      "resultOne": "résultat",
+      "resultMany": "résultats",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "pageOf": "Page {page} sur {pages}",
+      "empty": "Aucune entité ne correspond.",
+      "emptyBase": "La base ne contient encore aucune entité. Lancez une analyse pour qu'elle apprenne les noms de vos documents et de vos tableurs.",
+      "fileOne": "fichier",
+      "fileMany": "fichiers",
+      "matchOne": "correspondance possible",
+      "matchMany": "correspondances possibles",
+      "newButton": "Ajouter une entité",
+      "newName": "Nom",
+      "newType": "Type",
+      "newCreate": "Ajouter",
+      "newHint": "L'entité ajoutée est cherchée dans vos documents à la prochaine analyse. Elle reste même si les documents changent.",
+      "loadFailed": "Impossible de lire la liste."
+    },
+    "sheet": {
+      "pick": "Choisissez une entité dans la liste pour voir d'où elle vient.",
+      "close": "Fermer la fiche",
+      "mergedInto": "Cette entité est fusionnée dans « {name} » : ses noms et ses mentions se lisent sur la fiche de celle-ci.",
+      "openSurvivor": "Ouvrir « {name} »",
+      "unmerge": "Défaire la fusion",
+      "deleted": "Cette entité a été supprimée : elle n'apparaît plus et l'analyse ne la recrée pas.",
+      "restore": "Restaurer",
+      "edit": "Modifier",
+      "addName": "Ajouter un nom",
+      "merge": "Fusionner avec…",
+      "split": "Séparer…",
+      "delete": "Supprimer",
+      "editName": "Nom",
+      "editType": "Type",
+      "editDisambiguator": "Précision pour distinguer deux homonymes (facultatif)",
+      "editSave": "Enregistrer",
+      "editNote": "Modifier une entité repérée par l'application la garde définitivement ; l'ancien nom reste reconnu.",
+      "names": "Noms reconnus",
+      "nameAddLabel": "Nouveau nom",
+      "nameAddButton": "Ajouter",
+      "nameHint": "Ce nom sera cherché dans vos documents à la prochaine analyse.",
+      "nameShort": "Un nom de moins de 3 lettres est retrouvé dans les documents, mais pas dans une question.",
+      "nameSharedOne": "Ce nom est déjà reconnu pour une autre entité : une question qui l'emploie vous demandera laquelle.",
+      "nameSharedMany": "Ce nom est déjà reconnu pour {count} autres entités : une question qui l'emploie vous demandera laquelle.",
+      "removeName": "Retirer ce nom",
+      "automaticName": "Nom repéré par l'application : il ne peut pas être retiré ici.",
+      "mergedIn": "Fusionnées dans cette entité",
+      "provenance": "D'où vient cette entité",
+      "provenanceIntro": "Chaque ligne dit où l'application a trouvé cette entité et sur quoi elle s'est appuyée.",
+      "provenanceNone": "Aucune mention enregistrée pour le moment.",
+      "provenanceMore": "{shown} mentions affichées sur {total}.",
+      "sourceDocument": "Document",
+      "sourceTable": "Tableur",
+      "relations": "Liens lus dans les tableurs",
+      "attributes": "Précisions",
+      "attributeAdd": "Prononciation à lire à voix haute",
+      "attributeAddButton": "Enregistrer la prononciation",
+      "attributeRemove": "Retirer cette précision",
+      "possible": "Peut-être la même entité que",
+      "columns": "Comment les colonnes des tableurs ont été lues",
+      "columnRead": "lue comme {type}",
+      "columnNotRead": "non lue",
+      "columnConfidence": "confiance {confidence}",
+      "loadFailed": "Impossible de lire cette fiche."
+    },
+    "merge": {
+      "search": "Chercher l'autre entité",
+      "searchHint": "Seules les entités du même type peuvent être fusionnées.",
+      "none": "Aucune entité du même type ne correspond.",
+      "direction": "Garder le nom de",
+      "go": "Fusionner"
+    },
+    "split": {
+      "hint": "Utile quand deux personnes différentes portent le même nom. Cochez, dans « D'où vient cette entité », les mentions qui concernent l'autre personne, donnez-lui un nom, puis validez.",
+      "nameLabel": "Nom de la nouvelle entité",
+      "nameNote": "Ce nom doit être différent de tous ceux que la base connaît.",
+      "pickSome": "Cochez au moins une mention, mais pas toutes.",
+      "go": "Séparer les mentions cochées",
+      "picked": "{count} cochée(s)"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Supprimer « {name} » ?",
+        "body": "L'entité disparaît des listes et l'analyse ne la recrée pas. Vos fichiers ne sont pas touchés. Vous pourrez la restaurer dans « Entités supprimées ».",
+        "confirm": "Supprimer"
+      },
+      "merge": {
+        "title": "Fusionner ces deux entités ?",
+        "body": "« {absorbed} » devient un autre nom de « {survivor} ». Rien n'est déplacé : vous pourrez défaire la fusion.",
+        "confirm": "Fusionner"
+      },
+      "split": {
+        "title": "Séparer {count} mention(s) de « {name} » ?",
+        "body": "Elles passent à une nouvelle entité, « {newName} ». Vous pourrez annuler cette séparation juste après. Vos fichiers ne sont pas touchés.",
+        "confirm": "Séparer"
+      },
+      "removeAlias": {
+        "title": "Retirer ce nom ?",
+        "body": "« {name} » ne sera plus reconnu pour cette entité. Cela ne peut pas être annulé avec « Annuler », mais vous pouvez le rajouter.",
+        "confirm": "Retirer"
+      },
+      "removeAttribute": {
+        "title": "Retirer cette précision ?",
+        "body": "La prononciation « {name} » est retirée de cette entité.",
+        "confirm": "Retirer"
+      },
+      "reset": {
+        "title": "Réinitialiser ce que les fichiers ont appris ?",
+        "body": "Les entités repérées dans vos documents et vos tableurs sont effacées. Ce que vous avez saisi à la main et les entités que vous avez supprimées sont gardés. La prochaine analyse relit les documents déjà analysés, sans solliciter l'IA. Vos fichiers ne sont pas touchés.",
+        "confirm": "Réinitialiser"
+      },
+      "resetAll": {
+        "title": "Tout réinitialiser ?",
+        "body": "Toute la base de connaissances est vidée : entités repérées, entités saisies à la main, noms ajoutés, précisions, entités supprimées et historique des opérations. Cela ne peut pas être annulé. Vos fichiers ne sont pas touchés.",
+        "confirm": "Tout réinitialiser"
+      }
+    },
+    "review": {
+      "pairs": "Correspondances possibles",
+      "pairsIntro": "Deux entités qui se ressemblent peut-être, sans qu'on puisse l'affirmer. Rien n'est fusionné sans votre accord.",
+      "pairsNone": "Aucune correspondance à trancher.",
+      "mergeInto": "Fusionner dans « {name} »",
+      "distinct": "Ce sont deux entités distinctes",
+      "open": "Ouvrir la fiche",
+      "health": "État de la bibliothèque",
+      "healthIntro": "Des chiffres pour repérer ce qui mérite un coup d'œil. Rien n'est corrigé tout seul.",
+      "seenOnce": "Entités vues une seule fois",
+      "candidates": "Entités à confirmer (repérées sans appui sûr)",
+      "documentsWithoutEntity": "Documents où aucun nom n'a été repéré",
+      "workbooksWithoutColumn": "Tableurs dont aucune colonne n'a été lue comme un nom, un lieu ou un identifiant",
+      "duplicates": "Correspondances possibles à trancher",
+      "inDocumentsNotInTables": "Personnes et organisations citées dans des documents mais dans aucun tableur",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "showEntities": "Les afficher dans l'onglet Entités",
+      "more": "{shown} affichés sur {total}.",
+      "loadFailed": "Impossible de lire cette partie.",
+      "countLine": "{label} : {total}",
+      "pairCount": "{name} : {count}"
+    },
+    "types": {
+      "intro": "Le vocabulaire que la base utilise. Il ne se modifie pas ici.",
+      "typesTitle": "Types d'entité",
+      "rolesTitle": "Rôles",
+      "rolesNone": "Aucun rôle n'est défini.",
+      "packsTitle": "Modules de vocabulaire",
+      "packsActive": "lus pour la langue de l'interface",
+      "packsAvailable": "Modules disponibles dans cette version",
+      "entitiesOne": "entité",
+      "entitiesMany": "entités",
+      "builtin": "type de base"
+    },
+    "pack": {
+      "base": "Vocabulaire de base",
+      "health-fr": "Santé, France",
+      "health-ch": "Santé, Suisse",
+      "legal-fr": "Droit, France",
+      "accounting-fr": "Comptabilité, France",
+      "active": "activé",
+      "inactive": "non activé (Réglages)"
+    },
+    "reset": {
+      "intro": "La base de connaissances ne contient que des noms et des emplacements, jamais vos fichiers. Les deux boutons « Reset » des cartes de dossier vident l'analyse de chaque dossier ; celui-ci vide la base de connaissances elle-même.",
+      "keepTitle": "Ce que les fichiers ont appris",
+      "keepBody": "Efface les entités repérées dans vos documents et vos tableurs. Garde ce que vous avez saisi à la main (entités, noms, précisions) et les entités que vous avez supprimées, qui ne reviendront pas.",
+      "keepButton": "Réinitialiser, en gardant mes saisies…",
+      "allTitle": "Tout, y compris mes saisies",
+      "allBody": "Efface aussi les entités saisies à la main, les noms ajoutés, les précisions, les entités supprimées et l'historique des opérations.",
+      "allButton": "Tout réinitialiser…",
+      "after": "Dans les deux cas, la prochaine analyse reconstruit la base à partir du texte déjà conservé : l'IA n'est pas sollicitée et vos fichiers ne sont jamais touchés.",
+      "done": "La base de connaissances a été réinitialisée."
     }
   }
 }

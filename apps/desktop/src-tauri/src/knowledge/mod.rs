@@ -14,6 +14,7 @@ pub mod extract;
 pub mod gazetteer;
 pub mod ingest;
 pub mod maintenance;
+pub mod manage;
 pub mod normalize;
 pub mod packs;
 pub mod phonetic;

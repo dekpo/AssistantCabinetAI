@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS kb_mentions (
     confidence REAL NOT NULL DEFAULT 1.0,
     method TEXT NOT NULL,
     origin TEXT NOT NULL CHECK (origin IN ('automatic', 'manual')),
-    extractor_version INTEGER NOT NULL DEFAULT 0
+    extractor_version INTEGER NOT NULL DEFAULT 0,
+    split_from INTEGER
 );
 CREATE INDEX IF NOT EXISTS kb_mentions_by_entity ON kb_mentions (entity_id);
 CREATE INDEX IF NOT EXISTS kb_mentions_by_source ON kb_mentions (source_id);
@@ -261,9 +262,16 @@ INSERT OR IGNORE INTO kb_meta (key, value) VALUES
 /// Create whatever is missing, seed the fixed rows, record the schema version. Safe to run on every
 /// open: a database that is already current is read, not written.
 pub fn ensure_schema(connection: &Connection) -> Result<(), AppError> {
-    let tx = db(connection.unchecked_transaction())?;
+    // The write lock at once: several connections open the index together (the management dialog
+    // reads with a handful of commands at the same time), and a deferred transaction that starts as
+    // a read and then tries to write is refused at once instead of waiting for the busy timeout.
+    let tx = db(rusqlite::Transaction::new_unchecked(
+        connection,
+        rusqlite::TransactionBehavior::Immediate,
+    ))?;
     db(tx.execute_batch(SCHEMA))?;
     add_missing_diagnostic_columns(&tx)?;
+    add_missing_mention_columns(&tx)?;
     db(tx.execute_batch(SEEDS))?;
     db(tx.execute(
         "INSERT INTO kb_meta (key, value) VALUES ('schema_version', ?1)
@@ -299,6 +307,20 @@ fn add_missing_diagnostic_columns(connection: &Connection) -> Result<(), AppErro
                 [],
             ))?;
         }
+    }
+    Ok(())
+}
+
+/// `kb_mentions.split_from` (lot 8): the entity a mention was moved away from by hand, so that a
+/// re-analysis does not put it back. A database made by lot 1 to 7 has the table without it.
+fn add_missing_mention_columns(connection: &Connection) -> Result<(), AppError> {
+    let mut statement = db(connection.prepare("PRAGMA table_info(kb_mentions)"))?;
+    let known: Vec<String> = db(statement.query_map([], |row| row.get::<_, String>(1)))?
+        .collect::<Result<_, _>>()
+        .map_err(|_| AppError::KnowledgeUnavailable)?;
+    drop(statement);
+    if !known.iter().any(|column| column == "split_from") {
+        db(connection.execute("ALTER TABLE kb_mentions ADD COLUMN split_from INTEGER", []))?;
     }
     Ok(())
 }
@@ -816,6 +838,36 @@ fn resolve_ref(
     }
 }
 
+type MovedPlace = (i64, String, Option<String>, Option<String>, Option<String>);
+
+/// The places of one source whose mention was moved to another entity by a split, keyed by the
+/// entity (after merges) it was moved away from: `(entity, locator kind, chunk, sheet, column)`.
+fn places_moved_away(
+    connection: &Connection,
+    source_id: i64,
+) -> Result<std::collections::HashSet<MovedPlace>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT v.effective_id, m.locator_kind, m.chunk_id, m.sheet, m.column_name
+         FROM kb_mentions m
+         JOIN kb_effective_entity v ON v.entity_id = m.split_from
+         WHERE m.source_id = ?1 AND m.split_from IS NOT NULL",
+    ))?;
+    let rows = db(statement.query_map([source_id], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, Option<String>>(4)?,
+        ))
+    }))?;
+    let mut places = std::collections::HashSet::new();
+    for row in rows {
+        places.insert(db(row)?);
+    }
+    Ok(places)
+}
+
 fn apply_mentions(
     tx: &Transaction<'_>,
     source_id: i64,
@@ -863,11 +915,24 @@ fn apply_mentions(
         }
     }
 
+    // Places where the user moved a mention away from an entity by hand (a split): the automatic
+    // reading of the same place must not put it back, or the next Analyse would undo her decision.
+    let moved_away = places_moved_away(tx, source_id)?;
+
     for draft in &delta.mentions {
         let Some(entity_id) = resolve_ref(tx, drafts, draft.entity)? else {
             continue;
         };
         let columns = locator_columns(&draft.locator);
+        if moved_away.contains(&(
+            entity_id,
+            columns.kind.to_string(),
+            columns.chunk_id.clone(),
+            columns.sheet.clone(),
+            columns.column_name.clone(),
+        )) {
+            continue;
+        }
         let alias_id = match &draft.alias_normalized {
             Some(normalized) => db(tx
                 .query_row(
@@ -1723,13 +1788,15 @@ pub fn remove_attribute(
 // Merge, unmerge, delete, restore: the entity operations a person performs
 // ---------------------------------------------------------------------------------------------
 
-fn log_op(connection: &Connection, kind: &str, payload: Value) -> Result<(), AppError> {
+/// Append one line to the operation log: a kind and ids, never a name or a passage. Returns the id
+/// of the line, which the undo of `knowledge::manage` refers to.
+pub(crate) fn log_op(connection: &Connection, kind: &str, payload: Value) -> Result<i64, AppError> {
     db(connection.execute(
         "INSERT INTO kb_ops_log (kind, payload_json, at)
          VALUES (?1, ?2, CAST(strftime('%s', 'now') AS INTEGER))",
         params![kind, payload.to_string()],
     ))?;
-    Ok(())
+    Ok(connection.last_insert_rowid())
 }
 
 /// The live entity an id leads to, or the reason it cannot be used.
@@ -1783,7 +1850,8 @@ pub fn merge_entities(tx: &Transaction<'_>, survivor: i64, victim: i64) -> Resul
             "victim_previous_status": victim.status.as_code(),
             "redirected": redirected,
         }),
-    )
+    )?;
+    Ok(())
 }
 
 /// Undo a merge: the entity becomes itself again, and whatever the merge had redirected to the
@@ -1852,7 +1920,8 @@ pub fn unmerge_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErr
         tx,
         "unmerge",
         json!({ "entity": entity.entity_id, "survivor": survivor }),
-    )
+    )?;
+    Ok(())
 }
 
 /// Delete an entity the way a person does: a tombstone. Its mentions and relations go, its name
@@ -1881,7 +1950,8 @@ pub fn delete_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErro
         tx,
         "delete",
         json!({ "entity": entity_id, "previous_status": entity.status.as_code() }),
-    )
+    )?;
+    Ok(())
 }
 
 /// Bring a tombstone back. Its mentions return with the next analysis of the files that held them.
@@ -1914,7 +1984,8 @@ pub fn restore_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErr
          WHERE entity_id = ?2",
         params![previous.as_code(), entity_id],
     ))?;
-    log_op(tx, "restore", json!({ "entity": entity_id }))
+    log_op(tx, "restore", json!({ "entity": entity_id }))?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------------------------

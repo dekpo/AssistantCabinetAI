@@ -26,6 +26,7 @@ import {
   AnalysisProgress,
   FileList,
   isSelectable,
+  KnowledgeLink,
   SelectAll,
   StatusDot,
 } from "./FolderCardParts";
@@ -57,6 +58,7 @@ export function WorkFolderCard({
   scope,
   onScopeChange,
   scopeLocked = false,
+  onOpenKnowledge,
 }: {
   workFolder: string | null;
   suggestedWorkFolder: string | null;
@@ -75,6 +77,9 @@ export function WorkFolderCard({
   /** A question is being answered: changing the scope under it would describe a different answer
    * from the one being written. */
   scopeLocked?: boolean;
+  /** Opens the knowledge management dialog; the link under the summary shows only when the
+   * knowledge base took part in the pass. */
+  onOpenKnowledge?: () => void;
 }) {
   const { t } = useTranslation();
   const [error, setError] = useState<AppError | null>(null);
@@ -244,14 +249,19 @@ export function WorkFolderCard({
 
   const passSummary =
     passLines.length === 0 ? null : (
-      <p className="inventory-detail__summary">
-        {passLines.map((line, index) => (
-          <Fragment key={index}>
-            {index > 0 ? <br /> : null}
-            {line}
-          </Fragment>
-        ))}
-      </p>
+      <>
+        <p className="inventory-detail__summary">
+          {passLines.map((line, index) => (
+            <Fragment key={index}>
+              {index > 0 ? <br /> : null}
+              {line}
+            </Fragment>
+          ))}
+        </p>
+        {onOpenKnowledge !== undefined && indexing.summary?.knowledge ? (
+          <KnowledgeLink onOpen={onOpenKnowledge} />
+        ) : null}
+      </>
     );
 
   /* Opening the folder is the one action here that changes nothing, so it reports a failure and

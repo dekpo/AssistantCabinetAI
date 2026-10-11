@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "about": "The contract of the transcript repair (knowledge::repair::propose). The speech work reuses this file as it is. 'known_names' are the people the knowledge base holds (the test writes one document for each, with a title and the full name, so that each is a confirmed name). 'must_propose' are transcripts where a word must be proposed as a known name: 'heard' is the word or run as the engine wrote it, 'expected' the names offered (best first), 'action' is 'suggest' (one strong candidate) or 'ask' (several, or a spelling-only match). 'must_not_change' are transcripts that must get no proposal at all: ordinary words, months, a name that is already a known name. 'cases_without_case' are read with case_reliable = false: only a word that follows a title is looked at. Names are invented; none is a real person.",
+  "known_names": [
+    "Jean Dupont",
+    "Claire Lefebvre",
+    "Paul Thibault",
+    "Anne Martin",
+    "Marc Durand",
+    "Eric Durant",
+    "Sophie Rousseau"
+  ],
+  "must_propose": [
+    {
+      "transcript": "J'ai croise Dupond au cabinet ce matin",
+      "heard": "Dupond",
+      "expected": ["Jean Dupont"],
+      "action": "suggest"
+    },
+    {
+      "transcript": "Rendez-vous avec Du pont demain",
+      "heard": "Du pont",
+      "expected": ["Jean Dupont"],
+      "action": "suggest"
+    },
+    {
+      "transcript": "Le courrier de Lefèvre est pret",
+      "heard": "Lefèvre",
+      "expected": ["Claire Lefebvre"],
+      "action": "suggest"
+    },
+    {
+      "transcript": "Thibaut a rappele ce soir",
+      "heard": "Thibaut",
+      "expected": ["Paul Thibault"],
+      "action": "suggest"
+    },
+    {
+      "transcript": "Docteur Duran a telephone",
+      "heard": "Duran",
+      "expected": ["Eric Durant", "Marc Durand"],
+      "action": "ask"
+    },
+    {
+      "transcript": "Rousseaux est en conge",
+      "heard": "Rousseaux",
+      "expected": ["Sophie Rousseau"],
+      "action": "suggest"
+    }
+  ],
+  "must_not_change": [
+    "Bonjour, merci pour votre message",
+    "Le pont est ferme ce matin",
+    "Rendez-vous en Janvier ou en Mars",
+    "Nous avons vu Dupont hier",
+    "Docteur Martin est la",
+    "Doctor Martin is here",
+    "Paris Lyon Marseille",
+    "Cordialement, Camille Perrin",
+    "Thibault et Lefebvre sont la",
+    "Il a dit oui"
+  ],
+  "cases_without_case": [
+    {
+      "transcript": "docteur dupond a appele",
+      "heard": "dupond",
+      "expected": ["Jean Dupont"],
+      "action": "suggest"
+    },
+    {
+      "transcript": "dupond a appele hier",
+      "heard": null,
+      "expected": [],
+      "action": null
+    }
+  ]
+}

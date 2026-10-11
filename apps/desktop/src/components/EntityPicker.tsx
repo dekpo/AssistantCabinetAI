@@ -23,6 +23,7 @@ export function EntityPicker({
   onChoose,
   onHighlight,
   onAddToSelection,
+  onOpenCard,
 }: {
   /** The id of the list, so the box can name it as the thing it controls. */
   id: string;
@@ -34,6 +35,8 @@ export function EntityPicker({
   onChoose: (choice: EntityChoice) => void;
   onHighlight: (index: number) => void;
   onAddToSelection: (outside: OutsideSelection) => void;
+  /** Opens the sheet of a name. A mouse press on its button does not choose the name. */
+  onOpenCard: (choice: EntityChoice) => void;
 }) {
   const { t } = useTranslation();
   const nothingYet = prefix.length === 0;
@@ -68,6 +71,20 @@ export function EntityPicker({
                   t("chat.scopeFileMany"),
                 )}
               </span>
+              <button
+                type="button"
+                className="picker__card"
+                tabIndex={-1}
+                aria-label={t("entityCard.open", { name: choice.display })}
+                title={t("entityCard.open", { name: choice.display })}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={() => onOpenCard(choice)}
+              >
+                i
+              </button>
             </li>
           ))}
         </ul>

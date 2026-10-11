@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { Chip } from "../lib/entityPicker";
 import type {
+  EntityCard,
   EntityChoice,
   OutsideSelection,
   RetrievalDiagnostics,
@@ -11,7 +12,9 @@ import type {
 } from "../lib/ipc";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { EntityChips } from "./EntityChips";
+import { EntityCardSheet } from "./EntityCardDialog";
 import { EntityPicker } from "./EntityPicker";
+import { SuggestionList } from "./SuggestionChips";
 import { TargetingNote } from "./TargetingNote";
 
 /* The window is not opened in these tests: each component is drawn to static markup, with the real
@@ -167,15 +170,26 @@ describe("the names chosen for the next question, drawn", () => {
   ];
 
   it("shows each name with a button to remove it", () => {
-    const html = page("fr-FR", createElement(EntityChips, { chips, onRemove: () => {} }));
+    const html = page("fr-FR", createElement(EntityChips, { chips, onRemove: () => {}, onOpenCard: () => {} }));
 
     expect(html).toContain("Jean Dupont");
     expect(html).toContain("Claire Martin");
     expect(html).toContain('aria-label="Retirer Jean Dupont"');
   });
 
+  it("gives each name a button that opens its sheet, without choosing or removing it", () => {
+    const html = page(
+      "fr-FR",
+      createElement(EntityChips, { chips, onRemove: () => {}, onOpenCard: () => {} }),
+    );
+
+    expect(html).toContain('aria-label="Voir la fiche de Jean Dupont"');
+    expect(html).toContain('aria-label="Voir la fiche de Claire Martin"');
+    expect(html).toContain('aria-label="Retirer Claire Martin"');
+  });
+
   it("draws nothing without a chip", () => {
-    expect(page("fr-FR", createElement(EntityChips, { chips: [], onRemove: () => {} }))).toBe("");
+    expect(page("fr-FR", createElement(EntityChips, { chips: [], onRemove: () => {}, onOpenCard: () => {} }))).toBe("");
   });
 });
 
@@ -205,10 +219,19 @@ describe("the list of names, drawn", () => {
         onChoose: () => {},
         onHighlight: () => {},
         onAddToSelection: () => {},
+        onOpenCard: () => {},
         ...overrides,
       }),
     );
   }
+
+  it("gives each name of the list a button for its sheet, outside the keyboard order", () => {
+    const html = list();
+
+    expect(html).toContain('aria-label="Voir la fiche de Jean Dupont"');
+    expect(html).toContain('aria-label="Voir la fiche de Cabinet des Lilas"');
+    expect(html.match(/class="picker__card" tabindex="-1"/g)).toHaveLength(2);
+  });
 
   it("lists the names with their kind and their number of files, and marks the highlighted one", () => {
     const html = list();
@@ -271,5 +294,138 @@ describe("the developer panel, drawn", () => {
 
     expect(html).toContain("30 documents, 0 workbooks");
     expect(html).toContain("23500 ms");
+  });
+});
+
+
+describe("the questions worth asking, drawn", () => {
+  const items = [
+    { key: "a", text: "Combien de lignes pour Alice Archer ?", suggestion: {} as never },
+    { key: "b", text: "Résume chaque document.", suggestion: {} as never },
+  ];
+
+  function list(overrides: Partial<Parameters<typeof SuggestionList>[0]["view"]> = {}, disabled = false): string {
+    return page(
+      "fr-FR",
+      createElement(SuggestionList, {
+        view: { items, canRevealNames: false, canHideNames: false, ...overrides },
+        disabled,
+        compact: false,
+        onAsk: () => {},
+        onRevealNamesChange: () => {},
+      }),
+    );
+  }
+
+  it("draws each question as a button with its title and its reassurance", () => {
+    const html = list();
+
+    expect(html).toContain("Suggestions");
+    expect(html).toContain("Questions suggérées à partir de vos fichiers");
+    expect(html).toContain("Combien de lignes pour Alice Archer ?");
+    expect(html).toContain("Résume chaque document.");
+    expect(html.match(/class="suggestions__item"/g)).toHaveLength(2);
+  });
+
+  it("locks the buttons while a question is being answered", () => {
+    expect(list({}, true).match(/disabled=""/g)).toHaveLength(2);
+  });
+
+  it("offers the names only as an action of the user's own, with the reason they are hidden", () => {
+    const html = list({ canRevealNames: true });
+
+    expect(html).toContain("Les noms sont masqués");
+    expect(html).toContain("Afficher les suggestions avec des noms");
+    expect(html).not.toContain("Masquer à nouveau");
+  });
+
+  it("offers to hide them again once shown", () => {
+    const html = list({ canHideNames: true });
+
+    expect(html).toContain("Masquer à nouveau les noms");
+    expect(html).not.toContain("Afficher les suggestions avec des noms");
+  });
+
+  it("draws nothing when there is nothing to ask and nothing to reveal", () => {
+    expect(list({ items: [] })).toBe("");
+  });
+
+  it("keeps the intro out of the compact form under a summary", () => {
+    const html = page(
+      "fr-FR",
+      createElement(SuggestionList, {
+        view: { items, canRevealNames: false, canHideNames: false },
+        disabled: false,
+        compact: true,
+        onAsk: () => {},
+        onRevealNamesChange: () => {},
+      }),
+    );
+
+    expect(html).toContain("suggestions--compact");
+    expect(html).not.toContain("Questions suggérées à partir de vos fichiers");
+  });
+});
+
+describe("the sheet of a name, drawn", () => {
+  const card: EntityCard = {
+    entityId: 1,
+    display: "Alice Archer",
+    typeId: "person",
+    subtype: null,
+    status: "active",
+    aliases: ["Archer Alice"],
+    roles: [{ role: "client", mentions: 2 }],
+    documents: [{ relativePath: "archer-courrier.txt", mentions: 1, pages: [1] }],
+    tables: [{ relativePath: "rdv.csv", sheet: "rdv", column: "patient", rows: 2 }],
+    outside: { documents: 3, workbooks: 0 },
+    relations: [],
+    attributes: [],
+  };
+
+  function sheet(value: EntityCard | null | undefined, locale = "fr-FR"): string {
+    return page(
+      locale,
+      createElement(EntityCardSheet, { card: value, display: "Alice Archer", onClose: () => {} }),
+    );
+  }
+
+  it("shows the files of the selection and only counts the others", () => {
+    const html = sheet(card);
+
+    expect(html).toContain("Fiche de Alice Archer");
+    expect(html).toContain("archer-courrier.txt : 1 mention, page 1");
+    expect(html).toContain("rdv.csv, feuille rdv, colonne patient : 2 lignes");
+    expect(html).toContain("Hors de la sélection : 3 dans les documents.");
+    expect(html).toContain("Archer Alice");
+    expect(html).toContain('role="dialog"');
+  });
+
+  it("uses its own class names, never the folder cards' (a shared `card` squashed the settings)", () => {
+    const html = sheet(card);
+
+    expect(html).toContain('class="entity-card"');
+    expect(html).not.toMatch(/class="card[ "_]/);
+    expect(html).not.toMatch(/class="[^"]*card__/);
+  });
+
+  it("says that it is being read, and that a name is gone", () => {
+    expect(sheet(undefined)).toContain("Lecture de la fiche");
+    expect(sheet(null)).toContain("existe plus");
+    expect(sheet(null)).toContain("Fiche de Alice Archer");
+  });
+
+  it("says when the selection holds the name nowhere", () => {
+    const html = sheet({ ...card, documents: [], tables: [] });
+
+    expect(html).toContain("apparaît dans aucun fichier de la sélection actuelle");
+  });
+
+  it("is drawn in English too", () => {
+    const html = sheet(card, "en-US");
+
+    expect(html).toContain("Sheet of Alice Archer");
+    expect(html).toContain("Outside the selection: 3 in documents.");
+    expect(html).toContain("Close");
   });
 });

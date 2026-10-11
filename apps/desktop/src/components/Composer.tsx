@@ -43,6 +43,7 @@ export function Composer({
   scope,
   hasSelection,
   onAddToSelection,
+  onOpenCard,
 }: {
   /** No documents folder is chosen yet. This is a practice assistant, not a chatbot: nothing is
    * asked until there is a folder, even an empty one (`docs/SELECTION-AND-MEMORY.md`). */
@@ -66,6 +67,8 @@ export function Composer({
   hasSelection: boolean;
   /** Adds the files of a name that is only in unselected files to the selection. Her own click. */
   onAddToSelection: (outside: OutsideSelection) => void;
+  /** Opens the sheet of a name, from its chip or from the list. */
+  onOpenCard: (entity: { entityId: number; display: string }) => void;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -162,7 +165,7 @@ export function Composer({
 
   return (
     <div className="composer">
-      <EntityChips chips={chips} onRemove={onRemoveChip} />
+      <EntityChips chips={chips} onRemove={onRemoveChip} onOpenCard={onOpenCard} />
       <textarea
         ref={input}
         className="composer__input"
@@ -195,6 +198,7 @@ export function Composer({
           onChoose={choose}
           onHighlight={setHighlighted}
           onAddToSelection={onAddToSelection}
+          onOpenCard={onOpenCard}
         />
       ) : null}
       <div className="composer__footer">

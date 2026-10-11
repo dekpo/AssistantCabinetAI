@@ -12,7 +12,9 @@ vi.mock("@tauri-apps/api/core", () => {
 import { invoke } from "@tauri-apps/api/core";
 import {
   askWithSources,
+  entityCard,
   searchEntities,
+  suggestQuestions,
   type AskAnswer,
   type ChatStreamEvent,
   type CombinedScope,
@@ -158,5 +160,32 @@ describe("searching the names of the selection", () => {
       limit: 8,
     });
     expect(result).toBe(found);
+  });
+});
+
+
+describe("the suggestions and the sheet of a name", () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+  });
+
+  it("asks for the questions with the selection and whether the names are shown", async () => {
+    vi.mocked(invoke).mockResolvedValue({ suggestions: [], namesHidden: false, dryRuns: 0 });
+
+    await suggestQuestions(scope, true);
+
+    expect(invoke).toHaveBeenCalledWith("knowledge_suggest_questions", {
+      scope,
+      revealNames: true,
+    });
+  });
+
+  it("asks for the sheet of a name inside the selection, and nothing else", async () => {
+    vi.mocked(invoke).mockResolvedValue(null);
+
+    const found = await entityCard(7, scope);
+
+    expect(found).toBeNull();
+    expect(invoke).toHaveBeenCalledWith("knowledge_entity_card", { entityId: 7, scope });
   });
 });

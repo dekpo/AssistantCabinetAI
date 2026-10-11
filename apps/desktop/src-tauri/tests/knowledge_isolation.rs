@@ -400,3 +400,72 @@ async fn no_name_the_base_holds_is_in_a_row_the_questions_write() {
         .iter()
         .any(|text| text == "Jean Dupont"));
 }
+
+// ------------------------------------------------ lot 9: the services built on the shared vocabulary
+
+#[tokio::test]
+async fn the_vocabulary_services_change_no_row_and_are_the_same_every_time() {
+    use assistant_cabinet_ai_lib::knowledge::guard::OutboundGuard;
+    use assistant_cabinet_ai_lib::knowledge::query::QuerySelection;
+    use assistant_cabinet_ai_lib::knowledge::repair::propose;
+    use assistant_cabinet_ai_lib::knowledge::sheet::entity_sheet;
+    use assistant_cabinet_ai_lib::knowledge::suggest::{suggest, SuggestionInput};
+    use assistant_cabinet_ai_lib::knowledge::surface::{surface_forms, Purpose, SurfaceRequest};
+
+    let lab = world(clinic()).await;
+    let documents = lab.documents();
+    let selection = QuerySelection {
+        documents: &documents,
+        data: &[],
+    };
+    let vocabulary = lab.vocabulary();
+    let jean = entity_id(&lab, "Jean Dupont");
+    let before = snapshot(&lab.side());
+
+    let run = || {
+        let forms = surface_forms(
+            &lab.side(),
+            &vocabulary.packs,
+            &SurfaceRequest {
+                selection: Some(&selection),
+                purpose: Purpose::SpeechHints,
+                limit: 40,
+                prefix: None,
+            },
+        )
+        .expect("lists");
+        let proposals = propose(
+            &lab.side(),
+            &vocabulary,
+            "J'ai vu Dupond",
+            Some(&selection),
+            true,
+        )
+        .expect("proposes");
+        let sheet = entity_sheet(&lab.side(), &vocabulary.packs, jean, &selection).expect("reads");
+        let suggestions = suggest(&SuggestionInput {
+            index: &lab.index,
+            vocabulary: &vocabulary,
+            data: None,
+            documents: &documents,
+            workbooks: &[],
+            locale: "fr-FR",
+            names_allowed: true,
+            names_a_file: &|_| false,
+            limit: 6,
+            max_dry_runs: 5,
+            max_cold_read_bytes: 2_000_000,
+        })
+        .expect("suggests");
+        let guard = OutboundGuard::build(&lab.side()).expect("builds");
+        let hits = guard.scan(&vocabulary, None, "Jean Dupont");
+        format!("{forms:?}{proposals:?}{sheet:?}{suggestions:?}{hits:?}")
+    };
+
+    let first = run();
+    let second = run();
+
+    assert_eq!(first, second, "a read-only service answers the same twice");
+    assert_eq!(before, snapshot(&lab.side()), "and writes nothing");
+    clean(&lab);
+}

@@ -9,9 +9,12 @@ import type { Chip } from "../lib/entityPicker";
 export function EntityChips({
   chips,
   onRemove,
+  onOpenCard,
 }: {
   chips: readonly Chip[];
   onRemove: (entityId: number) => void;
+  /** Opens the sheet of a name: what the files of the selection say about it. */
+  onOpenCard: (chip: Chip) => void;
 }) {
   const { t } = useTranslation();
   if (chips.length === 0) {
@@ -22,6 +25,15 @@ export function EntityChips({
       {chips.map((chip) => (
         <li className="chip" key={chip.entityId}>
           <span className="chip__name">{chip.display}</span>
+          <button
+            type="button"
+            className="chip__card"
+            aria-label={t("entityCard.open", { name: chip.display })}
+            title={t("entityCard.open", { name: chip.display })}
+            onClick={() => onOpenCard(chip)}
+          >
+            i
+          </button>
           <button
             type="button"
             className="chip__remove"

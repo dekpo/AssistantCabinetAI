@@ -327,6 +327,75 @@ export function searchEntities(
   return invoke<EntitySearch>("knowledge_search_entities", { prefix, scope, limit });
 }
 
+/** The kinds of question the knowledge base can suggest. The sentence of each is a catalogue entry
+ * (`suggestions.<id>`); Rust sends the id and the slots, never a sentence. */
+export type SuggestionTemplate =
+  | "entity_documents"
+  | "entity_rows_count"
+  | "entity_total"
+  | "entity_period_count"
+  | "entity_compare_docs_data"
+  | "top_group"
+  | "each_document"
+  | "folder_count";
+
+/** One question worth asking, as data. Every one has passed a dry run on the user's own files. */
+export interface Suggestion {
+  templateId: SuggestionTemplate;
+  entity: { entityId: number; display: string } | null;
+  /** The text of the table cell the name was read from, as the table writes it. */
+  value: string | null;
+  column: string | null;
+  group: string | null;
+  /** The workbook the question is about, set when the selection holds several. */
+  file: string | null;
+  month: number | null;
+  year: number | null;
+}
+
+export interface SuggestionSet {
+  suggestions: Suggestion[];
+  /** Names were left out because the setting hides them and the selection holds some. */
+  namesHidden: boolean;
+  dryRuns: number;
+}
+
+/** The questions worth asking about the current selection (`knowledge_suggest_questions`). Names are
+ * left out unless the setting allows them or `revealNames` (the user's own click, kept for the
+ * session) asks for them. A read: no model, no write. */
+export function suggestQuestions(
+  scope: CombinedScope,
+  revealNames: boolean,
+): Promise<SuggestionSet> {
+  return invoke<SuggestionSet>("knowledge_suggest_questions", { scope, revealNames });
+}
+
+/** What the knowledge base knows about one name inside the current selection
+ * (`knowledge_entity_card`). Files outside the selection are counted, never named. */
+export interface EntityCard {
+  entityId: number;
+  display: string;
+  typeId: string;
+  subtype: string | null;
+  status: "active" | "candidate";
+  aliases: string[];
+  roles: { role: string; mentions: number }[];
+  documents: { relativePath: string; mentions: number; pages: number[] }[];
+  tables: { relativePath: string; sheet: string; column: string; rows: number }[];
+  outside: { documents: number; workbooks: number };
+  relations: {
+    predicate: string;
+    otherEntityId: number;
+    otherDisplay: string;
+    direction: "subject" | "object";
+  }[];
+  attributes: { key: string; value: string }[];
+}
+
+export function entityCard(entityId: number, scope: CombinedScope): Promise<EntityCard | null> {
+  return invoke<EntityCard | null>("knowledge_entity_card", { entityId, scope });
+}
+
 /** The recorded questions added up (`knowledge_diagnostics`). Counts and ratios only. */
 export interface KnowledgeAggregates {
   questions: number;

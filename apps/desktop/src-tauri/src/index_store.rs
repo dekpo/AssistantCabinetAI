@@ -1170,6 +1170,18 @@ impl IndexStore {
             .transpose()
     }
 
+    /// Whether the cell values of this content hash are cached, without reading them. Lets a caller
+    /// that must not read a file by itself (the question suggestions) tell a warm cache from a cold one.
+    pub fn has_tabular_workbook(&self, workbook_id: &str) -> bool {
+        self.connection
+            .query_row(
+                "SELECT 1 FROM tabular_workbooks WHERE workbook_id = ?1",
+                [workbook_id],
+                |_| Ok(()),
+            )
+            .is_ok()
+    }
+
     /// Forget every cached workbook's cell values, and nothing else - `tabular_inventories` and
     /// every document table are untouched. Called at the start of every `data_folder::analyse`
     /// pass (a workbook that left the folder, or whose content changed, must not go on serving

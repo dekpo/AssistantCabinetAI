@@ -218,14 +218,14 @@ pub struct QueryEntityDetector<'a> {
 
 /// A word of the question with its place in it.
 #[derive(Debug, Clone)]
-struct Word {
-    text: String,
-    start: usize,
-    end: usize,
+pub(crate) struct Word {
+    pub(crate) text: String,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 impl Word {
-    fn is_capitalised(&self) -> bool {
+    pub(crate) fn is_capitalised(&self) -> bool {
         self.text.chars().next().is_some_and(char::is_uppercase)
     }
 
@@ -804,7 +804,7 @@ fn pairs(files: &[SelectedFile]) -> Vec<(String, String)> {
 /// The words of a question, each with its byte range. Whitespace separates words; punctuation at
 /// either end of a word is dropped (`Dupont,` and `(Dupont)` are `Dupont`), punctuation inside is
 /// kept (`Jean-Pierre`, `d'Alembert`).
-fn words_of(question: &str) -> Vec<Word> {
+pub(crate) fn words_of(question: &str) -> Vec<Word> {
     let mut words = Vec::new();
     let mut start: Option<usize> = None;
     let flush = |from: usize, to: usize, words: &mut Vec<Word>| {

@@ -882,6 +882,74 @@ pub fn selected_workbook_files(data: &DataFolder, selection: &ScopeMode) -> Vec<
         .collect()
 }
 
+/// A workbook the selection keeps, as the readers that only look at it (the knowledge base's
+/// question suggestions) need it: where it is, which content it was analysed under, and the sheets
+/// the selection narrowed it to (`None` is every sheet).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkbookChoice {
+    pub relative_path: String,
+    pub content_id: String,
+    pub sheets: Option<Vec<String>>,
+}
+
+/// The usable workbooks a selection covers, with the sheets each was narrowed to. The same files as
+/// `selected_workbook_files`, which is what the knowledge base keys a workbook by.
+pub fn selected_workbook_choices(data: &DataFolder, selection: &ScopeMode) -> Vec<WorkbookChoice> {
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return Vec::new();
+    };
+    chosen
+        .iter()
+        .filter(|each| each.record.processing_status == ProcessingStatus::Indexed)
+        .filter_map(|each| {
+            data.usable_inventory(&each.record.relative_path)
+                .map(|inventory| WorkbookChoice {
+                    relative_path: each.record.relative_path.clone(),
+                    content_id: inventory.workbook_id.clone(),
+                    sheets: each.sheets.clone(),
+                })
+        })
+        .collect()
+}
+
+/// A workbook read for a look: its typed cells, its inventory as of today, and the one sheet a
+/// question without a sheet name would be answered from.
+pub struct OpenedWorkbook {
+    pub workbook: Workbook,
+    pub inventory: TabularInventory,
+    pub sheet: String,
+}
+
+/// Open a chosen workbook from the typed cache. On a **cold** cache the file is read only when it is
+/// at most `max_cold_read_bytes` long: this is for readers that no one asked for a file by name (the
+/// question suggestions), which must not make a large file's read their business
+/// (`AGENTS.md`, "No costly silent background work"). `None` for a workbook that is gone, changed
+/// since its analysis, unreadable, too large to read cold, or that has **several** reachable sheets:
+/// a sentence that names no sheet cannot be answered from it, so nothing is suggested.
+pub fn open_single_sheet_workbook(
+    data: &DataFolder,
+    choice: &WorkbookChoice,
+    locale: &str,
+    index: &IndexStore,
+    max_cold_read_bytes: u64,
+) -> Option<OpenedWorkbook> {
+    let record = data.files().find_by_relative_path(&choice.relative_path)?;
+    let inventory = data.usable_inventory(&choice.relative_path)?;
+    if !index.has_tabular_workbook(&inventory.workbook_id) {
+        let path = data.files().absolute_path(record)?;
+        if std::fs::metadata(&path).ok()?.len() > max_cold_read_bytes {
+            return None;
+        }
+    }
+    let (workbook, inventory, sheet) =
+        open_for_fill(data, record, choice.sheets.as_deref(), locale, index)?;
+    Some(OpenedWorkbook {
+        workbook,
+        inventory,
+        sheet,
+    })
+}
+
 /// Whether the question points at a file of the Data Folder, selected or not. A question that names
 /// a workbook is never narrowed by the knowledge base (`docs/SESSION-KB-00-master.md`, I2).
 pub fn names_a_workbook(question: &str, data: &DataFolder, selection: &ScopeMode) -> bool {

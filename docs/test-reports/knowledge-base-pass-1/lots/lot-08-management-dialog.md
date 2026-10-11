@@ -74,7 +74,7 @@ Windows 11, debug profile. Baseline measured at the start of the session on `102
 
 | Command | Baseline | After |
 | --- | --- | --- |
-| `cargo test` (all targets, from `apps\desktop\src-tauri`) | 1155 passed, 0 failed, 18 ignored | **1201 passed, 0 failed, 19 ignored** (+46: 36 in `knowledge::manage`, 10 in `tests/knowledge_manage.rs`; the new ignored one is the walk printer). `--lib` (what CI runs): **748** (712 before) |
+| `cargo test` (all targets, from `apps\desktop\src-tauri`) | 1155 passed, 0 failed, 18 ignored | **1202 passed, 0 failed, 19 ignored** (+47, the last one added after her first look: 36 in `knowledge::manage`, 10 in `tests/knowledge_manage.rs`; the new ignored one is the walk printer). `--lib` (what CI runs): **748** (712 before) |
 | `cargo clippy --lib` | 21 warnings | **21** (none added) |
 | `rustfmt --edition 2021 --check` | - | clean on `knowledge/mod.rs` (which formats every module under it, `manage.rs` and `store.rs` included), `error.rs`, `tests/knowledge_manage.rs`, `tests/knowledge_manage_walk.rs`; `commands.rs` has 8 hunks, 8 on `HEAD`. No plain `cargo fmt` was run |
 | `pnpm run test` (from `apps\desktop`) | 482 passed (34 files) | **571 passed** (37 files; +89: 45 + 7 + 21 in the three new files, +16 in the catalogue and source guards which read the new strings and components) |
@@ -103,11 +103,11 @@ Nothing timed. The reads are indexed queries over a handful of rows (a page of 5
 
 ## Human test
 
-`docs/test-reports/knowledge-base-pass-1/human-tests/lot-08-management-dialog.md` - **proposed, not yet run**. Visible in the application: yes, fully. Parts: Preparation, A (open, find, read the provenance), B (add a name, the next Analyse uses it), C (merge and unmerge), D (separate two people, undo), E (delete a false positive, it does not come back, restore), F (files untouched), G (reset keeping what was typed), H (reset everything), smoke test, the only restore. About 55 minutes. **The agent did not open the application window**: the figures come from the walk through the same Rust code; every label was read from the catalogue.
+`docs/test-reports/knowledge-base-pass-1/human-tests/lot-08-management-dialog.md` - **run by the owner on 12 October 2026: the implementation and the tests were found conclusive; she did not copy the results back (time pressure), so lot 8 is treated as accepted by her decision.** One finding before that: opening the dialog showed « L'index local n'a pas pu être ouvert » (a bug of this lot, not of the protocol): the dialog's commands run in parallel and each opens the index, whose schema check started as a read and tried to write, which SQLite refuses at once instead of waiting. Fixed in the same branch (`ensure_schema` takes the write lock first); proved by `several_commands_can_open_the_index_at_the_same_moment` (fails without the fix, 12 threads), 1202 cargo tests. The empty Data folder she also asked about is by design (`prepare`). Original status line: proposed, not yet run. Visible in the application: yes, fully. Parts: Preparation, A (open, find, read the provenance), B (add a name, the next Analyse uses it), C (merge and unmerge), D (separate two people, undo), E (delete a false positive, it does not come back, restore), F (files untouched), G (reset keeping what was typed), H (reset everything), smoke test, the only restore. About 55 minutes. **The agent did not open the application window**: the figures come from the walk through the same Rust code; every label was read from the catalogue.
 
 ## Open questions
 
-For the owner:
+**Answered by the owner on 12 October 2026, all recorded in `docs/DECISIONS.md` ("Settled by KB lot 8", row "Owner answers")**: (1) a merge across two types stays refused; (2) a restored entity becomes manual; (3) a name under three letters stays accepted, found in documents and never read in a question; (4) hiding an automatic alias is not built (keep it simple); (5) KBD-13 is not urgent and stays deferred (reason in the register). The questions as asked:
 
 1. **Merge across types is refused** (person with organisation, for example). Right, or should the dialog be able to change an entity's type first (it can: *Modifier*) and then merge?
 2. **Restoring an entity makes it manual.** It then survives the "keep what I typed" reset. Acceptable, or should a restored automatic entity stay automatic and be allowed to vanish if no document names it?

@@ -137,6 +137,55 @@ pub struct RetrievalDiagnostics {
     /// which only spends time when a model is asked).
     pub generation_total_ms: u64,
     pub total_ms: u64,
+    /// What the knowledge base did with this question (lot 6). All of it numbers and machine codes:
+    /// an entity is its id, its type code, a confidence and a method code, never a name.
+    pub targeting: Option<TargetingDiagnostics>,
+}
+
+/// An entity the question named, without a letter of its name.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryEntityDiagnostic {
+    pub entity_id: i64,
+    pub type_id: String,
+    pub confidence: f32,
+    /// `chip`, `carried_over`, `canonical_name`, `alias`, `identifier`.
+    pub method: String,
+}
+
+/// How a reduction that was only measured compares with what the answer cited.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShadowDiagnostics {
+    pub would_apply: bool,
+    pub cited: usize,
+    pub cited_in_candidates: usize,
+    pub miss_no_mention: usize,
+    pub miss_capped: usize,
+    pub miss_entity_not_resolved: usize,
+}
+
+/// The knowledge base's part in one question: how long the lookup took, what it found, what it
+/// would have searched, and how that compares with what the answer cited.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetingDiagnostics {
+    /// `off`, `suggest` or `auto`.
+    pub mode: &'static str,
+    pub knowledge_lookup_ms: u64,
+    /// `entity_files`, `chip_files` or `none`.
+    pub strategy: &'static str,
+    /// Why nothing was reduced (`reduce::SkipReason::as_code`); absent when something was.
+    pub skipped_reason: Option<&'static str>,
+    /// `applied`, `shadow` or `skipped`.
+    pub outcome: &'static str,
+    pub query_entities: Vec<QueryEntityDiagnostic>,
+    pub candidate_documents: usize,
+    pub candidate_workbooks: usize,
+    pub reduction_percent: u32,
+    /// The reduced search found too little and the search was repeated on the whole selection.
+    pub widened: bool,
+    pub shadow: ShadowDiagnostics,
 }
 
 impl RetrievalDiagnostics {
@@ -282,6 +331,175 @@ impl AnalysisTimings {
         });
         self.slowest_files.truncate(SLOWEST_FILES_KEPT);
     }
+}
+
+/// How many rows of `kb_diagnostics` are kept: the oldest go first.
+pub const QUESTIONS_KEPT: i64 = 2_000;
+
+/// Write one question's row to `kb_diagnostics` and trim the table to its ring size. **Counts, codes
+/// and milliseconds only** (master invariant I8): the row has no column that could hold a question,
+/// a name or a file name, and `kb_diagnostics` is the one `kb_` table the "a question changes
+/// nothing" test (I3) leaves out, because it is a log and not knowledge.
+///
+/// A question that did not go through the knowledge base (`targeting` absent, or the mode off)
+/// writes nothing.
+pub fn record_question(
+    connection: &rusqlite::Connection,
+    at_seconds: i64,
+    measured: &RetrievalDiagnostics,
+) -> Result<(), crate::error::AppError> {
+    let Some(targeting) = &measured.targeting else {
+        return Ok(());
+    };
+    if targeting.mode == "off" {
+        return Ok(());
+    }
+    let path = serde_json::to_value(measured.path)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_default();
+    let applied = targeting.outcome == "applied";
+    connection
+        .execute(
+            "INSERT INTO kb_diagnostics
+                (at, mode, strategy, skipped_reason, selected_files, candidate_files,
+                 selected_data, candidate_data, cited_files, cited_in_candidates, entities_found,
+                 widened, knowledge_ms, retrieval_ms, total_ms, path, applied, would_apply,
+                 reduction_percent, miss_no_mention, miss_capped, miss_unresolved)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                     ?18, ?19, ?20, ?21, ?22)",
+            rusqlite::params![
+                at_seconds,
+                targeting.mode,
+                targeting.strategy,
+                targeting.skipped_reason,
+                measured.selected_documents as i64,
+                targeting.candidate_documents as i64,
+                measured.selected_workbooks as i64,
+                targeting.candidate_workbooks as i64,
+                targeting.shadow.cited as i64,
+                targeting.shadow.cited_in_candidates as i64,
+                targeting.query_entities.len() as i64,
+                i64::from(targeting.widened),
+                targeting.knowledge_lookup_ms as i64,
+                (measured.embedding_ms + measured.search_ms) as i64,
+                measured.total_ms as i64,
+                path,
+                i64::from(applied),
+                i64::from(targeting.shadow.would_apply),
+                i64::from(targeting.reduction_percent),
+                targeting.shadow.miss_no_mention as i64,
+                targeting.shadow.miss_capped as i64,
+                targeting.shadow.miss_entity_not_resolved as i64,
+            ],
+        )
+        .map_err(|_| crate::error::AppError::KnowledgeUnavailable)?;
+    connection
+        .execute(
+            "DELETE FROM kb_diagnostics
+             WHERE id <= (SELECT MAX(id) FROM kb_diagnostics) - ?1",
+            [QUESTIONS_KEPT],
+        )
+        .map_err(|_| crate::error::AppError::KnowledgeUnavailable)?;
+    Ok(())
+}
+
+/// What the recorded questions add up to. Counts and ratios; `None` where there is nothing to
+/// divide. Read by the developer panel (`knowledge_diagnostics`), never by normal chat.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeAggregates {
+    pub questions: usize,
+    /// Questions in which the base found at least one entity of the selection.
+    pub with_entities: usize,
+    pub with_entities_share: Option<f32>,
+    /// Questions for which a reduced set existed (applied or only measured).
+    pub would_apply: usize,
+    pub would_apply_rate: Option<f32>,
+    pub applied: usize,
+    pub widened: usize,
+    /// Median share of the selection a reduced set left out, among questions that had one.
+    pub median_reduction_percent: Option<u32>,
+    /// Of the files the answers cited, the share the reduced set would have held. Questions that
+    /// had no reduced set count as fully held: they searched everything.
+    pub recall_overall: Option<f32>,
+    /// The same, among questions that had a reduced set: the figure the release gate reads.
+    pub recall_when_would_apply: Option<f32>,
+    pub miss_no_mention: usize,
+    pub miss_capped: usize,
+    pub miss_entity_not_resolved: usize,
+    /// How many questions were skipped for each reason.
+    pub skipped_by_reason: std::collections::BTreeMap<String, usize>,
+}
+
+/// Aggregate the last `limit` recorded questions (newest first).
+pub fn aggregate(
+    connection: &rusqlite::Connection,
+    limit: usize,
+) -> Result<KnowledgeAggregates, crate::error::AppError> {
+    let unavailable = |_| crate::error::AppError::KnowledgeUnavailable;
+    let mut statement = connection
+        .prepare(
+            "SELECT skipped_reason, entities_found, would_apply, applied, widened,
+                    reduction_percent, cited_files, cited_in_candidates,
+                    miss_no_mention, miss_capped, miss_unresolved
+             FROM kb_diagnostics ORDER BY id DESC LIMIT ?1",
+        )
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map([limit as i64], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)? != 0,
+                row.get::<_, i64>(3)? != 0,
+                row.get::<_, i64>(4)? != 0,
+                row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)?,
+                row.get::<_, i64>(8)?,
+                row.get::<_, i64>(9)?,
+                row.get::<_, i64>(10)?,
+            ))
+        })
+        .map_err(unavailable)?;
+
+    let mut totals = KnowledgeAggregates::default();
+    let mut reductions: Vec<u32> = Vec::new();
+    let (mut cited_all, mut held_all) = (0i64, 0i64);
+    let (mut cited_reduced, mut held_reduced) = (0i64, 0i64);
+    for row in rows {
+        let (skipped, entities, would_apply, applied, widened, reduction, cited, held, a, b, c) =
+            row.map_err(unavailable)?;
+        totals.questions += 1;
+        totals.with_entities += usize::from(entities > 0);
+        totals.would_apply += usize::from(would_apply);
+        totals.applied += usize::from(applied);
+        totals.widened += usize::from(widened);
+        totals.miss_no_mention += a as usize;
+        totals.miss_capped += b as usize;
+        totals.miss_entity_not_resolved += c as usize;
+        if let Some(reason) = skipped {
+            *totals.skipped_by_reason.entry(reason).or_insert(0) += 1;
+        }
+        cited_all += cited;
+        if would_apply {
+            reductions.push(reduction.clamp(0, 100) as u32);
+            cited_reduced += cited;
+            held_reduced += held;
+            held_all += held;
+        } else {
+            held_all += cited;
+        }
+    }
+    let ratio = |part: i64, whole: i64| (whole > 0).then(|| part as f32 / whole as f32);
+    totals.with_entities_share = ratio(totals.with_entities as i64, totals.questions as i64);
+    totals.would_apply_rate = ratio(totals.would_apply as i64, totals.questions as i64);
+    totals.recall_overall = ratio(held_all, cited_all);
+    totals.recall_when_would_apply = ratio(held_reduced, cited_reduced);
+    reductions.sort_unstable();
+    totals.median_reduction_percent = reductions.get(reductions.len() / 2).copied();
+    Ok(totals)
 }
 
 /// A timing line as it is written: the timestamp, then the entry's own fields.

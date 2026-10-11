@@ -498,3 +498,87 @@ pub fn cells_mentions_of(connection: &Connection, entity_id: i64) -> Vec<CellsMe
         .expect("reads");
     rows
 }
+
+// ---------------------------------------------------------------------------- lot 6: questions
+
+use assistant_cabinet_ai_lib::data_folder::DataFolder;
+use assistant_cabinet_ai_lib::inventory::{FileHashCache, WorkFolderInventory};
+use assistant_cabinet_ai_lib::knowledge::query::SelectedFile;
+use assistant_cabinet_ai_lib::knowledge::reduce::{SideInput, TargetingPolicy};
+use assistant_cabinet_ai_lib::knowledge::targeting::{
+    self, QueryVocabulary, TargetingPlan, TargetingRequest, TargetingTools,
+};
+
+/// The settings of a test: no file-count floor, so a handful of invented files is enough to see a
+/// reduction. Every other number is the product's own default.
+pub fn small_world_policy() -> TargetingPolicy {
+    TargetingPolicy {
+        min_scope_files: 1,
+        ..TargetingPolicy::default()
+    }
+}
+
+impl Lab {
+    /// The analysed documents of the work folder, as the knowledge base keys them (what a selection of
+    /// "all documents" is).
+    pub fn documents(&self) -> Vec<SelectedFile> {
+        let inventory = WorkFolderInventory::discover(self.work.path(), Some(&self.index))
+            .expect("discovers the work folder");
+        inventory
+            .indexed_files()
+            .into_iter()
+            .map(|record| SelectedFile::new(&record.relative_path, &record.id))
+            .collect()
+    }
+
+    /// The analysed workbooks of the Data Folder (a selection of "all workbooks").
+    pub fn workbooks(&self) -> Vec<SelectedFile> {
+        let folder =
+            DataFolder::discover(self.data.path(), Some(&self.index), &FileHashCache::new())
+                .expect("discovers the data folder");
+        assistant_cabinet_ai_lib::tabular_answer::selected_workbook_files(
+            &folder,
+            &assistant_cabinet_ai_lib::analysis_scope::ScopeMode::WholeFolder,
+        )
+        .into_iter()
+        .map(|(path, id)| SelectedFile::new(&path, &id))
+        .collect()
+    }
+
+    pub fn data_folder(&self) -> DataFolder {
+        DataFolder::discover(self.data.path(), Some(&self.index), &FileHashCache::new())
+            .expect("discovers the data folder")
+    }
+
+    /// The words a question is read with, for the lab's locale and modules.
+    pub fn vocabulary(&self) -> QueryVocabulary {
+        QueryVocabulary::load(self.locale, &self.packs).expect("loads the vocabulary")
+    }
+
+    /// Plan one question the way the application does, with the lab's modules and the given policy.
+    pub fn plan(
+        &self,
+        vocabulary: &QueryVocabulary,
+        mode: KnowledgeMode,
+        request: &TargetingRequest,
+        question: &str,
+        documents: SideInput<'_>,
+        data: SideInput<'_>,
+        policy: TargetingPolicy,
+    ) -> TargetingPlan {
+        let key = IdentifierKey::from_bytes(self.key);
+        targeting::plan(
+            &self.index,
+            &TargetingTools {
+                vocabulary,
+                key: Some(&key),
+                policy,
+            },
+            mode,
+            request,
+            question,
+            documents,
+            data,
+        )
+    }
+}

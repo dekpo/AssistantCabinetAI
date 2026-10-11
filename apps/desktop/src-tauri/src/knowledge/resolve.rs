@@ -1067,7 +1067,10 @@ fn push_title_forms(
 /// The alias a full name carries for "the initial of its first given name and the surname":
 /// `jean dupont` and `jean pierre dupont` both give `j dupont`. `None` for a name that is not a
 /// given name and a surname (one word, an initial first, `Surname Initial`).
-fn initial_surname_key_of_full_name(name: &NormalizedName, titles: &TitleSet) -> Option<String> {
+pub(crate) fn initial_surname_key_of_full_name(
+    name: &NormalizedName,
+    titles: &TitleSet,
+) -> Option<String> {
     if surname_then_initial(name, titles).is_some() {
         return None;
     }

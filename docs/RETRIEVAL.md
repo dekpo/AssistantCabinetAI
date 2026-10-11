@@ -173,6 +173,45 @@ Excel calculation engine.
 Escalation to the model carries the compact aggregate card, never rows, and the model's citations are
 verified against that evidence afterwards.
 
+## Targeting inside the selection (KB lot 6)
+
+The user's selection is the authority; the knowledge base proposes a smaller search **inside** it and the old
+search on the full selection runs whenever anything is in doubt (`docs/SELECTION-AND-MEMORY.md`, "Targeting
+inside the selection"). The step sits between the router and the question's one embedding call:
+
+```text
+question --> router (named file? each document? deterministic answer?)
+         --> knowledge: names in the question -> entities of the selection -> candidate files
+             (QueryEntityDetector, ScopeReducer: no model, no gateway call, milliseconds)
+         --> embedding of the question (unchanged)
+         --> search
+               suggest : the full selection, exactly as with the base off; the reduction is only measured
+               auto    : the candidates only, then ONCE on the full selection if nothing came back or the
+                         closest passage by meaning is under knowledge_widen_below_score
+         --> excerpts --> gateway --> answer + sources + (auto) a targeting report
+```
+
+- **Lexical, held to the scope, twice over.** The question's own words keep the rule above (a word of fewer than
+  four letters is dropped). The surface forms of a name the question resolved to are searched apart
+  (`IndexStore::search_lexical_terms_in`, `files_matching_terms_in`): each form is quoted as a phrase and a form of
+  two letters or more is kept, because `Roy`, `Lee` and `Ng` are exactly the names the generic rule loses. They
+  serve two purposes: the **safety net** that keeps in the reduced set a document that only says `M. Dupont`, and,
+  in `auto` only, extra lexical bonus candidates for the search itself. The embedding text is always the question.
+- **Nothing the base has not read is left out.** A selected file with no source row under its current content, or
+  read by no extractor, is searched whatever the base knows about the others.
+- **The closest passage by meaning.** `SearchOutcome::best_vector_score` is the best cosine similarity of the scope,
+  without the lexical bonus; the widening reads it. Its scale belongs to the embedding model
+  (`nomic-embed-text`: unrelated 0.55 to 0.65, a passage that answers 0.70 and above), measured by
+  `docs/test-reports/knowledge-base-pass-1/lots/lot-06-widen-calibration.py`.
+- **Equivalence.** With the mode `off`, or `suggest`, or the widen action, the search is the one that has always
+  run, same excerpts, same order, same scores (`tests/knowledge_targeting.rs`). The excerpts are cited exactly as
+  before (file, page, section, sheet, row).
+- **Cost.** Reading the question and deciding is milliseconds (1.7 ms for 10 files, 2.7 ms for 50, 14 ms for 1 000;
+  3.7 ms against a base of 10 000 more entities). What a reduction saves is the scoring of the chunks of the files
+  left out: 50 files, 3.1 ms against 0.9 ms in the benchmark with fake vectors, and a search over many explicitly
+  selected files is quadratic today because `chunks_for_document` scans the table once per file (KBD-16). The time
+  the model takes to write is not changed.
+
 ## Partitioning
 
 | Level | Mechanism |

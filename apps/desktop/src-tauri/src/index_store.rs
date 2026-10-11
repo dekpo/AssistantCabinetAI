@@ -802,6 +802,85 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
+    /// The full-text search for the surface forms of entities (`entity_terms_expression`), held to
+    /// the chunks of `relative_paths`. A separate door from `search_lexical_in` on purpose: the
+    /// question's own words keep the generic rule (a word of fewer than four letters is dropped),
+    /// while the forms of a name a question resolved to are searched whole and whatever their length,
+    /// because `Roy` and `Ng` are exactly the names that rule loses.
+    pub fn search_lexical_terms_in(
+        &self,
+        terms: &[String],
+        limit: usize,
+        relative_paths: &[String],
+    ) -> Result<Vec<LexicalHit>, AppError> {
+        let match_expression = entity_terms_expression(terms);
+        if match_expression.is_empty() || relative_paths.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+        let paths = serde_json::to_string(relative_paths).map_err(|_| AppError::Internal)?;
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT chunks_fts.chunk_id, bm25(chunks_fts) FROM chunks_fts
+                 JOIN chunks ON chunks.chunk_id = chunks_fts.chunk_id
+                 WHERE chunks_fts MATCH ?1
+                   AND chunks.relative_path IN (SELECT value FROM json_each(?2))
+                 ORDER BY bm25(chunks_fts) LIMIT ?3",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map(
+                rusqlite::params![match_expression, paths, limit as i64],
+                |row| {
+                    Ok(LexicalHit {
+                        chunk_id: row.get(0)?,
+                        rank: row.get(1)?,
+                    })
+                },
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The files of `relative_paths` that hold any of the surface forms in `terms`, best match first,
+    /// each once. The safety net of the targeting step: a document that only says `M. Dupont`, or
+    /// whose scan damaged the full name, still holds a form of the name the question used.
+    pub fn files_matching_terms_in(
+        &self,
+        terms: &[String],
+        relative_paths: &[String],
+    ) -> Result<Vec<String>, AppError> {
+        let match_expression = entity_terms_expression(terms);
+        if match_expression.is_empty() || relative_paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let paths = serde_json::to_string(relative_paths).map_err(|_| AppError::Internal)?;
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT chunks.relative_path FROM chunks_fts
+                 JOIN chunks ON chunks.chunk_id = chunks_fts.chunk_id
+                 WHERE chunks_fts MATCH ?1
+                   AND chunks.relative_path IN (SELECT value FROM json_each(?2))
+                 ORDER BY bm25(chunks_fts), chunks.relative_path",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map(rusqlite::params![match_expression, paths], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let mut files: Vec<String> = Vec::new();
+        for row in rows {
+            let path = row.map_err(|_| AppError::IndexUnavailable)?;
+            if !files.contains(&path) {
+                files.push(path);
+            }
+        }
+        Ok(files)
+    }
+
     /// Every stored chunk with its vector, for brute-force cosine similarity. A work folder holds
     /// tens of files, not millions, so loading everything into memory is fast enough and avoids a
     /// vector-database dependency (`docs/RETRIEVAL.md`).
@@ -1154,6 +1233,45 @@ fn fts_match_expression(query: &str) -> String {
         .map(|term| format!("\"{term}\""))
         .collect::<Vec<_>>()
         .join(" OR ")
+}
+
+/// The most surface forms one expression carries: an entity has a handful of aliases, and a
+/// question names a handful of entities, so this is a ceiling against a degenerate store and not a
+/// limit anyone meets.
+const MAX_ENTITY_TERMS: usize = 60;
+
+/// An FTS5 expression for the surface forms of resolved entities: each form quoted as a phrase (so
+/// `jean dupont` must appear in that order and `dupont` alone is a word), joined with OR. A form
+/// of one or two letters is only kept when it has a letter and is not a lone initial; the generic
+/// `fts_match_expression` drops every word of fewer than four characters, which loses `Roy`, `Lee`
+/// and `Ng` (master section 4). Nothing but letters and digits survives, so a form can never carry
+/// FTS syntax.
+pub fn entity_terms_expression(terms: &[String]) -> String {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut phrases = Vec::new();
+    for term in terms {
+        let words: Vec<String> = term
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_string)
+            .collect();
+        let long_enough = match words.as_slice() {
+            [] => false,
+            [only] => only.chars().count() >= 2,
+            _ => words.iter().any(|word| word.chars().count() >= 2),
+        };
+        if !long_enough {
+            continue;
+        }
+        let phrase = words.join(" ");
+        if seen.insert(phrase.to_lowercase()) {
+            phrases.push(format!("\"{phrase}\""));
+        }
+        if phrases.len() >= MAX_ENTITY_TERMS {
+            break;
+        }
+    }
+    phrases.join(" OR ")
 }
 
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {

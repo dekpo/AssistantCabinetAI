@@ -210,8 +210,89 @@ export interface EvidenceCoverage {
 export type ChatStreamEvent =
   | { event: "delta"; text: string }
   | { event: "completed"; text: string }
+  /** What the knowledge base did to the search, sent just before the sources. Only when there is
+   * something to tell (lot 7 draws it). */
+  | { event: "targeting"; report: TargetingReport }
   | { event: "sources"; sources: Evidence[]; coverage: EvidenceCoverage | null }
   | { event: "folder_answer"; answer: FolderAnswer };
+
+/**
+ * What the client asks of the knowledge base for one question (`TargetingRequest` in Rust).
+ * `mode: "off"` is the widen action: the old search on the whole selection. `entityIds` are chips
+ * the user picked; `carryOver` is the previous answer's entities, honoured only for a short
+ * follow-up and held here, never stored by Rust.
+ */
+export interface TargetingRequest {
+  mode?: "auto" | "off";
+  entityIds?: number[];
+  carryOver?: number[];
+}
+
+/** An entity of the selection, as the interface may show it. The display is the entity's own
+ * name: user data, shown on screen only. */
+export interface TargetingEntity {
+  entityId: number;
+  display: string;
+  typeId: string;
+  confidence: number;
+  /** `chip`, `carried_over`, `canonical_name`, `alias`, `identifier`. */
+  method: string;
+}
+
+export interface TargetingCandidate {
+  entityId: number;
+  display: string;
+  typeId: string;
+}
+
+/** What the knowledge base did to the search (`TargetingReport` in Rust). Machine codes and ids;
+ * the interface writes the sentence. */
+export interface TargetingReport {
+  /** `entity_files`, `chip_files` or `none`. */
+  strategy: string;
+  /** Why nothing was reduced, when nothing was (`off`, `named_file`, `small_scope`, `no_entity`,
+   * `no_discriminating_entity`, `ambiguous`, `no_candidates`, `insignificant`, `lookup_error`,
+   * `user_widened`). */
+  reason: string | null;
+  requestedBy: "auto" | "chip";
+  /** `auto` when the reduced search found too little and ran again on the whole selection. */
+  widened: "none" | "auto";
+  selectedDocuments: number;
+  candidateDocuments: number;
+  selectedWorkbooks: number;
+  candidateWorkbooks: number;
+  reductionPercent: number;
+  entities: TargetingEntity[];
+  candidatePaths: string[];
+  workbookPaths: string[];
+  /** A name that fits several entities inside the selection: asked, never picked. */
+  ambiguities: { candidates: TargetingCandidate[] }[];
+  /** Probably one of these (`phonetic`, `token_set`, `initial`, `shared_identifier`). */
+  possibles: { candidates: TargetingCandidate[]; reason: string; score: number }[];
+  chosenWorkbook: { file: string; reason: string } | null;
+}
+
+/** The recorded questions added up (`knowledge_diagnostics`). Counts and ratios only. */
+export interface KnowledgeAggregates {
+  questions: number;
+  withEntities: number;
+  withEntitiesShare: number | null;
+  wouldApply: number;
+  wouldApplyRate: number | null;
+  applied: number;
+  widened: number;
+  medianReductionPercent: number | null;
+  recallOverall: number | null;
+  recallWhenWouldApply: number | null;
+  missNoMention: number;
+  missCapped: number;
+  missEntityNotResolved: number;
+  skippedByReason: Record<string, number>;
+}
+
+export function knowledgeDiagnostics(limit?: number): Promise<KnowledgeAggregates> {
+  return invoke<KnowledgeAggregates>("knowledge_diagnostics", { limit });
+}
 
 /**
  * How far one analysis pass has got. Counts only: no document text and not even a file name
@@ -542,11 +623,19 @@ export type TabularAnswer =
   | { kind: "which_column"; file: string; value: string; candidates: string[] }
   | { kind: "workbook_unreadable"; file: string }
   | { kind: "workbook_not_analysed"; file: string }
-  | { kind: "which_workbook"; candidates: string[] }
+  | { kind: "which_workbook"; candidates: string[]; hints?: WorkbookHint[] }
   | { kind: "ambiguous_reference"; query: string; candidates: string[] }
   | { kind: "file_not_selected"; query: string }
   | { kind: "no_matching_file"; query: string }
   | { kind: "no_usable_table" };
+
+/** Why the knowledge base points at a workbook of "which workbook?": the entities of the question
+ * it holds and the sheets they appear in. Orders and annotates the choice, never makes it. */
+export interface WorkbookHint {
+  file: string;
+  entities: { entityId: number; display: string }[];
+  sheets: string[];
+}
 
 /** Why one side of a mixed answer has nothing to show (`docs/SESSION-DATA-16-Mixed-Tier.md`,
  * mechanism 6: partial refusal). */
@@ -618,6 +707,9 @@ export interface AskAnswer {
   mixedAnswer: MixedAnswer | null;
   /** Where this question spent its time. Numbers and machine codes only. */
   diagnostics: RetrievalDiagnostics | null;
+  /** What the knowledge base did to the search, when there is something to tell: an applied
+   * reduction, or names that need a question. */
+  targeting: TargetingReport | null;
 }
 
 export type RetrievalPath =
@@ -652,6 +744,38 @@ export interface RetrievalDiagnostics {
   generationFirstTokenMs: number | null;
   generationTotalMs: number;
   totalMs: number;
+  /** The knowledge base's part: lookup time, what it found, what it reduced, how a reduction that
+   * was only measured compares with what the answer cited. Absent when the base took no part. */
+  targeting: TargetingDiagnostics | null;
+}
+
+/** One entity of the question, without a letter of its name. */
+export interface QueryEntityDiagnostic {
+  entityId: number;
+  typeId: string;
+  confidence: number;
+  method: string;
+}
+
+export interface TargetingDiagnostics {
+  mode: "off" | "suggest" | "auto";
+  knowledgeLookupMs: number;
+  strategy: string;
+  skippedReason: string | null;
+  outcome: "applied" | "shadow" | "skipped";
+  queryEntities: QueryEntityDiagnostic[];
+  candidateDocuments: number;
+  candidateWorkbooks: number;
+  reductionPercent: number;
+  widened: boolean;
+  shadow: {
+    wouldApply: boolean;
+    cited: number;
+    citedInCandidates: number;
+    missNoMention: number;
+    missCapped: number;
+    missEntityNotResolved: number;
+  };
 }
 
 /**
@@ -852,6 +976,9 @@ export function askWithSources(
   scope?: CombinedScope,
   /** The conversation so far. Rust keeps as much of it as the chosen model can read. */
   history: ChatTurn[] = [],
+  /** What the knowledge base is asked to do: chips, the previous answer's entities, or `off` to
+   * widen. Left out, the knowledge mode of the settings decides. */
+  targeting?: TargetingRequest,
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
@@ -870,6 +997,7 @@ export function askWithSources(
     skipDeterministic,
     scope,
     history,
+    targeting,
     onEvent: channel,
   });
 }

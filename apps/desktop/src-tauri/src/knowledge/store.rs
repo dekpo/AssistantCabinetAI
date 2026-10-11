@@ -225,7 +225,14 @@ CREATE TABLE IF NOT EXISTS kb_diagnostics (
     widened INTEGER NOT NULL DEFAULT 0,
     knowledge_ms INTEGER NOT NULL DEFAULT 0,
     retrieval_ms INTEGER NOT NULL DEFAULT 0,
-    total_ms INTEGER NOT NULL DEFAULT 0
+    total_ms INTEGER NOT NULL DEFAULT 0,
+    path TEXT NOT NULL DEFAULT '',
+    applied INTEGER NOT NULL DEFAULT 0,
+    would_apply INTEGER NOT NULL DEFAULT 0,
+    reduction_percent INTEGER NOT NULL DEFAULT 0,
+    miss_no_mention INTEGER NOT NULL DEFAULT 0,
+    miss_capped INTEGER NOT NULL DEFAULT 0,
+    miss_unresolved INTEGER NOT NULL DEFAULT 0
 );
 
 -- Merge is a redirect, so every read goes through these two views. Chains are flattened when an
@@ -256,6 +263,7 @@ INSERT OR IGNORE INTO kb_meta (key, value) VALUES
 pub fn ensure_schema(connection: &Connection) -> Result<(), AppError> {
     let tx = db(connection.unchecked_transaction())?;
     db(tx.execute_batch(SCHEMA))?;
+    add_missing_diagnostic_columns(&tx)?;
     db(tx.execute_batch(SEEDS))?;
     db(tx.execute(
         "INSERT INTO kb_meta (key, value) VALUES ('schema_version', ?1)
@@ -264,6 +272,35 @@ pub fn ensure_schema(connection: &Connection) -> Result<(), AppError> {
         [CURRENT_SCHEMA_VERSION.to_string()],
     ))?;
     db(tx.commit())
+}
+
+/// The columns of `kb_diagnostics` that lot 6 added to the table lot 1 created. A database made by
+/// lot 1 to 5 has the table without them, and `CREATE TABLE IF NOT EXISTS` leaves it alone.
+const DIAGNOSTIC_COLUMNS: [(&str, &str); 7] = [
+    ("path", "TEXT NOT NULL DEFAULT ''"),
+    ("applied", "INTEGER NOT NULL DEFAULT 0"),
+    ("would_apply", "INTEGER NOT NULL DEFAULT 0"),
+    ("reduction_percent", "INTEGER NOT NULL DEFAULT 0"),
+    ("miss_no_mention", "INTEGER NOT NULL DEFAULT 0"),
+    ("miss_capped", "INTEGER NOT NULL DEFAULT 0"),
+    ("miss_unresolved", "INTEGER NOT NULL DEFAULT 0"),
+];
+
+fn add_missing_diagnostic_columns(connection: &Connection) -> Result<(), AppError> {
+    let mut statement = db(connection.prepare("PRAGMA table_info(kb_diagnostics)"))?;
+    let known: Vec<String> = db(statement.query_map([], |row| row.get::<_, String>(1)))?
+        .collect::<Result<_, _>>()
+        .map_err(|_| AppError::KnowledgeUnavailable)?;
+    drop(statement);
+    for (name, declaration) in DIAGNOSTIC_COLUMNS {
+        if !known.iter().any(|column| column == name) {
+            db(connection.execute(
+                &format!("ALTER TABLE kb_diagnostics ADD COLUMN {name} {declaration}"),
+                [],
+            ))?;
+        }
+    }
+    Ok(())
 }
 
 pub fn meta(connection: &Connection, key: &str) -> Result<Option<String>, AppError> {
@@ -2253,10 +2290,12 @@ pub fn source_ids_for_scope(
         .collect();
     let pairs = Value::Array(pairs).to_string();
     let mut statement = db(connection.prepare(
-        "SELECT s.source_id FROM kb_sources s
-         JOIN json_each(?2) j
-           ON s.relative_path = json_extract(j.value, '$.path')
-          AND s.content_id = json_extract(j.value, '$.content_id')
+        "WITH scope(path, content_id) AS MATERIALIZED (
+             SELECT json_extract(value, '$.path'), json_extract(value, '$.content_id')
+             FROM json_each(?2))
+         SELECT s.source_id
+         FROM scope JOIN kb_sources s
+           ON s.relative_path = scope.path AND s.content_id = scope.content_id
          WHERE s.domain = ?1
          ORDER BY s.source_id",
     ))?;
@@ -2308,6 +2347,174 @@ pub fn files_for_entities(
         result.per_entity.insert(*entity_id, files);
     }
     Ok(result)
+}
+
+/// One source of a selection, as the targeting step needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopedSource {
+    pub source_id: i64,
+    pub relative_path: String,
+    /// `0` (`NOT_EXTRACTED`) when no extractor has read the file.
+    pub kb_version: u32,
+}
+
+/// The sources that match `(relative_path, content_id)` pairs of one domain, with the version of the
+/// extractor that read them. A file the selection holds that is not returned here (never analysed
+/// with the knowledge base on, or changed since) is one the knowledge base knows nothing about, and
+/// so can never be left out because of what it knows.
+pub fn sources_in_scope(
+    connection: &Connection,
+    domain: Domain,
+    scope: &[(String, String)],
+) -> Result<Vec<ScopedSource>, AppError> {
+    if scope.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pairs: Vec<Value> = scope
+        .iter()
+        .map(|(path, content_id)| json!({ "path": path, "content_id": content_id }))
+        .collect();
+    let pairs = Value::Array(pairs).to_string();
+    // The pairs are read out of the JSON once, in a materialised table, and the sources are then
+    // looked up by their unique key. Joined straight onto `json_each`, the planner may loop over the
+    // sources and parse the whole array again for each of them: quadratic in the size of the
+    // selection, which a thousand files turned into half a second.
+    let mut statement = db(connection.prepare(
+        "WITH scope(path, content_id) AS MATERIALIZED (
+             SELECT json_extract(value, '$.path'), json_extract(value, '$.content_id')
+             FROM json_each(?2))
+         SELECT s.source_id, s.relative_path, s.kb_version
+         FROM scope JOIN kb_sources s
+           ON s.relative_path = scope.path AND s.content_id = scope.content_id
+         WHERE s.domain = ?1
+         ORDER BY s.source_id",
+    ))?;
+    let rows = db(
+        statement.query_map(params![domain.as_code(), pairs], |row| {
+            Ok(ScopedSource {
+                source_id: row.get(0)?,
+                relative_path: row.get(1)?,
+                kb_version: row.get(2)?,
+            })
+        }),
+    )?;
+    db(rows.collect())
+}
+
+/// Which of these normalized forms the knowledge base knows as the name or as an alias of a live
+/// entity (after following merges). One query for a whole question: the detector asks it for every
+/// run of words before it spends a resolver call on any of them.
+pub fn known_name_forms(
+    connection: &Connection,
+    forms: &[String],
+) -> Result<BTreeSet<String>, AppError> {
+    if forms.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    let forms = db_json(forms)?;
+    let mut statement = db(connection.prepare(
+        "SELECT e.normalized_name FROM kb_entities e
+         JOIN kb_effective_entity v ON v.entity_id = e.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE e.normalized_name IN (SELECT value FROM json_each(?1))
+           AND s.status IN ('candidate', 'active')
+         UNION
+         SELECT a.normalized FROM kb_aliases a
+         JOIN kb_effective_entity v ON v.entity_id = a.entity_id
+         JOIN kb_entities s ON s.entity_id = v.effective_id
+         WHERE a.normalized IN (SELECT value FROM json_each(?1))
+           AND s.status IN ('candidate', 'active')",
+    ))?;
+    let rows = db(statement.query_map([forms], |row| row.get::<_, String>(0)))?;
+    let mut known = BTreeSet::new();
+    for row in rows {
+        known.insert(db(row)?);
+    }
+    Ok(known)
+}
+
+/// For each entity, the live entities it is **possibly** the same as: the open pairs of
+/// `kb_possible_matches`, in either order, after following merges. The pair is a question for the
+/// user and never a merge; the targeting step only uses it to keep the files of the other spelling
+/// in the search (`knowledge::reduce`).
+pub fn open_possible_partners(
+    connection: &Connection,
+    entity_ids: &[i64],
+) -> Result<BTreeMap<i64, BTreeSet<i64>>, AppError> {
+    let mut found: BTreeMap<i64, BTreeSet<i64>> = BTreeMap::new();
+    let mut statement = db(connection.prepare(
+        "SELECT p.entity_a, p.entity_b FROM kb_possible_matches p
+         WHERE p.state = 'open'
+           AND (p.entity_a IN (SELECT entity_id FROM kb_effective_entity WHERE effective_id = ?1)
+             OR p.entity_b IN (SELECT entity_id FROM kb_effective_entity WHERE effective_id = ?1))",
+    ))?;
+    for entity_id in entity_ids {
+        let Some(effective) = effective_entity(connection, *entity_id)? else {
+            continue;
+        };
+        let rows = db(statement.query_map([effective.entity_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+        }))?;
+        let mut partners = BTreeSet::new();
+        for row in rows {
+            let (a, b) = db(row)?;
+            for candidate in [a, b] {
+                let Some(partner) = effective_entity(connection, candidate)? else {
+                    continue;
+                };
+                if partner.entity_id != effective.entity_id
+                    && matches!(
+                        partner.status,
+                        EntityStatus::Candidate | EntityStatus::Active
+                    )
+                {
+                    partners.insert(partner.entity_id);
+                }
+            }
+        }
+        found.insert(*entity_id, partners);
+    }
+    Ok(found)
+}
+
+/// The sheets in which each source (among `source_ids`) names any of `entity_ids`, by relative path.
+/// A hint for ordering and for the note under an answer; the knowledge base never turns it into a
+/// sheet restriction (master invariant I5).
+pub fn sheets_for_entities(
+    connection: &Connection,
+    entity_ids: &[i64],
+    source_ids: &[i64],
+) -> Result<BTreeMap<String, BTreeSet<String>>, AppError> {
+    let mut sheets: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    if entity_ids.is_empty() || source_ids.is_empty() {
+        return Ok(sheets);
+    }
+    let sources = serde_json::to_string(source_ids).map_err(|_| AppError::Internal)?;
+    let mut statement = db(connection.prepare(
+        "SELECT DISTINCT s.relative_path, m.sheet
+         FROM kb_effective_mentions m
+         JOIN kb_sources s ON s.source_id = m.source_id
+         JOIN kb_entities e ON e.entity_id = m.effective_entity_id
+         WHERE m.effective_entity_id = ?1
+           AND e.status IN ('candidate', 'active')
+           AND m.locator_kind = 'cells' AND m.sheet IS NOT NULL
+           AND m.source_id IN (SELECT value FROM json_each(?2))",
+    ))?;
+    for entity_id in entity_ids {
+        let Some(effective) = effective_entity(connection, *entity_id)? else {
+            continue;
+        };
+        let rows = db(
+            statement.query_map(params![effective.entity_id, sources], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            }),
+        )?;
+        for row in rows {
+            let (path, sheet) = db(row)?;
+            sheets.entry(path).or_default().insert(sheet);
+        }
+    }
+    Ok(sheets)
 }
 
 pub fn entity_with_aliases(

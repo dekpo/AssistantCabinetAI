@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::error::AppError;
 use crate::knowledge::packs::{available_pack_ids, canonical_pack_id};
+use crate::knowledge::reduce::TargetingPolicy;
 use crate::knowledge::KnowledgeMode;
 use crate::work_folder::{display, WorkFolderPolicy};
 
@@ -47,6 +48,20 @@ pub const DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 300;
 /// another (`Settings::generated_folder_name`).
 pub const DEFAULT_GENERATED_FOLDER_NAME: &str = "Generated";
 
+/// Defaults of the targeting settings (`docs/SESSION-KB-00-master.md`, section 8). Named constants,
+/// never policy hidden in the code that applies them: the values are settings.
+pub const DEFAULT_KNOWLEDGE_MIN_SCOPE_FILES: usize = 8;
+pub const DEFAULT_KNOWLEDGE_MAX_SELECTIVITY: f32 = 0.6;
+pub const DEFAULT_KNOWLEDGE_MIN_REDUCTION: f32 = 0.3;
+pub const DEFAULT_KNOWLEDGE_MAX_CANDIDATES: usize = 15;
+/// Measured in lot 6 on the embedding model the pilot runs (`nomic-embed-text`): questions about
+/// nothing in the passages reach 0.555 to 0.645 against the closest passage, questions whose
+/// passage is there reach 0.698 to 0.843, so 0.65 separates them (`lot-06-widen-calibration.py`,
+/// `docs/test-reports/knowledge-base-pass-1/lots/lot-06-targeted-scope.md`, "Measured"). The scale
+/// belongs to the embedding model: another model needs the script run again. Lot 11 checks it on
+/// the owner's own documents.
+pub const DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE: f32 = 0.65;
+
 /// Low enough that a genuinely stuck model is still reported in a reasonable time, high enough
 /// that nobody can set a value that cuts off a working answer on a slow machine.
 pub const MIN_ANSWER_IDLE_TIMEOUT_SECONDS: u64 = 30;
@@ -60,7 +75,7 @@ pub enum Theme {
     System,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     /// `None` until a language has been chosen. The interface resolves it from the system locale
@@ -109,6 +124,22 @@ pub struct Settings {
     /// `accounting`, which meant the French pack) is read as its `-fr` name
     /// (`Settings::knowledge_pack_ids`).
     pub knowledge_packs: Vec<String>,
+    /// Below this many selected files on one side (documents, or workbooks) the knowledge base does
+    /// not reduce that side by itself: with a handful of files there is nothing to save and a lot to
+    /// lose. A reduction the user asked for with a chip applies at any size
+    /// (`knowledge::reduce`).
+    pub knowledge_min_scope_files: usize,
+    /// An entity present in more than this share of the selected files names no file in particular
+    /// (the user's own name, the letterhead): it is ignored for reduction.
+    pub knowledge_max_selectivity: f32,
+    /// A reduction applies only when it leaves out at least this share of the selected files.
+    pub knowledge_min_reduction: f32,
+    /// At most this many documents are searched after a reduction (workbooks are not capped).
+    pub knowledge_max_candidates: usize,
+    /// When the closest passage of a reduced search is below this cosine similarity (by meaning
+    /// alone, without the lexical bonus), the search is repeated once on the whole selection. The
+    /// scale belongs to the embedding model: 0.65 is measured on `nomic-embed-text`.
+    pub knowledge_widen_below_score: f32,
 }
 
 impl Default for Settings {
@@ -128,6 +159,11 @@ impl Default for Settings {
             write_timing_log: false,
             knowledge_mode: KnowledgeMode::default(),
             knowledge_packs: vec!["health-fr".to_string()],
+            knowledge_min_scope_files: DEFAULT_KNOWLEDGE_MIN_SCOPE_FILES,
+            knowledge_max_selectivity: DEFAULT_KNOWLEDGE_MAX_SELECTIVITY,
+            knowledge_min_reduction: DEFAULT_KNOWLEDGE_MIN_REDUCTION,
+            knowledge_max_candidates: DEFAULT_KNOWLEDGE_MAX_CANDIDATES,
+            knowledge_widen_below_score: DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE,
         }
     }
 }
@@ -148,6 +184,31 @@ impl Settings {
             }
         }
         kept
+    }
+
+    /// The targeting settings as they are used: each one clamped, so a `settings.json` edited by hand
+    /// can neither make a reduction impossible to stop nor make it swallow a whole selection.
+    pub fn targeting_policy(&self) -> TargetingPolicy {
+        let finite = |value: f32, fallback: f32| if value.is_finite() { value } else { fallback };
+        TargetingPolicy {
+            min_scope_files: self.knowledge_min_scope_files.clamp(1, 10_000),
+            max_selectivity: finite(
+                self.knowledge_max_selectivity,
+                DEFAULT_KNOWLEDGE_MAX_SELECTIVITY,
+            )
+            .clamp(0.05, 1.0),
+            min_reduction: finite(
+                self.knowledge_min_reduction,
+                DEFAULT_KNOWLEDGE_MIN_REDUCTION,
+            )
+            .clamp(0.0, 0.95),
+            max_candidates: self.knowledge_max_candidates.clamp(1, 500),
+            widen_below_score: finite(
+                self.knowledge_widen_below_score,
+                DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE,
+            )
+            .clamp(0.0, 1.5),
+        }
     }
 
     /// The generated-letters folder name as it is used: one clean name, never a path, never empty.
@@ -220,6 +281,12 @@ pub fn save(
     );
     checked.generated_folder_name = clean_folder_name(&checked.generated_folder_name);
     checked.knowledge_packs = checked.knowledge_pack_ids();
+    let targeting = checked.targeting_policy();
+    checked.knowledge_min_scope_files = targeting.min_scope_files;
+    checked.knowledge_max_selectivity = targeting.max_selectivity;
+    checked.knowledge_min_reduction = targeting.min_reduction;
+    checked.knowledge_max_candidates = targeting.max_candidates;
+    checked.knowledge_widen_below_score = targeting.widen_below_score;
     checked.work_folder = match checked.work_folder.as_deref() {
         None => None,
         Some(chosen) if chosen.trim().is_empty() => None,
@@ -329,6 +396,11 @@ mod tests {
             write_timing_log: true,
             knowledge_mode: KnowledgeMode::Auto,
             knowledge_packs: vec!["health-fr".into(), "health-ch".into()],
+            knowledge_min_scope_files: 12,
+            knowledge_max_selectivity: 0.5,
+            knowledge_min_reduction: 0.25,
+            knowledge_max_candidates: 20,
+            knowledge_widen_below_score: 0.35,
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
@@ -337,6 +409,9 @@ mod tests {
         assert_eq!(json["writeTimingLog"], true);
         assert_eq!(json["knowledgeMode"], "auto");
         assert_eq!(json["knowledgePacks"][1], "health-ch");
+        assert_eq!(json["knowledgeMinScopeFiles"], 12);
+        assert_eq!(json["knowledgeMaxCandidates"], 20);
+        assert!((json["knowledgeMaxSelectivity"].as_f64().unwrap() - 0.5).abs() < 1e-6);
 
         assert_eq!(json["locale"], "fr-FR");
         assert_eq!(json["theme"], "system");
@@ -373,6 +448,43 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(long.generated_folder().chars().count(), 60);
+    }
+
+    #[test]
+    fn the_targeting_settings_are_clamped_rather_than_trusted() {
+        let wild = Settings {
+            knowledge_min_scope_files: 0,
+            knowledge_max_selectivity: 7.0,
+            knowledge_min_reduction: -3.0,
+            knowledge_max_candidates: 0,
+            knowledge_widen_below_score: f32::NAN,
+            ..Settings::default()
+        };
+        let policy = wild.targeting_policy();
+
+        assert_eq!(policy.min_scope_files, 1);
+        assert_eq!(policy.max_selectivity, 1.0);
+        assert_eq!(policy.min_reduction, 0.0);
+        assert_eq!(policy.max_candidates, 1);
+        assert_eq!(
+            policy.widen_below_score,
+            DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE
+        );
+
+        let defaults = Settings::default().targeting_policy();
+        assert_eq!(defaults.min_scope_files, 8);
+        assert_eq!(defaults.max_candidates, 15);
+        assert!((defaults.max_selectivity - 0.6).abs() < 1e-6);
+        assert!((defaults.min_reduction - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_file_written_before_the_targeting_settings_existed_still_loads() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"knowledgeMode":"auto"}"#).expect("loads");
+
+        assert_eq!(settings.knowledge_min_scope_files, 8);
+        assert_eq!(settings.knowledge_max_candidates, 15);
     }
 
     #[test]

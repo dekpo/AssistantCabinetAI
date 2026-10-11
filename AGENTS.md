@@ -57,6 +57,10 @@ Full design: `docs/LANGUAGE-AND-LOCALE.md`. In short:
 - Rust and Python return **machine codes**, never user-facing prose. The UI localises them. A French string literal in `apps/server` or `apps/desktop/src-tauri` is a bug.
 - **Every string sent to the model** (`prompts.py`, `RETRIEVAL_INSTRUCTION`, `NO_DOCUMENTS_INSTRUCTION`, and anything added later) must read the same for a doctor, a lawyer, a notary or an accountant: no "practice", "patient", "doctor" or profession-specific wording, even though the pilot is a GP. The docs may describe the pilot in plain terms; what the model reads may not assume it. Decided 27 September 2026 after a hallucination regression traced partly to this — see `docs/SELECTION-AND-MEMORY.md`, "Profession-neutral model-facing text". Guard tests live beside each constant (`..._stays_neutral_about_who_the_user_is`); add one for any new model-facing constant.
 
+## Human tests
+
+A human test is **a script, not a list** (owner instruction, 11 October 2026, for every agent and every human test): the owner follows it to the letter and cannot guess what comes next. It runs top to bottom; every part states **"You start with"** and **"You leave with"** (the exact state: application open or closed, mode, folders, what is ticked); there is **no undo in the middle**, one backup at the start and **one** restore at the very end, an optional part goes last with its own undo; expectations come from her real state (earlier screenshots and outputs are read first), as rules where her index can change a number; every question is run through the real path (the router, the engine) before it is written; and the agent walks the whole protocol on temporary copies before proposing it. Every command is written in full, every click named by its exact label, and the automated suites the agent ran are never part of the test. Full text: `.cursor/rules/kb-programme.mdc` (items 1 to 9) and `docs/SESSION-KB-WORKFLOW.md`, section 5.
+
 ## Out of scope for now
 
 - Diagnosis, prescriptions, FSE / Vitale, DMP / MSSanté send.

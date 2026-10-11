@@ -63,6 +63,7 @@ pub fn run() {
             commands::cancel_chat,
             commands::index_work_folder,
             commands::ask_with_sources,
+            commands::knowledge_diagnostics,
             commands::has_indexed_documents,
             commands::work_folder_inventory,
             commands::reveal_work_folder,

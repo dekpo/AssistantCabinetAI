@@ -48,6 +48,20 @@ sentence as the Documents card's (reading the names in documents analysed earlie
 Nothing is read in the background: documents analysed before the knowledge base existed are read for names, from the text the index already holds, only when she presses Analyse. The settings panel shows the same listing with a **See** button on each file, which shows it selected in
 the file manager without opening it.
 
+**Knowledge base, in the window (KB lot 7).** Four things are added, and nothing changes while the mode is `off`.
+(1) Under an answer whose search the base **narrowed**, a small line says how many files were searched out of
+how many and for which name, with **Élargir à ma sélection** (the question is asked again on everything she
+selected) and **Voir les fichiers**; the same line says when the base widened the search by itself, and names the
+workbook it chose with **Choisir un autre classeur**. Nothing is shown when the base only measured. (2) When a name
+fits several people, the question is answered anyway and buttons below ask which one was meant, each with its number
+of files; a click asks again with that name. (3) In the box, typing `@` and the first letters of a name (or pressing
+the **@** button) lists the names of the current selection with their number of files; arrows and Enter choose,
+Escape closes. The chosen name appears as a chip above the box and narrows that question's search; the question
+text is untouched. If the name exists only in files she did not tick, one clearly labelled line offers
+**Ajouter à ma sélection**. (4) The settings dialog has a « Connaissances » group (**Ciblage intelligent**, the
+health modules, hiding names in suggestions) and, under **Avancé**, the thresholds and a **diagnostics panel** for
+developers that appears under the last answer. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 7".
+
 The conversation remembers its recent exchanges, as many as the chosen model's context window allows; past
 excerpts are never resent. Design and budget: `docs/SELECTION-AND-MEMORY.md`.
 

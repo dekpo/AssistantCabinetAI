@@ -1182,3 +1182,189 @@ body {
 .startup__message {
   color: var(--text-quiet);
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Knowledge base, lot 7: the line under an answer, the names picked for a question, the `@` list
+   and the developer panel. Same tokens as the rest, so light and dark need nothing of their own.
+   --------------------------------------------------------------------------------------------- */
+
+/* What the search was narrowed to, under the other notes of an answer. */
+.targeting {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.targeting__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.targeting__files {
+  margin-top: 2px;
+  font-size: 0.8em;
+  color: var(--text-quiet);
+}
+
+.targeting__offer {
+  margin-top: 4px;
+}
+
+/* The names chosen for the next question, above the box. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 0.9em;
+}
+
+.chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text-quiet);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip__remove:hover,
+.chip__remove:focus-visible {
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* The "@" next to the model choice: a square rather than a wide button. */
+.composer__mention {
+  flex: 0 0 auto;
+  min-width: 32px;
+  padding: 0 8px;
+}
+
+/* The list of names while "@name" is being typed. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.picker__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.picker__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.picker__item--active {
+  color: var(--accent-text);
+  background: var(--accent);
+}
+
+.picker__item--active .picker__meta {
+  color: inherit;
+}
+
+.picker__meta,
+.picker__hint {
+  color: var(--text-quiet);
+  font-size: 0.85em;
+}
+
+.picker__hint {
+  margin: 0;
+  padding: 4px 8px;
+}
+
+/* The one line that names a name which is not in the selection: set apart from the list above it. */
+.picker__outside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 6px 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.85em;
+  color: var(--text-quiet);
+}
+
+/* The developer panel under the last answer. */
+.diagnostics {
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: var(--text-quiet);
+}
+
+.diagnostics__heading {
+  margin: 8px 0 2px;
+  font-size: 1em;
+  color: var(--text);
+}
+
+.diagnostics__rows {
+  margin: 0;
+}
+
+.diagnostics__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 1px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.diagnostics__row dt,
+.diagnostics__row dd {
+  margin: 0;
+}
+
+.diagnostics__row dd {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A group heading in the settings dialog, and the disclosure of its advanced fields. */
+.dialog__subtitle {
+  margin: 8px 0 0;
+  font-size: 1em;
+}
+
+.settings-advanced > .field,
+.settings-advanced > .field__row,
+.settings-advanced > .field__description {
+  margin-top: 8px;
+}

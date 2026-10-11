@@ -17,6 +17,7 @@ pub mod maintenance;
 pub mod normalize;
 pub mod packs;
 pub mod phonetic;
+pub mod picker;
 pub mod query;
 pub mod reduce;
 pub mod resolve;

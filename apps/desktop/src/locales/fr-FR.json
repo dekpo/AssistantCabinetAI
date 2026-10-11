@@ -96,7 +96,59 @@
       "not_linked": "Cette partie n'a pas pu être rattachée à vos tables."
     },
     "mixedCorrection": "La table indique {correct}, et non {claimed}.",
-    "mixedRejectedCitation": "Une citation ({citation}) ne correspond à aucune source fournie et a été signalée."
+    "mixedRejectedCitation": "Une citation ({citation}) ne correspond à aucune source fournie et a été signalée.",
+    "targeting": {
+      "applied": "Recherche ciblée : {scope}",
+      "appliedByChip": "Recherche ciblée à votre demande : {scope}",
+      "namesSuffix": " — {names}",
+      "portion": "{kept} sur {total}",
+      "and": " et ",
+      "documentOne": "document",
+      "documentMany": "documents",
+      "workbookOne": "classeur",
+      "workbookMany": "classeurs",
+      "widen": "Élargir à ma sélection",
+      "showFiles": "Voir les fichiers",
+      "hideFiles": "Masquer les fichiers",
+      "widenedAuto": "Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.",
+      "workbookChosen": "Classeur choisi : {file}",
+      "presentOne": " — {names} y figure",
+      "presentMany": " — {names} y figurent",
+      "chooseAnotherWorkbook": "Choisir un autre classeur",
+      "option": "{name} ({files})",
+      "didYouMean": "Vouliez-vous dire :",
+      "ambiguousUnnamed": "Plusieurs noms correspondent à votre question :",
+      "ambiguous": {
+        "person": "Plusieurs personnes correspondent à « {name} » :",
+        "organization": "Plusieurs organisations correspondent à « {name} » :",
+        "location": "Plusieurs lieux correspondent à « {name} » :",
+        "other": "Plusieurs noms correspondent à « {name} » :"
+      }
+    },
+    "chips": {
+      "label": "Noms choisis pour cette question",
+      "remove": "Retirer {name}"
+    },
+    "picker": {
+      "label": "Noms de votre sélection",
+      "typeMore": "Tapez les premières lettres d'un nom.",
+      "searching": "Recherche…",
+      "noMatch": "Aucun nom de votre sélection ne commence ainsi.",
+      "button": "Choisir un nom de ma sélection",
+      "needsSelection": "Choisissez d'abord des fichiers dans le panneau de gauche.",
+      "type": {
+        "person": "Personne",
+        "organization": "Organisation",
+        "location": "Lieu",
+        "identifier": "Identifiant",
+        "item": "Élément",
+        "term": "Terme"
+      },
+      "outside": "{name} figure dans {files}",
+      "outsideFileOne": "fichier non sélectionné",
+      "outsideFileMany": "fichiers non sélectionnés",
+      "addToSelection": "Ajouter à ma sélection"
+    }
   },
   "choices": {
     "hint": "Cliquez sur un fichier pour poser la question à son sujet.",
@@ -315,12 +367,12 @@
     "idleTimeoutUnit": "secondes",
     "generatedFolderLabel": "Dossier des courriers générés",
     "generatedFolderDescription": "Le sous-dossier de votre dossier de documents où sont écrits les courriers générés à partir d'un modèle et d'un tableur. Le nom est simplifié : lettres sans accent, chiffres, tirets.",
-    "knowledgeModeLabel": "Base de connaissances",
-    "knowledgeModeDescription": "À chaque analyse, repère les noms de personnes et d'organisations de vos documents pour les retrouver plus vite. Tout reste sur cet ordinateur. Pris en compte à la prochaine analyse que vous lancez.",
+    "knowledgeModeLabel": "Ciblage intelligent",
+    "knowledgeModeDescription": "Repère les noms de personnes et d'organisations de vos documents pour retrouver plus vite les bons fichiers. Tout reste sur cet ordinateur. « Désactivé » ne lit aucun nom. « Suggestions seulement » ne restreint jamais la recherche d'elle-même : vous pouvez choisir un nom pour la cibler. « Automatique » limite la recherche aux fichiers qui parlent des noms de la question, avec un bouton pour tout rechercher. Les noms sont lus à la prochaine analyse que vous lancez.",
     "knowledgeMode": {
-      "suggest": "Activée",
-      "off": "Désactivée",
-      "auto": "Automatique (recherche seulement dans les fichiers cités par la question)"
+      "suggest": "Suggestions seulement",
+      "off": "Désactivé",
+      "auto": "Automatique"
     },
     "healthModuleLabel": "Module santé",
     "healthModuleDescription": "Cochez le ou les pays de vos patients : un frontalier peut avoir un numéro de sécurité sociale français et un numéro AVS. Un module aide à mieux lire les numéros et le vocabulaire de son pays, sans jamais retirer ni changer le type d'un nom. Pris en compte à la prochaine analyse que vous lancez.",
@@ -331,8 +383,21 @@
     "advancedLabel": "Avancé",
     "timingLogLabel": "Noter les durées dans un journal",
     "timingLogDescription": "Écrit, sur cet ordinateur seulement, combien de temps prend chaque question et chaque analyse : des durées et des nombres, jamais votre question, un nom de fichier ou un extrait. Désactivé par défaut ; à activer pour une mesure.",
-    "showDiagnosticsLabel": "Préparer l'affichage des durées",
-    "showDiagnosticsDescription": "Réservé à un panneau pour les développeurs, pas encore disponible : l'activer ne change rien à l'écran pour l'instant."
+    "showDiagnosticsLabel": "Afficher le panneau de diagnostics",
+    "showDiagnosticsDescription": "Sous la dernière réponse, montre les durées et ce que la base de connaissances a reconnu et écarté. Réservé aux développeurs : des nombres et des codes, jamais vos questions ni vos noms de fichiers.",
+    "knowledgeGroupLabel": "Connaissances",
+    "hideNamesLabel": "Masquer les noms dans les suggestions",
+    "hideNamesDescription": "Les questions proposées ne citent aucun nom : un écran se voit depuis la salle d'attente.",
+    "minScopeFilesLabel": "Nombre minimal de fichiers pour cibler",
+    "minScopeFilesDescription": "En dessous de ce nombre de fichiers choisis, la recherche n'est jamais restreinte d'elle-même. Un nom que vous choisissez cible la recherche quelle que soit la taille.",
+    "maxSelectivityLabel": "Part maximale de fichiers pour qu'un nom cible",
+    "maxSelectivityDescription": "Un nom présent dans plus de cette part de vos fichiers (le vôtre, celui du cabinet) ne désigne aucun fichier en particulier : il est ignoré.",
+    "minReductionLabel": "Part minimale de fichiers écartés",
+    "minReductionDescription": "La recherche n'est restreinte que si elle écarte au moins cette part des fichiers choisis.",
+    "maxCandidatesLabel": "Nombre maximal de documents ciblés",
+    "maxCandidatesDescription": "Au plus ce nombre de documents sont recherchés après un ciblage. Les classeurs ne sont pas limités.",
+    "widenBelowScoreLabel": "Seuil d'élargissement",
+    "widenBelowScoreDescription": "Si le passage le plus proche trouvé dans les fichiers ciblés ressemble moins que ce score à la question (de 0 à 1,5), la recherche est refaite sur toute votre sélection. L'échelle dépend du modèle de lecture : 0,65 a été mesuré avec nomic-embed-text."
   },
   "errorBanner": {
     "title": "Cela n'a pas fonctionné"
@@ -515,6 +580,94 @@
       "accounting": {
         "provider": "Expert-comptable"
       }
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnostics (développeur)",
+    "thisAnswer": "Cette réponse",
+    "recorded": "Questions enregistrées",
+    "noneForAnswer": "Aucune mesure pour cette réponse.",
+    "noneRecorded": "Aucune question enregistrée.",
+    "yes": "oui",
+    "no": "non",
+    "path": "Chemin",
+    "plan": "Plan",
+    "selected": "Sélection",
+    "selectedValue": "{documents} documents, {workbooks} classeurs",
+    "chunks": "Passages retenus / examinés",
+    "chunksValue": "{selected} / {considered}",
+    "inputChars": "Caractères envoyés à l'IA (estimation)",
+    "inventoryMs": "Inventaire",
+    "scopeMs": "Sélection",
+    "routingMs": "Routage",
+    "embeddingMs": "Lecture de la question",
+    "searchMs": "Recherche",
+    "workbookLoadMs": "Chargement des classeurs",
+    "firstTokenMs": "Premier mot",
+    "generationMs": "Rédaction",
+    "totalMs": "Total",
+    "mode": "Mode",
+    "outcome": "Résultat",
+    "strategy": "Stratégie",
+    "skippedReason": "Raison du non-ciblage",
+    "lookupMs": "Lecture des noms",
+    "queryEntities": "Noms reconnus",
+    "candidates": "Fichiers ciblés",
+    "reduction": "Réduction",
+    "widened": "Élargie",
+    "wouldApply": "Ciblage possible",
+    "cited": "Fichiers cités retrouvés dans le ciblage",
+    "citedValue": "{held} sur {cited}",
+    "misses": "Fichiers cités hors ciblage",
+    "missesValue": "sans mention : {noMention}, plafond : {capped}, nom non reconnu : {unresolved}",
+    "questions": "Questions",
+    "withEntities": "Avec au moins un nom",
+    "wouldApplyCount": "Ciblage possible",
+    "appliedCount": "Ciblage appliqué",
+    "widenedCount": "Élargissements",
+    "medianReduction": "Réduction médiane",
+    "recallOverall": "Fichiers cités retrouvés (toutes les questions)",
+    "recallWhenWouldApply": "Fichiers cités retrouvés (ciblage possible)",
+    "missesTotal": "Fichiers cités hors ciblage",
+    "skippedFor": "Non ciblées : {reason}",
+    "pathName": {
+      "documents": "documents",
+      "tabular": "tableaux",
+      "mixed": "mixte",
+      "folder_answer": "réponse du dossier",
+      "without_documents": "sans documents"
+    },
+    "planName": {
+      "one_file": "un fichier",
+      "every_document": "chaque document",
+      "whole_folder": "toute la sélection"
+    },
+    "modeName": {
+      "off": "désactivé",
+      "suggest": "suggestions",
+      "auto": "automatique"
+    },
+    "outcomeName": {
+      "applied": "appliqué",
+      "shadow": "mesuré seulement",
+      "skipped": "non appliqué"
+    },
+    "strategyName": {
+      "none": "aucune",
+      "entity_files": "fichiers des noms",
+      "chip_files": "fichiers des noms choisis"
+    },
+    "reasonName": {
+      "off": "désactivé",
+      "named_file": "fichier nommé",
+      "small_scope": "sélection trop petite",
+      "no_entity": "aucun nom connu",
+      "no_discriminating_entity": "aucun nom discriminant",
+      "ambiguous": "nom ambigu",
+      "no_candidates": "aucun fichier",
+      "insignificant": "réduction trop faible",
+      "lookup_error": "lecture impossible",
+      "user_widened": "élargi par l'utilisateur"
     }
   }
 }

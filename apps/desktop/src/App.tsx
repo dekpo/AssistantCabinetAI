@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
 import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
+import { isSelectable } from "./components/FolderCardParts";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
-import { combineScopes, noDocumentsScope } from "./lib/analysisScope";
-import { indexDataFolder, type AnalysisScope } from "./lib/ipc";
+import { addScopeFiles, combineScopes, noDocumentsScope } from "./lib/analysisScope";
+import {
+  dataFolderInventory,
+  indexDataFolder,
+  workFolderInventory,
+  type AnalysisScope,
+  type OutsideSelection,
+} from "./lib/ipc";
 import { applyTheme } from "./lib/theme";
 import { useAppSettings } from "./state/useAppSettings";
 import { useIndexing } from "./state/useIndexing";
@@ -55,6 +62,35 @@ export default function App() {
   useEffect(() => setDataScope(noDocumentsScope(Date.now())), [dataFolder]);
   /* Both lists, joined only when a question is sent (`docs/SELECTION-AND-MEMORY.md`). */
   const chatScope = useMemo(() => combineScopes(scope, dataScope), [scope, dataScope]);
+  /* "Add to my selection", under the name picker: the files of a name that is only in analysed
+     files she did not tick. Her own click, and the same ticking as the listing's checkboxes
+     (`addScopeFiles` shares its rule with `toggleScopeFile`). The ids come from a fresh read of each
+     folder, because a ticked file is pinned to its content. A read that fails changes nothing: the
+     offer stays on screen and she can press it again. Locked while an answer is being written, as
+     the listings are. */
+  const addOutsideToSelection = useCallback(
+    async (outside: OutsideSelection) => {
+      if (chatBusy) {
+        return;
+      }
+      const now = Date.now();
+      try {
+        if (outside.documents.length > 0) {
+          const analysed = (await workFolderInventory()).files.filter(isSelectable);
+          const wanted = analysed.filter((file) => outside.documents.includes(file.relativePath));
+          setScope((current) => addScopeFiles(current, wanted, analysed, now));
+        }
+        if (outside.workbooks.length > 0) {
+          const analysed = (await dataFolderInventory()).files.filter(isSelectable);
+          const wanted = analysed.filter((file) => outside.workbooks.includes(file.relativePath));
+          setDataScope((current) => addScopeFiles(current, wanted, analysed, now));
+        }
+      } catch {
+        // Nothing was changed; see above.
+      }
+    },
+    [chatBusy],
+  );
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
 
@@ -145,6 +181,8 @@ export default function App() {
             aliases={health?.aliases ?? []}
             indexing={indexing}
             onModelAliasChange={(alias) => void update({ modelAlias: alias })}
+            showDiagnostics={snapshot.settings.showDiagnostics}
+            onAddToSelection={(outside) => void addOutsideToSelection(outside)}
           />
         </main>
         {settingsOpen ? (

@@ -122,6 +122,11 @@ pub struct EntityBrief {
     pub entity_id: i64,
     pub display: String,
     pub type_id: String,
+    /// How many files of the selection name it, by side. Filled once the whole question is read.
+    /// A candidate that names none is not in the selection, and the interface drops it even if it
+    /// were sent (invariant I7).
+    pub documents: usize,
+    pub workbooks: usize,
 }
 
 impl EntityBrief {
@@ -130,6 +135,8 @@ impl EntityBrief {
             entity_id: hit.entity_id,
             display: hit.canonical_name.clone(),
             type_id: hit.type_id.clone(),
+            documents: 0,
+            workbooks: 0,
         }
     }
 }
@@ -137,12 +144,17 @@ impl EntityBrief {
 /// Several entities of the selection answer equally to a name: asked, never picked.
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryAmbiguity {
+    /// The words of the question that fit them, exactly as the user typed them (her own text,
+    /// shown only on screen and never logged).
+    pub span: String,
     pub candidates: Vec<EntityBrief>,
 }
 
 /// Probably one of these, never to be applied on that evidence: offered as a "did you mean".
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryPossible {
+    /// The word of the question that sounds like them, as typed.
+    pub span: String,
     pub candidates: Vec<EntityBrief>,
     /// `PossibleReason::as_code`.
     pub reason: &'static str,
@@ -308,7 +320,14 @@ impl QueryEntityDetector<'_> {
         )?;
 
         // 2-4. Runs of words, longest first, each looked up in the base before the resolver is asked.
-        self.read_spans(&words, &mut consumed, &context, &mut found, &mut analysis)?;
+        self.read_spans(
+            input.question,
+            &words,
+            &mut consumed,
+            &context,
+            &mut found,
+            &mut analysis,
+        )?;
 
         // 5. A capitalised word nothing explained: a possible match at best.
         self.read_misspellings(&words, &consumed, &context, &mut analysis)?;
@@ -335,7 +354,61 @@ impl QueryEntityDetector<'_> {
 
         // 8. Files and selectivity of each entity inside the selection.
         self.describe(&found, &input.selection, &every_source, &mut analysis)?;
+        // 9. How many files of the selection hold each name that is asked about.
+        self.count_offered(&every_source, &mut analysis)?;
         Ok(analysis)
+    }
+
+    /// Fill in, for every entity a "which one?" or a "did you mean?" will offer, how many files of
+    /// the selection name it. One query for all of them.
+    fn count_offered(
+        &self,
+        every_source: &SourceSet,
+        analysis: &mut QueryAnalysis,
+    ) -> Result<(), AppError> {
+        let offered: Vec<i64> = analysis
+            .ambiguities
+            .iter()
+            .flat_map(|ambiguity| ambiguity.candidates.iter())
+            .chain(
+                analysis
+                    .possibles
+                    .iter()
+                    .flat_map(|possible| possible.candidates.iter()),
+            )
+            .map(|brief| brief.entity_id)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        if offered.is_empty() {
+            return Ok(());
+        }
+        let files = store::files_for_entities(self.connection, &offered, &every_source.ids())?;
+        let count = |entity_id: i64| -> (usize, usize) {
+            let mut documents = 0;
+            let mut workbooks = 0;
+            if let Some(sources) = files.per_entity.get(&entity_id) {
+                for source in sources {
+                    match source.domain {
+                        Domain::Documents => documents += 1,
+                        Domain::Data => workbooks += 1,
+                    }
+                }
+            }
+            (documents, workbooks)
+        };
+        let fill = |briefs: &mut Vec<EntityBrief>| {
+            for brief in briefs.iter_mut() {
+                (brief.documents, brief.workbooks) = count(brief.entity_id);
+            }
+        };
+        for ambiguity in &mut analysis.ambiguities {
+            fill(&mut ambiguity.candidates);
+        }
+        for possible in &mut analysis.possibles {
+            fill(&mut possible.candidates);
+        }
+        Ok(())
     }
 
     /// A live (candidate or active) entity after following merges, or `None`.
@@ -375,7 +448,8 @@ impl QueryEntityDetector<'_> {
                         strength: scheme.strength,
                     },
                 );
-                let settled = self.settle(&surface, context, found, analysis)?;
+                let shown = surface.text.clone();
+                let settled = self.settle(&surface, &shown, context, found, analysis)?;
                 if settled {
                     for (index, word) in words.iter().enumerate() {
                         if word.start < matched.range.end && matched.range.start < word.end {
@@ -390,6 +464,7 @@ impl QueryEntityDetector<'_> {
 
     fn read_spans(
         &self,
+        question: &str,
         words: &[Word],
         consumed: &mut [bool],
         context: &ResolveContext<'_>,
@@ -401,6 +476,9 @@ impl QueryEntityDetector<'_> {
             first: usize,
             length: usize,
             text: String,
+            /// The same words exactly as typed, punctuation between them kept (`J. Dupont`): what a
+            /// "which one?" row quotes back to the user.
+            shown: String,
             forms: Vec<String>,
         }
         let mut spans: Vec<Span> = Vec::new();
@@ -421,10 +499,12 @@ impl QueryEntityDetector<'_> {
                     continue;
                 }
                 every_form.extend(forms.iter().cloned());
+                let shown = question[run[0].start..run[length - 1].end].to_string();
                 spans.push(Span {
                     first,
                     length,
                     text,
+                    shown,
                     forms,
                 });
             }
@@ -440,7 +520,7 @@ impl QueryEntityDetector<'_> {
                 continue;
             }
             let surface = SurfaceInput::new(&span.text);
-            if self.settle(&surface, context, found, analysis)? {
+            if self.settle(&surface, &span.shown, context, found, analysis)? {
                 for index in range {
                     consumed[index] = true;
                 }
@@ -489,6 +569,7 @@ impl QueryEntityDetector<'_> {
     fn settle(
         &self,
         surface: &SurfaceInput,
+        shown: &str,
         context: &ResolveContext<'_>,
         found: &mut Vec<Found>,
         analysis: &mut QueryAnalysis,
@@ -511,6 +592,7 @@ impl QueryEntityDetector<'_> {
             }
             Resolution::Ambiguous { entities, .. } => {
                 analysis.ambiguities.push(QueryAmbiguity {
+                    span: shown.to_string(),
                     candidates: entities.iter().map(EntityBrief::of).collect(),
                 });
                 Ok(true)
@@ -522,6 +604,7 @@ impl QueryEntityDetector<'_> {
                 ..
             } => {
                 analysis.possibles.push(QueryPossible {
+                    span: shown.to_string(),
                     candidates: entities.iter().map(EntityBrief::of).collect(),
                     reason: reason.as_code(),
                     score: score.value(),
@@ -575,6 +658,7 @@ impl QueryEntityDetector<'_> {
                     score,
                     ..
                 } => analysis.possibles.push(QueryPossible {
+                    span: word.text.clone(),
                     candidates: entities.iter().map(EntityBrief::of).collect(),
                     reason: reason.as_code(),
                     score: score.value(),

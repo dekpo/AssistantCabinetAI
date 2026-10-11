@@ -3,15 +3,26 @@ import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
 import type { AppSettings, KnowledgeMode, ThemeChoice } from "../lib/ipc";
+import {
+  boundedNumber,
+  fractionFromPercentDraft,
+  MAX_CANDIDATES,
+  MAX_SELECTIVITY,
+  MIN_REDUCTION,
+  MIN_SCOPE_FILES,
+  percentDraft,
+  WIDEN_BELOW_SCORE,
+} from "../lib/knowledgeSettings";
 import { HEALTH_MODULES, isModuleOn, withModule } from "../lib/knowledgePacks";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DataFolderCard } from "./DataFolderCard";
 import { ErrorBanner } from "./ErrorBanner";
+import { NumberSetting } from "./NumberSetting";
 import { WorkFolderCard } from "./WorkFolderCard";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
-const KNOWLEDGE_MODES: KnowledgeMode[] = ["suggest", "off", "auto"];
+const KNOWLEDGE_MODES: KnowledgeMode[] = ["off", "suggest", "auto"];
 
 /* The same bounds Rust clamps to, so the control offers only what will actually be stored. They
    are duplicated rather than fetched because a number input needs them before anything is saved;
@@ -226,8 +237,11 @@ export function SettingsDialog({
           />
         </label>
 
-        {/* What the analysis learns from the documents. Both are read at the next Analyse: nothing
-            runs in the background when one is changed. */}
+        {/* The knowledge base: what the analysis learns from the documents, and how a question
+            uses it. The mode and the modules are read at the next Analyse: nothing runs in the
+            background when one is changed. */}
+        <h3 className="dialog__subtitle">{t("settings.knowledgeGroupLabel")}</h3>
+
         <label className="field">
           <span className="field__label">{t("settings.knowledgeModeLabel")}</span>
           <span className="field__description">{t("settings.knowledgeModeDescription")}</span>
@@ -271,10 +285,117 @@ export function SettingsDialog({
           ))}
         </div>
 
-        {/* Measurement switches, kept apart under their own heading: neither changes what an answer
-            says. They are off unless she turns them on (`docs/DECISIONS.md`, "KB lot 0"). */}
         <div className="field">
-          <span className="field__label">{t("settings.advancedLabel")}</span>
+          <label className="field__row">
+            <input
+              type="checkbox"
+              checked={settings.knowledgeHideNamesInSuggestions}
+              onChange={(event) =>
+                onUpdate({ knowledgeHideNamesInSuggestions: event.target.checked })
+              }
+            />
+            <span className="field__label">{t("settings.hideNamesLabel")}</span>
+          </label>
+          <span className="field__description">{t("settings.hideNamesDescription")}</span>
+        </div>
+
+        {/* The thresholds of the narrowing, the measurement switches and the developer panel, kept
+            apart under one heading. None changes what an answer says; the thresholds change which
+            files are searched when the mode is automatic or a name was picked. */}
+        <details className="field settings-advanced">
+          <summary className="disclosure">{t("settings.advancedLabel")}</summary>
+
+          <NumberSetting
+            label={t("settings.minScopeFilesLabel")}
+            description={t("settings.minScopeFilesDescription")}
+            value={String(settings.knowledgeMinScopeFiles)}
+            min={MIN_SCOPE_FILES.min}
+            max={MIN_SCOPE_FILES.max}
+            step={1}
+            commit={(typed) => {
+              const next = boundedNumber(typed, MIN_SCOPE_FILES, settings.knowledgeMinScopeFiles);
+              if (next !== settings.knowledgeMinScopeFiles) {
+                onUpdate({ knowledgeMinScopeFiles: next });
+              }
+              return String(next);
+            }}
+          />
+          <NumberSetting
+            label={t("settings.maxSelectivityLabel")}
+            description={t("settings.maxSelectivityDescription")}
+            value={percentDraft(settings.knowledgeMaxSelectivity)}
+            min={MAX_SELECTIVITY.min * 100}
+            max={MAX_SELECTIVITY.max * 100}
+            step={5}
+            unit="%"
+            commit={(typed) => {
+              const next = fractionFromPercentDraft(
+                typed,
+                MAX_SELECTIVITY,
+                settings.knowledgeMaxSelectivity,
+              );
+              if (next !== settings.knowledgeMaxSelectivity) {
+                onUpdate({ knowledgeMaxSelectivity: next });
+              }
+              return percentDraft(next);
+            }}
+          />
+          <NumberSetting
+            label={t("settings.minReductionLabel")}
+            description={t("settings.minReductionDescription")}
+            value={percentDraft(settings.knowledgeMinReduction)}
+            min={MIN_REDUCTION.min * 100}
+            max={MIN_REDUCTION.max * 100}
+            step={5}
+            unit="%"
+            commit={(typed) => {
+              const next = fractionFromPercentDraft(
+                typed,
+                MIN_REDUCTION,
+                settings.knowledgeMinReduction,
+              );
+              if (next !== settings.knowledgeMinReduction) {
+                onUpdate({ knowledgeMinReduction: next });
+              }
+              return percentDraft(next);
+            }}
+          />
+          <NumberSetting
+            label={t("settings.maxCandidatesLabel")}
+            description={t("settings.maxCandidatesDescription")}
+            value={String(settings.knowledgeMaxCandidates)}
+            min={MAX_CANDIDATES.min}
+            max={MAX_CANDIDATES.max}
+            step={1}
+            commit={(typed) => {
+              const next = boundedNumber(typed, MAX_CANDIDATES, settings.knowledgeMaxCandidates);
+              if (next !== settings.knowledgeMaxCandidates) {
+                onUpdate({ knowledgeMaxCandidates: next });
+              }
+              return String(next);
+            }}
+          />
+          <NumberSetting
+            label={t("settings.widenBelowScoreLabel")}
+            description={t("settings.widenBelowScoreDescription")}
+            value={String(settings.knowledgeWidenBelowScore)}
+            min={WIDEN_BELOW_SCORE.min}
+            max={WIDEN_BELOW_SCORE.max}
+            step={0.05}
+            commit={(typed) => {
+              const next = boundedNumber(
+                typed,
+                WIDEN_BELOW_SCORE,
+                settings.knowledgeWidenBelowScore,
+                2,
+              );
+              if (next !== settings.knowledgeWidenBelowScore) {
+                onUpdate({ knowledgeWidenBelowScore: next });
+              }
+              return String(next);
+            }}
+          />
+
           <label className="field__row">
             <input
               type="checkbox"
@@ -293,7 +414,7 @@ export function SettingsDialog({
             <span>{t("settings.showDiagnosticsLabel")}</span>
           </label>
           <span className="field__description">{t("settings.showDiagnosticsDescription")}</span>
-        </div>
+        </details>
 
         <WorkFolderCard
           workFolder={settings.workFolder}

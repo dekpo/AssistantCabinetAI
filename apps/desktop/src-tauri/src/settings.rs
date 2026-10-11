@@ -140,6 +140,10 @@ pub struct Settings {
     /// alone, without the lexical bonus), the search is repeated once on the whole selection. The
     /// scale belongs to the embedding model: 0.65 is measured on `nomic-embed-text`.
     pub knowledge_widen_below_score: f32,
+    /// Question suggestions leave names out: a screen is visible to whoever sits across from the
+    /// user (master decision D10). On by default. Read by the suggestions of a later lot; the
+    /// setting exists now so the dialog and the stored file already carry it.
+    pub knowledge_hide_names_in_suggestions: bool,
 }
 
 impl Default for Settings {
@@ -164,6 +168,7 @@ impl Default for Settings {
             knowledge_min_reduction: DEFAULT_KNOWLEDGE_MIN_REDUCTION,
             knowledge_max_candidates: DEFAULT_KNOWLEDGE_MAX_CANDIDATES,
             knowledge_widen_below_score: DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE,
+            knowledge_hide_names_in_suggestions: true,
         }
     }
 }
@@ -401,6 +406,7 @@ mod tests {
             knowledge_min_reduction: 0.25,
             knowledge_max_candidates: 20,
             knowledge_widen_below_score: 0.35,
+            knowledge_hide_names_in_suggestions: false,
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
@@ -411,6 +417,7 @@ mod tests {
         assert_eq!(json["knowledgePacks"][1], "health-ch");
         assert_eq!(json["knowledgeMinScopeFiles"], 12);
         assert_eq!(json["knowledgeMaxCandidates"], 20);
+        assert_eq!(json["knowledgeHideNamesInSuggestions"], false);
         assert!((json["knowledgeMaxSelectivity"].as_f64().unwrap() - 0.5).abs() < 1e-6);
 
         assert_eq!(json["locale"], "fr-FR");
@@ -423,6 +430,17 @@ mod tests {
             json["answerIdleTimeoutSeconds"],
             DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
         );
+    }
+
+    #[test]
+    fn a_settings_file_written_before_the_names_setting_still_reads_and_hides_names() {
+        // Settings are `serde(default)`: a file from an earlier build has no such key, and the
+        // safe side (names hidden on a screen others can see) is the default.
+        let older: Settings =
+            serde_json::from_str(r#"{ "knowledgeMode": "auto" }"#).expect("reads");
+
+        assert!(older.knowledge_hide_names_in_suggestions);
+        assert_eq!(older.knowledge_mode, KnowledgeMode::Auto);
     }
 
     #[test]

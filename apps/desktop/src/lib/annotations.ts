@@ -5,6 +5,7 @@ import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
 import { counted } from "./plural";
 import { formatTabularAnswer } from "./tabularAnswer";
+import { targetingNoteText } from "./targeting";
 
 /**
  * Everything written under an answer, as plain lines: where it came from, what it rests on, what could
@@ -114,14 +115,15 @@ export function computedBlock(t: Translator, locale: string, entry: ChatEntry): 
 }
 
 /** What "Copy the conversation" puts on the clipboard for one answer: the text as shown (internal
- * names replaced), the engine's block, then the notes under it. Sources are left out. */
+ * names replaced), the engine's block, then the notes under it, including the line that says the
+ * search was narrowed (what she copies is what she saw). Sources are left out. */
 export function answerForCopy(t: Translator, locale: string, entry: ChatEntry): string {
   const parts = [localiseInternalNames(entry.content, t)];
   const computed = computedBlock(t, locale, entry);
   if (computed !== null) {
     parts.push(computed);
   }
-  const notes = annotationLines(t, locale, entry);
+  const notes = [...annotationLines(t, locale, entry), ...targetingNoteText(t, entry.targeting)];
   if (notes.length > 0) {
     parts.push(notes.join("\n"));
   }

@@ -1,4 +1,4 @@
-import type { AnalysisScope, CombinedScope, FileRecord } from "./ipc";
+import type { AnalysisScope, CombinedScope, FileRecord, ScopeEntry } from "./ipc";
 
 /**
  * The files a conversation may rely on, as she ticked them (`docs/SELECTION-AND-MEMORY.md`). One
@@ -67,6 +67,43 @@ export function toggleScopeFile(
     ? entries.filter((entry) => entry.relativePath !== file.relativePath)
     : [...entries, { relativePath: file.relativePath, pinnedId: file.id, addedAt: now }];
 
+  return scopeOfEntries(scope, next, analysed, now);
+}
+
+/**
+ * The selection after `files` are added to it, among the `analysed` files the listing offers: the
+ * same ticking as `toggleScopeFile`, several at once. This is what "Add to my selection" does under
+ * the name picker, for the files of a name that is only in files she did not tick. A selection that
+ * is already "tous" is left as it is, and a file already ticked is not added twice.
+ */
+export function addScopeFiles(
+  scope: AnalysisScope,
+  files: FileRecord[],
+  analysed: FileRecord[],
+  now: number,
+): AnalysisScope {
+  if (scope.mode.kind === "whole_folder") {
+    return scope;
+  }
+  const entries = scope.mode.entries;
+  const present = new Set(entries.map((entry) => entry.relativePath));
+  const added = files
+    .filter((file, index) => !present.has(file.relativePath) && files.indexOf(file) === index)
+    .map((file) => ({ relativePath: file.relativePath, pinnedId: file.id, addedAt: now }));
+  if (added.length === 0) {
+    return scope;
+  }
+  return scopeOfEntries(scope, [...entries, ...added], analysed, now);
+}
+
+/** The shared ending of every change to a list: nothing left is "aucun", every analysed file is
+ * "tous" (to her it means the same thing), anything else is the explicit list. */
+function scopeOfEntries(
+  scope: AnalysisScope,
+  next: ScopeEntry[],
+  analysed: FileRecord[],
+  now: number,
+): AnalysisScope {
   if (next.length === 0) {
     return { ...noDocumentsScope(scope.createdAt), updatedAt: now };
   }
@@ -97,4 +134,12 @@ export function combineScopes(documents: AnalysisScope, data: AnalysisScope): Co
     createdAt: Math.min(documents.createdAt, data.createdAt),
     updatedAt: Math.max(documents.updatedAt, data.updatedAt),
   };
+}
+
+/** Whether a question is sent with anything selected, on either side. The name picker needs a
+ * selection to pick among. */
+export function combinedHasSelection(scope: CombinedScope): boolean {
+  const some = (mode: AnalysisScope["mode"]) =>
+    mode.kind === "whole_folder" || mode.entries.length > 0;
+  return some(scope.mode) || some(scope.dataMode);
 }

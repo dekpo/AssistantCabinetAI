@@ -17,10 +17,13 @@ import {
   USER_INTENT_WINDOW_MS,
 } from "../lib/scroll";
 import { timestampParts } from "../lib/timestamp";
+import type { TargetingChoice } from "../lib/targeting";
 import type { ChatEntry } from "../state/useChat";
 import { ArrowDownGlyph } from "./ArrowDownGlyph";
 import { CollapsibleText } from "./CollapsibleText";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { Markdown } from "./Markdown";
+import { TargetingNote } from "./TargetingNote";
 
 export function MessageList({
   entries,
@@ -31,6 +34,8 @@ export function MessageList({
   onRegenerate,
   onAnalyse,
   analysing,
+  onRetarget,
+  showDiagnostics,
 }: {
   entries: ChatEntry[];
   phase: GenerationPhase;
@@ -45,6 +50,11 @@ export function MessageList({
   onAnalyse: (answerEntryId: string) => void;
   /** Whether the shared analysis pass is running, wherever it was started from. */
   analysing: boolean;
+  /** Ask a question again with something said to the knowledge base: widen to her whole selection,
+   * or narrow to a name she picked. Replaces the answer, as a regenerate does. */
+  onRetarget: (answerEntryId: string, choice: TargetingChoice) => void;
+  /** Shows the developer panel under the last answer. Off in normal use. */
+  showDiagnostics: boolean;
 }) {
   const { t, locale } = useTranslation();
   const messages = useRef<HTMLDivElement>(null);
@@ -70,6 +80,8 @@ export function MessageList({
      at a time" rule already enforces in `useChat` - here they are simply hidden while busy, since
      an answer already being written cannot be edited or regenerated. */
   const idle = phase === "idle";
+  /* The developer panel sits under the last answer only. */
+  const lastAnswerId = [...entries].reverse().find((each) => each.role === "assistant")?.id;
 
   const startEdit = (entry: ChatEntry) => {
     setEditingId(entry.id);
@@ -337,6 +349,14 @@ export function MessageList({
                   {line}
                 </p>
               ))}
+              {/* What the knowledge base did to the search, and the names it asks about. Under the
+                  other notes, above the buttons that re-ask the question. */}
+              <TargetingNote
+                report={entry.targeting}
+                chosenIds={entry.targetingChoice?.entityIds ?? []}
+                idle={idle}
+                onChoose={(choice) => onRetarget(entry.id, choice)}
+              />
               {/* A "which file?" answer offers its candidates as buttons. A click replaces her
                   question in place with one that names the file (the edit-and-resend path), so she
                   does not retype it (HAP-1, UX-1). */}
@@ -417,6 +437,9 @@ export function MessageList({
                     </button>
                   )}
                 </p>
+              ) : null}
+              {showDiagnostics && idle && entry.id === lastAnswerId ? (
+                <DiagnosticsPanel diagnostics={entry.diagnostics} />
               ) : null}
             </article>
           );

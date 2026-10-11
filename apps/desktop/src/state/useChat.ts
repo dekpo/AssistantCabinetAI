@@ -24,8 +24,11 @@ import {
   type FolderAnswer,
   type MixedPartUnavailable,
   type NumericCorrection,
+  type RetrievalDiagnostics,
   type TabularAnswer,
+  type TargetingReport,
 } from "../lib/ipc";
+import { targetingRequestFor, type TargetingChoice } from "../lib/targeting";
 import { truncateForRegenerate, truncateForResend } from "../lib/turns";
 
 /** Retrieval found nothing to answer from. Either the documents do not carry it, or none have
@@ -144,6 +147,16 @@ export interface ChatEntry extends ChatTurn {
   mixedCorrections?: NumericCorrection[];
   /** A bracketed citation the model wrote that did not resolve to any supplied document excerpt. */
   mixedRejectedCitations?: string[];
+  /** What the knowledge base did to this answer's search, when there is something to tell: a
+   * narrowing it applied, or names it needs a question about. Kept with the answer so the line under
+   * it, the buttons and the next short follow-up can read it; never sent back to the model and never
+   * part of the history (`lib/history.ts` copies only the words). */
+  targeting?: TargetingReport;
+  /** What she asked of the knowledge base for this answer (widen, or the names she picked), so that
+   * regenerating it asks the same thing. Absent for an ordinary question. */
+  targetingChoice?: TargetingChoice;
+  /** The timings and counts of this question, for the developer panel. Numbers and codes only. */
+  diagnostics?: RetrievalDiagnostics;
 }
 
 export interface ChatState {
@@ -155,7 +168,7 @@ export interface ChatState {
    * answer rather than under every answer already in the conversation. */
   streamingId: string | null;
   error: AppError | null;
-  send: (question: string) => Promise<void>;
+  send: (question: string, choice?: TargetingChoice) => Promise<void>;
   /** Edited-and-reposted question (docs/CHAT-UX-ASSESSMENT.md item 3). Truncates `entries` to
    * before `questionEntryId` and asks the edited text as a fresh turn - not a rewrite of the old
    * one. No version history is kept: truncate and replace, per the recorded decision. */
@@ -164,6 +177,10 @@ export interface ChatState {
    * then asks that same question again. Retrieval, embedding and the model all run afresh, so the
    * sources shown are this run's own rather than the previous run's. */
   regenerate: (answerEntryId: string) => Promise<void>;
+  /** Ask the same question again with something said to the knowledge base: widen to her whole
+   * selection, or narrow to the names she picked. Replaces the answer the way a regenerate does, and
+   * the choice is kept if that answer is regenerated. */
+  retarget: (answerEntryId: string, choice: TargetingChoice) => Promise<void>;
   /** Close the error banner. A failure that has already happened should not keep taking up the
    * conversation until the next question succeeds. */
   dismissError: () => void;
@@ -219,7 +236,12 @@ export function useChat(
    * resend the tail that was just cut.
    */
   const runTurn = useCallback(
-    async (baseEntries: ChatEntry[], text: string, skipDeterministic = false) => {
+    async (
+      baseEntries: ChatEntry[],
+      text: string,
+      skipDeterministic = false,
+      choice?: TargetingChoice,
+    ) => {
       if (phase !== "idle" || !hasWorkFolder) {
         return;
       }
@@ -234,8 +256,20 @@ export function useChat(
       setEntries([
         ...baseEntries,
         { id: questionId, role: "user", content: text, createdAt },
-        { id: answerId, role: "assistant", content: "", createdAt },
+        {
+          id: answerId,
+          role: "assistant",
+          content: "",
+          createdAt,
+          ...(choice === undefined ? {} : { targetingChoice: choice }),
+        },
       ]);
+      /* The names the previous answer settled on ride along with a short follow-up, so "and her
+         address?" is about the same person. The client holds them: Rust keeps nothing about the
+         conversation, and honours them only for a question that names nobody. */
+      const previousTargeting = [...baseEntries]
+        .reverse()
+        .find((entry) => entry.role === "assistant")?.targeting;
 
       const onDelta = (delta: string) => {
         setPhase(phaseAfterFirstText);
@@ -250,6 +284,13 @@ export function useChat(
             const piece = entry.content.length === 0 ? delta.replace(/^ /, "") : delta;
             return { ...entry, content: entry.content + piece };
           }),
+        );
+      };
+      /* What the knowledge base did arrives just before the sources, for the same reason: an answer
+         she interrupts still says how its search was narrowed. */
+      const onTargeting = (targeting: TargetingReport) => {
+        setEntries((current) =>
+          current.map((entry) => (entry.id === answerId ? { ...entry, targeting } : entry)),
         );
       };
       /* Sources arrive on their own event, before the first word of the answer, because retrieval
@@ -303,7 +344,24 @@ export function useChat(
           // What the conversation was before this question - `baseEntries` rather than `entries`,
           // so a repost or a regenerate remembers the conversation it truncated to.
           conversationHistory(baseEntries),
+          targetingRequestFor(choice, previousTargeting, text),
+          onTargeting,
         );
+        /* Every path below merges into the entry, so what the knowledge base did and how long the
+           question took are put on it once, here, whichever path answered. */
+        if (result.targeting !== null || result.diagnostics !== null) {
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerId
+                ? {
+                    ...entry,
+                    ...(result.targeting === null ? {} : { targeting: result.targeting }),
+                    ...(result.diagnostics === null ? {} : { diagnostics: result.diagnostics }),
+                  }
+                : entry,
+            ),
+          );
+        }
         const outdated = result.scopeOutdated.length > 0 ? result.scopeOutdated : undefined;
         if (result.mixedAnswer !== null) {
           /* Session 16: documents and tables both selected, answered across both
@@ -525,12 +583,12 @@ export function useChat(
   );
 
   const send = useCallback(
-    (question: string) => {
+    (question: string, choice?: TargetingChoice) => {
       const text = question.trim();
       if (text.length === 0) {
         return Promise.resolve();
       }
-      return runTurn(entries, text);
+      return runTurn(entries, text, false, choice);
     },
     [runTurn, entries],
   );
@@ -556,9 +614,23 @@ export function useChat(
       // Regenerating an answer the work folder gave would produce the same answer, byte for
       // byte - it is computed, not written. On those the control means something else: ask the
       // model this time. The interface says so, and it is the same button either way.
-      const wasDeterministic =
-        entries.find((entry) => entry.id === answerEntryId)?.deterministic === true;
-      return runTurn(truncated.base, truncated.question, wasDeterministic);
+      const answer = entries.find((entry) => entry.id === answerEntryId);
+      const wasDeterministic = answer?.deterministic === true;
+      // What she asked of the knowledge base on this answer (a widen, a name) is asked again.
+      return runTurn(truncated.base, truncated.question, wasDeterministic, answer?.targetingChoice);
+    },
+    [runTurn, entries],
+  );
+
+  const retarget = useCallback(
+    (answerEntryId: string, choice: TargetingChoice) => {
+      const truncated = truncateForRegenerate(entries, answerEntryId);
+      if (truncated === null) {
+        return Promise.resolve();
+      }
+      // Not "ask the model instead": the question is asked again the usual way, with her wish said
+      // to the knowledge base. A widened tabular question therefore comes back with its buttons.
+      return runTurn(truncated.base, truncated.question, false, choice);
     },
     [runTurn, entries],
   );
@@ -594,6 +666,7 @@ export function useChat(
     send,
     resend,
     regenerate,
+    retarget,
     stop,
     dismissError,
     clear,

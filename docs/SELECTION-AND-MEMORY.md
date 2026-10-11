@@ -329,6 +329,21 @@ previous answer's entities are held by the client and sent back with a short fol
 nothing about the conversation. What the model is sent is the instruction, the folder's counts, the excerpts and
 the question, as before; no alias, type, role, method or pack reaches it (`no_knowledge_text_reaches_a_model_facing_string`).
 
+
+### The interface for it (KB lot 7)
+
+The reduction is visible and reversible. Under an answer whose search was narrowed, a line says how many files were
+searched out of how many and which name drove it, and **Élargir à ma sélection** asks the same question again with
+`targeting.mode = off`, which is the old search on everything she selected; it replaces the answer as *Régénérer*
+does, and regenerating that answer keeps the choice. A name that fits several people never blocks the answer: the
+question is answered on the whole selection and buttons ask which was meant (each name has at least one file of
+**the selection**; the client drops any that has none, a second line of defence for I7). Choosing a name, in the
+`@` list or in those buttons, is an entity chip: an id sent as `targeting.entity_ids`, never words added to the
+question. The only surface that may name a name outside the selection is one labelled line in the `@` list, and
+adding those files to the selection is her own click. The conversation history sent to Rust carries the words and
+nothing of this (`conversationHistory`, locked by a test); the previous answer's confirmed names are the only thing
+carried, as ids, for a short follow-up.
+
 ## Deploying to a separate server device (pending)
 
 Today the whole stack runs on one machine. The target is two devices: the **user device** (the desktop app,

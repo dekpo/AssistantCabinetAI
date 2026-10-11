@@ -3,7 +3,7 @@ import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
 import { annotationLines, answerForCopy, computedBlock } from "./annotations";
-import type { TabularAnswer } from "./ipc";
+import type { TabularAnswer, TargetingReport } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
 const english = createTranslator(reference, reference);
@@ -109,5 +109,45 @@ describe("Copy the conversation", () => {
     expect(copied).toContain("gemma2:2b");
     expect(copied).not.toContain("devis.pdf");
     expect(copied).not.toContain("Montant total du devis");
+  });
+});
+
+describe("Copy the conversation, when the search was narrowed", () => {
+  const narrowed: TargetingReport = {
+    strategy: "entity_files",
+    reason: null,
+    requestedBy: "auto",
+    widened: "none",
+    selectedDocuments: 40,
+    candidateDocuments: 7,
+    selectedWorkbooks: 0,
+    candidateWorkbooks: 0,
+    reductionPercent: 82,
+    entities: [
+      { entityId: 7, display: "Jean Dupont", typeId: "person", confidence: 0.9, method: "alias" },
+    ],
+    candidatePaths: ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt", "g.txt"],
+    workbookPaths: [],
+    ambiguities: [],
+    possibles: [],
+    chosenWorkbook: null,
+  };
+
+  it("copies the line that says so, because it is under the answer on screen", () => {
+    const copied = answerForCopy(french, "fr-FR", entry({ targeting: narrowed }));
+
+    expect(copied).toContain("Recherche ciblée : 7 documents sur 40 — Jean Dupont");
+    // The files are a list of references, left out of a copy as the sources are.
+    expect(copied).not.toContain("a.txt");
+  });
+
+  it("copies nothing more for an answer that was not narrowed", () => {
+    const copied = answerForCopy(french, "fr-FR", entry({ targeting: { ...narrowed, candidatePaths: [] } }));
+
+    expect(copied).toBe("1 450,00 euros.");
+  });
+
+  it("keeps the line out of the notes shown as lines, which the interface draws with its buttons", () => {
+    expect(annotationLines(french, "fr-FR", entry({ targeting: narrowed }))).toEqual([]);
   });
 });

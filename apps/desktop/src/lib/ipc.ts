@@ -11,9 +11,8 @@ export type ThemeChoice = "light" | "dark" | "system";
 
 /**
  * Whether the local knowledge base reads the analysed files for names. `off` leaves the product as
- * it was before it and writes nothing; `suggest` is the default; `auto` also narrows the selection
- * by itself once that exists. Edited in `settings.json` until the settings dialog has its
- * "Advanced" group.
+ * it was before it and writes nothing; `suggest` is the default and never narrows a search by
+ * itself; `auto` narrows the search to the files that match the names a question holds.
  */
 export type KnowledgeMode = "off" | "suggest" | "auto";
 
@@ -34,12 +33,11 @@ export interface AppSettings {
   /** The subfolder of the documents folder where generated letters are written. Rust keeps it one
    * clean name, whatever is sent. */
   generatedFolderName: string;
-  /** Reveals the developer panel that shows each question's timings. Nothing renders it yet; never
-   * shown in normal chat. Off by default. */
+  /** Reveals the developer panel under the last answer (`DiagnosticsPanel`). Never shown in normal
+   * chat. Off by default. */
   showDiagnostics: boolean;
   /** Appends numbers and machine codes, never a question or a file name, to
-   * `retrieval-timings.jsonl` and `analysis-timings.jsonl` in the app-data folder. Off by default;
-   * edited in `settings.json` until the settings dialog has its "Advanced" group. */
+   * `retrieval-timings.jsonl` and `analysis-timings.jsonl` in the app-data folder. Off by default. */
   writeTimingLog: boolean;
   knowledgeMode: KnowledgeMode;
   /** The optional lexicon packs the knowledge base reads names with, named `<domain>-<country>`:
@@ -47,6 +45,22 @@ export interface AppSettings {
    * `legal-fr`, `accounting-fr`, and later `health-eu`, `legal-ch`... Rust keeps only the ids a
    * build ships and reads an older bare id (`health`) as its French pack. */
   knowledgePacks: string[];
+  /** Below this many selected files on one side (documents, or workbooks) the search is not
+   * narrowed by itself. A name the user picked as a chip narrows at any size. Rust clamps it. */
+  knowledgeMinScopeFiles: number;
+  /** A name present in more than this share of the selected files names no file in particular and
+   * is ignored. 0.05 to 1. */
+  knowledgeMaxSelectivity: number;
+  /** A narrowing applies only when it leaves out at least this share of the selection. 0 to 0.95. */
+  knowledgeMinReduction: number;
+  /** At most this many documents are searched after a narrowing; workbooks are not capped. */
+  knowledgeMaxCandidates: number;
+  /** When the closest passage of a narrowed search is below this similarity, the search runs again
+   * on the whole selection. The scale belongs to the embedding model (0.65 on `nomic-embed-text`). */
+  knowledgeWidenBelowScore: number;
+  /** Question suggestions leave names out, because a screen is visible to whoever sits across
+   * from the user. On by default. */
+  knowledgeHideNamesInSuggestions: boolean;
 }
 
 export interface AppSnapshot {
@@ -211,7 +225,7 @@ export type ChatStreamEvent =
   | { event: "delta"; text: string }
   | { event: "completed"; text: string }
   /** What the knowledge base did to the search, sent just before the sources. Only when there is
-   * something to tell (lot 7 draws it). */
+   * something to tell. */
   | { event: "targeting"; report: TargetingReport }
   | { event: "sources"; sources: Evidence[]; coverage: EvidenceCoverage | null }
   | { event: "folder_answer"; answer: FolderAnswer };
@@ -243,6 +257,10 @@ export interface TargetingCandidate {
   entityId: number;
   display: string;
   typeId: string;
+  /** How many files of the current selection name it, by side. A candidate that names none is not
+   * in the selection and is never offered (invariant I7, checked again in `lib/targeting.ts`). */
+  documents: number;
+  workbooks: number;
 }
 
 /** What the knowledge base did to the search (`TargetingReport` in Rust). Machine codes and ids;
@@ -265,11 +283,48 @@ export interface TargetingReport {
   entities: TargetingEntity[];
   candidatePaths: string[];
   workbookPaths: string[];
-  /** A name that fits several entities inside the selection: asked, never picked. */
-  ambiguities: { candidates: TargetingCandidate[] }[];
+  /** A name that fits several entities inside the selection: asked, never picked. `span` is the
+   * words of the question that fit them, exactly as the user typed them. */
+  ambiguities: { span: string; candidates: TargetingCandidate[] }[];
   /** Probably one of these (`phonetic`, `token_set`, `initial`, `shared_identifier`). */
-  possibles: { candidates: TargetingCandidate[]; reason: string; score: number }[];
+  possibles: { span: string; candidates: TargetingCandidate[]; reason: string; score: number }[];
   chosenWorkbook: { file: string; reason: string } | null;
+}
+
+/** One entity the `@` picker offers: a name of the current selection, with how many of its files
+ * name it. */
+export interface EntityChoice {
+  entityId: number;
+  display: string;
+  typeId: string;
+  documents: number;
+  workbooks: number;
+}
+
+/** A name that exists only in analysed files the user did not select: counts and paths, never a
+ * sentence. The one surface allowed to mention it, and always labelled as outside the selection
+ * (invariant I7). */
+export interface OutsideSelection {
+  entityId: number;
+  display: string;
+  typeId: string;
+  documents: string[];
+  workbooks: string[];
+}
+
+export interface EntitySearch {
+  entities: EntityChoice[];
+  outsideSelection: OutsideSelection[];
+}
+
+/** The names of the current selection that begin with `prefix` (`knowledge_search_entities`). An
+ * empty selection finds nothing, whatever the base holds. */
+export function searchEntities(
+  prefix: string,
+  scope: CombinedScope,
+  limit?: number,
+): Promise<EntitySearch> {
+  return invoke<EntitySearch>("knowledge_search_entities", { prefix, scope, limit });
 }
 
 /** The recorded questions added up (`knowledge_diagnostics`). Counts and ratios only. */
@@ -723,8 +778,8 @@ export type RetrievalPlan = "one_file" | "every_document" | "whole_folder";
 
 /**
  * The timings and counts of one question (`knowledge::diagnostics` in Rust). Every `...Ms` is the
- * wall time of one stage, and stays 0 when the question did not go through it. Nothing renders
- * this yet; `AppSettings.showDiagnostics` is reserved for the panel that will.
+ * wall time of one stage, and stays 0 when the question did not go through it. Shown only by the
+ * developer panel, when `AppSettings.showDiagnostics` is on.
  */
 export interface RetrievalDiagnostics {
   path: RetrievalPath;
@@ -979,11 +1034,16 @@ export function askWithSources(
   /** What the knowledge base is asked to do: chips, the previous answer's entities, or `off` to
    * widen. Left out, the knowledge mode of the settings decides. */
   targeting?: TargetingRequest,
+  /** What the knowledge base did to the search, sent just before the sources so an answer that is
+   * stopped still shows it. */
+  onTargeting?: (report: TargetingReport) => void,
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
     if (message.event === "delta") {
       onDelta(message.text);
+    } else if (message.event === "targeting") {
+      onTargeting?.(message.report);
     } else if (message.event === "sources") {
       // Read from the event rather than from the resolved answer, because a stopped answer never
       // resolves and still has to show where its text came from.

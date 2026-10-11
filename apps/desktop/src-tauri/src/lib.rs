@@ -64,6 +64,7 @@ pub fn run() {
             commands::index_work_folder,
             commands::ask_with_sources,
             commands::knowledge_diagnostics,
+            commands::knowledge_search_entities,
             commands::has_indexed_documents,
             commands::work_folder_inventory,
             commands::reveal_work_folder,

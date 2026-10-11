@@ -96,7 +96,59 @@
       "not_linked": "This part could not be tied to your tables."
     },
     "mixedCorrection": "The table gives {correct}, not {claimed}.",
-    "mixedRejectedCitation": "A citation ({citation}) did not match a supplied source and was flagged."
+    "mixedRejectedCitation": "A citation ({citation}) did not match a supplied source and was flagged.",
+    "targeting": {
+      "applied": "Targeted search: {scope}",
+      "appliedByChip": "Targeted search, as you asked: {scope}",
+      "namesSuffix": " — {names}",
+      "portion": "{kept} out of {total}",
+      "and": " and ",
+      "documentOne": "document",
+      "documentMany": "documents",
+      "workbookOne": "workbook",
+      "workbookMany": "workbooks",
+      "widen": "Widen to my selection",
+      "showFiles": "See the files",
+      "hideFiles": "Hide the files",
+      "widenedAuto": "Search widened to your whole selection: few results in the targeted documents.",
+      "workbookChosen": "Workbook chosen: {file}",
+      "presentOne": " — {names} appears in it",
+      "presentMany": " — {names} appear in it",
+      "chooseAnotherWorkbook": "Choose another workbook",
+      "option": "{name} ({files})",
+      "didYouMean": "Did you mean:",
+      "ambiguousUnnamed": "Several names match your question:",
+      "ambiguous": {
+        "person": "Several people match “{name}”:",
+        "organization": "Several organisations match “{name}”:",
+        "location": "Several places match “{name}”:",
+        "other": "Several names match “{name}”:"
+      }
+    },
+    "chips": {
+      "label": "Names chosen for this question",
+      "remove": "Remove {name}"
+    },
+    "picker": {
+      "label": "Names in your selection",
+      "typeMore": "Type the first letters of a name.",
+      "searching": "Searching…",
+      "noMatch": "No name in your selection starts that way.",
+      "button": "Choose a name from my selection",
+      "needsSelection": "Choose some files in the left panel first.",
+      "type": {
+        "person": "Person",
+        "organization": "Organisation",
+        "location": "Place",
+        "identifier": "Identifier",
+        "item": "Item",
+        "term": "Term"
+      },
+      "outside": "{name} appears in {files}",
+      "outsideFileOne": "file that is not selected",
+      "outsideFileMany": "files that are not selected",
+      "addToSelection": "Add to my selection"
+    }
   },
   "choices": {
     "hint": "Click a file to ask the question about it.",
@@ -315,12 +367,12 @@
     "idleTimeoutUnit": "seconds",
     "generatedFolderLabel": "Generated letters folder",
     "generatedFolderDescription": "The subfolder of your documents folder where letters made from a template and a spreadsheet are written. The name is simplified: letters without accents, digits, hyphens.",
-    "knowledgeModeLabel": "Knowledge base",
-    "knowledgeModeDescription": "At each analysis, finds the names of people and organisations in your documents so they can be found faster. Everything stays on this computer. Applied at the next analysis you start.",
+    "knowledgeModeLabel": "Smart targeting",
+    "knowledgeModeDescription": "Finds the names of people and organisations in your documents to reach the right files faster. Everything stays on this computer. “Off” reads no name. “Suggestions only” never narrows the search by itself: you can choose a name to target it. “Automatic” limits the search to the files that mention the names in the question, with a button to search everything. Names are read at the next analysis you start.",
     "knowledgeMode": {
-      "suggest": "On",
+      "suggest": "Suggestions only",
       "off": "Off",
-      "auto": "Automatic (searches only the files the question names)"
+      "auto": "Automatic"
     },
     "healthModuleLabel": "Health module",
     "healthModuleDescription": "Tick the country or countries of your patients: a cross-border worker can have both a French social security number and an AVS number. A module helps read the numbers and vocabulary of its country, and never removes or changes the type of a name. Applied at the next analysis you start.",
@@ -331,8 +383,21 @@
     "advancedLabel": "Advanced",
     "timingLogLabel": "Write the timings to a log",
     "timingLogDescription": "Writes, on this computer only, how long each question and each analysis takes: durations and numbers, never your question, a file name or an excerpt. Off by default; switch it on for a measurement.",
-    "showDiagnosticsLabel": "Prepare the timings display",
-    "showDiagnosticsDescription": "Reserved for a developer panel that is not available yet: switching it on changes nothing on screen for now."
+    "showDiagnosticsLabel": "Show the diagnostics panel",
+    "showDiagnosticsDescription": "Under the last answer, shows the timings and what the knowledge base recognised and left out. For developers: numbers and codes, never your questions or file names.",
+    "knowledgeGroupLabel": "Knowledge",
+    "hideNamesLabel": "Hide names in suggestions",
+    "hideNamesDescription": "Suggested questions quote no name: a screen can be seen from the waiting room.",
+    "minScopeFilesLabel": "Minimum number of files to target",
+    "minScopeFilesDescription": "Below this many chosen files the search is never narrowed by itself. A name you choose narrows the search whatever the size.",
+    "maxSelectivityLabel": "Largest share of files for a name to target",
+    "maxSelectivityDescription": "A name found in more than this share of your files (yours, the practice's) points at no file in particular and is ignored.",
+    "minReductionLabel": "Smallest share of files left out",
+    "minReductionDescription": "The search is narrowed only if it leaves out at least this share of the chosen files.",
+    "maxCandidatesLabel": "Most documents targeted",
+    "maxCandidatesDescription": "At most this many documents are searched after a targeting. Workbooks are not limited.",
+    "widenBelowScoreLabel": "Widening threshold",
+    "widenBelowScoreDescription": "If the closest passage found in the targeted files resembles the question less than this score (0 to 1.5), the search is repeated on your whole selection. The scale depends on the reading model: 0.65 was measured with nomic-embed-text."
   },
   "errorBanner": {
     "title": "This did not work"
@@ -515,6 +580,94 @@
       "accounting": {
         "provider": "Accountant"
       }
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnostics (developer)",
+    "thisAnswer": "This answer",
+    "recorded": "Recorded questions",
+    "noneForAnswer": "No measurement for this answer.",
+    "noneRecorded": "No question recorded.",
+    "yes": "yes",
+    "no": "no",
+    "path": "Path",
+    "plan": "Plan",
+    "selected": "Selection",
+    "selectedValue": "{documents} documents, {workbooks} workbooks",
+    "chunks": "Passages kept / considered",
+    "chunksValue": "{selected} / {considered}",
+    "inputChars": "Characters sent to the AI (estimate)",
+    "inventoryMs": "Inventory",
+    "scopeMs": "Selection",
+    "routingMs": "Routing",
+    "embeddingMs": "Reading the question",
+    "searchMs": "Search",
+    "workbookLoadMs": "Loading workbooks",
+    "firstTokenMs": "First word",
+    "generationMs": "Writing",
+    "totalMs": "Total",
+    "mode": "Mode",
+    "outcome": "Outcome",
+    "strategy": "Strategy",
+    "skippedReason": "Why not targeted",
+    "lookupMs": "Reading names",
+    "queryEntities": "Names recognised",
+    "candidates": "Files targeted",
+    "reduction": "Reduction",
+    "widened": "Widened",
+    "wouldApply": "Targeting possible",
+    "cited": "Cited files found by the targeting",
+    "citedValue": "{held} of {cited}",
+    "misses": "Cited files outside the targeting",
+    "missesValue": "no mention: {noMention}, capped: {capped}, name not resolved: {unresolved}",
+    "questions": "Questions",
+    "withEntities": "With at least one name",
+    "wouldApplyCount": "Targeting possible",
+    "appliedCount": "Targeting applied",
+    "widenedCount": "Widenings",
+    "medianReduction": "Median reduction",
+    "recallOverall": "Cited files found (all questions)",
+    "recallWhenWouldApply": "Cited files found (targeting possible)",
+    "missesTotal": "Cited files outside the targeting",
+    "skippedFor": "Not targeted: {reason}",
+    "pathName": {
+      "documents": "documents",
+      "tabular": "tables",
+      "mixed": "mixed",
+      "folder_answer": "folder answer",
+      "without_documents": "without documents"
+    },
+    "planName": {
+      "one_file": "one file",
+      "every_document": "every document",
+      "whole_folder": "whole selection"
+    },
+    "modeName": {
+      "off": "off",
+      "suggest": "suggestions",
+      "auto": "automatic"
+    },
+    "outcomeName": {
+      "applied": "applied",
+      "shadow": "measured only",
+      "skipped": "not applied"
+    },
+    "strategyName": {
+      "none": "none",
+      "entity_files": "files of the names",
+      "chip_files": "files of the chosen names"
+    },
+    "reasonName": {
+      "off": "off",
+      "named_file": "named file",
+      "small_scope": "selection too small",
+      "no_entity": "no known name",
+      "no_discriminating_entity": "no discriminating name",
+      "ambiguous": "ambiguous name",
+      "no_candidates": "no file",
+      "insignificant": "reduction too small",
+      "lookup_error": "lookup failed",
+      "user_widened": "widened by the user"
     }
   }
 }

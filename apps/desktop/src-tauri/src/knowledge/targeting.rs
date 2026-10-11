@@ -295,6 +295,8 @@ impl TargetingPlan {
                     entity_id: candidate.entity_id,
                     display: candidate.display.clone(),
                     type_id: candidate.type_id.clone(),
+                    documents: candidate.documents,
+                    workbooks: candidate.workbooks,
                 })
                 .collect()
         };
@@ -364,6 +366,7 @@ impl TargetingPlan {
                         .ambiguities
                         .iter()
                         .map(|ambiguity| ReportAmbiguity {
+                            span: ambiguity.span.clone(),
                             candidates: brief(&ambiguity.candidates),
                         })
                         .collect()
@@ -375,6 +378,7 @@ impl TargetingPlan {
                         .possibles
                         .iter()
                         .map(|possible| ReportPossible {
+                            span: possible.span.clone(),
                             candidates: brief(&possible.candidates),
                             reason: possible.reason,
                             score: possible.score,
@@ -433,17 +437,25 @@ pub struct ReportCandidate {
     pub entity_id: i64,
     pub display: String,
     pub type_id: String,
+    /// How many files of the selection name it, by side. The interface offers no candidate that
+    /// names none.
+    pub documents: usize,
+    pub workbooks: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportAmbiguity {
+    /// The words of the question that fit these names, as the user typed them.
+    pub span: String,
     pub candidates: Vec<ReportCandidate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportPossible {
+    /// The word of the question that sounds like these names, as typed.
+    pub span: String,
     pub candidates: Vec<ReportCandidate>,
     pub reason: &'static str,
     pub score: f32,

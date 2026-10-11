@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { answerForCopy } from "../lib/annotations";
+import { combinedHasSelection } from "../lib/analysisScope";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
-import type { CombinedScope } from "../lib/ipc";
+import { chipIds, withChip, withoutChip, type Chip } from "../lib/entityPicker";
+import type { CombinedScope, OutsideSelection } from "../lib/ipc";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
@@ -21,6 +23,8 @@ export function ChatPanel({
   aliases,
   indexing,
   onModelAliasChange,
+  showDiagnostics,
+  onAddToSelection,
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
@@ -34,6 +38,11 @@ export function ChatPanel({
    * pass rather than a second one of its own. */
   indexing: IndexingState;
   onModelAliasChange: (alias: string) => void;
+  /** Shows the developer panel under the last answer. Off in normal use. */
+  showDiagnostics: boolean;
+  /** Adds the files of a name that is only in unselected files to the selection: her own click,
+   * made in the name picker. */
+  onAddToSelection: (outside: OutsideSelection) => void;
 }) {
   const { t, locale } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -45,10 +54,18 @@ export function ChatPanel({
     send,
     resend,
     regenerate,
+    retarget,
     stop,
     dismissError,
     clear,
   } = useChat(onFailure, hasWorkFolder, modelAlias, scope);
+  /* The names chosen for the next question. They are ids with the words shown; sending clears them,
+     and a stop that gives the question back gives them back too. */
+  const [chips, setChips] = useState<Chip[]>([]);
+  const sentChips = useRef<Chip[]>([]);
+  /* A name counted its files in one selection; in another the count means nothing, so a change of
+     selection starts the chips over. */
+  useEffect(() => setChips([]), [scope]);
   /* The sidebar's picker is locked while a question is being answered, and only this panel knows
      when that is. */
   const busy = phase !== "idle";
@@ -62,6 +79,7 @@ export function ChatPanel({
     const stopped = stop();
     if (stopped !== null) {
       setDraft(stopped);
+      setChips(sentChips.current);
     }
   };
 
@@ -109,6 +127,8 @@ export function ChatPanel({
         onStop={onStop}
         onResend={(questionEntryId, text) => void resend(questionEntryId, text)}
         onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
+        onRetarget={(answerEntryId, choice) => void retarget(answerEntryId, choice)}
+        showDiagnostics={showDiagnostics}
         onAnalyse={(answerEntryId) => void analyseThenAsk(answerEntryId)}
         analysing={indexing.running}
       />
@@ -151,13 +171,23 @@ export function ChatPanel({
         draft={draft}
         onDraftChange={setDraft}
         phase={phase}
-        onSend={(question) => void send(question)}
+        onSend={(question) => {
+          sentChips.current = chips;
+          void send(question, chips.length > 0 ? { entityIds: chipIds(chips) } : undefined);
+          setChips([]);
+        }}
         onStop={onStop}
         hint={hint}
         modelAlias={modelAlias}
         aliases={aliases}
         onModelAliasChange={onModelAliasChange}
         needsFolder={!hasWorkFolder}
+        chips={chips}
+        onAddChip={(chip) => setChips((current) => withChip(current, chip))}
+        onRemoveChip={(entityId) => setChips((current) => withoutChip(current, entityId))}
+        scope={scope}
+        hasSelection={combinedHasSelection(scope)}
+        onAddToSelection={onAddToSelection}
       />
     </section>
   );

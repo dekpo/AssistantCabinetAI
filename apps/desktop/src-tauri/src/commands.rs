@@ -29,6 +29,7 @@ use crate::knowledge::diagnostics::{
     self, elapsed_ms, RetrievalDiagnostics, RetrievalPath, RetrievalPlan, StageTimer,
 };
 use crate::knowledge::ingest::KnowledgeContext;
+use crate::knowledge::picker::{self, EntitySearch, PickerFiles};
 use crate::knowledge::query::SelectedFile;
 use crate::knowledge::reduce::{SideInput, SkipReason, TargetingPolicy};
 use crate::knowledge::secret::IdentifierKey;
@@ -790,6 +791,78 @@ pub fn knowledge_diagnostics(
     crate::knowledge::diagnostics::aggregate(
         index.connection(),
         limit.unwrap_or(500).clamp(1, 2_000),
+    )
+}
+
+/// The names of the current selection that begin with `prefix`, for the composer's `@` picker
+/// (`knowledge::picker`), and the names that exist only in analysed files she did not select.
+///
+/// A cheap read the user starts by typing: no model, no file content, no write. Documents and
+/// workbooks are resolved exactly as a question resolves them, so the picker offers what the next
+/// question could use and nothing else. With the knowledge base off, or nothing selected, it finds
+/// nothing.
+#[tauri::command]
+pub fn knowledge_search_entities(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    prefix: String,
+    scope: AnalysisScope,
+    limit: Option<usize>,
+) -> Result<EntitySearch, AppError> {
+    let (work_folder, data_folder, mode) = state.read(|settings| {
+        (
+            settings.work_folder.clone(),
+            settings.data_folder.clone(),
+            settings.knowledge_mode,
+        )
+    })?;
+    if !mode.reads_files() || prefix.trim().is_empty() {
+        return Ok(EntitySearch::default());
+    }
+    let index = open_index(&app)?;
+
+    let mut selected_documents_list = Vec::new();
+    let mut analysed_documents = Vec::new();
+    if let Some(work_folder) = work_folder {
+        let full = WorkFolderInventory::discover_with_cache(
+            Path::new(&work_folder),
+            Some(&index),
+            &state.file_hashes,
+        )?;
+        let as_files = |inventory: &WorkFolderInventory| -> Vec<SelectedFile> {
+            inventory
+                .indexed_files()
+                .into_iter()
+                .map(|record| SelectedFile::new(&record.relative_path, &record.id))
+                .collect()
+        };
+        analysed_documents = as_files(&full);
+        selected_documents_list = as_files(&scope.resolve(&full).inventory);
+    }
+    let mut selected_workbooks_list = Vec::new();
+    let mut analysed_workbooks = Vec::new();
+    if let Some(data_folder) = data_folder {
+        let folder = DataFolder::discover(
+            Path::new(&data_folder),
+            Some(&index),
+            &state.data_file_hashes,
+        )?;
+        analysed_workbooks = selected_workbook_files(&folder, &ScopeMode::WholeFolder);
+        selected_workbooks_list = selected_workbook_files(&folder, &scope.data_mode);
+    }
+
+    picker::search_entities(
+        index.connection(),
+        &prefix,
+        PickerFiles {
+            documents: &selected_documents_list,
+            data: &selected_workbooks_list,
+        },
+        PickerFiles {
+            documents: &analysed_documents,
+            data: &analysed_workbooks,
+        },
+        limit.unwrap_or(picker::PICKER_LIMIT),
     )
 }
 

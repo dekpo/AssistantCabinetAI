@@ -193,6 +193,25 @@ pub enum AppError {
     #[error("knowledge_merge_refused")]
     KnowledgeMergeRefused,
 
+    /// A name typed in the management dialog that cannot be kept: empty once cleaned, too long, or
+    /// made only of titles. Nothing was changed.
+    #[error("knowledge_name_invalid")]
+    KnowledgeNameInvalid,
+
+    /// The name typed already belongs to another entity of the same kind. Nothing was changed.
+    #[error("knowledge_name_taken")]
+    KnowledgeNameTaken,
+
+    /// A manual operation the knowledge base cannot do on that item (an automatic alias to remove,
+    /// a split that would leave nothing behind, a personal identifier typed by hand). Nothing was
+    /// changed.
+    #[error("knowledge_operation_refused")]
+    KnowledgeOperationRefused,
+
+    /// "Undo" was asked and the last operation cannot be undone, or there is none.
+    #[error("knowledge_nothing_to_undo")]
+    KnowledgeNothingToUndo,
+
     /// A lexicon pack bundled with the application does not validate. `pack` is its id and `path`
     /// the place in the file (a JSON path, or a line and column for a syntax error). Both are
     /// ours, never document text. The knowledge base stays inactive; nothing else is affected.
@@ -248,6 +267,10 @@ impl AppError {
             Self::KnowledgeUnavailable => "knowledge_unavailable",
             Self::KnowledgeEntityNotFound => "knowledge_entity_not_found",
             Self::KnowledgeMergeRefused => "knowledge_merge_refused",
+            Self::KnowledgeNameInvalid => "knowledge_name_invalid",
+            Self::KnowledgeNameTaken => "knowledge_name_taken",
+            Self::KnowledgeOperationRefused => "knowledge_operation_refused",
+            Self::KnowledgeNothingToUndo => "knowledge_nothing_to_undo",
             Self::KnowledgePackInvalid { .. } => "knowledge_pack_invalid",
         }
     }
@@ -277,6 +300,10 @@ impl AppError {
             | Self::KnowledgeUnavailable
             | Self::KnowledgeEntityNotFound
             | Self::KnowledgeMergeRefused
+            | Self::KnowledgeNameInvalid
+            | Self::KnowledgeNameTaken
+            | Self::KnowledgeOperationRefused
+            | Self::KnowledgeNothingToUndo
             | Self::OcrUnavailable => json!({}),
             Self::KnowledgePackInvalid { pack, path } => json!({ "pack": pack, "path": path }),
             Self::FillTemplateUnreadable { path } => json!({ "path": path }),

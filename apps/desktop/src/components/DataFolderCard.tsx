@@ -25,6 +25,7 @@ import {
   AnalysisProgress,
   FileList,
   isSelectable,
+  KnowledgeLink,
   SelectAll,
   StatusDot,
 } from "./FolderCardParts";
@@ -56,6 +57,7 @@ export function DataFolderCard({
   scope,
   onScopeChange,
   scopeLocked = false,
+  onOpenKnowledge,
 }: {
   dataFolder: string | null;
   suggestedDataFolder: string | null;
@@ -70,6 +72,9 @@ export function DataFolderCard({
   onScopeChange?: (scope: AnalysisScope) => void;
   /** A question is being answered: the selection it was asked with must not change under it. */
   scopeLocked?: boolean;
+  /** Opens the knowledge management dialog; the link under the summary shows only when the
+   * knowledge base took part in the pass. */
+  onOpenKnowledge?: () => void;
 }) {
   const { t } = useTranslation();
   const [error, setError] = useState<AppError | null>(null);
@@ -171,14 +176,19 @@ export function DataFolderCard({
 
   const passSummary =
     passLines.length === 0 ? null : (
-      <p className="inventory-detail__summary">
-        {passLines.map((line, index) => (
-          <Fragment key={index}>
-            {index > 0 ? <br /> : null}
-            {line}
-          </Fragment>
-        ))}
-      </p>
+      <>
+        <p className="inventory-detail__summary">
+          {passLines.map((line, index) => (
+            <Fragment key={index}>
+              {index > 0 ? <br /> : null}
+              {line}
+            </Fragment>
+          ))}
+        </p>
+        {onOpenKnowledge !== undefined && summary?.knowledge ? (
+          <KnowledgeLink onOpen={onOpenKnowledge} />
+        ) : null}
+      </>
     );
 
   /* A file here that is not a spreadsheet is red for a different reason than a workbook with no

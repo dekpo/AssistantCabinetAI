@@ -1070,3 +1070,347 @@ export function askWithSources(
 export function workFolderInventory(): Promise<InventoryReport> {
   return invoke<InventoryReport>("work_folder_inventory");
 }
+
+// ---------------------------------------------------------------------------------------------
+// The knowledge management dialog (lot 8)
+//
+// Machine data only: ids, counts, codes, locators. Every sentence the dialog shows is the
+// catalogue's. Nothing here reads or writes a file of either folder.
+// ---------------------------------------------------------------------------------------------
+
+/** What every write reports: the ids it produced, and how many documents the next Analyse reads
+ * again because of it (from the text already stored, with no request to the AI). */
+export interface ManageOutcome {
+  entityId: number | null;
+  aliasId: number | null;
+  /** For a new name: how many other entities already answer to it. */
+  sharedWith: number;
+  documentsDue: number;
+}
+
+export type EntityListView = "live" | "deleted" | "merged";
+
+export interface EntityListQuery {
+  text: string;
+  typeId: string | null;
+  origin: "automatic" | "manual" | null;
+  view: EntityListView;
+  /** Only what deserves a look: unconfirmed names, names with a pair to decide on, names seen once. */
+  problemsOnly: boolean;
+  page: number;
+}
+
+export interface EntityRow {
+  entityId: number;
+  typeId: string;
+  subtype: string | null;
+  name: string;
+  disambiguator: string;
+  status: "candidate" | "active" | "merged" | "deleted";
+  origin: "automatic" | "manual";
+  mergedInto: number | null;
+  mentions: number;
+  sources: number;
+  aliases: number;
+  openMatches: number;
+}
+
+export interface EntityPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: EntityRow[];
+}
+
+export interface EntityBriefView {
+  entityId: number;
+  typeId: string;
+  name: string;
+  status: string;
+}
+
+export interface AliasView {
+  aliasId: number;
+  entityId: number;
+  display: string;
+  kind: string;
+  origin: "automatic" | "manual";
+  confidence: number;
+}
+
+export interface LocatorView {
+  kind: "chunk" | "cells" | "filename" | "metadata";
+  page: number | null;
+  section: number | null;
+  sheet: string | null;
+  column: string | null;
+  firstRow: number | null;
+  sampleRows: number[];
+}
+
+export interface Excerpt {
+  text: string;
+  cutBefore: boolean;
+  cutAfter: boolean;
+}
+
+export interface MentionView {
+  mentionId: number;
+  entityId: number;
+  locator: LocatorView;
+  excerpt: Excerpt | null;
+  alias: string | null;
+  role: string | null;
+  method: string;
+  confidence: number;
+  origin: "automatic" | "manual";
+  occurrences: number;
+  splitFrom: number | null;
+}
+
+export interface SourceMentions {
+  sourceId: number;
+  domain: "documents" | "data";
+  relativePath: string;
+  mentions: MentionView[];
+}
+
+export interface RelationView {
+  relationId: number;
+  predicate: string;
+  subject: EntityBriefView;
+  object: EntityBriefView;
+  relativePath: string | null;
+  occurrences: number;
+}
+
+export interface AttributeView {
+  key: string;
+  value: string;
+  origin: "automatic" | "manual";
+}
+
+export interface PossibleView {
+  other: EntityBriefView;
+  reason: string;
+  score: number;
+  state: "open" | "dismissed" | "merged";
+}
+
+export interface ColumnView {
+  sheet: string;
+  column: string;
+  semanticType: string;
+  subtype: string | null;
+  role: string | null;
+  confidence: number;
+  reason: string;
+  read: boolean;
+}
+
+export interface WorkbookColumns {
+  relativePath: string;
+  columns: ColumnView[];
+}
+
+export interface EntityDetail {
+  entity: EntityRow;
+  effectiveId: number;
+  /** The survivor, when this entity was merged into another. */
+  survivor: EntityBriefView | null;
+  aliases: AliasView[];
+  mergedIn: EntityBriefView[];
+  sources: SourceMentions[];
+  mentionCount: number;
+  relations: RelationView[];
+  attributes: AttributeView[];
+  possibleMatches: PossibleView[];
+  columns: WorkbookColumns[];
+}
+
+export interface PossiblePair {
+  one: EntityBriefView;
+  other: EntityBriefView;
+  oneMentions: number;
+  otherMentions: number;
+  reason: string;
+  score: number;
+}
+
+export interface PossiblePage {
+  total: number;
+  page: number;
+  pageSize: number;
+  pairs: PossiblePair[];
+}
+
+export interface SourceBrief {
+  sourceId: number;
+  domain: "documents" | "data";
+  relativePath: string;
+}
+
+export interface Counted<T> {
+  total: number;
+  items: T[];
+}
+
+export interface HealthReport {
+  seenOnce: Counted<EntityBriefView>;
+  candidates: number;
+  documentsWithoutEntity: Counted<SourceBrief>;
+  workbooksWithoutUsableColumn: Counted<SourceBrief>;
+  probableDuplicates: number;
+  inDocumentsNotInTables: Counted<EntityBriefView>;
+}
+
+export interface LastOperation {
+  opId: number;
+  kind: string;
+  undoable: boolean;
+  at: number;
+}
+
+export interface KnowledgeOverview {
+  entitiesLive: number;
+  entitiesCandidate: number;
+  entitiesManual: number;
+  entitiesMerged: number;
+  entitiesDeleted: number;
+  aliases: number;
+  mentions: number;
+  documentsRead: number;
+  workbooksRead: number;
+  openPossibleMatches: number;
+  documentsDue: number;
+  consistent: boolean;
+  lastOperation: LastOperation | null;
+}
+
+export interface TypeRow {
+  id: string;
+  builtin: boolean;
+  entities: number;
+}
+
+export interface RoleRow {
+  id: string;
+  labelKey: string;
+}
+
+export interface TypesAndRoles {
+  types: TypeRow[];
+  roles: RoleRow[];
+  packs: { id: string; locale: string }[];
+  availablePacks: string[];
+}
+
+export interface NewManualEntity {
+  name: string;
+  typeId: string;
+  subtype?: string | null;
+  disambiguator?: string | null;
+}
+
+export interface EditEntity {
+  name?: string | null;
+  typeId?: string | null;
+  disambiguator?: string | null;
+}
+
+export interface SplitRequest {
+  entityId: number;
+  mentionIds: number[];
+  sourceIds: number[];
+  name: string;
+}
+
+export function knowledgeOverview(): Promise<KnowledgeOverview> {
+  return invoke<KnowledgeOverview>("knowledge_overview");
+}
+
+export function listEntities(query: EntityListQuery): Promise<EntityPage> {
+  return invoke<EntityPage>("knowledge_list_entities", { query });
+}
+
+export function entitySheet(entityId: number): Promise<EntityDetail> {
+  return invoke<EntityDetail>("knowledge_entity_sheet", { entityId });
+}
+
+export function possibleMatches(page = 0): Promise<PossiblePage> {
+  return invoke<PossiblePage>("knowledge_possible_matches", { page });
+}
+
+export function knowledgeHealth(): Promise<HealthReport> {
+  return invoke<HealthReport>("knowledge_health");
+}
+
+export function knowledgeTypesAndRoles(): Promise<TypesAndRoles> {
+  return invoke<TypesAndRoles>("knowledge_types_and_roles");
+}
+
+export function createEntity(input: NewManualEntity): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_create_entity", { input });
+}
+
+export function editEntity(entityId: number, edit: EditEntity): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_edit_entity", { entityId, edit });
+}
+
+export function addAlias(entityId: number, text: string): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_add_alias", { entityId, text });
+}
+
+export function removeAlias(aliasId: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_remove_alias", { aliasId });
+}
+
+export function setAttribute(entityId: number, key: string, value: string): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_set_attribute", { entityId, key, value });
+}
+
+export function removeAttribute(
+  entityId: number,
+  key: string,
+  value: string,
+): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_remove_attribute", { entityId, key, value });
+}
+
+export function mergeEntities(survivor: number, absorbed: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_merge", { survivor, absorbed });
+}
+
+export function unmergeEntity(entityId: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_unmerge", { entityId });
+}
+
+export function splitEntity(request: SplitRequest): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_split", { request });
+}
+
+export function deleteEntity(entityId: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_delete_entity", { entityId });
+}
+
+export function restoreEntity(entityId: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_restore_entity", { entityId });
+}
+
+export function acceptMatch(survivor: number, absorbed: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_accept_match", { survivor, absorbed });
+}
+
+export function dismissMatch(one: number, other: number): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_dismiss_match", { one, other });
+}
+
+export function undoLastOperation(): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_undo");
+}
+
+/** "Reset the whole knowledge base": without `includeManual`, what the files taught goes and what
+ * the user wrote stays; with it, everything goes. Files, chunks and inventories are never touched. */
+export function resetKnowledge(includeManual: boolean): Promise<ManageOutcome> {
+  return invoke<ManageOutcome>("knowledge_reset", { includeManual });
+}

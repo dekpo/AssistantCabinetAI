@@ -1368,3 +1368,342 @@ body {
 .settings-advanced > .field__description {
   margin-top: 8px;
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Knowledge base, lot 8: the management dialog. Same tokens as the rest, so light and dark need
+   nothing of their own. The dialog is wider than the settings one: a list beside a sheet.
+   --------------------------------------------------------------------------------------------- */
+
+.dialog--wide {
+  max-width: min(78em, 100%);
+}
+
+.knowledge {
+  gap: 12px;
+}
+
+.knowledge__note {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.knowledge__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.knowledge__status > p {
+  margin: 0;
+}
+
+.knowledge__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.knowledge__tab {
+  padding: 6px 12px;
+  color: var(--text-quiet);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.knowledge__tab:hover {
+  color: var(--text);
+}
+
+.knowledge__tab--on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.knowledge__panes {
+  display: grid;
+  grid-template-columns: minmax(16em, 22em) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .knowledge__panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.knowledge__list,
+.knowledge__detail,
+.knowledge__review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.knowledge__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9em, 1fr));
+  gap: 8px;
+}
+
+.knowledge__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.knowledge__rows,
+.knowledge__pairs,
+.knowledge__healths {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  color: inherit;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.knowledge__row:hover {
+  border-color: var(--accent);
+}
+
+.knowledge__row--selected {
+  background: var(--panel);
+  border-color: var(--accent);
+}
+
+.knowledge__row-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.knowledge__pair,
+.knowledge__health {
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.knowledge__pair > p,
+.knowledge__health > p {
+  margin: 0 0 4px;
+}
+
+/* One entity's sheet. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.sheet__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sheet__title {
+  margin: 0 0 2px;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.sheet__heading {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.sheet__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sheet__meta {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.sheet__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 0;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0 6px;
+  color: var(--text-quiet);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sheet__note {
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sheet__note > p {
+  margin: 0 0 6px;
+}
+
+.sheet__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sheet__aliases,
+.sheet__mentions,
+.sheet__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet__alias {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.sheet__alias-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sheet__source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheet__source-title {
+  margin: 0;
+}
+
+.sheet__path {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.sheet__mention {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sheet__mention-body {
+  min-width: 0;
+}
+
+.sheet__mention-body > p {
+  margin: 0;
+}
+
+.sheet__where {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sheet__excerpt {
+  margin: 4px 0;
+  padding-left: 8px;
+  color: var(--text-quiet);
+  border-left: 2px solid var(--border);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.sheet__pick {
+  margin-top: 3px;
+}
+
+.sheet__choice {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  color: inherit;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheet__choice--picked {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+.sheet__direction {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

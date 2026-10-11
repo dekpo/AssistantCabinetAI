@@ -3,6 +3,7 @@ import { ChatPanel } from "./components/ChatPanel";
 import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { isSelectable } from "./components/FolderCardParts";
+import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
@@ -45,6 +46,9 @@ export default function App() {
   /* The Data Folder's own pass: two folders, two passes that never wait on each other. */
   const dataIndexing = useIndexing(indexDataFolder);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* The knowledge management dialog: opened from the settings or from an analysis summary, drawn
+     over whichever is on screen. Never reachable from the conversation. */
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   /* The documents the conversation is about. Held here because it is chosen in the folder card and
      used by the chat: nothing persists a session yet, so nothing persists this. It starts with no
      document: the selection is built only from what she ticks (`docs/SELECTION-AND-MEMORY.md`). */
@@ -152,6 +156,7 @@ export default function App() {
               scope={scope}
               onScopeChange={setScope}
               scopeLocked={chatBusy}
+              onOpenKnowledge={() => setKnowledgeOpen(true)}
             />
             <DataFolderCard
               dataFolder={snapshot.settings.dataFolder}
@@ -162,6 +167,7 @@ export default function App() {
               scope={dataScope}
               onScopeChange={setDataScope}
               scopeLocked={chatBusy}
+              onOpenKnowledge={() => setKnowledgeOpen(true)}
             />
             {snapshot.warnings.map((code) => (
               <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -198,6 +204,13 @@ export default function App() {
             onUpdate={(patch) => void update(patch)}
             onReset={reset}
             onClose={() => setSettingsOpen(false)}
+            onOpenKnowledge={() => setKnowledgeOpen(true)}
+          />
+        ) : null}
+        {knowledgeOpen ? (
+          <KnowledgeDialog
+            knowledgeMode={snapshot.settings.knowledgeMode}
+            onClose={() => setKnowledgeOpen(false)}
           />
         ) : null}
       </div>

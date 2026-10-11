@@ -48,6 +48,7 @@ export function SettingsDialog({
   onUpdate,
   onReset,
   onClose,
+  onOpenKnowledge,
 }: {
   settings: AppSettings;
   settingsPath: string;
@@ -65,6 +66,8 @@ export function SettingsDialog({
    * `src/guards/sources.test.ts` does not read `> Promise <` as a text node. */
   onReset(): Promise<void>;
   onClose: () => void;
+  /** Opens the knowledge management dialog, over this one. */
+  onOpenKnowledge: () => void;
 }) {
   const { t, locale } = useTranslation();
   const [serverUrlDraft, setServerUrlDraft] = useState(settings.serverUrl);
@@ -285,6 +288,17 @@ export function SettingsDialog({
           ))}
         </div>
 
+        {/* Where the knowledge base can be seen, corrected and extended (`KnowledgeDialog`). */}
+        <div className="field">
+          <span className="field__label">{t("settings.manageKnowledgeLabel")}</span>
+          <span className="field__description">{t("settings.manageKnowledgeDescription")}</span>
+          <div className="field__row">
+            <button type="button" className="button button--compact" onClick={onOpenKnowledge}>
+              {t("settings.manageKnowledge")}
+            </button>
+          </div>
+        </div>
+
         <div className="field">
           <label className="field__row">
             <input
@@ -421,6 +435,7 @@ export function SettingsDialog({
           suggestedWorkFolder={suggestedWorkFolder}
           onChosen={(path) => onUpdate({ workFolder: path })}
           indexing={indexing}
+          onOpenKnowledge={onOpenKnowledge}
         />
 
         <DataFolderCard
@@ -428,6 +443,7 @@ export function SettingsDialog({
           suggestedDataFolder={suggestedDataFolder}
           onChosen={(path) => onUpdate({ dataFolder: path })}
           indexing={dataIndexing}
+          onOpenKnowledge={onOpenKnowledge}
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}

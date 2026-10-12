@@ -149,11 +149,23 @@ fn without_citations(text: &str) -> String {
     out
 }
 
+/// The numbers a source can be read to write. A passage is cut at a line wherever the page broke it, so
+/// a figure grouped by spaces can be split across two lines ("1 85 03 69" then "123 456 78"): the source
+/// is read as written and once more with each line break taken for a space, and both readings count.
+fn scan_source(source: &str) -> Vec<Number> {
+    let mut numbers = scan(source, 1);
+    if source.contains(['\n', '\r']) {
+        let joined = source.replace("\r\n", " ").replace(['\n', '\r'], " ");
+        numbers.extend(scan(&joined, 1));
+    }
+    numbers
+}
+
 /// The numbers of `answer` that equal no number written in any of `sources` (the excerpts, and the
 /// user's own question). Equal means the same value, however written: "1200" matches "1 200,00".
 /// Citation markers are ignored. Each distinct number once, in the order written.
 pub fn unsupported_numbers(answer: &str, sources: &[&str], min_digits: usize) -> Vec<String> {
-    let known: Vec<Number> = sources.iter().flat_map(|source| scan(source, 1)).collect();
+    let known: Vec<Number> = sources.iter().flat_map(|source| scan_source(source)).collect();
     let mut seen: Vec<String> = Vec::new();
     let mut unsupported = Vec::new();
     for number in scan(&without_citations(answer), min_digits) {

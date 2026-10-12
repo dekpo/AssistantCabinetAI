@@ -128,12 +128,16 @@ fn detect_delimiter(text: &str) -> u8 {
 
 /// `(how many lines share the most common field count, that field count)`. Compared as a tuple
 /// so consistency always outranks width: a delimiter that slices most rows the same way beats
-/// one that merely finds more fields in a handful of them.
+/// one that merely finds more fields in a handful of them. Only the lines the delimiter really
+/// cuts are scored: a title row above the header (`Export du 12/03/2026`) holds no delimiter and
+/// must not make a one-field "table" of every other delimiter's file.
 fn consistency_score(lines: &[&str], delimiter: u8) -> (usize, usize) {
     let mut frequency: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
     for line in lines {
         let width = count_unquoted(line, delimiter) + 1;
-        *frequency.entry(width).or_insert(0) += 1;
+        if width >= 2 {
+            *frequency.entry(width).or_insert(0) += 1;
+        }
     }
     frequency
         .into_iter()

@@ -540,7 +540,9 @@ function formatNudge(
     lines.push(t("tabularAnswer.nudgeFilterColumn", { column: nudge.filterColumn }));
   }
   if (
-    (nudge.reason === "non_numeric_column" || nudge.reason === "formula_cannot_be_verified") &&
+    (nudge.reason === "non_numeric_column" ||
+      nudge.reason === "formula_cannot_be_verified" ||
+      nudge.reason === "non_date_column") &&
     nudge.filterColumn !== null
   ) {
     lines.push(t("tabularAnswer.nudgeRefusedColumn", { column: nudge.filterColumn }));

@@ -1548,6 +1548,11 @@ async fn sourced_answer(
             if let Some(answer) = fill_tier(app, state, &question, &scope, measured)? {
                 return Ok(answer);
             }
+            // "How many documents do I have?" is a question about the folder, not a row count of
+            // a workbook (KBD-23).
+            if let Some(answer) = mixed_folder_tier(app, state, &question, &scope, on_event, measured)? {
+                return Ok(answer);
+            }
             match mixed_data_only_tier(app, state, &question, &scope, &targeting_request, measured)
                 .await?
             {
@@ -2139,6 +2144,70 @@ async fn mixed_data_only_tier(
         fill_plan: None,
         diagnostics: None,
         targeting: targeting_plan.report(false),
+    }))
+}
+
+/// Documents and tables are both selected and the question is about the documents themselves ("how
+/// many documents do I have?", "list my files"): answered from the inventory of the selected
+/// documents, exactly as the documents tier answers it, with no model and no table. `None` for every
+/// other question, which costs one cheap check of its words.
+fn mixed_folder_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+    on_event: &Channel<ChatStreamEvent>,
+    measured: &mut RetrievalDiagnostics,
+) -> Result<Option<AskAnswer>, AppError> {
+    let (work_folder, locale) =
+        state.read(|settings| (settings.work_folder.clone(), settings.locale.clone()))?;
+    let Some(work_folder) = work_folder else {
+        return Ok(None);
+    };
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    if !folder_questions::names_the_documents(question, &locale) {
+        return Ok(None);
+    }
+    let mut stage = StageTimer::start();
+    let index = open_index(app)?;
+    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    measured.inventory_ms += stage.lap_ms();
+    let resolution = scope.resolve(&full_inventory);
+    let selection = folder_questions::Selection {
+        full: &full_inventory,
+        scoped: &resolution.inventory,
+        narrowed: resolution.narrowed,
+        no_documents_chosen: resolution.no_documents_chosen,
+    };
+    let Some(answer) = folder_questions::answer_in_mixed_selection(&selection, &index, question, &locale)
+    else {
+        return Ok(None);
+    };
+    measured.routing_ms += stage.lap_ms();
+    measured.path = RetrievalPath::FolderAnswer;
+    let scope_outdated: Vec<String> = resolution
+        .missing
+        .into_iter()
+        .chain(resolution.changed)
+        .collect();
+    let _ = on_event.send(ChatStreamEvent::FolderAnswer {
+        answer: answer.clone(),
+    });
+    Ok(Some(AskAnswer {
+        answer: String::new(),
+        sources: Vec::new(),
+        folder_answer: Some(answer),
+        coverage: None,
+        unanalysed_files: 0,
+        scope_outdated,
+        without_documents: false,
+        tabular_answer: None,
+        documents_not_needed: false,
+        mixed_answer: None,
+        unverified_numbers: Vec::new(),
+        fill_plan: None,
+        diagnostics: None,
+        targeting: None,
     }))
 }
 

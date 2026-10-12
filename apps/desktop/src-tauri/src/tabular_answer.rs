@@ -122,7 +122,8 @@ pub enum TabularAnswer {
         /// was found in, when one was - a bare number with no matching column leaves this
         /// `None` even though `filter_value` is set. Also set when `reason` is
         /// `NonNumericColumn` or `FormulaCannotBeVerified`: the column the engine refused to
-        /// read. `None` for every other nudge
+        /// read; or `NonDateColumn`: the column a month, year or weekday was aimed at. `None` for
+        /// every other nudge
         /// (`docs/DECISIONS.md`, session 7's D1).
         filter_column: Option<String>,
         /// Set when `reason` is `FilterNotSupported` or `ValueNotFound`: the word from the
@@ -262,7 +263,34 @@ pub fn prepare_for_mixed(
     index: &IndexStore,
     document_names: &[String],
 ) -> Result<PendingAnswer, AppError> {
-    answer_sync(question, data, selection, locale, index, false, Some(document_names))
+    let pending = answer_sync(question, data, selection, locale, index, false, Some(document_names))?;
+    // With several workbooks selected, a question that is not about a table has no table part: the
+    // documents answer it. The choice of a workbook is never the whole mixed answer for it (KBD-21).
+    if matches!(pending, PendingAnswer::Done(TabularAnswer::WhichWorkbook { .. }))
+        && !asks_about_a_table(question, data, selection, locale)
+    {
+        return Ok(PendingAnswer::Done(TabularAnswer::Nudge {
+            file: String::new(),
+            reason: None,
+            available_sheets: Vec::new(),
+            available_columns: Vec::new(),
+            example_column: None,
+            example_group: None,
+            filter_column: None,
+            filter_value: None,
+            close_values: Vec::new(),
+            model_attempt: None,
+        }));
+    }
+    Ok(pending)
+}
+
+/// Whether a question is about a table: it does not name the documents (unless it names a workbook), and
+/// the table classifier reads an operation or a column in it.
+fn asks_about_a_table(question: &str, data: &DataFolder, selection: &ScopeMode, locale: &str) -> bool {
+    let about_documents = crate::folder_questions::names_the_documents(question, locale)
+        && !names_a_workbook(question, data, selection);
+    !about_documents && points_at_a_table(question, data, selection, locale)
 }
 
 /// D7 step 1 (`docs/DECISIONS.md`, `docs/SESSION-DATA-15-Mixed-Routing.md`): documents and tables
@@ -304,10 +332,46 @@ pub fn prepare_if_data_only(
     if crate::tabular::question::has_writing_intent(question, locale) {
         return Ok(None);
     }
+    // A question about "the documents" or "the files" is about the documents: the table engine would
+    // read "how many documents" as "how many rows". A workbook named in the question wins, since it
+    // makes the "files" the table's own (KBD-21, KBD-23).
+    if crate::folder_questions::names_the_documents(question, locale)
+        && !names_a_workbook(question, data, selection)
+    {
+        return Ok(None);
+    }
     match prepare(question, data, selection, locale, index, false)? {
+        // "Which workbook?" is asked only of a question that points at a table: an operation or a
+        // column. A plain question about a person or a subject has no table intent at all, and
+        // the choice of a workbook would block the documents behind it (KBD-21).
+        PendingAnswer::Done(TabularAnswer::WhichWorkbook { .. })
+            if !points_at_a_table(question, data, selection, locale) =>
+        {
+            Ok(None)
+        }
         done @ PendingAnswer::Done(_) => Ok(Some(done)),
         PendingAnswer::TryModel { .. } => Ok(None),
     }
+}
+
+/// Whether the table classifier reads the question as an operation or a structural question on at least
+/// one chosen workbook, or the question names one of their columns.
+fn points_at_a_table(question: &str, data: &DataFolder, selection: &ScopeMode, locale: &str) -> bool {
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return false;
+    };
+    let folded_words: std::collections::HashSet<String> = name_words(question).into_iter().collect();
+    chosen.iter().any(|each| {
+        let Some(inventory) = data.usable_inventory(&each.record.relative_path) else {
+            return false;
+        };
+        let allowed = each.sheets.as_deref();
+        names_a_column(inventory, &folded_words)
+            || !matches!(
+                question::classify(question, inventory, allowed, locale),
+                TabularRoute::NotRecognised
+            )
+    })
 }
 
 /// The model-assisted half, with `index` already out of scope: awaits the gateway only for
@@ -480,6 +544,9 @@ fn answer_sync(
             // `tabular::engine` actually runs under, rather than only naming what was seen
             // (`docs/DECISIONS.md`).
             let mut filtered_by_the_question = false;
+            // The column a weekday, month, year or period filter was aimed at: named when the engine
+            // refuses it because the file does not settle that column's dates (KBD-22).
+            let mut calendar_filter_column: Option<String> = None;
             let operation = match detect_filters(
                 question,
                 &residual,
@@ -494,6 +561,18 @@ fn answer_sync(
             ) {
                 FilterDetection::Filters(filters) => {
                     filtered_by_the_question = true;
+                    calendar_filter_column = filters
+                        .iter()
+                        .find(|spec| {
+                            matches!(
+                                spec.comparison,
+                                Comparison::Weekday(_)
+                                    | Comparison::Month(_)
+                                    | Comparison::Year(_)
+                                    | Comparison::DateRange(..)
+                            )
+                        })
+                        .map(|spec| spec.column.clone());
                     match group_threshold(
                         &operation,
                         &filters,
@@ -584,6 +663,7 @@ fn answer_sync(
                         | NotAnswerableReason::FormulaCannotBeVerified => {
                             operation_column_name(&operation).map(str::to_string)
                         }
+                        NotAnswerableReason::NonDateColumn => calendar_filter_column.clone(),
                         _ => None,
                     };
                     nudge(
@@ -1835,6 +1915,15 @@ fn detect_filters(
         .iter()
         .filter(|column| column.inferred_type == ColumnType::Date)
         .collect();
+    // The column a weekday, a month, a year or a period is read on. A day-first column that no cell
+    // settles stays text (`ColumnInventory::ambiguous_date`), but it is still the file's calendar: a
+    // question about March 2026 aimed at it is refused by the engine, with the column named, instead
+    // of filtering text that no cell equals, or dropping the month without a word (KBD-22).
+    let calendar_columns: Vec<&ColumnInventory> = if date_columns.is_empty() {
+        columns.iter().filter(|column| column.ambiguous_date).collect()
+    } else {
+        date_columns.clone()
+    };
     let numeric_columns: Vec<&ColumnInventory> = columns
         .iter()
         .filter(|column| column.inferred_type == ColumnType::Numeric && !column.has_formulas)
@@ -2025,7 +2114,7 @@ fn detect_filters(
                 } else {
                     (*end, *start)
                 };
-                if let [only] = date_columns.as_slice() {
+                if let [only] = calendar_columns.as_slice() {
                     filters.push(FilterSpec {
                         column: only.name.clone(),
                         comparison: Comparison::DateRange(start, end),
@@ -2041,7 +2130,7 @@ fn detect_filters(
     }
 
     // --- One written date: that day, exactly -------------------------------------------------
-    if let ([day], [only]) = (written_dates.as_slice(), date_columns.as_slice()) {
+    if let ([day], [only]) = (written_dates.as_slice(), calendar_columns.as_slice()) {
         if !filters.iter().any(|spec| matches!(spec.comparison, Comparison::DateRange(..))) {
             filters.push(FilterSpec {
                 column: only.name.clone(),
@@ -2052,6 +2141,9 @@ fn detect_filters(
 
     // --- Equality, weekday, month, year - one not-yet-consumed word at a time ---------------
     let mut unmatched_value: Option<String> = None;
+    // (column, word, the distinct values of the column that hold the word) of each word shared by
+    // several values of a column.
+    let mut shared_words: Vec<(String, String, Vec<String>)> = Vec::new();
     for index in 0..residual.len() {
         if consumed[index] {
             continue;
@@ -2065,8 +2157,15 @@ fn detect_filters(
             continue;
         }
 
+        // A calendar column no cell settles is read through its dates, never through the digits of
+        // their text: `2026` is a year of the file, not one of the words of `02/03/2026`.
         let matching_columns: Vec<(&str, &Vec<String>)> = columns_words
             .iter()
+            .filter(|(name, _)| {
+                !calendar_columns
+                    .iter()
+                    .any(|column| column.ambiguous_date && column.name == *name)
+            })
             .filter_map(|(name, words)| words.get(&folded).map(|values| (name.as_str(), values)))
             .collect();
         // The question may already have named its column ("where fournisseur is Alpha", "for the
@@ -2083,19 +2182,25 @@ fn detect_filters(
         };
         match resolved {
             Some((column_name, candidate_values)) => {
-                // Several distinct values of this one column share the word: a best-effort
-                // fallback to the word itself, rather than refusing outright - rare in practice
-                // (`docs/SESSION-DATA-06-Findings.md`'s fixtures never exercise it).
-                let value = match candidate_values.as_slice() {
-                    [only] => only.clone(),
-                    _ => word.clone(),
-                };
-                let spec = FilterSpec {
-                    column: column_name.to_string(),
-                    comparison: Comparison::Equals(value),
-                };
-                if !filters.contains(&spec) {
-                    filters.push(spec);
+                match candidate_values.as_slice() {
+                    [only] => {
+                        let spec = FilterSpec {
+                            column: column_name.to_string(),
+                            comparison: Comparison::Equals(only.clone()),
+                        };
+                        if !filters.contains(&spec) {
+                            filters.push(spec);
+                        }
+                    }
+                    // Several distinct values of this one column share the word (a title, a given
+                    // name, a surname): no cell equals the word alone, so it is no filter by itself.
+                    // It is settled below, with the other words that name a value of the column
+                    // (KBD-24).
+                    _ => shared_words.push((
+                        column_name.to_string(),
+                        word.clone(),
+                        candidate_values.clone(),
+                    )),
                 }
                 consumed[index] = true;
                 continue;
@@ -2112,7 +2217,7 @@ fn detect_filters(
             None => {}
         }
 
-        if let (Some(words), [only]) = (&words, date_columns.as_slice()) {
+        if let (Some(words), [only]) = (&words, calendar_columns.as_slice()) {
             if let Some((weekday, _)) = words.weekdays.iter().find(|(_, forms)| forms.contains(&folded)) {
                 push_unique(
                     &mut filters,
@@ -2140,7 +2245,7 @@ fn detect_filters(
         if word.chars().count() == 4 {
             // A plausible calendar year only: "plus de 5000 euros" is an amount, not the year 5000
             // (HAP-1, BUG-02, Q19).
-            if let (Ok(year @ 1900..=2100), [only]) = (word.parse::<i32>(), date_columns.as_slice()) {
+            if let (Ok(year @ 1900..=2100), [only]) = (word.parse::<i32>(), calendar_columns.as_slice()) {
                 push_unique(
                     &mut filters,
                     FilterSpec {
@@ -2170,6 +2275,8 @@ fn detect_filters(
         }
     }
 
+    settle_shared_words(&mut filters, shared_words);
+
     if !filters.is_empty() {
         if let Some(value) = unresolved_comparison {
             return FilterDetection::ValueNotFound {
@@ -2198,6 +2305,70 @@ fn detect_filters(
         };
     }
     FilterDetection::None
+}
+
+/// Turns the words that several distinct values of one column share (`Dr` in `Dr Jean Dupont` and
+/// `Dr Paul Martin`, `Martin` in two doctors) into filters, per column:
+///
+/// - a value the question's other words already picked (`Jean Dupont` picked `Dr Jean Dupont`) holds
+///   every shared word that belongs to it: the shared words add nothing, and `Dr Jean Dupont` counts
+///   like `Jean Dupont`;
+/// - with nothing picked, the values that hold every shared word are the answer: one value is an
+///   `Equals`, several are an `In` (`Martin` alone is both Martins), the way the question reads;
+/// - a picked value that lacks a shared word (`Jean Martin`: nobody) keeps the word as it was, a
+///   value no cell equals, so the count is the honest zero.
+fn settle_shared_words(filters: &mut Vec<FilterSpec>, shared: Vec<(String, String, Vec<String>)>) {
+    let mut columns: Vec<&str> = Vec::new();
+    for (column, _, _) in &shared {
+        if !columns.contains(&column.as_str()) {
+            columns.push(column);
+        }
+    }
+    for column in columns {
+        let own: Vec<&(String, String, Vec<String>)> =
+            shared.iter().filter(|(name, _, _)| name == column).collect();
+        let narrowed: Vec<String> = own[0]
+            .2
+            .iter()
+            .filter(|value| own.iter().all(|(_, _, values)| values.contains(value)))
+            .cloned()
+            .collect();
+        let picked: Vec<&String> = filters
+            .iter()
+            .filter(|spec| spec.column == column)
+            .filter_map(|spec| match &spec.comparison {
+                Comparison::Equals(value) => Some(value),
+                _ => None,
+            })
+            .collect();
+        let comparisons: Vec<Comparison> = if !picked.is_empty() {
+            if picked.iter().all(|value| narrowed.contains(value)) {
+                Vec::new()
+            } else {
+                own.iter()
+                    .map(|(_, word, _)| Comparison::Equals(word.clone()))
+                    .collect()
+            }
+        } else {
+            match narrowed.as_slice() {
+                [] => own
+                    .iter()
+                    .map(|(_, word, _)| Comparison::Equals(word.clone()))
+                    .collect(),
+                [only] => vec![Comparison::Equals(only.clone())],
+                _ => vec![Comparison::In(narrowed.clone())],
+            }
+        };
+        for comparison in comparisons {
+            push_unique(
+                filters,
+                FilterSpec {
+                    column: column.to_string(),
+                    comparison,
+                },
+            );
+        }
+    }
 }
 
 /// A number written in a question, read the way a person writes it.

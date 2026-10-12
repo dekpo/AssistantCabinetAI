@@ -118,6 +118,11 @@ never paths, so `vier/neurologie.pdf` cannot reach into `janvier/`. And a fragme
 extension is not a reference at all — `.pdf` would otherwise match every PDF in the folder. Several
 tails matching is an ambiguity, reported like any other.
 
+A reference with a folder and a name resolves the same careful way (fix 4, batch 3, KBD-02):
+`mars/neurologie.pdf` reaches `2026/mars/neurologie.pdf` because the path **ends** with it at a folder
+boundary. With `2025/mars/neurologie.pdf` too, both are returned and the user is asked;
+`ars/neurologie.pdf` is not a folder, and `janvier/neurologie.pdf` never reaches the file under `mars/`.
+
 `resolve_in_question` is deliberately conservative: a question only names a file when it contains
 something shaped like a path, something shaped like a file name with an alphabetic extension, or a
 word that is exactly one file's stem. Anything looser would let an ordinary sentence silently

@@ -365,6 +365,49 @@ pub fn route_in_selection(
     }
 }
 
+/// Whether a word of the question is a word for the documents or the files themselves
+/// (the pack's `documents` and `files` subjects). In a selection that also holds tables, such a question is about
+/// the documents: the table engine reads "how many documents" as "how many rows", and a question
+/// that names no column and no operation as a request to choose a workbook (KBD-21, KBD-23).
+pub fn names_the_documents(question: &str, locale: &str) -> bool {
+    let Some(pack) = pack_for(locale) else {
+        return false;
+    };
+    tokenise(question).iter().any(|token| {
+        contains(&pack.subjects.documents, token) || contains(&pack.subjects.files, token)
+    })
+}
+
+/// The inventory's answer to a question about the documents themselves ("how many documents do I
+/// have?"), in a selection that also holds tables, where the folder is otherwise not asked.
+///
+/// Only the answers the inventory gives about the selected documents are returned: counts, lists and
+/// the tree. A question that names a file is left alone, since the name can be a workbook of the Data
+/// Folder, which this inventory knows nothing about. `None` for every other question, and for a
+/// question that does not name the documents at all.
+pub fn answer_in_mixed_selection(
+    selection: &Selection<'_>,
+    corpus: &dyn CorpusWords,
+    question: &str,
+    locale: &str,
+) -> Option<FolderAnswer> {
+    if !names_the_documents(question, locale) {
+        return None;
+    }
+    match route_in_selection(selection, corpus, question, locale) {
+        QuestionRoute::Deterministic(
+            FolderAnswer::FileDetails { .. }
+            | FolderAnswer::AmbiguousReference { .. }
+            | FolderAnswer::NoMatchingFile { .. }
+            | FolderAnswer::FileUnreadable { .. }
+            | FolderAnswer::FileNotSelected { .. }
+            | FolderAnswer::NothingSelected,
+        ) => None,
+        QuestionRoute::Deterministic(answer) => Some(answer),
+        _ => None,
+    }
+}
+
 /// The name a question used, when it names a file the folder holds and the selection does not.
 ///
 /// The selection's own resolver is asked first. When it finds a selected file, or an ambiguity

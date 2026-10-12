@@ -78,9 +78,16 @@ async fn a_stop_ends_the_stream_and_no_further_text_arrives() {
     let mut stopped = cancellation.begin();
     let deltas = Arc::new(AtomicUsize::new(0));
 
+    // The stop is asked once the first piece of the answer has arrived, not after a fixed delay: on
+    // a slow runner (macOS in CI) 200 ms was not always enough for the connection to be made, and
+    // the test then stopped a stream that had not started. Ten seconds is only a safety net.
     let asked_to_stop = Arc::clone(&cancellation);
+    let streaming = Arc::clone(&deltas);
     tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        let started = std::time::Instant::now();
+        while streaming.load(Ordering::SeqCst) == 0 && started.elapsed() < Duration::from_secs(10) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         asked_to_stop.cancel();
     });
 

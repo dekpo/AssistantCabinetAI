@@ -51,6 +51,8 @@ pub enum ResolutionReason {
     FileNameSuffix,
     /// A word in the reference is one file's name without its extension.
     StemToken,
+    /// The reference is the end of one file's path, from a folder name on (`mars/neurologie.pdf`).
+    FolderSuffix,
     /// Several files carry the reference. The caller must ask which.
     Ambiguous,
     /// Nothing in the Work Folder carries it.
@@ -138,11 +140,25 @@ impl<'a> FileReferenceResolver<'a> {
         }
         if normalised.contains('/') {
             let folded = self.case_insensitive_paths(&normalised);
+            if folded.is_empty() {
+                // A person names a file by its last folder and its name (`mars/neurologie.pdf`), not by
+                // the whole path. The reference must end a path at a folder boundary, so `ars/x.pdf`
+                // reaches nothing and `janvier/x.pdf` never reaches the file under `mars/`.
+                let by_folder = self.paths_ending_with(&normalised);
+                return match by_folder.len() {
+                    1 => FileReferenceResolution::exact(
+                        query,
+                        by_folder[0],
+                        ResolutionReason::FolderSuffix,
+                    ),
+                    0 => FileReferenceResolution::none(query, ResolutionReason::NotFound),
+                    _ => FileReferenceResolution::several(query, by_folder),
+                };
+            }
             return match folded.len() {
                 1 => {
                     FileReferenceResolution::exact(query, folded[0], ResolutionReason::RelativePath)
                 }
-                0 => FileReferenceResolution::none(query, ResolutionReason::NotFound),
                 _ => FileReferenceResolution::several(query, folded),
             };
         }
@@ -289,6 +305,17 @@ impl<'a> FileReferenceResolver<'a> {
             .all_files()
             .iter()
             .filter(|file| fold_text(&file.relative_path) == wanted)
+            .collect()
+    }
+
+    /// Every file whose relative path ends with `reference` at a folder boundary, once case is set
+    /// aside: `mars/neurologie.pdf` ends `2026/mars/neurologie.pdf` and nothing else.
+    fn paths_ending_with(&self, reference: &str) -> Vec<&'a FileRecord> {
+        let wanted = format!("/{}", fold_text(reference.trim_matches('/')));
+        self.inventory
+            .all_files()
+            .iter()
+            .filter(|file| format!("/{}", fold_text(&file.relative_path)).ends_with(&wanted))
             .collect()
     }
 

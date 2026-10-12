@@ -331,6 +331,11 @@ async fn resolve_table(
     document_sources: &[Evidence],
 ) -> (Option<TabularAnswer>, Option<MixedPartUnavailable>) {
     match pending {
+        // The question has no table part (`prepare_for_mixed` says so with an unrecognised nudge, the same
+        // sign a question the classifier could not read leaves): the documents answer it alone.
+        PendingAnswer::Done(TabularAnswer::Nudge { reason: None, .. }) => {
+            (None, Some(MixedPartUnavailable::NotAskedAbout))
+        }
         PendingAnswer::Done(answer) => (Some(answer), None),
         PendingAnswer::TryModel {
             file,

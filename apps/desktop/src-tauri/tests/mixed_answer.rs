@@ -693,3 +693,34 @@ async fn a_figure_the_excerpt_carries_is_not_reported() {
 
     assert!(result.unverified_numbers.is_empty(), "{:?}", result.unverified_numbers);
 }
+
+// --- A plain question about the documents, with two workbooks selected (KBD-21) --------------
+
+#[tokio::test]
+async fn a_plain_question_about_the_documents_is_answered_from_them_not_by_a_choice_of_workbook() {
+    let mut folder = Folder::build();
+    std::fs::write(folder.data.path().join("autres.csv"), factures_csv()).unwrap();
+    data_folder::analyse(folder.data.path(), &mut folder.index, "fr-FR", &|_| {}).unwrap();
+    let question = "Que disent mes documents \u{e0} propos de Beta ?";
+    let pending = folder.prepare_mixed(question, "fr-FR");
+    let sources = vec![evidence("Le contrat est sign\u{e9} par la soci\u{e9}t\u{e9} Beta.")];
+    let gateway = start_fake_gateway(|_| "Le contrat est signe par Beta.".to_string());
+
+    let (result, _) = run(pending, sources, None, question, "fr-FR", &gateway.url, "cabinet-chat").await;
+
+    assert!(result.table.is_none(), "{:?}", result.table);
+    assert!(result.answer.contains("Beta"), "{:?}", result.answer);
+    assert_eq!(result.table_unavailable, Some(MixedPartUnavailable::NotAskedAbout));
+}
+
+#[tokio::test]
+async fn a_question_about_a_table_still_asks_which_workbook_in_the_mixed_tier() {
+    let mut folder = Folder::build();
+    std::fs::write(folder.data.path().join("autres.csv"), factures_csv()).unwrap();
+    data_folder::analyse(folder.data.path(), &mut folder.index, "fr-FR", &|_| {}).unwrap();
+    let pending = folder.prepare_mixed("Combien de lignes ?", "fr-FR");
+    assert!(matches!(
+        pending,
+        PendingAnswer::Done(TabularAnswer::WhichWorkbook { .. })
+    ));
+}

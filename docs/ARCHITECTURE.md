@@ -444,3 +444,7 @@ work-folder policy, the bundler configuration — and never inside a capability 
 retrieval. And a test must assert the same rule on both systems: a test whose fixture is a Windows path
 literal proves nothing on macOS, where a backslash is an ordinary filename character. Current state,
 including the gaps: `docs/SPRINT-2.5-ASSESSMENT.md` section O.
+
+### The knowledge base (KB programme, lots 0 to 11)
+
+The knowledge base is a directory of the names found in the analysed files, kept in the `kb_*` tables of `index.sqlite3`, inside the user's selection and never above it. Its canonical description (modules, modes, persistence rules, what it may and may not do) is `docs/KNOWLEDGE-BASE.md`; the measured behaviour from 30 to 1 000 files, the release gate and the post-KB fix battery are in `docs/test-reports/knowledge-base-pass-1/` (`03-release-gate.md`, `04-final-report.md`). It adds no platform `cfg`: the Windows and macOS rule above holds for it as for the rest.

@@ -11,12 +11,15 @@ The long-lived specification is `docs/KNOWLEDGE-BASE.md`, written in lot 11. The
 | `lots/lot-NN-<slug>.md` | the agent of lot NN | summary, files, decisions, deviations, invariants proved, verification numbers, measurements, what was not done, open questions, git block |
 | `human-tests/lot-NN-<slug>.md` | the agent of lot NN, results filled in by the owner | step-by-step test in the real application, expected result per step, results table, findings |
 | `00-baseline.md` | lot 0 | timings of the product before the KB (owner fills in) |
-| `01-protocol.md`, `02-results.md`, `03-release-gate.md`, final report | lot 11 | the full manual protocol and the decision on making `auto` the default |
+| `01-protocol.md`, `02-results.md`, `03-release-gate.md`, `04-final-report.md` | lot 11 | the validation protocol, the owner's results (template until she plays it), the decision on making `auto` the default (**not met: it stays optional**), and the final developer report with the post-KB fix battery |
+| `measurements/` | lot 11 | the raw reports of every automatic run (quality by tier, cost and gain, the real stack, the text recognition, the formats) |
+| `05-branches-and-stages.md` | lot 11 | every branch, tag and stage of the programme, their size, how to test a stage without breaking an installation, how to compare with and without the KB |
+| `defects-register.md` | every lot | every defect found during the programme (KBD-01 to KBD-38), its effect on the lots, its status |
 
 ## Branches and tags
 
 ```text
-main                 untouched until the release gate
+main                 the product WITHOUT the KB; kb/integration is not merged into it (owner decision, 12 October 2026)
 kb/integration       receives each accepted lot by pull request
 feat/kb-<topic>      one branch per lot
 kb-baseline          tag on main before the programme
@@ -39,7 +42,7 @@ Compare two states with `git diff --stat kb-after-lot-03..kb-after-lot-04`, or t
 | 7 | Targeting in the interface | `feat/kb-targeting-ui` | K-C |
 | 8 | Manage knowledge | `feat/kb-management-dialog` | K-D |
 | 9 | Shared vocabulary | `feat/kb-shared-vocabulary` | K-D |
-| 10 | Activity profiles | `feat/kb-activity-profiles` | K-D |
+| 10 | Activity profiles (**withdrawn** 12 October 2026) | `feat/kb-activity-profiles` | K-D |
 | 11 | Prove it | `feat/kb-validation` | K-E |
 
 Rules that every lot report and human test follows are in the workflow file the agents receive (`docs/SESSION-KB-WORKFLOW.md`, local). In short: a lot is *code done* when its report is written and its suites are green, *accepted* when the owner has run its human test, *merged* when its pull request is in `kb/integration`.

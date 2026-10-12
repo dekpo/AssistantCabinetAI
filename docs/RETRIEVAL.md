@@ -272,3 +272,7 @@ too, because the bug changed shape.
 
 Server-side retrieval is only ever reconsidered for shared **non-sensitive** corpora such as templates or a
 quality checklist, never for case files.
+
+### The knowledge base in a search (KB programme, lot 11)
+
+Between the router and the single embedding call of the question, the knowledge base may shorten the list of files to search (mode « Automatique »; « Suggestions seulement » only measures). It never widens the user's selection, repeats the search once on the whole selection when the narrow one is too weak, and leaves a named file, an ambiguous name or a small selection alone. Rules and the widening score: `docs/KNOWLEDGE-BASE.md` section 6 and `docs/DECISIONS.md` (« Settled by KB lot 6 »). Measured recall, reduction and time: `docs/test-reports/knowledge-base-pass-1/04-final-report.md` sections 6 and 7. The base-off search always cites six passages, which is why the share of cited files that are kept is low by construction.

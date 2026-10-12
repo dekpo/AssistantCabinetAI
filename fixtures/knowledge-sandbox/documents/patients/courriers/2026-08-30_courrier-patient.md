@@ -1,0 +1,17 @@
+# Demande de copie de dossier
+
+Rue du Lac 52, 1860 Aigle
+
+Tél. 021 555 53 76 — sylvie.crettenand@mail.example
+
+Dr Hélène Marchetti
+Cabinet médical des Voirons
+8 rue du Léman, 74100 Annemasse
+
+Objet : demande de rendez-vous et de copie de mon dossier. Aigle, le 30 août 2026.
+
+Madame le Docteur,
+Je souhaiterais obtenir un rendez-vous dans le courant du mois prochain et recevoir une copie des derniers résultats d'analyses. Je me tiens à votre disposition pour toute précision.
+
+Avec mes salutations distinguées,
+S. Crettenand

@@ -221,3 +221,7 @@ into a health-record store.
 
 The full runbook — client and server hardware requirements, the LAN topology, the beta rollout checklist for
 this cabinet and the template for the next one — is `docs/DEPLOYMENT.md`.
+
+### The knowledge base in the window (KB programme, lot 11)
+
+« Réglages » → « Connaissances » has the mode « Ciblage intelligent » (« Suggestions seulement » by default; « Désactivé »; « Automatique »), the health modules and « Gérer… » (the dialog). In « Automatique » a line under the answer says « Recherche ciblée : N documents sur M — nom » with « Voir les fichiers » and « Élargir à ma sélection ». The script the owner plays to decide whether « Automatique » may become the default is `docs/test-reports/knowledge-base-pass-1/human-tests/lot-11-validation.md`; the verdict of lot 11 is in `03-release-gate.md` (not met: it stays optional). The canonical description is `docs/KNOWLEDGE-BASE.md`.

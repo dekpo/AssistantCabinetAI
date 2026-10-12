@@ -58,7 +58,7 @@ reports in `docs/test-reports/knowledge-base-pass-1/`.
 | **K-B** | 4 and 5 | The files the user has analysed feed the Knowledge Base, and the Analyse summary says what was found |
 | **K-C** | 6 and 7 | Questions are targeted inside the user's own selection, in `suggest` mode first, with a visible line and a one-click widen; the shadow measurement accumulates |
 | **K-D** | 8 and 9 | The user manages the knowledge; suggestions, entity autocomplete and the speech-ready vocabulary exist. Lot 10 (activity profiles) was built, tried and **withdrawn** on 12 October 2026 (`docs/DECISIONS.md`); the notion of module returns later, with precise use cases |
-| **K-E** | 11 | The release gate: benchmarks and the manual protocol decide whether `auto` may become the default, and `main` receives the programme |
+| **K-E** | 11 | The release gate: benchmarks and the manual protocol decide whether `auto` may become the default, and the owner decides what to do with the result. **`main` does not receive the programme** (owner decision, 12 October 2026: `main` stays the product without the KB, for the comparison). **12 October 2026: measured, gate not met, `auto` stays optional** (`docs/test-reports/knowledge-base-pass-1/03-release-gate.md`); the verdict is accepted; the fix battery (24 fixes, Switzerland first) is applied before the big human test, on `fix/kb-*` branches merged into `kb/integration` (`docs/SESSION-KB-FIX-04-battery.md`) |
 
 ### Tracks that run beside it, and that it neither blocks nor waits for
 

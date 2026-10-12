@@ -138,6 +138,84 @@ Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OL
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.
 
+### Reading the client's own logs (Knowledge Base programme, lots 0 and 6)
+
+Three records live on the workstation, in the application's local data folder (`%LOCALAPPDATA%\com.assistantcabinetai.desktop\` on
+Windows, `~/Library/Application Support/com.assistantcabinetai.desktop/` on macOS). They hold **numbers and machine codes only**:
+no question, no file name, no entity name, no excerpt (a test serialises a populated base and checks it).
+
+| Record | Written | Switch |
+| --- | --- | --- |
+| `retrieval-timings.jsonl` | one line per question, appended | Réglages, group « Avancé », **« Noter les durées dans un journal »** (off by default); delete the file when a measure is done |
+| `analysis-timings.jsonl` | one line per Analyse pass (Documents or Data), appended | the same box |
+| `kb_diagnostics` (table of `index.sqlite3`) | one row per question that went through the base, a ring of 2 000 | automatic when the knowledge mode is not `off`; the panel under the last answer is **« Afficher le panneau de diagnostics »** (developers only) |
+
+**A question line** (`retrieval-timings.jsonl`), from the left: `at` (epoch seconds), `path` (`documents`, `tabular`, `mixed`,
+`folder_answer`, `without_documents`), `plan` (`whole_folder`, `every_document`, `one_file`), `selectedDocuments`,
+`selectedWorkbooks`, `chunksConsidered` (stored chunks the search scored), `chunksSelected` (at most 6),
+`estimatedInputChars` (at most 6 000 of excerpts), then the stages in milliseconds in the order a question goes through them:
+`inventoryMs`, `scopeMs`, `routingMs`, `embeddingMs`, `searchMs`, `workbookLoadMs`, `generationFirstTokenMs`,
+`generationTotalMs`, `totalMs`. A stage the question did not go through is 0. The generation is the model's and is the
+same in the three knowledge modes (the evidence is capped, so the prompt has the same size): **read the stages before
+the first word to see what the base changes, and the generation to see where the wait is.** Then a `targeting` object:
+
+- `mode` (`suggest` or `auto`; a question in `off` has none), `knowledgeLookupMs` (reading the question and deciding:
+  milliseconds), `strategy` (`entity_files`, `chip_files`, `none`), `outcome` (`applied`, `shadow`, `skipped`),
+  `skippedReason`, `queryEntities` (ids, a type code, a confidence and a method: `canonical_name`, `alias`,
+  `identifier`, `chip`, `carried_over`), `candidateDocuments`, `candidateWorkbooks`, `reductionPercent`, `widened`;
+- `shadow`, the comparison with what the answer really cited: `wouldApply`, `cited`, `citedInCandidates`, and the misses
+  by cause, `missNoMention` (a cited file that mentions no entity of the question: **filler**, or an extraction gap, the
+  counters cannot tell them apart, defect KBD-34), `missCapped` (left out by the cap of 15), `missEntityNotResolved`
+  (the file does mention an entity of the question that the base did not use).
+
+Skip reasons: `off`, `user_widened`, `named_file`, `small_scope` (fewer than `knowledge_min_scope_files`, 8, selected files),
+`no_entity`, `no_discriminating_entity` (an entity in too much of the selection, or not sure enough), `ambiguous`,
+`no_candidates`, `insignificant` (less than `knowledge_min_reduction`, 30 %, would be dropped), `lookup_error`.
+
+**An Analyse line** (`analysis-timings.jsonl`): `pass`, `filesScanned`, `filesProcessed` (read, not skipped as unchanged),
+then `hashMs`, `extractMs`, `ocrMs`, `chunkMs`, `embedMs` (with `embedBatches` and `embeddedChars`), `writeMs`,
+`buildInventoryMs`, `chunksTotal`, `chunksRepeatingEarlierText` (letterheads and signatures a cache would save embedding twice),
+`totalMs`, and `slowestFiles` identified by their **position in the pass**, never by name. On the development PC the embedding is
+nine tenths of an Analyse; the reading of names is the remaining few percent.
+
+Read them (PowerShell):
+
+```powershell
+Get-Content $env:LOCALAPPDATA\com.assistantcabinetai.desktop\retrieval-timings.jsonl | ForEach-Object { $_ | ConvertFrom-Json } | Format-Table path,plan,selectedDocuments,chunksConsidered,embeddingMs,searchMs,generationFirstTokenMs,totalMs
+Get-Content $env:LOCALAPPDATA\com.assistantcabinetai.desktop\analysis-timings.jsonl | ForEach-Object { $_ | ConvertFrom-Json } | Format-Table pass,filesProcessed,extractMs,ocrMs,embedMs,writeMs,totalMs
+```
+
+or, for the whole of the knowledge base's figures at once (the release gate's inputs, by mode, with the timings):
+
+```text
+python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py report
+```
+
+The gate's recall, `citedInCandidates / cited` over the questions the base would reduce, is **low by construction on a small
+library**: with the base off the search cites six passages whatever the library holds, and the ones that have nothing to do with
+the question are dropped on purpose. Read it beside the share of files that really hold the answer
+(`docs/test-reports/knowledge-base-pass-1/03-release-gate.md`).
+
+### Running the knowledge-base validation (KB lot 11)
+
+For a developer or an agent. The library is `fixtures/knowledge-sandbox` (200 documents, versioned) or `data/knowledge-sandbox-1000` (generated, never versioned):
+`python scripts/gen-knowledge-sandbox.py` and `python scripts/gen-knowledge-sandbox.py --documents 1000 --extra-rows 40 --out data/knowledge-sandbox-1000` (deterministic; the same seed gives the same bytes).
+Every run below reads the library, builds its own temporary folders and index, and **never touches the application's data**. From `apps/desktop/src-tauri`, in release mode:
+
+| Run | Command | Variables | Writes (in `ACAI_VALIDATION_OUT`, else only prints) |
+| --- | --- | --- | --- |
+| Asserted invariants (30 documents) | `cargo test --test knowledge_validation --test knowledge_validation_walk` | | |
+| Entity quality and recall, fake vectors | `cargo test --release --test knowledge_validation report_quality_and_recall -- --ignored --nocapture` | `ACAI_TIERS=30,100,200`, `ACAI_SANDBOX_DIR=<library>` | `quality-tier-N.md` |
+| What the base holds / why one question was kept | `... print_what_the_base_holds`, `... explain_one_question` | `ACAI_TIER`, `ACAI_Q=Q011` | |
+| Formats the product does not read | `... report_what_the_product_does_with_each_format` | | `formats.md` |
+| Cost and gain from 30 to 1 000 files | `cargo test --release --test knowledge_validation_bench -- --ignored --nocapture` | `ACAI_TIERS`, `ACAI_SANDBOX_DIR` | `bench.md` |
+| Real stack: embeddings, text recognition, answers | `cargo test --release --test knowledge_validation_real real_run -- --ignored --nocapture` (the Docker stack must be up) | `ACAI_GATEWAY`, `ACAI_EMBED_ALIAS`, `ACAI_MODEL`, `ACAI_TIERS`, `ACAI_GENERATE` (answers per mode), `ACAI_TESSERACT`, `ACAI_TESSDATA`, `ACAI_PDFIUM` | `real-tier-N.md`, `real-tier-N.tsv`, `real-answers-tier-N.jsonl` |
+| Text recognition on every scan | `... knowledge_validation_real ocr_on_every_scan` | | `ocr.md` |
+| Probes (extractor, router, Swiss formats, data questions, Analyse summaries, the lines of the window) | `cargo test --release --test knowledge_validation_walk <name> -- --ignored --nocapture` | `ACAI_WALK_TIER`, `ACAI_WALK_QUESTIONS` (sentences joined by a vertical bar) | |
+
+Running time on the development PC: asserted invariants a few seconds; quality 10 to 200 documents 40 s, 500 and 1 000 documents 3 minutes; bench 4 minutes; the real stack at 30, 100 and 200 documents 17 minutes (the embedding of two long documents is 585 s of it).
+A real run restarts from nothing: **do not change the library while it runs**. The figures of lot 11 are in `docs/test-reports/knowledge-base-pass-1/measurements/`.
+
 ## Diagnosing the tabular hidden interpreter against a real model
 
 Session 14 (`docs/DECISIONS.md`, "the hidden interpreter session" and its manual validation pass

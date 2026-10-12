@@ -21,7 +21,7 @@
 //! the place in the file. A test loads every bundled pack in every locale, so a typo fails the
 //! build rather than a user's analysis.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 
 use regex::{Regex, RegexBuilder};
@@ -44,6 +44,8 @@ pub const FALLBACK_LOCALE: &str = "fr-FR";
 
 /// A list entry longer than this is a sentence, not a word or a phrase.
 const MAX_WORDS_PER_ENTRY: usize = 4;
+/// The longest organisation name a pack may list, in words (a canton's office of insurance).
+const MAX_WORDS_PER_ORG_NAME: usize = 12;
 
 /// A pattern whose compiled form exceeds this is refused: a pack is data, and data does not get to
 /// make the program allocate without bound.
@@ -279,6 +281,34 @@ pub struct OrgMarkers {
     pub suffix: Vec<Vec<String>>,
 }
 
+/// An organisation a pack lists by name, with the short forms it is known by.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownOrganization {
+    pub pack: String,
+    /// The name as the interface shows it: the entity's name when one is created.
+    pub display: String,
+    /// The folded words of the full name.
+    pub words: Vec<String>,
+    /// Short forms (`HUG`): written exactly like this in a text, one word each.
+    pub short: Vec<ShortForm>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShortForm {
+    /// The form as the pack writes it. An acronym is matched in this case, not folded: `hug` is an
+    /// ordinary word of another language.
+    pub written: String,
+    pub word: String,
+}
+
+/// Where a known organisation's form starts: the organisation, and which short form (`None` for the
+/// full name).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KnownForm {
+    pub organization: usize,
+    pub short: Option<usize>,
+}
+
 // ---------------------------------------------------------------------------------------------
 // The file format
 // ---------------------------------------------------------------------------------------------
@@ -302,6 +332,10 @@ struct RawPack {
     #[serde(default)]
     org_markers: RawOrgMarkers,
     #[serde(default)]
+    org_names: Vec<RawOrgName>,
+    #[serde(default)]
+    address_markers: Vec<String>,
+    #[serde(default)]
     identifier_schemes: Vec<RawScheme>,
     #[serde(default)]
     columns: Vec<RawColumn>,
@@ -320,6 +354,14 @@ struct RawOrgMarkers {
     prefix: Vec<String>,
     #[serde(default)]
     suffix: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawOrgName {
+    name: String,
+    #[serde(default)]
+    short: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -379,6 +421,8 @@ struct LoadedPack {
     title_spoken: BTreeMap<String, String>,
     stop_words: Vec<String>,
     org_markers: OrgMarkers,
+    org_names: Vec<KnownOrganization>,
+    address_markers: Vec<String>,
     schemes: Vec<IdentifierScheme>,
     columns: Vec<(ColumnRule, usize)>,
     relations: Vec<(RelationRule, usize)>,
@@ -507,6 +551,43 @@ fn parse_pack(
     check_entries(pack, "org_markers.prefix", &raw.org_markers.prefix)?;
     check_entries(pack, "org_markers.suffix", &raw.org_markers.suffix)?;
     check_entries(pack, "detection_terms", &raw.detection_terms)?;
+    check_entries(pack, "address_markers", &raw.address_markers)?;
+    let mut org_names = Vec::new();
+    for (index, organization) in raw.org_names.iter().enumerate() {
+        let at = |field: &str| format!("org_names[{index}].{field}");
+        let name = organization.name.trim();
+        let words = words_of(name);
+        if words.is_empty()
+            || name.split_whitespace().count() > MAX_WORDS_PER_ORG_NAME
+            || name.contains(['?', '!', ';', ':'])
+        {
+            return Err(invalid(pack, &at("name")));
+        }
+        let mut short = Vec::new();
+        for (position, form) in organization.short.iter().enumerate() {
+            let written = form.trim();
+            let folded = words_of(written);
+            if folded.len() != 1
+                || written.split_whitespace().count() != 1
+                || written.chars().count() < 2
+            {
+                return Err(invalid(
+                    pack,
+                    &format!("org_names[{index}].short[{position}]"),
+                ));
+            }
+            short.push(ShortForm {
+                written: written.to_string(),
+                word: folded[0].clone(),
+            });
+        }
+        org_names.push(KnownOrganization {
+            pack: pack.to_string(),
+            display: name.to_string(),
+            words,
+            short,
+        });
+    }
 
     // A spoken form belongs to a title the same pack (or the base) declares; the key is the title
     // as it is folded, because that is how it is looked up.
@@ -657,6 +738,8 @@ fn parse_pack(
             prefix: phrases(&raw.org_markers.prefix),
             suffix: phrases(&raw.org_markers.suffix),
         },
+        org_names,
+        address_markers: raw.address_markers,
         schemes,
         columns,
         relations,
@@ -740,6 +823,11 @@ pub struct PackSet {
     stop_forms: HashSet<String>,
     title_spoken: BTreeMap<String, String>,
     org_markers: OrgMarkers,
+    known_organizations: Vec<KnownOrganization>,
+    /// The folded first word of a known organisation's full name, or its short form, to the forms
+    /// that start with it: a scan looks at a handful of candidates per word.
+    known_forms: HashMap<String, Vec<KnownForm>>,
+    address_forms: HashSet<String>,
     schemes: Vec<IdentifierScheme>,
     columns: Vec<ColumnRule>,
     relations: Vec<RelationRule>,
@@ -812,6 +900,9 @@ impl PackSet {
             stop_forms: HashSet::new(),
             title_spoken: BTreeMap::new(),
             org_markers: OrgMarkers::default(),
+            known_organizations: Vec::new(),
+            known_forms: HashMap::new(),
+            address_forms: HashSet::new(),
             schemes: Vec::new(),
             columns: Vec::new(),
             relations: Vec::new(),
@@ -839,6 +930,12 @@ impl PackSet {
             set.title_spoken.extend(pack.title_spoken);
             set.org_markers.prefix.extend(pack.org_markers.prefix);
             set.org_markers.suffix.extend(pack.org_markers.suffix);
+            set.known_organizations.extend(pack.org_names);
+            set.address_forms.extend(
+                pack.address_markers
+                    .iter()
+                    .map(|marker| words_of(marker).concat()),
+            );
 
             for scheme in pack.schemes {
                 if !scheme_ids.insert(scheme.id.clone()) {
@@ -903,6 +1000,24 @@ impl PackSet {
             .iter()
             .map(|word| words_of(word).concat())
             .collect();
+        for (organization, known) in set.known_organizations.iter().enumerate() {
+            set.known_forms
+                .entry(known.words[0].clone())
+                .or_default()
+                .push(KnownForm {
+                    organization,
+                    short: None,
+                });
+            for (short, form) in known.short.iter().enumerate() {
+                set.known_forms
+                    .entry(form.word.clone())
+                    .or_default()
+                    .push(KnownForm {
+                        organization,
+                        short: Some(short),
+                    });
+            }
+        }
 
         let digest = hasher.finalize();
         set.hash = digest.iter().map(|byte| format!("{byte:02x}")).collect();
@@ -952,6 +1067,25 @@ impl PackSet {
 
     pub fn org_markers(&self) -> &OrgMarkers {
         &self.org_markers
+    }
+
+    /// The organisations the packs list by name.
+    pub fn known_organizations(&self) -> &[KnownOrganization] {
+        &self.known_organizations
+    }
+
+    /// The known-organisation forms that start with this folded word.
+    pub fn known_forms_starting_with(&self, folded_word: &str) -> &[KnownForm] {
+        self.known_forms
+            .get(folded_word)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// Whether a folded word opens an address (`rue`, `avenue`, `place`): what follows it is a place,
+    /// not a person.
+    pub fn is_address_marker(&self, folded_word: &str) -> bool {
+        self.address_forms.contains(folded_word)
     }
 
     pub fn identifier_schemes(&self) -> &[IdentifierScheme] {

@@ -120,10 +120,16 @@ fn raw_tokens(text: &str) -> Vec<RawToken> {
 
     let mut tokens = Vec::new();
     let mut current = String::new();
-    for c in text.chars() {
+    let chars: Vec<char> = text.chars().collect();
+    for (position, &c) in chars.iter().enumerate() {
         // An apostrophe is checked first: U+02BC is a letter as far as Unicode is concerned.
         if is_apostrophe(c) {
-            flush(&mut current, true, &mut tokens);
+            if apostrophe_joins_a_name(&current, chars.get(position + 1).copied()) {
+                // "D'Amico": the apostrophe is inside the surname, which stays one word.
+                current.push('\'');
+            } else {
+                flush(&mut current, true, &mut tokens);
+            }
         } else if c.is_alphanumeric() || is_combining_mark(c) {
             current.push(c);
         } else {
@@ -132,6 +138,26 @@ fn raw_tokens(text: &str) -> Vec<RawToken> {
     }
     flush(&mut current, false, &mut tokens);
     tokens
+}
+
+/// The capital letters that open a surname with an apostrophe: `D'Amico`, `N'Diaye`, `O'Brien`.
+/// `L'` is left out on purpose: `L'Hotel de Ville` is an article and a noun.
+const NAME_ELISION_LETTERS: [char; 3] = ['D', 'N', 'O'];
+
+/// Whether the apostrophe that follows `before` (the letters of the word read so far) and precedes
+/// `after` belongs to a surname (`D'Amico`) and not to an elided article (`l'Hopital`,
+/// `d'Aubigne`).
+///
+/// The rule is about how the name is *written*: a single capital letter, an apostrophe and a capital
+/// letter. An article before a noun is written in lower case (`d'Aubigne`), or is followed by a
+/// lower case word at the start of a sentence (`D'apres`, `N'oubliez pas`). The one function the
+/// name normaliser, the text extractor and the question reader all ask, so the three agree.
+pub(crate) fn apostrophe_joins_a_name(before: &str, after: Option<char>) -> bool {
+    let mut letters = before.chars();
+    let (Some(first), None) = (letters.next(), letters.next()) else {
+        return false;
+    };
+    NAME_ELISION_LETTERS.contains(&first) && after.is_some_and(|next| next.is_uppercase())
 }
 
 /// The language-dependent words a name is read with. Titles, particles and stop-words are data,
@@ -401,6 +427,51 @@ pub fn surname_then_initial(name: &NormalizedName, set: &TitleSet) -> Option<Sur
         surname: before.to_vec(),
         initial: initial.clone(),
     })
+}
+
+/// Whether a word is written in capitals only (two letters or more): `DUPONT`, `VAN DEN BERG`.
+fn is_shouting(word: &str) -> bool {
+    let letters: Vec<char> = word.chars().filter(|c| c.is_alphabetic()).collect();
+    letters.len() >= 2 && letters.iter().all(|c| c.is_uppercase())
+}
+
+/// The span of the first run of words written in capitals, when a word with lower case letters
+/// follows it: the administrative way of writing a person, surname first (`DUPONT Jean`,
+/// `VAN DEN BERG Anne`). `(start, end)` are positions among the words, `end` excluded.
+fn surname_first_run(words: &[&str]) -> Option<(usize, usize)> {
+    let start = words.iter().position(|word| is_shouting(word))?;
+    let mut end = start;
+    while end < words.len() && is_shouting(words[end]) {
+        end += 1;
+    }
+    let mixed_after = words[end..]
+        .iter()
+        .any(|word| word.chars().any(char::is_lowercase));
+    mixed_after.then_some((start, end))
+}
+
+/// Whether a person is written surname first, in capitals (`DUPONT Jean`). The order of the words
+/// of any other spelling says nothing: `Roy Lucas` can be the surname Roy or the surname Lucas.
+pub fn writes_surname_first(text: &str) -> bool {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    surname_first_run(&words).is_some()
+}
+
+/// The name with the given names first, when it is written surname first in capitals
+/// (`LUCAS Roy` is `Roy LUCAS`: the person whose surname is Lucas). Any other spelling is returned as
+/// it is. Titles in front are kept in front.
+pub fn given_name_first(text: &str) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    match surname_first_run(&words) {
+        Some((start, end)) => words[..start]
+            .iter()
+            .chain(&words[end..])
+            .chain(&words[start..end])
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" "),
+        None => text.to_string(),
+    }
 }
 
 /// An identifier with everything that is formatting removed: letters and digits only, accents

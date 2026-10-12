@@ -8,6 +8,13 @@ Local AI for professional practices. Pilot: French GP **admin** (not clinical ca
 
 **No costly silent background work (owner instruction, 11 October 2026, applies to every feature).** Heavy or slow processing (reading, indexing, extraction, relecture of stored documents, any pass over the user's files) runs **only inside an Analyse that the user started by hand**, with the interface showing that it is running. Nothing heavy starts by itself at launch or in the background: it would freeze the interface without the user knowing why. A cheap check (one query) is allowed at launch; anything that can take longer than a moment is not.
 
+**No redundant work (owner instruction, 12 October 2026, binding for every agent, overrides any default habit).** Do nothing that is not needed for the task, and nothing twice. Precisely:
+- **One final pass.** Run the full test suite, `clippy`, `rustfmt --check`, `pnpm run build`, `pnpm run test`, and the measures (sandbox, real stack, bench) **once, at the end**, after the last edit. During the work run only the test or the target that proves the change in hand. Never rerun a measure or the full suite after each small edit; a measure invalidated by a later edit is run again once, at the end.
+- **One report, at the end.** One lot report, one human test, one register update, one status update, written once the work is final. No intermediate report, no rewritten figure table.
+- **Read only what the task needs.** Do not read the "Before any change" documents that the task does not touch, nor a file listed in `.claudeignore`. Read a file once; do not reread a file you just edited or already hold.
+- **No extra deliverable** (extra measures, extra prints, extra documents, extra variants) without an explicit request from the owner.
+- **Over 1 h 00 of expected work:** open with a task list of at most eight lines, one time estimate each, then one-line status updates.
+
 **Everything written for a developer, an agent or a model is English:** code, tests, commits, `prompts/`, and all of `docs/`. **Everything a user reads is in their own language**, French for the pilot. That split is the product's language contract, not a preference — see `docs/LANGUAGE-AND-LOCALE.md`. Never write Franglais, and never mix two languages in one file.
 
 ## Current objective — v0 prototype

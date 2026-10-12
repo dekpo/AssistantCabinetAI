@@ -36,7 +36,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use rusqlite::Connection;
 
 use super::normalize::{
-    normalize_name, normalize_name_with, surname_then_initial, NormalizedName, TitleSet, WeakTitles,
+    given_name_first, normalize_name, normalize_name_with, surname_then_initial,
+    writes_surname_first, NormalizedName, TitleSet, WeakTitles,
 };
 use super::packs::IdentifierStrength;
 use super::phonetic::{bounded_damerau_levenshtein, PhoneticEncoder};
@@ -77,6 +78,7 @@ const SCORE_TOKEN_SET: f32 = 0.75;
 /// the pairs a pass records.
 pub const SCORE_INITIAL: f32 = 0.60;
 const SCORE_SHARED_IDENTIFIER: f32 = 0.70;
+const SCORE_SWAPPED_ORDER: f32 = 0.75;
 
 // ---------------------------------------------------------------------------------------------
 // What the resolver reads
@@ -175,6 +177,15 @@ pub trait EntityLookup {
     fn is_tombstoned(&self, type_id: &str, normalized: &str) -> bool;
     /// Keep the hits that have at least one mention in `selection`.
     fn restrict_to_selection(&self, hits: Vec<EntityHit>, selection: &SourceSet) -> Vec<EntityHit>;
+
+    /// Ingestion: whether an entity is named in the same folder as the source being read (documents
+    /// or tables). Two orders of the same words are kept apart only inside one folder (see
+    /// [`PossibleReason::SwappedOrder`]): a table that writes `Dupont Jean` and a letter that writes
+    /// `Jean Dupont` are the usual way one person is written twice. A lookup that cannot say answers
+    /// `true`, the cautious answer (two people are kept apart).
+    fn names_in_the_same_folder(&self, _entity_id: i64) -> bool {
+        true
+    }
 
     /// Whether any read failed since the lookup was made. The signature of the reads above cannot
     /// carry an error (a lookup is a question, and "I could not look" must not look like "there is
@@ -325,6 +336,11 @@ pub enum PossibleReason {
     Initial,
     /// An identifier two people can share.
     SharedIdentifier,
+    /// Given name and surname the other way round in plain case (`Roy Lucas` for `Lucas Roy`): the
+    /// same person written surname first, or another person whose names are the first one's reverse.
+    /// Only a surname written in capitals (`ROY Lucas`) says which. Not kept in a reduction: two
+    /// people are never searched as one on this evidence.
+    SwappedOrder,
 }
 
 impl PossibleReason {
@@ -335,6 +351,7 @@ impl PossibleReason {
             Self::TokenSet => "token_set",
             Self::Initial => "initial",
             Self::SharedIdentifier => "shared_identifier",
+            Self::SwappedOrder => "swapped_order",
         }
     }
 }
@@ -570,7 +587,18 @@ impl Run<'_, '_> {
 
     fn resolve(&self) -> Resolution {
         let surface = self.surface;
-        let name = normalize_name_with(&surface.text, self.context.titles, surface.weak_titles);
+        // A person written surname first in capitals (`LUCAS Roy`) is read given name first, so the
+        // order of the words never points at the other person whose names are the reverse.
+        let written = if surface
+            .type_id
+            .as_ref()
+            .is_some_and(|type_id| type_id.as_str() == EntityTypeId::PERSON)
+        {
+            given_name_first(&surface.text)
+        } else {
+            surface.text.clone()
+        };
+        let name = normalize_name_with(&written, self.context.titles, surface.weak_titles);
         let has_name = !name.joined.is_empty();
         if !has_name && surface.identifier.is_none() {
             return Resolution::Unresolved {
@@ -653,14 +681,39 @@ impl Run<'_, '_> {
         if !name.titles.is_empty() {
             alias_keys.push(format!("{} {}", name.titles.join(" "), name.joined));
         }
-        let aliases = self.keep(
+        let mut aliases = self.keep(
             alias_keys
                 .iter()
                 .flat_map(|key| self.lookup().by_alias(key))
                 .collect(),
         );
+        // The same words the other way round, in plain case: not the same person on that evidence.
+        // Only a surname written in capitals (`ROY Lucas`) is a surname-first spelling, and that one
+        // was read given name first above.
+        let mut swapped: Vec<EntityHit> = Vec::new();
+        if !writes_surname_first(&surface.text) {
+            let (reordered, mut others): (Vec<EntityHit>, Vec<EntityHit>) = aliases
+                .into_iter()
+                .partition(|hit| hit.alias_kind == Some(AliasKind::Reordered));
+            // An entity only the other folder names (a table against a letter) is the same person.
+            let (kept_apart, same_person): (Vec<EntityHit>, Vec<EntityHit>) =
+                reordered.into_iter().partition(|hit| {
+                    self.is_query() || self.lookup().names_in_the_same_folder(hit.entity_id)
+                });
+            others.extend(same_person);
+            swapped = kept_apart;
+            aliases = others;
+        }
         if !aliases.is_empty() {
             return self.decide_alias(aliases, &name);
+        }
+        if !swapped.is_empty() {
+            return Resolution::PossibleMatch {
+                entities: swapped,
+                reason: PossibleReason::SwappedOrder,
+                score: Confidence::new(SCORE_SWAPPED_ORDER),
+                create_separate: !self.is_query(),
+            };
         }
 
         // A surname and an initial against a full name: a hint, never a link.
@@ -942,7 +995,9 @@ impl Run<'_, '_> {
         let signal = match method {
             Method::Identifier => Signal::Identifier,
             Method::ColumnValue => Signal::ColumnValue,
-            Method::TitleFullName | Method::OrganizationMarker => Signal::StrongPattern,
+            Method::TitleFullName | Method::OrganizationMarker | Method::OrganizationKnown => {
+                Signal::StrongPattern
+            }
             _ => Signal::None,
         };
         Resolution::NewEntity {
@@ -1241,6 +1296,10 @@ pub struct StoreLookup<'a> {
 const WORD_CANDIDATES: usize = 500;
 
 impl<'a> StoreLookup<'a> {
+    pub fn connection(&self) -> &Connection {
+        self.connection
+    }
+
     pub fn new(connection: &'a Connection, titles: &'a TitleSet) -> Self {
         Self {
             connection,
@@ -1265,6 +1324,7 @@ impl<'a> StoreLookup<'a> {
 }
 
 impl EntityLookup for StoreLookup<'_> {
+
     fn by_identifier(&self, scheme: &str, normalized: &str) -> Vec<EntityHit> {
         self.settle(store::find_entities_by_identifier(
             self.connection,

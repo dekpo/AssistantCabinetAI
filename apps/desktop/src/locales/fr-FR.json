@@ -785,6 +785,8 @@
       "coref_in_document": "même personne ailleurs dans le document",
       "filename_token": "mot du nom du fichier",
       "capitalised_name": "mots à majuscule, sans autre appui",
+      "organization_known": "organisation connue du vocabulaire",
+      "block_name": "nom seul sous une formule d'appel",
       "manual": "saisi à la main",
       "other": "autre méthode"
     },
@@ -793,6 +795,7 @@
       "token_set": "mêmes mots dans un autre ordre",
       "initial": "initiale et nom de famille compatibles",
       "shared_identifier": "même identifiant",
+      "swapped_order": "prénom et nom dans l'ordre inverse",
       "other": "ils se ressemblent"
     },
     "matchState": {

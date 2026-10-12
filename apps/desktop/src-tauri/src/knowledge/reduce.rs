@@ -441,7 +441,8 @@ fn reduce_side(
     // The other spelling of a person the base has recorded as a possible match (`Dupont J` and
     // `Jean Dupont`): same person until the user says otherwise, so its files stay in the search.
     let driving_ids: Vec<i64> = driving.iter().map(|entity| entity.entity_id).collect();
-    let partners = store::open_possible_partners(index.connection(), &driving_ids)?;
+    let partners =
+        store::open_possible_partners(index.connection(), &driving_ids, domain == Domain::Data)?;
     let partner_ids: Vec<i64> = partners
         .values()
         .flatten()

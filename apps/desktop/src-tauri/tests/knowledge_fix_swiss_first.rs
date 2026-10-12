@@ -178,11 +178,8 @@ async fn a_commune_of_a_table_never_narrows_the_documents() {
     let vocabulary = lab.vocabulary();
     let documents = lab.documents();
     let workbooks = lab.workbooks();
-    for question in [
-        "Quels documents viennent de Gen\u{e8}ve ?",
-        "Quels documents concernent les Hopitaux universitaires de Gen\u{e8}ve ?",
-    ] {
-        let plan = lab.plan(
+    let plan = |question: &str| {
+        lab.plan(
             &vocabulary,
             KnowledgeMode::Auto,
             &TargetingRequest::default(),
@@ -190,17 +187,32 @@ async fn a_commune_of_a_table_never_narrows_the_documents() {
             SideInput::new(&documents),
             SideInput::new(&workbooks),
             small_world_policy(),
-        );
-        assert!(
-            !plan.reduction.documents.is_applied(),
-            "{question:?}: the documents were reduced to {:?}",
-            plan.reduction.documents.candidates
-        );
-        assert!(
-            plan.reduction.documents.capped.is_empty(),
-            "{question:?}: the cap dropped files"
-        );
-    }
+        )
+    };
+    let commune = plan("Quels documents viennent de Gen\u{e8}ve ?");
+    assert!(
+        !commune.reduction.documents.is_applied(),
+        "the documents were reduced to {:?}",
+        commune.reduction.documents.candidates
+    );
+    assert!(
+        commune.reduction.documents.capped.is_empty(),
+        "the cap dropped files"
+    );
+
+    // Since fix 4, batch 2 the hospital is an organisation the base knows by name (the vocabulary
+    // lists it), so a question that names it is narrowed to the hospital's own files. The commune
+    // adds nothing to it: the file that only says `Gen\u{e8}ve` (the urgences) is not taken in.
+    let hospital = plan("Quels documents concernent les Hopitaux universitaires de Gen\u{e8}ve ?");
+    let mut candidates = hospital.reduction.documents.candidates.clone();
+    candidates.sort();
+    assert_eq!(
+        candidates,
+        ["hug-cardiologie.txt", "hug-neurologie.txt"],
+        "{:?}",
+        hospital.reduction.documents.skipped
+    );
+    assert!(hospital.reduction.documents.capped.is_empty());
 }
 
 // ---------------------------------------------------------------------------------------- F-16

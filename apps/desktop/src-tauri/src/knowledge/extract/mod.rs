@@ -154,6 +154,9 @@ pub struct Candidate {
     pub identifier: Option<CandidateIdentifier>,
     /// The titles seen with the name (folded), so a title-and-surname alias can be made.
     pub titles_seen: Vec<String>,
+    /// The short form a pack states for a well-known organisation (`HUG` for the name written in
+    /// full), so the entity is born knowing it. Never invented from a text.
+    pub acronym: Option<String>,
 }
 
 impl Candidate {
@@ -176,6 +179,7 @@ impl Candidate {
             occurrence_count: 1,
             identifier: None,
             titles_seen: Vec::new(),
+            acronym: None,
         }
     }
 }

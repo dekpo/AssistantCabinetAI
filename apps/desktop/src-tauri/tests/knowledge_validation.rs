@@ -64,16 +64,44 @@ fn truth_keys(entity: &EntityTruth, titles: &TitleSet) -> Vec<String> {
 fn map_truth(truth: &Truth, base: &[KbEntity], titles: &TitleSet) -> Mapping {
     let mut kb_of: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     let mut truth_of: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    let ordered = |text: &str| {
+        assistant_cabinet_ai_lib::knowledge::normalize::normalize_name(text, titles).joined
+    };
     for (id, entity) in &truth.entities {
         if entity.kind != "person" && entity.kind != "organization" {
             continue;
         }
         let keys = truth_keys(entity, titles);
-        for (position, kb) in base.iter().enumerate() {
-            if kb.type_id == entity.kind && keys.iter().any(|key| kb.keys.contains(key)) {
-                kb_of.entry(id.clone()).or_default().push(position);
-                truth_of.entry(position).or_default().push(id.clone());
+        let mut positions: Vec<usize> = (0..base.len())
+            .filter(|&position| {
+                let kb = &base[position];
+                kb.type_id == entity.kind && keys.iter().any(|key| kb.keys.contains(key))
+            })
+            .collect();
+        // Two people whose given name and surname are each other's reverse (`Lucas Roy`, `Roy Lucas`)
+        // share their order-free key: the entity that is written in the person's own order is theirs.
+        // When no entity is, the key match stands, so a real merge is still seen as one.
+        let twin_exists = entity.kind == "person"
+            && truth.entities.iter().any(|(other_id, other)| {
+                other_id != id
+                    && other.kind == "person"
+                    && truth_key(other, titles) == truth_key(entity, titles)
+            });
+        if twin_exists {
+            let own: Vec<usize> = positions
+                .iter()
+                .copied()
+                .filter(|&position| {
+                    ordered(&base[position].canonical) == ordered(&entity.canonical)
+                })
+                .collect();
+            if !own.is_empty() {
+                positions = own;
             }
+        }
+        for position in positions {
+            kb_of.entry(id.clone()).or_default().push(position);
+            truth_of.entry(position).or_default().push(id.clone());
         }
     }
     Mapping { kb_of, truth_of }

@@ -18,7 +18,8 @@ All local branches have a remote twin at the same commit (verified: every `heads
 | `main` | `f27505f` | product | - | The product **without the KB**: the last merge is PR #19 (embedding batches and timeout). Not touched by the programme |
 | `kb/integration` | `5d18c55` | programme trunk | - | `main` + the 45 commits (16 merged pull requests) of the programme, lots 0 to 9, the fixes, the withdrawal of lot 10 |
 | `feat/kb-validation` | `5d18c55` + this lot's uncommitted work | lot 11 | not yet | The validation lot (library with ground truth, tests, protocol, reports). The tip equals `kb/integration` until the owner commits |
-| `fix/kb-swiss-first` | `2f0700e` + batch 1 | fix 4, batch 1 | not yet | F-00, F-01, F-02, F-03, F-11, F-14, F-16, F-24 and the summary line of F-20 (`lots/fix-04-batch-1-swiss-first.md`). Tag to come: `kb-after-fix-04-batch-1` |
+| `fix/kb-swiss-first` | `d2e0786` (merged by `fc1a425`, #37) | fix 4, batch 1 | yes (#37) | F-00, F-01, F-02, F-03, F-11, F-14, F-16, F-24 and the summary line of F-20 (`lots/fix-04-batch-1-swiss-first.md`). Tag: `kb-after-fix-04-batch-1` |
+| `fix/kb-names-and-organisations` | `fc1a425` + batch 2 | fix 4, batch 2 | not yet | F-06, F-07, F-08, F-09, F-10, F-04 (`lots/fix-04-batch-2-names-and-organisations.md`). Tag to come: `kb-after-fix-04-batch-2` |
 | `feat/kb-shared-vocabulary` | `2852694` | lot 9 | yes (#34) | Entity suggestions, transcript repair, outbound guard |
 | `feat/kb-management-dialog` | `ffd7222` | lot 8 | yes (#33) | The « Gérer… » dialog |
 | `feat/kb-targeting-ui` | `f67407b` | lot 7 | yes (#32) | The targeting line, chips, `@` picker, widen button |

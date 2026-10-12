@@ -1959,13 +1959,18 @@ async fn people_who_share_a_surname_are_never_taken_for_one_person() {
     let (jean_pierre, _) = candidates_for("Que dit Jean-Pierre Dupont ?");
     assert_eq!(jean_pierre, vec!["jean-pierre.txt".to_string()]);
 
-    // A title and a surname, a surname, an initial and a surname: several Duponts answer, so the
-    // user is asked and nothing is narrowed.
-    for question in [
-        "Que dit le Dr Dupont ?",
-        "Que dit Dupont ?",
-        "Que dit J. Dupont ?",
-    ] {
+    // A title and a surname that only one of them was ever written with: the doctor (fix 4, batch 2:
+    // the base now learns every title a known person is written with, `Docteur` in one file and `Dr`
+    // in another, as it already did for the first file that named her).
+    let (doctor, _) = candidates_for("Que dit le Dr Dupont ?");
+    assert_eq!(
+        doctor,
+        vec!["jean.txt".to_string(), "ordonnance.txt".to_string()]
+    );
+
+    // A surname, an initial and a surname: several Duponts answer, so the user is asked and nothing
+    // is narrowed.
+    for question in ["Que dit Dupont ?", "Que dit J. Dupont ?"] {
         let (candidates, plan) = candidates_for(question);
         assert!(candidates.is_empty(), "{question}");
         assert_eq!(

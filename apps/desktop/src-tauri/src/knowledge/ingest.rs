@@ -38,20 +38,20 @@ use super::extract::{
 };
 use super::gazetteer::{is_listed_type, Gazetteer, GazetteerEntry};
 use super::maintenance;
-use super::normalize::{normalize_name, TitleSet};
+use super::normalize::{fold_word, given_name_first, normalize_name, TitleSet};
 use super::packs::PackSet;
 use super::phonetic::{encoder_for_locale, PhoneticEncoder};
 use super::resolve::{
-    aliases_for, AliasRequest, DeterministicResolver, EntityHit, EntityLookup, EntityResolver,
-    InMemoryLookup, Resolution, ResolveContext, ResolveMode, SourceSet, StoreLookup, SurfaceInput,
-    Via,
+    alias_phonetic_key, aliases_for, AliasRequest, DeterministicResolver, EntityHit, EntityLookup,
+    EntityResolver, InMemoryLookup, Resolution, ResolveContext, ResolveMode, SourceSet,
+    StoreLookup, SurfaceInput, Via,
 };
 use super::secret::IdentifierKey;
 use super::store;
 use super::{
     AliasDraft, AliasKind, AttributeDraft, ColumnSemanticsDraft, Domain, EntityDraft, EntityRef,
     EntityStatus, EntityTypeId, KnowledgeDelta, KnowledgeMode, KnowledgeSummary, MentionDraft,
-    MentionLocator, Method, Origin, PossibleMatchDraft, RelationDraft, SourceRef,
+    MentionLocator, Method, NewAlias, Origin, PossibleMatchDraft, RelationDraft, SourceRef,
     CURRENT_KB_VERSION,
 };
 use crate::chunking::Chunk;
@@ -835,6 +835,8 @@ fn note_key(connection: &Connection, key: &IdentifierKey) -> Result<bool, AppErr
 struct Layered<'a> {
     base: StoreLookup<'a>,
     drafts: InMemoryLookup,
+    /// The folder of the source being read.
+    domain: Domain,
 }
 
 impl EntityLookup for Layered<'_> {
@@ -870,6 +872,13 @@ impl EntityLookup for Layered<'_> {
 
     fn is_tombstoned(&self, type_id: &str, normalized: &str) -> bool {
         self.base.is_tombstoned(type_id, normalized)
+    }
+
+    fn names_in_the_same_folder(&self, entity_id: i64) -> bool {
+        // An entity this very document just drafted is in the same folder by definition.
+        entity_id < 0
+            || store::entity_has_mention_in_domain(self.base.connection(), entity_id, self.domain)
+                .unwrap_or(true)
     }
 
     fn restrict_to_selection(
@@ -916,6 +925,23 @@ fn display_name(surface: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// The name of an organisation without its legal form (`Dupont Immobilier SA` gives `Dupont
+/// Immobilier`), by the legal forms the packs list. `None` when it has none or nothing else.
+fn without_legal_suffix(name: &str, context: &KnowledgeContext) -> Option<String> {
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let folded: Vec<String> = words.iter().map(|word| fold_word(word)).collect();
+    for marker in &context.packs.org_markers().suffix {
+        if marker.is_empty() || words.len() <= marker.len() {
+            continue;
+        }
+        let cut = words.len() - marker.len();
+        if folded[cut..] == marker[..] {
+            return Some(words[..cut].join(" "));
+        }
+    }
+    None
 }
 
 enum Placed {
@@ -965,6 +991,7 @@ impl<'a> DeltaBuilder<'a> {
             lookup: Layered {
                 base: StoreLookup::new(connection, &context.titles),
                 drafts,
+                domain: delta.source.domain,
             },
             delta,
             source_entities: BTreeSet::new(),
@@ -1027,7 +1054,7 @@ impl<'a> DeltaBuilder<'a> {
             let key = format!(
                 "{}:{}",
                 candidate.type_id.as_str(),
-                normalize_name(&candidate.surface, &self.context.titles).joined
+                normalize_name(&self.read_as_written(candidate), &self.context.titles).joined
             );
             let group = by_key.entry(key.clone()).or_insert_with(|| {
                 order.push(key.clone());
@@ -1051,6 +1078,16 @@ impl<'a> DeltaBuilder<'a> {
             .into_iter()
             .filter_map(|key| by_key.remove(&key))
             .collect()
+    }
+
+    /// The name of a candidate as the resolver reads it: a person written surname first in capitals
+    /// (`DUPONT Jean`) is read given name first, so the two spellings are one name.
+    fn read_as_written(&self, candidate: &Candidate) -> String {
+        if candidate.type_id.as_str() == EntityTypeId::PERSON {
+            given_name_first(&candidate.surface)
+        } else {
+            candidate.surface.clone()
+        }
     }
 
     /// A surname alone, or an initial and a surname: placed after the full names.
@@ -1084,6 +1121,9 @@ impl<'a> DeltaBuilder<'a> {
                 through_short_form,
                 confidence,
             } => {
+                if !through_short_form && !group.titles_seen.is_empty() {
+                    self.add_title_forms(lead, target, &group.titles_seen);
+                }
                 for &position in &group.members {
                     let member = &names[position];
                     let (method, kept_confidence) =
@@ -1106,6 +1146,42 @@ impl<'a> DeltaBuilder<'a> {
                     );
                 }
             }
+        }
+    }
+
+    /// A person already in the base, found again with a title (`Dr Jean Dupont`): the title and the
+    /// surname (`Dr Dupont`) becomes one of the names the base knows her by, as it would have if this
+    /// document had been the first to name her. Only for a name written in full: a short form never
+    /// teaches the base anything.
+    fn add_title_forms(&mut self, lead: &Candidate, target: EntityRef, titles_seen: &[String]) {
+        if lead.type_id.as_str() != EntityTypeId::PERSON
+            || !matches!(target, EntityRef::Existing(_))
+        {
+            return;
+        }
+        let canonical = display_name(&given_name_first(&lead.surface));
+        let made = aliases_for(
+            &AliasRequest {
+                type_id: &lead.type_id,
+                canonical: &canonical,
+                titles_seen,
+                acronym: None,
+            },
+            &self.context.titles,
+            self.context.encoder.as_ref(),
+        );
+        for alias in made
+            .iter()
+            .filter(|alias| alias.kind == AliasKind::TitleForm)
+        {
+            self.delta.aliases.push(AliasDraft {
+                entity: target,
+                display: alias.display.clone(),
+                normalized: alias.normalized.clone(),
+                phonetic_key: alias.phonetic_key.clone(),
+                kind: alias.kind,
+                confidence: alias.confidence,
+            });
         }
     }
 
@@ -1223,7 +1299,7 @@ impl<'a> DeltaBuilder<'a> {
         // Capital letters are a style in a surname ("DUPONT Jean") and a fact in an organisation's
         // name ("SARL", "IBM"): only a person's name is re-cased.
         let canonical = if candidate.type_id.as_str() == EntityTypeId::PERSON {
-            display_name(&candidate.surface)
+            display_name(&given_name_first(&candidate.surface))
         } else {
             candidate.surface.clone()
         };
@@ -1231,16 +1307,39 @@ impl<'a> DeltaBuilder<'a> {
         if normalized_name.is_empty() {
             return None;
         }
-        let aliases = aliases_for(
+        let mut aliases = aliases_for(
             &AliasRequest {
                 type_id: &candidate.type_id,
                 canonical: &canonical,
                 titles_seen,
-                acronym: None,
+                acronym: candidate.acronym.as_deref(),
             },
             &self.context.titles,
             self.context.encoder.as_ref(),
         );
+        // An organisation known by its legal form (`Dupont Immobilier SA`) is also written without
+        // it: the same name in the next letter is this organisation and not a person.
+        if candidate.method == Method::OrganizationMarker {
+            if let Some(short) = without_legal_suffix(&canonical, self.context) {
+                let name = normalize_name(&short, &self.context.titles);
+                if !name.joined.is_empty()
+                    && !aliases.iter().any(|alias| alias.normalized == name.joined)
+                {
+                    aliases.push(NewAlias {
+                        phonetic_key: alias_phonetic_key(
+                            &short,
+                            AliasKind::Abbreviation,
+                            &self.context.titles,
+                            self.context.encoder.as_ref(),
+                        ),
+                        display: short,
+                        normalized: name.joined,
+                        kind: AliasKind::Abbreviation,
+                        confidence: 0.8,
+                    });
+                }
+            }
+        }
 
         let temp_id = self.next_temp;
         self.next_temp += 1;

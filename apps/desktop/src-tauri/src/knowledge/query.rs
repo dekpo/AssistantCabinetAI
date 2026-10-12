@@ -719,6 +719,40 @@ impl QueryEntityDetector<'_> {
                     continue;
                 }
             }
+            // A surname (alone, or after a title) that is another person's given name (`Roy` of
+            // `Lucas Roy`, for `Roy Lucas`): searching it would pull in that person's files.
+            let surname = alias.normalized.rsplit(' ').next().unwrap_or_default();
+            if matches!(
+                alias.kind,
+                super::AliasKind::PartialSurname | super::AliasKind::TitleForm
+            ) && !surname.is_empty()
+                && store::find_aliases_with_word(self.connection, surname, 50)?
+                    .iter()
+                    .any(|(other, named)| {
+                        other.entity_id != entity_id
+                            && other.type_id == super::EntityTypeId::PERSON
+                            && named.kind == super::AliasKind::CanonicalVariant
+                            && named
+                                .normalized
+                                .rsplit_once(' ')
+                                .is_some_and(|(given, last)| {
+                                    // `Dupont J` writes the surname first: its first word is no given name.
+                                    last.chars().count() > 1
+                                        && given.split(' ').any(|word| word == surname)
+                                })
+                    })
+            {
+                continue;
+            }
+            // The words the other way round are another person's name when that person is known
+            // (`Roy Lucas` for `Lucas Roy`): searching them would pull in the other one's files.
+            if alias.kind == super::AliasKind::Reordered
+                && store::find_entities_by_normalized(self.connection, &alias.normalized)?
+                    .iter()
+                    .any(|other| other.entity_id != entity_id)
+            {
+                continue;
+            }
             forms.insert(alias.normalized.clone());
         }
         Ok(forms.into_iter().collect())

@@ -26,12 +26,15 @@
     "facture", "devis", "commande", "bon", "avoir", "relevé", "courrier", "lettre", "mail", "note",
     "scan", "copie", "original", "brouillon", "version", "final", "modèle", "annexe", "pièce", "rapport",
     "compte", "rendu", "contrat", "attestation", "certificat", "tableau", "liste", "total",
-    "nul", "null", "none", "néant", "inconnu", "unknown", "n/a", "na", "vide", "oui", "non"
+    "nul", "null", "none", "néant", "inconnu", "unknown", "n/a", "na", "vide", "oui", "non",
+    "entre", "chez", "pour", "avec", "sans", "selon", "vers", "sous", "dans", "depuis", "pendant", "lors",
+    "merci", "bonjour", "cordialement"
   ],
   "org_markers": {
     "prefix": ["association", "cabinet", "société", "entreprise", "groupe", "fondation", "syndicat", "mairie", "ville de"],
     "suffix": ["SA", "SARL", "SAS", "SASU", "EURL", "SCI", "SNC", "SCP", "SCM", "SELARL"]
   },
+  "address_markers": ["rue", "avenue", "chemin", "route", "boulevard", "place", "impasse", "quai", "allée", "ruelle", "passage", "square", "sentier", "cours", "esplanade", "faubourg", "promenade"],
   "identifier_schemes": [
     {
       "id": "email",

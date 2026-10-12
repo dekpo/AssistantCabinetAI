@@ -511,15 +511,19 @@ fn split_ddmmyyyy(text: &str, separator: char) -> Option<(u32, u32, u32)> {
 // --- Numbers (D2) -------------------------------------------------------------------------------
 
 /// Currency and percent signs this product recognises in a cell's text, before or after the
-/// number, with or without a space.
-const UNIT_SYMBOLS: [&str; 3] = ["\u{20ac}", "$", "%"];
+/// number, with or without a space. The Swiss franc is written `CHF`, `Fr.` or `SFr.`, in any
+/// case; the longest spelling comes first so that `SFr.` is never read as `Fr.` with a stray `S`.
+const UNIT_SYMBOLS: [&str; 6] = ["SFr.", "CHF", "Fr.", "\u{20ac}", "$", "%"];
 
 /// Every character a thousands grouping may use - plain space, the two Unicode spaces real
-/// exports use, and, when it is not already playing the decimal role, a point or a comma.
-const GROUPING_CHARS: [char; 5] = [' ', '\u{a0}', '\u{202f}', '.', ','];
+/// exports use, the apostrophe of Swiss figures (`1'450.00`, typed or typographic), and, when it
+/// is not already playing the decimal role, a point or a comma.
+const GROUPING_CHARS: [char; 7] = [' ', '\u{a0}', '\u{202f}', '\'', '\u{2019}', '.', ','];
 
+/// A separator that can only group thousands, never mark a decimal: a space of any width, and the
+/// apostrophe (`1'45` is not a number; `1'450` is a thousand four hundred and fifty).
 fn is_space_like(separator: char) -> bool {
-    matches!(separator, ' ' | '\u{a0}' | '\u{202f}')
+    matches!(separator, ' ' | '\u{a0}' | '\u{202f}' | '\'' | '\u{2019}')
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -594,7 +598,14 @@ fn number_shape(text: &str) -> NumberShape {
         body = inner.trim_start();
     }
 
-    let (body, unit) = strip_unit(body);
+    let (mut body, unit) = strip_unit(body);
+    // `CHF -1'450.00`: the sign may follow the currency.
+    if !negative {
+        if let Some(inner) = body.strip_prefix('-') {
+            negative = true;
+            body = inner.trim_start();
+        }
+    }
     if body.is_empty() {
         return NumberShape::Invalid;
     }
@@ -734,14 +745,30 @@ fn resolve_thousands_only(
 fn strip_unit(text: &str) -> (&str, Option<String>) {
     let trimmed = trim_layout_space(text);
     for symbol in UNIT_SYMBOLS {
-        if let Some(rest) = trimmed.strip_prefix(symbol) {
+        if let Some(rest) = strip_symbol_prefix(trimmed, symbol) {
             return (trim_layout_space(rest), Some(symbol.to_string()));
         }
-        if let Some(rest) = trimmed.strip_suffix(symbol) {
+        if let Some(rest) = strip_symbol_suffix(trimmed, symbol) {
             return (trim_layout_space(rest), Some(symbol.to_string()));
         }
     }
     (trimmed, None)
+}
+
+/// `text` without `symbol` at its start. A symbol made of letters is matched whatever its case
+/// (`CHF`, `chf`); the others are matched exactly, which a case-insensitive ASCII comparison does
+/// for them as well.
+fn strip_symbol_prefix<'a>(text: &'a str, symbol: &str) -> Option<&'a str> {
+    let head = text.get(..symbol.len())?;
+    head.eq_ignore_ascii_case(symbol)
+        .then(|| &text[symbol.len()..])
+}
+
+/// `text` without `symbol` at its end, matched as [`strip_symbol_prefix`] is.
+fn strip_symbol_suffix<'a>(text: &'a str, symbol: &str) -> Option<&'a str> {
+    let at = text.len().checked_sub(symbol.len())?;
+    let tail = text.get(at..)?;
+    tail.eq_ignore_ascii_case(symbol).then(|| &text[..at])
 }
 
 fn trim_layout_space(text: &str) -> &str {

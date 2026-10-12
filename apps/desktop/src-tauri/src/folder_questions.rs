@@ -419,6 +419,7 @@ fn folder_answer(
         return None;
     }
 
+    let acronyms = acronyms_in(question);
     let mut counts = false;
     let mut subject: Option<Subject> = None;
     let mut extension: Option<String> = None;
@@ -453,7 +454,13 @@ fn folder_answer(
         // rule, and a politely phrased listing request went to a model that then had to
         // transcribe sixteen paths by hand. The exact sentence is in
         // `tests/work_folder_inventory.rs`, where a French example is allowed.
-        if corpus.contains(token) {
+        //
+        // An acronym is the same kind of word, and the corpus cannot say so: the index drops words
+        // shorter than four letters (`HUG`, `AVS`, `FMH`), so the corpus never "contains" them. A
+        // word written in capitals inside a sentence that is not all capitals is a name the user
+        // typed on purpose, and a question about it is a question about the documents, not a
+        // listing of the folder (`Quels documents concernent HUG ?`, defect KBD-35).
+        if corpus.contains(token) || acronyms.contains(token) {
             return None;
         }
         unknown_words += 1;
@@ -532,6 +539,23 @@ fn folder_answer(
             lines: tree_lines(inventory),
         }),
     }
+}
+
+/// The acronyms a question writes (`HUG`, `CHUV`, `SUVA`), lowercased like [`tokenise`]: words of two
+/// to six letters, all capitals, in a sentence that also holds lowercase letters. A sentence typed
+/// in capitals has no acronyms.
+fn acronyms_in(question: &str) -> Vec<String> {
+    if !question.chars().any(char::is_lowercase) {
+        return Vec::new();
+    }
+    question
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| {
+            let letters = word.chars().count();
+            (2..=6).contains(&letters) && word.chars().all(char::is_uppercase)
+        })
+        .map(str::to_lowercase)
+        .collect()
 }
 
 /// What a question is about. The order is the priority: a question mentioning both files and the

@@ -1898,7 +1898,10 @@ async fn sourced_answer(
     let answer = generated.text;
     // A figure the model states that is in no excerpt and not in the question: said beside the
     // answer. Two digits are enough here (a price such as 80 is the case that mattered).
+    // The cited files' own paths are known too: the model names a source by its path, and the date
+    // in `2026-03-26_decompte.pdf` is not a figure it invented.
     let mut known: Vec<&str> = evidence.iter().map(|item| item.text.as_str()).collect();
+    known.extend(evidence.iter().map(|item| item.relative_path.as_str()));
     known.push(&asked);
     let unverified_numbers = number_check::unsupported_numbers(&answer, &known, 2);
 

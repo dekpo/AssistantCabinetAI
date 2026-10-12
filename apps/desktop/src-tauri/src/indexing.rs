@@ -99,10 +99,55 @@ pub struct IndexSummary {
     /// because it costs a few clock reads; written to `analysis-timings.jsonl` only when
     /// `write_timing_log` is on.
     pub timings: Option<AnalysisTimings>,
+    /// Files of the folder that no reader of this product opens, counted by extension, most
+    /// numerous first: the summary says how many were not read and why (their format), instead of
+    /// letting a library with a tenth of its files in a format nobody reads answer from the rest
+    /// without a word (defect KBD-30). A count and an extension, never a name.
+    pub unread_formats: Vec<UnreadFormat>,
     /// What the pass learned about names, as counts. `None` when the knowledge base took no part
     /// (`knowledge_mode = off`, or a pass that never had a context) and for the Data Folder's pass
     /// until lot 5. Never a name.
     pub knowledge: Option<KnowledgeSummary>,
+}
+
+/// How many files of one format the pass could not read. The format is the extension, lowercase and
+/// without the dot; the interface says that these formats are not read yet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadFormat {
+    pub extension: String,
+    pub count: usize,
+}
+
+/// Files the operating system keeps in a folder for its own use: not documents, never reported.
+const OPERATING_SYSTEM_FILES: [&str; 2] = ["thumbs.db", "desktop.ini"];
+
+/// The formats of `everything` (the walk of the whole folder) that no reader opens: a known or
+/// unknown extension that is neither a document the pipeline reads nor a workbook, which belongs
+/// to the Data Folder. Counted by extension, most numerous first, then by extension.
+fn unread_formats(everything: &[DiscoveredFile]) -> Vec<UnreadFormat> {
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for file in everything {
+        let extension = file.extension.to_lowercase();
+        let name = file
+            .relative_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(&file.relative_path)
+            .to_lowercase();
+        let unread = crate::file_record::FileKind::from_extension(&extension)
+            == crate::file_record::FileKind::Unsupported
+            && !OPERATING_SYSTEM_FILES.contains(&name.as_str());
+        if unread {
+            *counts.entry(extension).or_insert(0) += 1;
+        }
+    }
+    let mut formats: Vec<UnreadFormat> = counts
+        .into_iter()
+        .map(|(extension, count)| UnreadFormat { extension, count })
+        .collect();
+    formats.sort_by(|a, b| b.count.cmp(&a.count).then(a.extension.cmp(&b.extension)));
+    formats
 }
 
 /// How far one pass has got, sent while it runs so a long analysis shows its progress rather than
@@ -229,7 +274,12 @@ pub async fn run_with_knowledge(
     // The engine itself is timed from inside, so the time it takes is not counted as extraction.
     let timed_ocr = ocr.map(TimedOcr::new);
     let ocr: Option<&dyn OcrProvider> = timed_ocr.as_ref().map(|engine| engine as &dyn OcrProvider);
-    let files = discovery::discover(work_folder);
+    let everything = discovery::discover_all(work_folder);
+    let unread_formats = unread_formats(&everything);
+    let files: Vec<DiscoveredFile> = everything
+        .into_iter()
+        .filter(|file| discovery::is_supported(&file.extension))
+        .collect();
     // Before reading anything: a document she deleted must stop being citable, and that is true
     // whether or not the rest of the pass succeeds. Keyed on the same walk the pass itself uses,
     // so the index and the folder panel cannot disagree about what is there.
@@ -494,6 +544,7 @@ pub async fn run_with_knowledge(
         rename_failed_files: Vec::new(),
         failed_files,
         unavailable_capabilities,
+        unread_formats,
         chunk_count: index.chunk_count()?,
         timings: Some(timings),
         knowledge: knowledge_summary,

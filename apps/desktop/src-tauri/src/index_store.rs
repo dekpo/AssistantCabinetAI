@@ -173,6 +173,14 @@ impl IndexStore {
             "TEXT NOT NULL DEFAULT 'text_layer'",
         )?;
         Self::ensure_column(connection, "chunks", "confidence", "REAL")?;
+        // The chunks of one document, asked once per file by a search over explicit files
+        // (`chunks_for_document`): without this, every file costs a scan of the whole table and a
+        // selection of a thousand files takes seconds (defect KBD-16). One pass over the rows, once.
+        connection
+            .execute_batch(
+                "CREATE INDEX IF NOT EXISTS chunks_by_document ON chunks (relative_path);",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
         // After the index's own tables: the knowledge base lives in the same file and is purely
         // additive, so a database from before it exists is opened and extended, never rewritten.
         // A schema that cannot be completed leaves the file in a state nobody has tested, so it is

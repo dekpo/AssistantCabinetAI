@@ -22,6 +22,8 @@ const MIN_TOKEN_CHARS: usize = 4;
 /// How much of a name, beside its extension, a shortened reference has to carry before the end of
 /// it is matched against the folder.
 const MIN_FRAGMENT_STEM_CHARS: usize = 3;
+/// The longest extension a file name carries here (`docx`, `xlsx`, `pptx`, `html`, `jpeg`).
+const MAX_EXTENSION_CHARS: usize = 5;
 /// A multi-word file name shorter than this is too easily a phrase in an ordinary sentence.
 const MIN_PHRASE_CHARS: usize = 8;
 
@@ -402,9 +404,22 @@ fn usable_fragment(reference: &str) -> Option<String> {
     (stem.chars().count() >= MIN_FRAGMENT_STEM_CHARS).then(|| reference.to_string())
 }
 
+/// Whether a token that carries a dot is written the way a file name is: a stem, then an
+/// extension that is a short word with at least one letter (`.pdf`, `.7z`, `.p7m`). A number with
+/// points in it (`756.3052.5778.43`, an AVS number; `04.50.12.34.56`, a phone number; `1.5`), a
+/// number with a hyphen after the last point (`6.126.452-9`, a policy number) and an e-mail
+/// address (`jean.dupont@email.com`) are identifiers, and an identifier is looked up in the
+/// documents, never reported as "no such file" (defect KBD-35).
 fn looks_like_a_file_name(token: &str) -> bool {
+    if token.contains('@') {
+        return false;
+    }
     let (stem, extension) = split_name(token);
-    !stem.is_empty() && !extension.is_empty()
+    !stem.is_empty()
+        && !extension.is_empty()
+        && extension.chars().count() <= MAX_EXTENSION_CHARS
+        && extension.chars().all(|c| c.is_ascii_alphanumeric())
+        && extension.chars().any(|c| c.is_ascii_alphabetic())
 }
 
 /// Words long enough to be a file's name rather than a preposition. Purely numeric words are

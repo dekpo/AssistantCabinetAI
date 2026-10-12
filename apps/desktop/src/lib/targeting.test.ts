@@ -189,6 +189,20 @@ describe("the line under an answer whose search was narrowed", () => {
     expect(note?.lines[0]?.text).toBe("Recherche ciblée : 2 documents sur 40");
   });
 
+  it("never writes an identifier as a name (its label is internal, a personal one is a hash)", () => {
+    const number = {
+      entityId: 20,
+      display: "health_insurance_number da99a7",
+      typeId: "identifier",
+      confidence: 1,
+      method: "identifier",
+    };
+    const note = targetingNote(french, applied(1, { entities: [number] }));
+
+    expect(confirmedNames(applied(1, { entities: [number, dupont] }))).toStrictEqual(["Jean Dupont"]);
+    expect(note?.lines[0]?.text).toBe("Recherche ciblée : 1 document sur 40");
+  });
+
   it("quotes at most three names", () => {
     const names = ["Ada", "Bea", "Cleo", "Dina"].map((display, index) => ({
       ...dupont,

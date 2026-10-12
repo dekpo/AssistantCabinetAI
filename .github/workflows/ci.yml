@@ -46,9 +46,16 @@ jobs:
       - name: vitest
         run: pnpm run test
 
-      - name: cargo test
+      - name: cargo test (library)
         working-directory: apps/desktop/src-tauri
         run: cargo test --lib
+
+      # Every integration target that is not #[ignore]: the knowledge base, the tabular engine and
+      # the router are proved there, not in the library. A target that needs something a runner
+      # lacks is fixed, never skipped.
+      - name: cargo test (integration targets)
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --tests
 
   server:
     name: server (${{ matrix.os }})

@@ -19,6 +19,9 @@ Commands
                                 Documents folder with the first <size> documents of the sandbox (30, 100, 200,
                                 500 or 1000) and its workbooks, point the application at them, set the
                                 knowledge mode to "suggest" and switch the timing log on
+    swiss-file                  write two invented amount tables in "kb-lot11-data": patients-suisse.csv (amounts
+                                "CHF 1'450.00", dates 14.10.2026) and patients-france.csv (amounts "1 450,00 EUR",
+                                dates 14/10/2026), the same ten rows in both; Analyse the Data card afterwards
     tier <size>                 grow or shrink the test library to <size> documents (adds or removes files in
                                 kb-lot11 only), the way a real library grows
     mode off | suggest | auto   set "knowledgeMode" in settings.json
@@ -312,6 +315,46 @@ def prepare(size_text: str) -> int:
     return 0
 
 
+SWISS_AMOUNTS = (
+    "Date;Patient;Montant\n"
+    "14.10.2026;Sophie Rochat;CHF 1'450.00\n"
+    "02.10.2026;Mathieu Cuendet;CHF 380.50\n"
+    "21.10.2026;Isabelle Pittet;CHF 1'020.00\n"
+    "05.09.2026;Nathalie Chappuis;CHF 95.00\n"
+    "18.09.2026;Pascal Maillard;CHF 2'310.25\n"
+    "30.09.2026;C\u00e9line Bovet;CHF 560.00\n"
+    "12.10.2026;Alain Jaccard;CHF 75.00\n"
+    "26.10.2026;Christelle D\u00e9l\u00e8ze;CHF 640.80\n"
+    "09.10.2026;Gr\u00e9goire Crettenand;CHF 1'999.99\n"
+    "15.09.2026;Marie-Claude Vuilleumier;CHF 410.00\n"
+)
+FRENCH_AMOUNTS = (
+    "Date;Patient;Montant\n"
+    "14/10/2026;Jean Dupont;1 450,00 \u20ac\n"
+    "02/10/2026;Marie Martin;380,50 \u20ac\n"
+    "21/10/2026;Claire Martin;1 020,00 \u20ac\n"
+    "05/09/2026;Luc Martin;95,00 \u20ac\n"
+    "18/09/2026;Laurence Fabre;2 310,25 \u20ac\n"
+    "30/09/2026;Fr\u00e9d\u00e9ric Girard;560,00 \u20ac\n"
+    "12/10/2026;Lucas Roy;75,00 \u20ac\n"
+    "26/10/2026;Pierre Thomas;640,80 \u20ac\n"
+    "09/10/2026;Thomas Pierre;1 999,99 \u20ac\n"
+    "15/09/2026;Marie Dupont;410,00 \u20ac\n"
+)
+
+
+def swiss_file() -> int:
+    settings = read_settings()
+    data = settings.get("dataFolder")
+    if not data or Path(data).name != DATA_NAME or not Path(data).is_dir():
+        return fail("run 'prepare <size>' first: the amount tables are written in " + DATA_NAME)
+    (Path(data) / "patients-suisse.csv").write_text(SWISS_AMOUNTS, encoding="utf-8", newline="\n")
+    (Path(data) / "patients-france.csv").write_text(FRENCH_AMOUNTS, encoding="utf-8", newline="\n")
+    say(f"wrote patients-suisse.csv and patients-france.csv in {data} (invented patients, ten rows each)")
+    say("Start the application, press Analyser on the Data card.")
+    return 0
+
+
 def tier(size_text: str) -> int:
     if not size_text.isdigit() or int(size_text) not in (30, 100, 200, 500, 1000):
         return fail("tier takes a size: 30, 100, 200, 500 or 1000")
@@ -582,6 +625,7 @@ COMMANDS = {
     "restore": (lambda a: restore(), True),
     "generate": (lambda a: generate(), False),
     "prepare": (lambda a: prepare(a[0]) if a else fail("usage: prepare 30 | 100 | 200 | 500 | 1000"), True),
+    "swiss-file": (lambda a: swiss_file(), False),
     "tier": (lambda a: tier(a[0]) if a else fail("usage: tier 30 | 100 | 200 | 500 | 1000"), False),
     "mode": (lambda a: set_mode(a[0]) if a else fail("usage: mode off | suggest | auto"), True),
     "lifecycle": (lambda a: lifecycle(a[0]) if a else fail("usage: lifecycle add | add-spaced | modify | delete | undo"), False),

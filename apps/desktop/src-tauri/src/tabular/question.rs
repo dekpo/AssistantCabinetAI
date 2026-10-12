@@ -352,18 +352,30 @@ fn classify_with(
     // "sort" in "Sort by duree_min descending". Narrow on purpose: only tokens that are part of a
     // name this question already resolved are excluded, and only from operation/group
     // detection - `detect_structural` still reads every token.
+    //
+    // The column's name is taken out where the question wrote it (one run of its words), so that
+    // an operation word the question uses on its own stays: in "the total of Total_Ligne" the
+    // first `total` is the operation and the second is part of the name. When the name is not
+    // written as one run (a plural, a tail word), every token that is one of its words goes.
     let mut excluded_parts: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Some(name) = &sheet_name {
         excluded_parts.extend(name_words(name));
     }
-    if let Some(name) = &column_name {
-        excluded_parts.extend(name_words(name));
-    }
-    let detection_tokens: Vec<String> = tokens
+    let column_words = column_name.as_deref().map(name_words).unwrap_or_default();
+    let mut detection_tokens: Vec<String> = tokens
         .iter()
         .filter(|token| !excluded_parts.contains(&fold_text(token)))
         .cloned()
         .collect();
+    if !column_words.is_empty() {
+        detection_tokens = match without_the_run(&detection_tokens, &column_words) {
+            Some(without) => without,
+            None => detection_tokens
+                .into_iter()
+                .filter(|token| !column_words.contains(&fold_text(token)))
+                .collect(),
+        };
+    }
 
     // "total <amount> for the <supplier> ..." names a text column and an amount: an aggregate is
     // computed over the amount, never over the longest name (HAP-1, BUG-05, Q24).
@@ -537,7 +549,32 @@ fn detect_structural(
     sheet_name: &Option<String>,
     column_name: &Option<String>,
 ) -> Option<StructuralQuestion> {
+    // A column's name is a name before it is words: `Total_Ligne` is a column, and its `ligne` is
+    // not the "rows" of "how many rows" (defect KBD-01). The words of a column named whole, with
+    // two words or more, are taken out of the question before the vocabulary is looked for. A
+    // one-word column keeps today's reading: a column called `Lignes` still lets "how many
+    // lines?" be the row count it has always been.
+    let own_words = column_name
+        .as_deref()
+        .map(name_words)
+        .filter(|words| words.len() >= 2);
+    let without_the_column;
+    let tokens = match &own_words {
+        Some(words) => {
+            without_the_column = without_the_run(tokens, words).unwrap_or_else(|| tokens.to_vec());
+            &without_the_column[..]
+        }
+        None => tokens,
+    };
     let has = |words: &[String]| tokens.iter().any(|token| contains(words, token));
+    // "The sum of the column Price" names a column and asks for a figure: the word "column" is
+    // there to say what the figure is about, so it is the sum that is answered, not the list of
+    // the columns (defect KBD-39). "How many columns?" and "which columns?" hold no such word.
+    let asks_for_a_figure = has(&pack.operations.sum)
+        || has(&pack.operations.mean)
+        || has(&pack.operations.median)
+        || has(&pack.operations.min)
+        || has(&pack.operations.max);
 
     // "sheet(s)" on its own means "what sheets exist"; mentioned alongside "row(s)" or
     // "column(s)" it is naming which sheet the real question is about instead, and one of the
@@ -587,12 +624,35 @@ fn detect_structural(
                 sheet: sheet_name.clone(),
             });
         }
-    } else if has(&pack.structural.columns) {
+    } else if has(&pack.structural.columns) && !asks_for_a_figure {
         return Some(StructuralQuestion::ColumnNames {
             sheet: sheet_name.clone(),
         });
     }
     None
+}
+
+/// `tokens` without the first run of consecutive tokens that spell `words` (folded, the last one
+/// possibly in the plural): the place where the question wrote a column's name. `None` when the
+/// question does not write the name as one run.
+fn without_the_run(tokens: &[String], words: &[String]) -> Option<Vec<String>> {
+    let span = words.len();
+    if span == 0 || tokens.len() < span {
+        return None;
+    }
+    let start = (0..=tokens.len() - span).find(|&start| {
+        (0..span).all(|offset| {
+            let token = fold_text(&tokens[start + offset]);
+            token == words[offset] || (offset + 1 == span && plural_of(&token, &words[offset]))
+        })
+    })?;
+    Some(
+        tokens[..start]
+            .iter()
+            .chain(&tokens[start + span..])
+            .cloned()
+            .collect(),
+    )
 }
 
 /// "Which agency costs the most", "which agency costs the least" (session 12's D5), "top 3

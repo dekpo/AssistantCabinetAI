@@ -175,3 +175,7 @@ frozen for the v0 sprint. Project documentation, which is English as of 16 Septe
 A locale-aware model alias, if a future model turns out to be clearly better in one language than
 another: `cabinet-chat` would resolve per locale in the alias map. This is a server-side mapping change
 and nothing else, which is why it can wait.
+
+### The knowledge base and the language contract (KB programme, lot 11)
+
+Rust returns machine codes only (`skipped` reasons, `widenedAuto`, `ambiguous`, the error codes of the dialog); every sentence the user reads under an answer, in the dialog, in the picker and in the Analyse summary is a key of the interface catalogue, French for the pilot. The vocabulary packs are named `<domain>-<country>` (`health-fr`, `health-ch`), cumulative, and never hard-code a French assumption in code or in a model-facing string. The validation library writes both French and French-Swiss forms (`Dre`, `CHF 1'450.00`, AVS numbers); what the product does not yet read of them is in the defects register (KBD-26, KBD-35, KBD-38). Canonical description: `docs/KNOWLEDGE-BASE.md`.

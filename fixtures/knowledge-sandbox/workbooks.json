@@ -1,0 +1,4897 @@
+[
+ {
+  "path": "rendez-vous-2026.xlsx",
+  "format": "xlsx",
+  "readable": true,
+  "sheets": [
+   {
+    "name": "Septembre",
+    "rows": 60
+   },
+   {
+    "name": "Octobre",
+    "rows": 42
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "p-g0116",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "d-martin-paul",
+    "form": "title_full",
+    "sheet": "Septembre",
+    "column": "Médecin traitant",
+    "rows": [
+     2,
+     4,
+     5,
+     8,
+     11,
+     13,
+     15,
+     21,
+     27,
+     28,
+     29,
+     32,
+     33,
+     36,
+     39,
+     40,
+     44,
+     51,
+     56,
+     57
+    ]
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "o-marchetti",
+    "form": "title_full",
+    "sheet": "Septembre",
+    "column": "Médecin traitant",
+    "rows": [
+     3,
+     6,
+     7,
+     9,
+     10,
+     12,
+     14,
+     16,
+     17,
+     18,
+     19,
+     20,
+     22,
+     23,
+     24,
+     25,
+     26,
+     30,
+     31,
+     34,
+     35,
+     37,
+     38,
+     41,
+     42,
+     43,
+     45,
+     46,
+     47,
+     48,
+     49,
+     52,
+     53,
+     54,
+     55,
+     58,
+     59,
+     60,
+     61
+    ]
+   },
+   {
+    "entity": "p-g0128",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "p-martin-claire",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "p-g0155",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "p-g0127",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "p-g0319",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "p-g0101",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "p-obrien-sean",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "p-martin-luc",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "p-g0393",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "p-g0001",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     14,
+     33
+    ]
+   },
+   {
+    "entity": "p-g0140",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     16,
+     29
+    ]
+   },
+   {
+    "entity": "p-g0363",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "p-g0066",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "p-g0111",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "p-g0011",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "p-g0366",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "p-g0310",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "p-g0036",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "p-g0061",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "p-g0253",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "p-g0284",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "p-g0309",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "p-g0243",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "p-g0094",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "p-g0263",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "p-petrovic-elena",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "p-g0134",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "p-g0124",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "p-g0026",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "p-g0111",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "p-g0146",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "p-g0136",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "p-g0232",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "p-martin-marie",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "p-muller-jorg",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     43
+    ]
+   },
+   {
+    "entity": "p-favre-laurent",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     44
+    ]
+   },
+   {
+    "entity": "p-g0086",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     45
+    ]
+   },
+   {
+    "entity": "p-g0206",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     46
+    ]
+   },
+   {
+    "entity": "p-g0012",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     47
+    ]
+   },
+   {
+    "entity": "p-thomas-pierre",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     48
+    ]
+   },
+   {
+    "entity": "p-g0339",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     49
+    ]
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "d-martin-pierre",
+    "form": "title_full",
+    "sheet": "Septembre",
+    "column": "Médecin traitant",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "p-g0207",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     51
+    ]
+   },
+   {
+    "entity": "p-g0042",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     52
+    ]
+   },
+   {
+    "entity": "p-g0001",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     53
+    ]
+   },
+   {
+    "entity": "p-g0198",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     54
+    ]
+   },
+   {
+    "entity": "p-g0314",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     55
+    ]
+   },
+   {
+    "entity": "p-girard-frederic",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     56
+    ]
+   },
+   {
+    "entity": "p-g0062",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     57
+    ]
+   },
+   {
+    "entity": "p-g0417",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     58
+    ]
+   },
+   {
+    "entity": "p-obrien-sean",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     59
+    ]
+   },
+   {
+    "entity": "p-g0328",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     60
+    ]
+   },
+   {
+    "entity": "p-g0226",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     61
+    ]
+   },
+   {
+    "entity": "p-g0179",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "d-martin-paul",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     2,
+     8,
+     9,
+     16,
+     27,
+     28,
+     29,
+     30,
+     35,
+     43
+    ]
+   },
+   {
+    "entity": "p-g0103",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "o-marchetti",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     3,
+     4,
+     5,
+     12,
+     13,
+     14,
+     15,
+     18,
+     19,
+     20,
+     23,
+     24,
+     25,
+     26,
+     31,
+     32,
+     33,
+     34,
+     36,
+     37,
+     38,
+     40,
+     41,
+     42
+    ]
+   },
+   {
+    "entity": "p-g0167",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "p-g0243",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "p-python-jean-claude",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "d-martin-pierre",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     6,
+     7,
+     10,
+     11,
+     21,
+     22,
+     39
+    ]
+   },
+   {
+    "entity": "p-g0419",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "p-g0072",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "p-g0419",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "p-g0110",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "p-lindqvist-asa",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     12,
+     16
+    ]
+   },
+   {
+    "entity": "p-g0183",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "p-martin-luc",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "p-g0322",
+    "form": "surname_initial",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "p-pittet-isabelle",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "p-g0361",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "p-g0061",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "p-bovet-celine",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "p-g0117",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "p-g0284",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "p-g0009",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "p-martin-marie",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "p-tschopp-raphael",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "p-g0008",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "p-daubigne-camille",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "p-g0297",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "p-g0033",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     29
+    ]
+   },
+   {
+    "entity": "p-g0166",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "p-le-gall-laurence",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "p-g0063",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "p-g0250",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     33
+    ]
+   },
+   {
+    "entity": "p-g0106",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "p-g0372",
+    "form": "surname_initial",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "p-g0351",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "p-g0064",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "p-g0206",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "p-g0072",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "p-g0415",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "p-g0257",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     43
+    ]
+   }
+  ],
+  "notes": []
+ },
+ {
+  "path": "rendez-vous-2026.ods",
+  "format": "ods",
+  "readable": false,
+  "sheets": [
+   {
+    "name": "Septembre",
+    "rows": 60
+   },
+   {
+    "name": "Octobre",
+    "rows": 42
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "p-g0116",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "d-martin-paul",
+    "form": "title_full",
+    "sheet": "Septembre",
+    "column": "Médecin traitant",
+    "rows": [
+     2,
+     4,
+     5,
+     8,
+     11,
+     13,
+     15,
+     21,
+     27,
+     28,
+     29,
+     32,
+     33,
+     36,
+     39,
+     40,
+     44,
+     51,
+     56,
+     57
+    ]
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "o-marchetti",
+    "form": "title_full",
+    "sheet": "Septembre",
+    "column": "Médecin traitant",
+    "rows": [
+     3,
+     6,
+     7,
+     9,
+     10,
+     12,
+     14,
+     16,
+     17,
+     18,
+     19,
+     20,
+     22,
+     23,
+     24,
+     25,
+     26,
+     30,
+     31,
+     34,
+     35,
+     37,
+     38,
+     41,
+     42,
+     43,
+     45,
+     46,
+     47,
+     48,
+     49,
+     52,
+     53,
+     54,
+     55,
+     58,
+     59,
+     60,
+     61
+    ]
+   },
+   {
+    "entity": "p-g0128",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "p-martin-claire",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "p-g0155",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "p-g0127",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "p-g0319",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "p-g0101",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "p-obrien-sean",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "p-martin-luc",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "p-g0393",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "p-g0001",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     14,
+     33
+    ]
+   },
+   {
+    "entity": "p-g0140",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     16,
+     29
+    ]
+   },
+   {
+    "entity": "p-g0363",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "p-g0066",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "p-g0111",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "p-g0011",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "p-g0366",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "p-g0310",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "p-g0036",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "p-g0061",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "p-g0253",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "p-g0284",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "p-g0309",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "p-g0243",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "p-g0094",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "p-g0263",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "p-petrovic-elena",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "p-g0134",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "p-g0124",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "p-g0026",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "p-g0111",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "p-g0146",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "p-g0136",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "p-g0232",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "p-martin-marie",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "p-muller-jorg",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     43
+    ]
+   },
+   {
+    "entity": "p-favre-laurent",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     44
+    ]
+   },
+   {
+    "entity": "p-g0086",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     45
+    ]
+   },
+   {
+    "entity": "p-g0206",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     46
+    ]
+   },
+   {
+    "entity": "p-g0012",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     47
+    ]
+   },
+   {
+    "entity": "p-thomas-pierre",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     48
+    ]
+   },
+   {
+    "entity": "p-g0339",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     49
+    ]
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "d-martin-pierre",
+    "form": "title_full",
+    "sheet": "Septembre",
+    "column": "Médecin traitant",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "p-g0207",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     51
+    ]
+   },
+   {
+    "entity": "p-g0042",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     52
+    ]
+   },
+   {
+    "entity": "p-g0001",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     53
+    ]
+   },
+   {
+    "entity": "p-g0198",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     54
+    ]
+   },
+   {
+    "entity": "p-g0314",
+    "form": "surname_given",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     55
+    ]
+   },
+   {
+    "entity": "p-girard-frederic",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     56
+    ]
+   },
+   {
+    "entity": "p-g0062",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     57
+    ]
+   },
+   {
+    "entity": "p-g0417",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     58
+    ]
+   },
+   {
+    "entity": "p-obrien-sean",
+    "form": "surname_initial",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     59
+    ]
+   },
+   {
+    "entity": "p-g0328",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     60
+    ]
+   },
+   {
+    "entity": "p-g0226",
+    "form": "full",
+    "sheet": "Septembre",
+    "column": "Patient",
+    "rows": [
+     61
+    ]
+   },
+   {
+    "entity": "p-g0179",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "d-martin-paul",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     2,
+     8,
+     9,
+     16,
+     27,
+     28,
+     29,
+     30,
+     35,
+     43
+    ]
+   },
+   {
+    "entity": "p-g0103",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "o-marchetti",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     3,
+     4,
+     5,
+     12,
+     13,
+     14,
+     15,
+     18,
+     19,
+     20,
+     23,
+     24,
+     25,
+     26,
+     31,
+     32,
+     33,
+     34,
+     36,
+     37,
+     38,
+     40,
+     41,
+     42
+    ]
+   },
+   {
+    "entity": "p-g0167",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "p-g0243",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "p-python-jean-claude",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "d-martin-pierre",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     6,
+     7,
+     10,
+     11,
+     21,
+     22,
+     39
+    ]
+   },
+   {
+    "entity": "p-g0419",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "p-g0072",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "p-g0419",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "p-g0110",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "p-lindqvist-asa",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     12,
+     16
+    ]
+   },
+   {
+    "entity": "p-g0183",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "p-martin-luc",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "p-g0322",
+    "form": "surname_initial",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "p-pittet-isabelle",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "form": "title_full",
+    "sheet": "Octobre",
+    "column": "Médecin traitant",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "p-g0361",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "p-g0061",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "p-bovet-celine",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "p-g0117",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "p-g0284",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "p-g0009",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "p-martin-marie",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "p-tschopp-raphael",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "p-g0008",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "p-daubigne-camille",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "p-g0297",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "p-g0033",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     29
+    ]
+   },
+   {
+    "entity": "p-g0166",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "p-le-gall-laurence",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "p-g0063",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "p-g0250",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     33
+    ]
+   },
+   {
+    "entity": "p-g0106",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "p-g0372",
+    "form": "surname_initial",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "p-g0351",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "p-g0064",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "p-g0206",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "p-g0072",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "p-g0415",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "form": "full",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "p-g0257",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "form": "surname_given",
+    "sheet": "Octobre",
+    "column": "Patient",
+    "rows": [
+     43
+    ]
+   }
+  ],
+  "notes": []
+ },
+ {
+  "path": "factures-fournisseurs-2026.xlsx",
+  "format": "xlsx",
+  "readable": true,
+  "sheets": [
+   {
+    "name": "Factures",
+    "rows": 39
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "o-medsupply",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     2,
+     18,
+     32,
+     37
+    ]
+   },
+   {
+    "entity": "i-fac-2026-014",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     2,
+     3
+    ]
+   },
+   {
+    "entity": "o-papeterie-lac",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "o-garage-martin",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     4,
+     10,
+     11
+    ]
+   },
+   {
+    "entity": "i-fac-2026-114",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "o-orange",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     5,
+     15,
+     23,
+     24,
+     36
+    ]
+   },
+   {
+    "entity": "i-fac-2026-116",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "o-swisscom",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     6,
+     25,
+     28,
+     30
+    ]
+   },
+   {
+    "entity": "i-fac-2026-117",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "o-pharma-depot",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     7,
+     9,
+     14,
+     40
+    ]
+   },
+   {
+    "entity": "i-fac-2026-118",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "o-edf",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     8,
+     13,
+     17,
+     20,
+     31
+    ]
+   },
+   {
+    "entity": "i-fac-2026-119",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "i-fac-2026-120",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "i-fac-2026-121",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "i-fac-2026-122",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "o-bureautique-leman",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     12,
+     34,
+     38
+    ]
+   },
+   {
+    "entity": "i-fac-2026-123",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "i-fac-2026-124",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "i-fac-2026-125",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "i-fac-2026-128",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "o-sig",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     16,
+     19,
+     22,
+     29,
+     33
+    ]
+   },
+   {
+    "entity": "i-fac-2026-129",
+    "form": "invoice",
+    "sheet": "Factures",
+    "column": "N° facture",
+    "rows": [
+     16
+    ]
+   },
+   {
+    "entity": "o-imprimerie-chablais",
+    "form": "full",
+    "sheet": "Factures",
+    "column": "Fournisseur",
+    "rows": [
+     21,
+     26,
+     27,
+     35,
+     39
+    ]
+   }
+  ],
+  "notes": []
+ },
+ {
+  "path": "patients-ch.xlsx",
+  "format": "xlsx",
+  "readable": true,
+  "sheets": [
+   {
+    "name": "Feuil1",
+    "rows": 60
+   },
+   {
+    "name": "Notes",
+    "rows": 2
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "p-favre-laurent",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "i-756-9163-8555-59",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "i-756-9204-3092-25",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "p-girardin-fabienne",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "i-756-7231-2149-25",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "p-roy-lucas",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "i-756-2328-7127-04",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "i-756-9617-2765-34",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "p-cuendet-mathieu",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "i-756-4642-7636-60",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "p-pittet-isabelle",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "i-756-7698-2098-23",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "p-chappuis-nathalie",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "i-756-9225-1152-32",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "p-maillard-pascal",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "i-756-6812-6221-97",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "p-bovet-celine",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "i-756-3038-8434-36",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "p-jaccard-alain",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "i-756-0120-3612-81",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "p-deleze-christelle",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "i-756-3430-3844-90",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "p-crettenand-gregoire",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "i-756-1253-5588-76",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "p-vuilleumier-marie-claude",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "i-756-1867-0415-04",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "p-python-jean-claude",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     16
+    ]
+   },
+   {
+    "entity": "i-756-8984-5455-02",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     16
+    ]
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "i-756-8846-6859-19",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "p-genoud-anne-laure",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "i-756-3241-3698-84",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "p-tschopp-raphael",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "i-756-6623-6068-50",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "p-zufferey-stephane",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "i-756-3847-4555-92",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "p-benali-fatima",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "i-756-9474-3948-46",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "p-nguyen-thi-lan",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "i-756-0891-9372-41",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "p-dos-santos-ferreira-maria",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "i-756-0789-5821-19",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "p-demirci-ibrahim",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "i-756-8473-2358-91",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "p-petrovic-elena",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "i-756-7696-1286-14",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "p-obrien-sean",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "i-756-6472-3004-04",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "p-muller-jorg",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "i-756-5530-6915-84",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "p-hasanovic-anna",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "i-756-3721-6496-97",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     29
+    ]
+   },
+   {
+    "entity": "i-756-0232-8973-57",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     29
+    ]
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "i-756-5976-0054-33",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "p-lindqvist-asa",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "i-756-2917-8278-19",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "p-g0001",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "i-756-0167-2121-71",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "p-g0003",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     33
+    ]
+   },
+   {
+    "entity": "i-756-8499-6680-86",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     33
+    ]
+   },
+   {
+    "entity": "p-g0005",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "i-756-5497-6647-13",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "p-g0007",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "i-756-7375-6007-76",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "p-g0008",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "i-756-0607-7355-67",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "p-g0009",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "i-756-5851-1171-52",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "p-g0010",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "i-756-9428-6667-46",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "p-g0012",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "i-756-4802-4478-98",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "p-g0014",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "i-756-4297-2407-76",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "p-g0018",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "i-756-6438-7599-49",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "p-g0019",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "i-756-7724-3062-36",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "p-g0022",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     43
+    ]
+   },
+   {
+    "entity": "i-756-5388-4229-65",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     43
+    ]
+   },
+   {
+    "entity": "p-g0025",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     44
+    ]
+   },
+   {
+    "entity": "i-756-8244-9719-04",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     44
+    ]
+   },
+   {
+    "entity": "p-g0027",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     45
+    ]
+   },
+   {
+    "entity": "i-756-5777-7250-28",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     45
+    ]
+   },
+   {
+    "entity": "p-g0029",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     46
+    ]
+   },
+   {
+    "entity": "i-756-4683-2456-37",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     46
+    ]
+   },
+   {
+    "entity": "p-g0032",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     47
+    ]
+   },
+   {
+    "entity": "i-756-8339-0575-99",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     47
+    ]
+   },
+   {
+    "entity": "p-g0035",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     48
+    ]
+   },
+   {
+    "entity": "i-756-4996-6621-07",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     48
+    ]
+   },
+   {
+    "entity": "p-g0036",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     49
+    ]
+   },
+   {
+    "entity": "i-756-8483-4448-70",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     49
+    ]
+   },
+   {
+    "entity": "p-g0037",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "i-756-9277-8679-29",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "p-g0042",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     51
+    ]
+   },
+   {
+    "entity": "i-756-0340-6482-16",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     51
+    ]
+   },
+   {
+    "entity": "p-g0046",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     52
+    ]
+   },
+   {
+    "entity": "i-756-7372-2350-32",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     52
+    ]
+   },
+   {
+    "entity": "p-g0047",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     53
+    ]
+   },
+   {
+    "entity": "i-756-1302-8165-37",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     53
+    ]
+   },
+   {
+    "entity": "p-g0048",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     54
+    ]
+   },
+   {
+    "entity": "i-756-4114-2125-04",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     54
+    ]
+   },
+   {
+    "entity": "p-g0052",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     55
+    ]
+   },
+   {
+    "entity": "i-756-6057-9018-97",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     55
+    ]
+   },
+   {
+    "entity": "p-g0054",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     56
+    ]
+   },
+   {
+    "entity": "i-756-9069-7465-79",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     56
+    ]
+   },
+   {
+    "entity": "p-g0055",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     57
+    ]
+   },
+   {
+    "entity": "i-756-5021-0787-40",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     57
+    ]
+   },
+   {
+    "entity": "p-g0056",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     58
+    ]
+   },
+   {
+    "entity": "i-756-4324-8746-39",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     58
+    ]
+   },
+   {
+    "entity": "p-g0058",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     59
+    ]
+   },
+   {
+    "entity": "i-756-4845-8225-15",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     59
+    ]
+   },
+   {
+    "entity": "p-g0060",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     60
+    ]
+   },
+   {
+    "entity": "i-756-8578-8934-08",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     60
+    ]
+   },
+   {
+    "entity": "p-g0061",
+    "form": "split_columns",
+    "sheet": "Feuil1",
+    "column": "Nom",
+    "rows": [
+     61
+    ]
+   },
+   {
+    "entity": "i-756-0330-2836-01",
+    "form": "avs",
+    "sheet": "Feuil1",
+    "column": "N° AVS",
+    "rows": [
+     61
+    ]
+   }
+  ],
+  "notes": [
+   "sheet Notes holds free text: must not be read as a table of names"
+  ]
+ },
+ {
+  "path": "patients-fr.csv",
+  "format": "csv",
+  "readable": true,
+  "sheets": [
+   {
+    "name": "csv",
+    "rows": 60
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "p-dupont-jean",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "o-marchetti",
+    "form": "title_surname",
+    "sheet": "csv",
+    "column": "medecin_traitant",
+    "rows": [
+     2,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     25,
+     27,
+     28,
+     29,
+     30,
+     31,
+     32,
+     33,
+     36,
+     38,
+     39,
+     40,
+     41,
+     42,
+     43,
+     44,
+     45,
+     48,
+     49,
+     50,
+     51,
+     52,
+     53,
+     55,
+     56,
+     58,
+     59,
+     60,
+     61
+    ]
+   },
+   {
+    "entity": "i-1-58-03-74-443-192-09",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "p-dupont-jean-pierre",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "d-martin-paul",
+    "form": "title_surname",
+    "sheet": "csv",
+    "column": "medecin_traitant",
+    "rows": [
+     3,
+     10,
+     21,
+     22,
+     23,
+     24,
+     26,
+     34,
+     35,
+     37,
+     46,
+     47,
+     54,
+     57
+    ]
+   },
+   {
+    "entity": "i-1-71-08-74-235-355-97",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "p-dupontet-jean",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "i-1-49-11-74-144-545-77",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     4
+    ]
+   },
+   {
+    "entity": "p-dupont-marie",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "i-2-62-10-74-172-032-17",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     5
+    ]
+   },
+   {
+    "entity": "p-martin-marie",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "i-2-75-09-74-355-357-48",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     6
+    ]
+   },
+   {
+    "entity": "p-martin-claire",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "i-2-88-07-69-327-701-10",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     7
+    ]
+   },
+   {
+    "entity": "p-martin-luc",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "i-1-44-11-74-015-196-79",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     8
+    ]
+   },
+   {
+    "entity": "p-fabre-laurence",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "i-2-70-10-74-219-289-92",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     9
+    ]
+   },
+   {
+    "entity": "p-meunier-veronique",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "i-2-61-07-74-380-712-82",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     10
+    ]
+   },
+   {
+    "entity": "p-girard-frederic",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "i-1-74-01-74-218-120-01",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     11
+    ]
+   },
+   {
+    "entity": "p-lucas-roy",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "i-1-83-01-74-329-462-59",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     12
+    ]
+   },
+   {
+    "entity": "p-thomas-pierre",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "i-1-90-12-74-229-661-74",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     13
+    ]
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "i-1-55-05-74-144-283-46",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     14
+    ]
+   },
+   {
+    "entity": "p-el-khoury-mohamed",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "i-1-77-09-69-283-633-79",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     15
+    ]
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     16
+    ]
+   },
+   {
+    "entity": "i-1-60-09-74-166-454-04",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     16
+    ]
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "i-1-50-07-74-110-277-88",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     17
+    ]
+   },
+   {
+    "entity": "p-ndiaye-aicha",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "i-2-95-02-69-184-333-74",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     18
+    ]
+   },
+   {
+    "entity": "p-le-gall-laurence",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "i-2-64-02-74-348-026-46",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     19
+    ]
+   },
+   {
+    "entity": "p-de-la-fontaine-matthieu",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "i-1-78-07-73-226-075-24",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     20
+    ]
+   },
+   {
+    "entity": "p-daubigne-camille",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "i-2-92-04-74-151-152-28",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     21
+    ]
+   },
+   {
+    "entity": "p-g0002",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "i-2-92-08-01-411-653-67",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     22
+    ]
+   },
+   {
+    "entity": "p-g0004",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "i-2-41-08-74-024-626-10",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     23
+    ]
+   },
+   {
+    "entity": "p-g0011",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "i-1-47-09-74-032-461-95",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     24
+    ]
+   },
+   {
+    "entity": "p-g0013",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "i-1-47-02-01-035-806-64",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     25
+    ]
+   },
+   {
+    "entity": "p-g0015",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "i-2-50-05-74-184-483-05",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     26
+    ]
+   },
+   {
+    "entity": "p-g0016",
+    "form": "no_accent",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "i-1-92-02-74-052-179-79",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     27
+    ]
+   },
+   {
+    "entity": "p-g0017",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "i-2-94-10-74-087-464-82",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     28
+    ]
+   },
+   {
+    "entity": "p-g0023",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     29
+    ]
+   },
+   {
+    "entity": "i-1-61-08-74-002-732-22",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     29
+    ]
+   },
+   {
+    "entity": "p-g0024",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "i-2-83-03-01-056-866-01",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     30
+    ]
+   },
+   {
+    "entity": "p-g0026",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "i-2-59-07-74-211-698-26",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     31
+    ]
+   },
+   {
+    "entity": "p-g0028",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "i-2-53-04-69-104-594-35",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     32
+    ]
+   },
+   {
+    "entity": "p-g0033",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     33
+    ]
+   },
+   {
+    "entity": "i-1-62-05-74-249-899-11",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     33
+    ]
+   },
+   {
+    "entity": "p-g0034",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "i-2-36-10-74-119-810-66",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     34
+    ]
+   },
+   {
+    "entity": "p-g0038",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "i-1-83-06-74-008-844-75",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     35
+    ]
+   },
+   {
+    "entity": "p-g0039",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "i-1-04-09-74-122-913-20",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     36
+    ]
+   },
+   {
+    "entity": "p-g0040",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "i-1-47-12-01-228-626-46",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     37
+    ]
+   },
+   {
+    "entity": "p-g0041",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "i-2-02-12-74-129-444-84",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     38
+    ]
+   },
+   {
+    "entity": "p-g0043",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "i-1-81-09-69-418-958-67",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     39
+    ]
+   },
+   {
+    "entity": "p-g0044",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "i-2-80-05-74-176-098-33",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     40
+    ]
+   },
+   {
+    "entity": "p-g0045",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "i-1-45-12-74-436-218-04",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     41
+    ]
+   },
+   {
+    "entity": "p-g0050",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "i-1-77-09-74-357-620-65",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     42
+    ]
+   },
+   {
+    "entity": "p-g0051",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     43
+    ]
+   },
+   {
+    "entity": "i-2-44-01-74-209-951-84",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     43
+    ]
+   },
+   {
+    "entity": "p-g0053",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     44
+    ]
+   },
+   {
+    "entity": "i-1-55-09-25-248-662-68",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     44
+    ]
+   },
+   {
+    "entity": "p-g0057",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     45
+    ]
+   },
+   {
+    "entity": "i-1-48-11-74-206-233-33",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     45
+    ]
+   },
+   {
+    "entity": "p-g0059",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     46
+    ]
+   },
+   {
+    "entity": "i-1-62-10-74-152-162-52",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     46
+    ]
+   },
+   {
+    "entity": "p-g0062",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     47
+    ]
+   },
+   {
+    "entity": "i-1-78-05-69-235-279-14",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     47
+    ]
+   },
+   {
+    "entity": "p-g0063",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     48
+    ]
+   },
+   {
+    "entity": "i-1-72-01-01-399-084-71",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     48
+    ]
+   },
+   {
+    "entity": "p-g0064",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     49
+    ]
+   },
+   {
+    "entity": "i-2-93-11-01-001-897-94",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     49
+    ]
+   },
+   {
+    "entity": "p-g0065",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "i-1-79-06-69-320-847-64",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     50
+    ]
+   },
+   {
+    "entity": "p-g0066",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     51
+    ]
+   },
+   {
+    "entity": "i-1-00-10-74-434-303-18",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     51
+    ]
+   },
+   {
+    "entity": "p-g0070",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     52
+    ]
+   },
+   {
+    "entity": "i-2-68-04-74-086-001-07",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     52
+    ]
+   },
+   {
+    "entity": "p-g0072",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     53
+    ]
+   },
+   {
+    "entity": "i-1-42-06-74-324-756-64",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     53
+    ]
+   },
+   {
+    "entity": "p-g0075",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     54
+    ]
+   },
+   {
+    "entity": "i-1-02-09-74-293-552-05",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     54
+    ]
+   },
+   {
+    "entity": "p-g0076",
+    "form": "full",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     55
+    ]
+   },
+   {
+    "entity": "i-1-69-11-01-172-061-33",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     55
+    ]
+   },
+   {
+    "entity": "p-g0077",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     56
+    ]
+   },
+   {
+    "entity": "i-2-40-09-01-237-556-91",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     56
+    ]
+   },
+   {
+    "entity": "p-g0080",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     57
+    ]
+   },
+   {
+    "entity": "i-2-54-06-01-101-902-84",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     57
+    ]
+   },
+   {
+    "entity": "p-g0086",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     58
+    ]
+   },
+   {
+    "entity": "i-1-04-12-73-256-991-71",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     58
+    ]
+   },
+   {
+    "entity": "p-g0089",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     59
+    ]
+   },
+   {
+    "entity": "i-2-85-05-38-033-233-65",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     59
+    ]
+   },
+   {
+    "entity": "p-g0094",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     60
+    ]
+   },
+   {
+    "entity": "i-2-02-03-74-069-523-12",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     60
+    ]
+   },
+   {
+    "entity": "p-g0096",
+    "form": "reordered",
+    "sheet": "csv",
+    "column": "nom_patient",
+    "rows": [
+     61
+    ]
+   },
+   {
+    "entity": "i-1-75-09-74-008-312-77",
+    "form": "nir",
+    "sheet": "csv",
+    "column": "NIR",
+    "rows": [
+     61
+    ]
+   }
+  ],
+  "notes": []
+ },
+ {
+  "path": "contrats-2026.xlsx",
+  "format": "xlsx",
+  "readable": true,
+  "sheets": [
+   {
+    "name": "Contrats",
+    "rows": 2
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "o-bureautique-leman",
+    "form": "full",
+    "sheet": "Contrats",
+    "column": "Fournisseur",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "i-ctr-2026-0041",
+    "form": "contract",
+    "sheet": "Contrats",
+    "column": "Numéro de contrat",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "o-edf",
+    "form": "full",
+    "sheet": "Contrats",
+    "column": "Fournisseur",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "i-ctr-2026-0146",
+    "form": "contract",
+    "sheet": "Contrats",
+    "column": "Numéro de contrat",
+    "rows": [
+     3
+    ]
+   }
+  ],
+  "notes": []
+ },
+ {
+  "path": "contrats-2026.xls",
+  "format": "xls",
+  "readable": false,
+  "sheets": [
+   {
+    "name": "Contrats",
+    "rows": 2
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "o-bureautique-leman",
+    "form": "full",
+    "sheet": "Contrats",
+    "column": "Fournisseur",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "i-ctr-2026-0041",
+    "form": "contract",
+    "sheet": "Contrats",
+    "column": "Numéro de contrat",
+    "rows": [
+     2
+    ]
+   },
+   {
+    "entity": "o-edf",
+    "form": "full",
+    "sheet": "Contrats",
+    "column": "Fournisseur",
+    "rows": [
+     3
+    ]
+   },
+   {
+    "entity": "i-ctr-2026-0146",
+    "form": "contract",
+    "sheet": "Contrats",
+    "column": "Numéro de contrat",
+    "rows": [
+     3
+    ]
+   }
+  ],
+  "notes": []
+ },
+ {
+  "path": "planning-garde-2026.xlsx",
+  "format": "xlsx",
+  "readable": true,
+  "sheets": [
+   {
+    "name": "Gardes",
+    "rows": 40
+   },
+   {
+    "name": "Totaux",
+    "rows": 7
+   },
+   {
+    "name": "Codes",
+    "rows": 12
+   },
+   {
+    "name": "Notes",
+    "rows": 1
+   }
+  ],
+  "mentions": [
+   {
+    "entity": "d-martin-paul",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     2,
+     9,
+     16,
+     23,
+     30,
+     37
+    ]
+   },
+   {
+    "entity": "d-martin-pierre",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     3,
+     10,
+     17,
+     24,
+     31,
+     38
+    ]
+   },
+   {
+    "entity": "d-favre-olivier",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     4,
+     11,
+     18,
+     25,
+     32,
+     39
+    ]
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     5,
+     12,
+     19,
+     26,
+     33,
+     40
+    ]
+   },
+   {
+    "entity": "d-bersier-marc",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     6,
+     13,
+     20,
+     27,
+     34,
+     41
+    ]
+   },
+   {
+    "entity": "o-marchetti",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     7,
+     14,
+     21,
+     28,
+     35
+    ]
+   },
+   {
+    "entity": "d-dupont-jean",
+    "form": "title_surname",
+    "sheet": "Gardes",
+    "column": "Médecin",
+    "rows": [
+     8,
+     15,
+     22,
+     29,
+     36
+    ]
+   }
+  ],
+  "notes": [
+   "sheet Codes: a column called Nom that holds zone codes (not names): must be rejected",
+   "sheet Notes: free text: must be rejected"
+  ]
+ }
+]

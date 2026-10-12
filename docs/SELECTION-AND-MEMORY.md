@@ -351,3 +351,7 @@ the index, OCR) and the **server device** (the gateway, Ollama, Open WebUI). The
 tracked in `docs/ROADMAP.md` (Sprint 4) and `docs/OPERATIONS.md`. It needs real design, not only steps:
 everything is published on `127.0.0.1` today, and the user device must reach the gateway over the practice
 network - only the gateway, never Ollama or Open WebUI, behind a firewall rule and some form of access key.
+
+### The knowledge base and the selection (KB programme, lot 11)
+
+The user's selection is the authority: the knowledge base only filters it, a final check drops any path that is not in it (invariant I1), and nothing a question or an answer says is learned (I3). Lot 11 replayed 2 198 questions of a generated library in two modes and found 0 files searched outside the selection (`docs/test-reports/knowledge-base-pass-1/04-final-report.md`, section 2). The canonical description is `docs/KNOWLEDGE-BASE.md`.

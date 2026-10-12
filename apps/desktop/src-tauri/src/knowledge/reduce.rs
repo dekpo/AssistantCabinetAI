@@ -320,6 +320,18 @@ fn passes(entity: &QueryEntity, selectivity: f32, policy: &TargetingPolicy) -> b
         && selectivity <= policy.max_selectivity
 }
 
+/// A place never narrows the documents. A commune is written in a table's column and in every
+/// letter that carries an address, so the only thing the base can say about it in the documents is
+/// the full-text net, which is not a list of the files about that place; and a place named in a
+/// question is usually the topic, not the owner of the file (`Quels documents viennent de Geneve ?`,
+/// defect KBD-29). A place still narrows the tables, where the column is the evidence, and a chip
+/// the user chose still drives (it is her own choice, and `passes` has already said so).
+fn only_orders_documents(entity: &QueryEntity, domain: Domain) -> bool {
+    domain == Domain::Documents
+        && !entity.from_chip
+        && entity.type_id == super::EntityTypeId::LOCATION
+}
+
 /// The files of the entity on one side of the selection.
 fn files_of(entity: &QueryEntity, domain: Domain) -> &[String] {
     match domain {
@@ -353,6 +365,7 @@ fn reduce_side(
         .entities
         .iter()
         .filter(|entity| passes(entity, selectivity_of(entity), policy))
+        .filter(|entity| !only_orders_documents(entity, domain))
         .collect();
     let chip_driven = driving.iter().any(|entity| entity.from_chip);
 

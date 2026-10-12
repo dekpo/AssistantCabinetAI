@@ -4,6 +4,7 @@ import { analysisFraction, analysisPending, countPending } from "../lib/analysis
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { errorMessage, normaliseError, type AppError } from "../lib/errors";
 import { knowledgeLines } from "../lib/knowledgeSummary";
+import { unreadFormatsLines } from "../lib/unreadFormats";
 import {
   chooseWorkFolder,
   ensureSuggestedWorkFolder,
@@ -239,6 +240,9 @@ export function WorkFolderCard({
                 )}.`,
               ]
             : []),
+          /* Files in a format nothing in the product reads: said, so that an answer drawn from the
+             others is never mistaken for an answer drawn from the whole folder. */
+          ...unreadFormatsLines(t, indexing.summary.unreadFormats),
           /* What the knowledge base did with the names, counts only. The line that asks her to act
              (a document whose names were not recorded) comes first among them. */
           ...knowledgeLines(t, indexing.summary.knowledge),

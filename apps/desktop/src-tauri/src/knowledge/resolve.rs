@@ -634,6 +634,20 @@ impl Run<'_, '_> {
             return self.decide_exact(canonical, Signal::CanonicalName, Via::Canonical);
         }
 
+        // In a question, a title and a surname that the base has seen together outrank the surname
+        // alone: "Dre Vuagniaux" in a question is the doctor that was written "Dre Vuagniaux", not the patient
+        // who shares the surname and was never written with that title. At ingestion nothing
+        // changes: a new source's "Dr Dupont" is not linked on a title.
+        if self.is_query() && !name.titles.is_empty() {
+            let titled = self.keep(
+                self.lookup()
+                    .by_alias(&format!("{} {}", name.titles.join(" "), name.joined)),
+            );
+            if !titled.is_empty() {
+                return self.decide_alias(titled, &name);
+            }
+        }
+
         // Signal 3: an exact alias.
         let mut alias_keys = keys.clone();
         if !name.titles.is_empty() {

@@ -56,8 +56,10 @@ impl KnowledgeMode {
 }
 
 /// What the extractor of the current build knows how to read. A source whose `kb_version` is lower
-/// is read again by the next pass, so improving an extractor means raising this number.
-pub const CURRENT_KB_VERSION: u32 = 1;
+/// is read again by the next pass the user starts, so improving an extractor means raising this
+/// number. 1: the extractors of lots 4 and 5. 2: the Swiss titles (`Dre`, `Dresse`, `Docteure`,
+/// `Professeure`, `Pre`) are titles, not the first word of a name (fix 4, batch 1).
+pub const CURRENT_KB_VERSION: u32 = 2;
 
 /// The confidence a column of a table needs for its values to be read as entities. A column below
 /// it is recorded all the same, with the reason it was not read.

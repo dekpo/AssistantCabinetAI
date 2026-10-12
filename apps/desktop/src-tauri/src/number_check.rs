@@ -241,6 +241,13 @@ mod tests {
     }
 
     #[test]
+    fn a_date_in_a_cited_file_name_is_supported_once_the_path_is_known() {
+        let answer = "See inbox/2026-03-26_report.pdf for the statement.";
+        assert!(!unsupported_numbers(answer, &["Some excerpt."], 2).is_empty());
+        assert!(unsupported_numbers(answer, &["Some excerpt.", "inbox/2026-03-26_report.pdf"], 2).is_empty());
+    }
+
+    #[test]
     fn an_amount_written_two_ways_is_supported() {
         let sources = ["Quote total: 1 200,00 EUR."];
         assert!(unsupported_numbers("The quote is 1200 EUR.", &sources, 2).is_empty());

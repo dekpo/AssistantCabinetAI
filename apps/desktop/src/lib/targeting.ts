@@ -44,11 +44,12 @@ function isConfirmed(entity: TargetingEntity): boolean {
   return entity.confidence > CANDIDATE_MAX_CONFIDENCE;
 }
 
-/** The names the question settled on, each once, candidates left out. */
+/** The names the question settled on, each once, candidates left out. An identifier (an AVS number,
+ * an invoice number) is not a name: its label is internal, and a personal one is a hash. */
 export function confirmedNames(report: TargetingReport): string[] {
   const names: string[] = [];
   for (const entity of report.entities) {
-    if (isConfirmed(entity) && !names.includes(entity.display)) {
+    if (entity.typeId !== "identifier" && isConfirmed(entity) && !names.includes(entity.display)) {
       names.push(entity.display);
     }
   }

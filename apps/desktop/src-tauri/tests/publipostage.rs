@@ -16,6 +16,7 @@ use assistant_cabinet_ai_lib::gateway::GatewayClient;
 use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::inventory::FileHashCache;
 use assistant_cabinet_ai_lib::tabular::engine::{AppliedFilter, TabularValue};
+use assistant_cabinet_ai_lib::tabular::structural::StructuralAnswer;
 use assistant_cabinet_ai_lib::tabular_answer::{self, ModelAssist, TabularAnswer};
 
 const DATA: &str = "donnees_publipostage.csv";
@@ -173,4 +174,111 @@ async fn an_operation_with_an_order_number_is_still_that_operation() {
         panic!("expected a sum, got {answer:?}");
     };
     assert_eq!(total.value, 924.5);
+}
+
+// KBD-01 (fix F-11): a column whose name holds a word of the "rows" vocabulary is a column, not a
+// row count. The whole name is tested against the question before it is split into words.
+#[tokio::test]
+async fn a_column_named_with_a_rows_word_is_computed_not_counted() {
+    let folder = Folder::build();
+    for (question, expect) in [
+        ("Quelle est la somme de Total_Ligne ?", "sum"),
+        ("Quel est le total de Total_Ligne ?", "sum"),
+        ("Quel est le maximum de Total_Ligne ?", "max"),
+        ("Quelle est la moyenne de Total_Ligne ?", "mean"),
+    ] {
+        let answer = folder.ask(question, "fr-FR").await;
+        let (kind, value) = match &answer {
+            TabularAnswer::Value {
+                value: TabularValue::Sum(a),
+                ..
+            } => ("sum", a.value),
+            TabularAnswer::Value {
+                value: TabularValue::Max(a),
+                ..
+            } => ("max", a.value),
+            TabularAnswer::Value {
+                value: TabularValue::Mean(a),
+                ..
+            } => ("mean", a.value),
+            other => panic!("{question:?}: expected a computed value, got {other:?}"),
+        };
+        assert_eq!(kind, expect, "{question:?}");
+        let wanted = match expect {
+            "sum" => 1592.98,
+            "max" => 899.0,
+            _ => 318.596,
+        };
+        assert!((value - wanted).abs() < 1e-9, "{question:?}: {value}");
+    }
+}
+
+#[tokio::test]
+async fn a_plain_row_count_is_still_a_row_count() {
+    let folder = Folder::build();
+    for question in ["Combien de lignes ?", "Combien de lignes y a-t-il ?"] {
+        let answer = folder.ask(question, "fr-FR").await;
+        let rows = match &answer {
+            TabularAnswer::Structural {
+                answer: StructuralAnswer::RowCount { rows, .. },
+                ..
+            } => *rows,
+            TabularAnswer::Value {
+                value: TabularValue::Count(rows),
+                locator,
+                ..
+            } if locator.filters.is_empty() => *rows,
+            other => panic!("{question:?}: {other:?}"),
+        };
+        assert_eq!(rows, 5, "{question:?}");
+    }
+}
+
+// KBD-39: the word "colonne" in a question that also holds an operation is that operation, not a request
+// for the list of the columns.
+#[tokio::test]
+async fn an_operation_on_a_column_named_with_the_word_column_is_computed() {
+    let folder = Folder::build();
+    for (question, expect, wanted) in [
+        ("Quelle est la somme de la colonne Prix_Unitaire ?", "sum", 1392.99),
+        ("Quel est le maximum de la colonne Total_Ligne ?", "max", 899.0),
+        ("Quelle est la moyenne de la colonne Quantite ?", "mean", 1.2),
+    ] {
+        let answer = folder.ask(question, "fr-FR").await;
+        let (kind, value) = match &answer {
+            TabularAnswer::Value {
+                value: TabularValue::Sum(a),
+                ..
+            } => ("sum", a.value),
+            TabularAnswer::Value {
+                value: TabularValue::Max(a),
+                ..
+            } => ("max", a.value),
+            TabularAnswer::Value {
+                value: TabularValue::Mean(a),
+                ..
+            } => ("mean", a.value),
+            other => panic!("{question:?}: expected a computed value, got {other:?}"),
+        };
+        assert_eq!(kind, expect, "{question:?}");
+        assert!((value - wanted).abs() < 1e-9, "{question:?}: {value}");
+    }
+}
+
+#[tokio::test]
+async fn a_question_about_the_columns_still_lists_them() {
+    let folder = Folder::build();
+    for question in ["Quelles sont les colonnes ?", "Combien de colonnes ?"] {
+        let answer = folder.ask(question, "fr-FR").await;
+        assert!(
+            matches!(
+                answer,
+                TabularAnswer::Structural {
+                    answer: StructuralAnswer::ColumnNames { .. },
+                    ..
+                }
+            ),
+            "{question:?}: {answer:?}"
+        );
+    }
 }

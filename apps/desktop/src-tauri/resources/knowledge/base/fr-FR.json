@@ -3,13 +3,16 @@
   "id": "base",
   "locale": "fr-FR",
   "titles": {
-    "person": ["Dr", "Docteur", "Pr", "Professeur", "Prof", "Maître", "Monsieur", "Mr", "Mme", "Madame", "Mlle", "Mademoiselle"]
+    "person": ["Dr", "Dre", "Dresse", "Docteur", "Docteure", "Pr", "Professeur", "Professeure", "Prof", "Maître", "Monsieur", "Mr", "Mme", "Madame", "Mlle", "Mademoiselle"]
   },
-  "weak_titles": ["Me", "M"],
+  "weak_titles": ["Me", "M", "Pre"],
   "particles": ["de", "du", "des", "la", "le", "van", "von", "der", "den", "di", "da", "dos", "das", "el", "al"],
   "title_spoken": {
     "dr": "docteur",
+    "dre": "docteure",
+    "dresse": "docteure",
     "pr": "professeur",
+    "pre": "professeure",
     "prof": "professeur",
     "m": "monsieur",
     "mr": "monsieur",

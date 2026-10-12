@@ -53,7 +53,7 @@ Rows come **only** from (a) analysed documents, (b) analysed workbooks, (c) expl
 a question, an answer, the conversation history, a transcript, a retrieval result or any model output
 (invariant I3; `tests/knowledge_isolation.rs` compares a snapshot of every `kb_` table before and after a question).
 
-- **Documents** (`knowledge::extract::text`, `knowledge::ingest`): titled names (`Dr`, `Docteur`, `Pr`,
+- **Documents** (`knowledge::extract::text`, `knowledge::ingest`): titled names (`Dr`, `Dre`, `Docteur`, `Pr`,
   `Madame`...), full names matching the gazetteer of names already known, organisation markers and legal suffixes,
   identifier schemes from the packs (invoice, order, e-mail, phone, IBAN, social security and AVS numbers), names
   in file names. An untitled capitalised run is a **candidate**, never active, until a second source or a column
@@ -207,9 +207,11 @@ shape of them:
   one person (KBD-25).
 - **Organisations with no marker word**: `Hôpitaux universitaires de Genève` written with lowercase words after
   the marker, `CHUV`, `SUVA`, `URSSAF`, `Hospices Civils de Lyon` are not found as organisations (KBD-27).
-- **Titles of Switzerland**: `Dre` (a woman doctor) is not a title and stays inside the name (KBD-26).
+- **Titles of Switzerland**: fixed in fix 4, batch 1 (KBD-26): `Dre`, `Dresse`, `Docteure`, `Professeure` are titles
+  of the base, `Pre` is a weak one (it is also the word `pre`, so it needs a capital and a capitalised word after it).
 - **A short question that names nobody** is read as the follow-up of the previous answer (KBD-19).
 - **Formats the product does not read**: ODT, ODP, PPT, PPTX, RTF, EML, VTT (documents) and ODS (tables). The
-  files are listed and silently never searched (KBD-30).
+  files are listed and never searched; since fix 4, batch 1, the Analyse summary of the documents says how many
+  files were not read and in which formats (KBD-30; the extractors themselves are a later batch).
 - **The widening score** cannot catch a reduced set that names the right person but lacks the answer (KBD-17).
 - The base is per workstation: two machines have two bases.

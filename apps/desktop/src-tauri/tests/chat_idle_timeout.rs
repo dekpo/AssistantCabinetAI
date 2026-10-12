@@ -18,7 +18,10 @@ use assistant_cabinet_ai_lib::gateway::{ChatTurn, GatewayClient};
 
 const LINE: &[u8] = b"data: {\"choices\":[{\"delta\":{\"content\":\"mot \"}}]}\n\n";
 const CHUNK_INTERVAL: Duration = Duration::from_millis(20);
-const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
+/// One second, not a few hundred milliseconds: the bound also covers the wait for the first byte, and a
+/// loaded CI runner (macOS) can take longer than 300 ms to make the connection, which cut the steady
+/// stream off before it had started. The product's bound is unchanged; only the test's is.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Fill the whole buffer with repeated SSE lines.
 ///

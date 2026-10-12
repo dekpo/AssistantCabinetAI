@@ -474,6 +474,11 @@ export interface KnowledgeSummary {
   elapsedMs: number;
 }
 
+export interface UnreadFormat {
+  extension: string;
+  count: number;
+}
+
 export interface IndexSummary {
   scannedFiles: number;
   indexedFiles: number;
@@ -492,6 +497,8 @@ export interface IndexSummary {
   failedFiles: FailedFile[];
   /** Machine codes for an ingestion capability that did not start. Empty on a healthy install. */
   unavailableCapabilities: string[];
+  /** Files no reader of the product opens, counted by extension (no dot), most numerous first. */
+  unreadFormats: UnreadFormat[];
   chunkCount: number;
   /** Where the pass spent its time. Numbers only. */
   timings: AnalysisTimings | null;

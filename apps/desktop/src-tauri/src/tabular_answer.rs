@@ -408,10 +408,19 @@ fn answer_sync(
         return Ok(PendingAnswer::Done(TabularAnswer::NoUsableTable));
     }
 
-    let target = match pick_target(question, data, &chosen) {
+    let (target, named_by_reference) = match pick_target(question, data, &chosen) {
         Ok(target) => target,
         Err(answer) => return Ok(PendingAnswer::Done(answer)),
     };
+    // The workbook she named is a reference, not words of the question: the year and the month in
+    // `ventes-2025.xlsx`, or the `patients` of `patients-suisse.csv`, are not filters or columns
+    // (defect KBD-04). Everything below reads the question without the reference.
+    let reader_question = if named_by_reference {
+        without_the_workbook_reference(question, target.record)
+    } else {
+        question.to_string()
+    };
+    let question = reader_question.as_str();
     let file = target.record.relative_path.clone();
     match target.record.processing_status {
         ProcessingStatus::Indexed => {}
@@ -1010,7 +1019,7 @@ fn pick_target<'c, 'a>(
     question: &str,
     data: &'a DataFolder,
     chosen: &'c [Chosen<'a>],
-) -> Result<&'c Chosen<'a>, TabularAnswer> {
+) -> Result<(&'c Chosen<'a>, bool), TabularAnswer> {
     let scoped = WorkFolderInventory::from_records(
         data.files().root(),
         chosen.iter().map(|each| each.record.clone()).collect(),
@@ -1027,6 +1036,7 @@ fn pick_target<'c, 'a>(
                 .exact_match
                 .as_ref()
                 .and_then(|record| find(&record.relative_path))
+                .map(|target| (target, true))
                 .ok_or(TabularAnswer::NoMatchingFile {
                     query: resolution.query.clone(),
                 }),
@@ -1081,9 +1091,9 @@ fn pick_target<'c, 'a>(
                 usable
             };
             match candidates.len() {
-                1 => Ok(candidates[0]),
+                1 => Ok((candidates[0], false)),
                 // Nothing chosen is usable: the first one tells her why.
-                0 => Ok(&chosen[0]),
+                0 => Ok((&chosen[0], false)),
                 _ => Err(TabularAnswer::WhichWorkbook {
                     candidates: candidates
                         .iter()
@@ -1094,6 +1104,53 @@ fn pick_target<'c, 'a>(
             }
         }
     }
+}
+
+/// The question without the words that name the workbook it is about: its path or its file name
+/// with the extension, in any case and with or without accents (`Ventes-2025.CSV`), or its name
+/// written as one hyphenated or underscored token (`factures-fournisseurs-2026`). A bare word that
+/// happens to be a file's name (`montants` for `montants.csv`) is left in: it may well be the
+/// column she asks about. A question that holds none of the spellings is returned as it was.
+fn without_the_workbook_reference(question: &str, record: &FileRecord) -> String {
+    let tokens: Vec<&str> = question.split_whitespace().collect();
+    let words: Vec<Vec<String>> = tokens.iter().map(|token| name_words(token)).collect();
+    let remove = |start: usize, end: usize| {
+        tokens[..start]
+            .iter()
+            .chain(&tokens[end..])
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+
+    // The path and the file name, with their extension: as many question tokens as it takes.
+    for target in [name_words(&record.relative_path), name_words(&record.name)] {
+        if target.is_empty() {
+            continue;
+        }
+        for start in 0..tokens.len() {
+            let mut joined: Vec<&str> = Vec::new();
+            let mut end = start;
+            while end < tokens.len() && joined.len() < target.len() && !words[end].is_empty() {
+                joined.extend(words[end].iter().map(String::as_str));
+                end += 1;
+            }
+            if end > start && joined == target.iter().map(String::as_str).collect::<Vec<_>>() {
+                return remove(start, end);
+            }
+        }
+    }
+
+    // The name without its extension, only as a single token that is visibly a file name.
+    let stem = name_words(&record.stem);
+    if stem.len() >= 2 {
+        for (index, token) in tokens.iter().enumerate() {
+            if (token.contains('-') || token.contains('_')) && words[index] == stem {
+                return remove(index, index + 1);
+            }
+        }
+    }
+    question.to_string()
 }
 
 /// Whether the question (as its whole words) names a column of any sheet of `inventory`: every word

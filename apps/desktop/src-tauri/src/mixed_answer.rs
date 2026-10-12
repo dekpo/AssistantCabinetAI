@@ -284,6 +284,7 @@ pub async fn answer(
     // states are held to the excerpts and the question, as a document answer's are.
     let unverified_numbers = if expected.is_none() && table.is_none() {
         let mut known: Vec<&str> = document_sources.iter().map(|item| item.text.as_str()).collect();
+        known.extend(document_sources.iter().map(|item| item.relative_path.as_str()));
         known.push(question);
         number_check::unsupported_numbers(&answer_text, &known, 2)
     } else {

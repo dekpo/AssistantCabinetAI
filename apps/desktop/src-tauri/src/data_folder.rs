@@ -364,6 +364,9 @@ pub fn analyse_with_knowledge(
         rename_failed_files: Vec::new(),
         failed_files: Vec::new(),
         unavailable_capabilities: Vec::new(),
+        // The workbook formats nobody reads (.ods) are a later batch (KBD-30); only the documents
+        // pass reports its unread formats for now.
+        unread_formats: Vec::new(),
         chunk_count: 0,
         timings: Some(timings),
         knowledge: knowledge_summary,

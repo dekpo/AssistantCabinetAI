@@ -95,9 +95,22 @@ organisation whatever packs are active. Packs (`health-fr`, `health-ch`, `legal-
 (`docs/DECISIONS.md`, "Knowledge packs are named domain-country").
 
 **Confidence by method** (stored per mention): identifier 1.00, column value 0.95, gazetteer hit 0.90, title and
-full name 0.85, organisation suffix 0.80, title and surname 0.70, name in a file name 0.50, untitled capitalised
-run 0.40 (a candidate). A reduction needs 0.80 or more, an entity that is not a candidate, and a share of the
-selection under the ceiling.
+full name 0.85, organisation suffix 0.80, an organisation a pack lists by name 0.80, a name alone under a
+salutation 0.60, title and surname 0.70, name in a file name 0.50, untitled capitalised run 0.40 (a candidate). A
+reduction needs 0.80 or more, an entity that is not a candidate, and a share of the selection under the ceiling.
+The method kept for a mention is the strongest evidence of that place: a name the base already knew and that a
+title also found is recorded as found by the title (`Dr Jean Dupont`), not as a hit on the list.
+
+**What the extractor reads** (`knowledge::extract::text`, version 3 of the knowledge base): a title and a name; an
+organisation by a legal form after it (`Garage Martin & Fils SARL`, an ampersand joins two halves), by a word that
+opens it (`Association`, `Hopitaux`, `Etude`, with lower case words allowed before the capitalised name) or by its
+**name in a pack** (`org_names`: `HUG`, `CHUV`, `SUVA`, `URSSAF`... written as the pack writes the acronym, the
+entity carries the full name); an untitled run of two or three capitalised words in a sentence; a name **alone on
+a line** in the block that opens a letter (a salutation above it, or an address below); a name split by the
+margin of a wrapped paragraph (a PDF: only in a text whose lines stop at the margin); a particle or two inside a
+name (`de la`, `van den`); an apostrophe inside a surname (`D'Amico`, `N'Diaye`, `O'Brien`: a single capital
+letter, `D`, `N` or `O`, an apostrophe and a capital). It never reads a street or a place as a person (`rue
+Jean Jaures`, `place de l'Hotel de Ville`) and never a heading or an acronym nobody listed.
 
 ## 5. Resolution: from a name to an entity
 
@@ -109,6 +122,15 @@ exact alias, strong pattern (title and full name; organisation suffix and name),
 shown as ambiguous, which respects I7). Initial and surname (`J. Dupont`) links only when the surname is unique in
 the source. Surname then initial (`Dupont J`, the form of a table) is a possible match of the full name, in both
 orders. Whatever the method, a name with no support is a candidate and never narrows anything.
+
+**Two orders of the same words.** `DUPONT Jean` (a surname in capitals first) is read given name first and is
+`Jean Dupont`. `Roy Lucas` in plain case, when `Lucas Roy` is known from a source of the **same folder**, is **not** the same
+person on that evidence: at ingestion it is a new entity with a possible match of reason `swapped_order`, in a
+question it is a "did you mean". Across folders (a table and a letter) the two orders are one person. A possible match of that reason is never kept in a reduction (two people are not searched as one).
+
+**An entity promoted by a second source goes back to a candidate** when fewer than two sources name it (a file
+deleted, changed, or read again without the name). An entity a pattern made active at once (a title and a full
+name, a legal form, a listed organisation, a column) is never demoted, and neither is anything the user typed.
 
 ## 6. How a question uses it
 
@@ -203,10 +225,16 @@ shape of them:
 - **Names a human reads from context and no rule can link**: a letter that says only `M. Dupont` in a library with
   several Dupont, a surname alone, a title and a surname when two doctors share it. The base asks or leaves the
   search whole; it cannot read them.
-- **A surname-first convention indistinguishable from a swapped pair**: `Lucas Roy` and `Roy Lucas` are filed as
-  one person (KBD-25).
-- **Organisations with no marker word**: `Hôpitaux universitaires de Genève` written with lowercase words after
-  the marker, `CHUV`, `SUVA`, `URSSAF`, `Hospices Civils de Lyon` are not found as organisations (KBD-27).
+- **A surname-first convention indistinguishable from a swapped pair**: fixed in fix 4, batch 2 (KBD-25). Only a
+  surname in capitals says "surname first"; a swapped pair in plain case is two people with a possible match when the
+  two orders come from the same folder (two tables, two letters); a table and a letter that write the two orders
+  are one person.
+- **Organisations no pack lists and that carry no marker word**: `Cerballiance` is found because the pack lists it;
+  an unlisted clinic written `Les Cerisiers` is not. An acronym nobody listed is never read (`IRM`, `TSH`, `PDF`
+  would be thousands of false organisations). Listed organisations live in the packs (`org_names`), per country.
+- **A name with a lower case `d'`** (`Camille d'Aubigne` in a sentence) keeps its article elided, while the same
+  name written `D'Aubigne` in a table is one word: the two meet only when a table or a letter writes both the same
+  way.
 - **Titles of Switzerland**: fixed in fix 4, batch 1 (KBD-26): `Dre`, `Dresse`, `Docteure`, `Professeure` are titles
   of the base, `Pre` is a weak one (it is also the word `pre`, so it needs a capital and a capitalised word after it).
 - **A short question that names nobody** is read as the follow-up of the previous answer (KBD-19).

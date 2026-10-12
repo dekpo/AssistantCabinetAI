@@ -9,9 +9,11 @@
 //!
 //! ```text
 //! 0  gazetteer, a full name     a name the knowledge base already holds, in full        0.90
-//! 1  organisation suffix        "Dupont SARL"                                           0.80
-//! 2  organisation prefix        "Association Friends Of Music"                          0.70 (candidate)
+//! 0  known organisation         "HUG", "SUVA": the packs list them by name              0.80
+//! 1  organisation suffix        "Dupont SARL", "Garage Martin & Fils SARL"              0.80
+//! 2  organisation prefix        "Association Friends Of Music", "Hopitaux universitaires de Zurich"  0.70 (candidate)
 //! 3  title and name             "Dr Jean Dupont", "Dr Martin"                           0.85 / 0.70
+//! 4  name alone in a block      "Anne Marchand" under "Madame," or above "12 rue ..."    0.60 / 0.40
 //! 5  untitled capitalised run   two or three capitalised words, not opening a sentence  0.40 (candidate)
 //! 6  gazetteer, a short form    a surname or an initial the same file also names in full 0.70
 //! -  identifiers                an invoice number, an e-mail address, an IBAN           1.00
@@ -36,7 +38,9 @@ use super::{
     ExtractedKnowledge, Span,
 };
 use crate::knowledge::gazetteer::{Gazetteer, GazetteerEntry};
-use crate::knowledge::normalize::{filename_name_candidates, fold_word, normalize_name, TitleSet};
+use crate::knowledge::normalize::{
+    apostrophe_joins_a_name, filename_name_candidates, fold_word, normalize_name, TitleSet,
+};
 use crate::knowledge::packs::PackSet;
 use crate::knowledge::{AliasKind, EntityTypeId, MentionLocator, Method};
 
@@ -44,7 +48,7 @@ pub const EXTRACTOR_ID: &str = "deterministic-text";
 
 /// Raised whenever this extractor's output for some text changes, so the next pass reads the
 /// sources again (`CURRENT_KB_VERSION` is what decides that; this one is recorded beside it).
-pub const EXTRACTOR_VERSION: u32 = 1;
+pub const EXTRACTOR_VERSION: u32 = 2;
 
 /// A source with more distinct names than this keeps the most confident ones.
 pub const MAX_ENTITIES_PER_SOURCE: usize = 500;
@@ -60,6 +64,23 @@ pub const MIN_OCR_CONFIDENCE_TO_CREATE: f32 = 0.80;
 const MAX_PERSON_UNITS: usize = 3;
 /// An organisation's own words, besides its marker.
 const MAX_ORGANIZATION_UNITS: usize = 4;
+/// Lower case words that may stand between an organisation's opening word and its capitalised name
+/// (`Hopitaux universitaires de Zurich`, `Clinique privee Bois-Cerf`).
+const MAX_DESCRIPTOR_UNITS: usize = 2;
+/// A descriptor is a real word, not a stray two-letter one.
+const MIN_DESCRIPTOR_LETTERS: usize = 4;
+/// Particles that may follow one another inside a name (`van den Berg`, `von der Heide`).
+const MAX_PARTICLES_IN_A_ROW: usize = 2;
+/// A line break inside a name is a soft wrap, not the end of a thought, when the line before it has at
+/// least this many words: a wrapped paragraph line, not an address or a heading.
+const SOFT_WRAP_MIN_WORDS: usize = 5;
+/// ... and it is as long as a line that stopped at the margin: at least this many characters and this
+/// share of the longest line of the text. A letterhead line (`... 74100 Annemasse`) that happens to end
+/// on a place name is shorter than the body, so it is not joined to the line under it.
+const MIN_WRAPPED_LINE_CHARS: usize = 60;
+/// ... and the text has at least this many such lines (a wrapped paragraph, not one long line).
+const MIN_FULL_LINES: usize = 3;
+const WRAPPED_LINE_FILL_PERCENT: usize = 85;
 
 /// Whether a word of a gazetteer phrase names the whole entity (a full name, an alias a person
 /// typed) or only part of it (a surname, an initial and a surname, a title and a surname).
@@ -109,6 +130,9 @@ struct Unit {
     /// The first unit of a sentence or of a line: a capital letter there proves nothing.
     sentence_start: bool,
     letters: usize,
+    /// Only an ampersand stands between this unit and the one before it (`Martin & Fils`): the two
+    /// share a segment, but a person's name never crosses it.
+    after_ampersand: bool,
 }
 
 impl Unit {
@@ -153,6 +177,10 @@ fn gap_effect(gap: &str, previous_may_be_abbreviated: bool) -> (bool, bool) {
     if marks.is_empty() {
         return (false, false);
     }
+    // "Martin & Fils": the words on either side are the two halves of one name.
+    if marks == ['&'] {
+        return (false, false);
+    }
     // "Dr. Martin", "J. Dupont": the dot belongs to the abbreviation, not to the sentence.
     if marks == ['.'] && previous_may_be_abbreviated {
         return (false, false);
@@ -161,6 +189,14 @@ fn gap_effect(gap: &str, previous_may_be_abbreviated: bool) -> (bool, bool) {
         .iter()
         .any(|c| matches!(c, '.' | '!' | '?' | '\u{2026}'));
     (true, ends_sentence)
+}
+
+/// The lengths of the lines of a text, in characters.
+fn line_lengths_of(chars: &[char]) -> Vec<usize> {
+    chars
+        .split(|c| *c == '\n')
+        .map(|line| line.iter().filter(|c| **c != '\r').count())
+        .collect()
 }
 
 fn scan_units(text: &str, titles: &TitleSet) -> Vec<Unit> {
@@ -172,6 +208,23 @@ fn scan_units(text: &str, titles: &TitleSet) -> Vec<Unit> {
     // Whether the token before the gap is a word that a dot may abbreviate.
     let mut abbreviable = false;
     let mut seen_token = false;
+    // The words of the line being read, and whether any has a lower case letter: a heading in
+    // capitals is not a wrapped line of text.
+    let mut line_words = 0usize;
+    let mut line_has_lower_case = false;
+    // Where the line being read began, and how long the last one was: a wrapped line stops at the
+    // margin, so it is about as long as the longest line of the text.
+    let lengths = line_lengths_of(&chars);
+    let longest_line = lengths.iter().copied().max().unwrap_or(0);
+    let margin = (longest_line * WRAPPED_LINE_FILL_PERCENT)
+        .div_ceil(100)
+        .max(MIN_WRAPPED_LINE_CHARS);
+    // A text that is wrapped has several lines that stop at the margin; an invoice or a letterhead
+    // has one long line at most.
+    let text_is_wrapped =
+        lengths.iter().filter(|length| **length >= margin).count() >= MIN_FULL_LINES;
+    let mut line_start = 0usize;
+    let mut last_line_length = 0usize;
     let mut index = 0usize;
 
     while index < chars.len() {
@@ -179,22 +232,53 @@ fn scan_units(text: &str, titles: &TitleSet) -> Vec<Unit> {
         let starts_word = c.is_alphabetic();
         let starts_number = c.is_numeric();
         if !starts_word && !starts_number {
+            if c == '\n' {
+                let mut end = index;
+                if end > line_start && chars[end - 1] == '\r' {
+                    end -= 1;
+                }
+                last_line_length = end - line_start;
+                line_start = index + 1;
+            }
             gap.push(c);
             index += 1;
             continue;
         }
 
         if seen_token {
-            let (breaks, new_sentence) = gap_effect(&gap, abbreviable);
-            if breaks {
-                segment += 1;
+            // A PDF wraps its lines: a name can be split by the break (`transmis a Jean` / `Dupont`).
+            // The break is a space when the line was a wrapped line of text that stopped on a title
+            // or a name, and the next one goes on with a capitalised word.
+            let wrapped_name = gap.matches('\n').count() == 1
+                && gap.chars().all(char::is_whitespace)
+                && starts_word
+                && c.is_uppercase()
+                && line_words >= SOFT_WRAP_MIN_WORDS
+                && line_has_lower_case
+                && text_is_wrapped
+                && last_line_length >= margin
+                && units.last().is_some_and(|previous: &Unit| {
+                    previous.title == TitleKind::Strong
+                        || (previous.name_like() && !previous.sentence_start)
+                });
+            if !wrapped_name {
+                let (breaks, new_sentence) = gap_effect(&gap, abbreviable);
+                if breaks {
+                    segment += 1;
+                }
+                if new_sentence {
+                    sentence_start = true;
+                }
             }
-            if new_sentence {
-                sentence_start = true;
+            if gap.contains('\n') && !wrapped_name {
+                line_words = 0;
+                line_has_lower_case = false;
             }
         }
+        let after_ampersand = seen_token && gap.chars().filter(|c| !c.is_whitespace()).eq(['&']);
         gap.clear();
         seen_token = true;
+        line_words += 1;
 
         let start = index;
         let mut end = index;
@@ -227,9 +311,16 @@ fn scan_units(text: &str, titles: &TitleSet) -> Vec<Unit> {
         }
 
         let written: String = chars[start..end].iter().collect();
+        line_has_lower_case |= written.chars().any(char::is_lowercase);
         let mut words: Vec<String> = Vec::new();
         let mut current = String::new();
-        for &d in &chars[start..end] {
+        for (offset, &d) in chars[start..end].iter().enumerate() {
+            if is_apostrophe(d)
+                && apostrophe_joins_a_name(&current, chars.get(start + offset + 1).copied())
+            {
+                // "D'Amico", "N'Diaye": the apostrophe is inside the surname, one word.
+                continue;
+            }
             if d == '-' || is_apostrophe(d) {
                 if !current.is_empty() {
                     words.push(fold_word(&current));
@@ -278,7 +369,10 @@ fn scan_units(text: &str, titles: &TitleSet) -> Vec<Unit> {
                 .iter()
                 .filter(|d| d.is_alphabetic())
                 .all(|d| d.is_uppercase());
-        let particle = single && (!capitalised || shouting) && titles.is_particle(&words[0]);
+        // A capital on an article or a preposition that opens a sentence (`The Lake Cafe`) is
+        // the sentence's, not the name's.
+        let particle =
+            single && (!capitalised || shouting || sentence_start) && titles.is_particle(&words[0]);
         let stop = words.iter().any(|word| titles.is_stop_word(word));
 
         units.push(Unit {
@@ -294,6 +388,7 @@ fn scan_units(text: &str, titles: &TitleSet) -> Vec<Unit> {
             segment,
             sentence_start,
             letters,
+            after_ampersand,
         });
         sentence_start = false;
         abbreviable = initial || (kind != TitleKind::No && capitalised);
@@ -348,14 +443,71 @@ struct Found {
     type_id: EntityTypeId,
     method: Method,
     titles_seen: Vec<String>,
+    /// The short form a pack gives for a known organisation.
+    acronym: Option<String>,
 }
 
 fn render(units: &[Unit]) -> String {
-    units
-        .iter()
-        .map(Unit::rendered)
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut out = String::new();
+    for (position, unit) in units.iter().enumerate() {
+        if position > 0 {
+            out.push(' ');
+        }
+        if unit.after_ampersand {
+            out.push_str("& ");
+        }
+        out.push_str(&unit.rendered());
+    }
+    out
+}
+
+/// [`render`] without the elided article the first word may carry: `l'Etude Chappuis` is the
+/// organisation `Etude Chappuis`.
+fn render_without_leading_elision(units: &[Unit]) -> String {
+    let mut rendered = render(units);
+    if let Some(first) = units.first() {
+        if first.words.len() > 1 && first.words[0].chars().count() == 1 {
+            if let Some((_, rest)) = first.written.split_once(is_apostrophe) {
+                let prefix_length = first.written.len() - rest.len();
+                rendered = rendered[prefix_length..].to_string();
+            }
+        }
+    }
+    rendered
+}
+
+/// The unit that follows 1 to [`MAX_PARTICLES_IN_A_ROW`] particles starting at `at`, when it can be
+/// part of a name: `van den Berg` from the `van`.
+fn name_after_particles(units: &[Unit], at: usize, to: usize) -> Option<usize> {
+    let mut cursor = at;
+    let mut particles = 0usize;
+    while cursor < to && units[cursor].particle && particles < MAX_PARTICLES_IN_A_ROW {
+        cursor += 1;
+        particles += 1;
+    }
+    (particles > 0 && cursor < to && units[cursor].name_like() && !units[cursor].after_ampersand)
+        .then_some(cursor)
+}
+
+/// Whether the unit just before `at` is an address marker (`rue`, `place`), looking back over
+/// particles (`place de l'Hotel de Ville`): what stands after it names a place.
+fn follows_an_address_marker(units: &[Unit], at: usize, from: usize, packs: &PackSet) -> bool {
+    let mut cursor = at;
+    let mut particles = 0usize;
+    while cursor > from && particles <= MAX_PARTICLES_IN_A_ROW {
+        cursor -= 1;
+        let unit = &units[cursor];
+        if unit.particle {
+            particles += 1;
+            continue;
+        }
+        return is_address_marker(unit, packs);
+    }
+    false
+}
+
+fn is_address_marker(unit: &Unit, packs: &PackSet) -> bool {
+    unit.words.len() == 1 && packs.is_address_marker(&unit.words[0])
 }
 
 /// A title the unit at `position` stands under, when one stands right before it.
@@ -393,6 +545,13 @@ fn gazetteer_finds(units: &[Unit], range: (usize, usize), gazetteer: &Gazetteer)
         if first == last && !units[from + first].capitalised {
             continue;
         }
+        // A name does not cross an ampersand ("Martin & Fils" is two names, or an organisation).
+        if units[from + first + 1..=from + last]
+            .iter()
+            .any(|unit| unit.after_ampersand)
+        {
+            continue;
+        }
         let entries: Vec<&GazetteerEntry> = hit
             .entries
             .iter()
@@ -423,32 +582,39 @@ fn gazetteer_finds(units: &[Unit], range: (usize, usize), gazetteer: &Gazetteer)
             type_id,
             method,
             titles_seen: title_before(units, a).into_iter().collect(),
+            acronym: None,
         });
     }
     found
 }
 
-fn title_finds(units: &[Unit], range: (usize, usize)) -> Vec<Found> {
+fn title_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) -> Vec<Found> {
     let (from, to) = range;
     let mut found = Vec::new();
     for position in from..to {
         if units[position].title == TitleKind::No {
             continue;
         }
+        // "boulevard du Docteur Bouchet" is a street, not a doctor.
+        if follows_an_address_marker(units, position, from, packs) {
+            continue;
+        }
         let mut cursor = position + 1;
         let mut names = 0usize;
         let mut last = None;
         while cursor < to && names < MAX_PERSON_UNITS {
+            if units[cursor].after_ampersand {
+                break;
+            }
             if units[cursor].name_like() {
                 names += 1;
                 last = Some(cursor);
                 cursor += 1;
-            } else if names > 0
-                && units[cursor].particle
-                && cursor + 1 < to
-                && units[cursor + 1].name_like()
+            } else if let Some(next) = (names > 0)
+                .then(|| name_after_particles(units, cursor, to))
+                .flatten()
             {
-                cursor += 1;
+                cursor = next;
             } else {
                 break;
             }
@@ -470,12 +636,24 @@ fn title_finds(units: &[Unit], range: (usize, usize)) -> Vec<Found> {
                 Method::TitleSurname
             },
             titles_seen: vec![units[position].words[0].clone()],
+            acronym: None,
         });
     }
     found
 }
 
-/// The positions where the words of `marker` stand one after the other, as whole units.
+/// Whether a unit is the word `word`: the word itself, or the word after an elided article
+/// (`l'Etude` is `etude`) when `allow_elision`.
+fn unit_is_word(unit: &Unit, word: &str, allow_elision: bool) -> bool {
+    match unit.words.as_slice() {
+        [only] => only == word,
+        [article, rest] if allow_elision => article.chars().count() == 1 && rest == word,
+        _ => false,
+    }
+}
+
+/// The positions where the words of `marker` stand one after the other, as whole units. The first
+/// word may carry an elided article (`l'Etude Chappuis`).
 fn marker_positions(units: &[Unit], range: (usize, usize), marker: &[String]) -> Vec<usize> {
     let (from, to) = range;
     if marker.is_empty() || to < from + marker.len() {
@@ -483,12 +661,153 @@ fn marker_positions(units: &[Unit], range: (usize, usize), marker: &[String]) ->
     }
     (from..=to - marker.len())
         .filter(|&position| {
-            marker.iter().enumerate().all(|(offset, word)| {
-                let unit = &units[position + offset];
-                unit.words.len() == 1 && unit.words[0] == *word
-            })
+            marker
+                .iter()
+                .enumerate()
+                .all(|(offset, word)| unit_is_word(&units[position + offset], word, offset == 0))
         })
         .collect()
+}
+
+/// A lower case word of an organisation's name that is neither a name nor a small word:
+/// `universitaires`, `privee`.
+fn is_descriptor(unit: &Unit) -> bool {
+    !unit.capitalised
+        && !unit.particle
+        && !unit.stop
+        && unit.title == TitleKind::No
+        && unit.words.len() == 1
+        && unit.letters >= MIN_DESCRIPTOR_LETTERS
+}
+
+/// From `at`, skip up to [`MAX_DESCRIPTOR_UNITS`] descriptors when what follows them is a name
+/// (directly, or after particles): the position to continue from.
+fn skip_descriptors(units: &[Unit], at: usize, to: usize) -> Option<usize> {
+    let mut cursor = at;
+    let mut skipped = 0usize;
+    while cursor < to && skipped < MAX_DESCRIPTOR_UNITS && is_descriptor(&units[cursor]) {
+        cursor += 1;
+        skipped += 1;
+    }
+    if skipped == 0 || cursor >= to {
+        return None;
+    }
+    let names_follow = (units[cursor].name_like() && !units[cursor].particle)
+        || name_after_particles(units, cursor, to).is_some();
+    names_follow.then_some(cursor)
+}
+
+/// The organisations a pack lists by name, found by their words (a full name) or by their exact
+/// written form (a short form: `HUG`). Every one is reported as the organisation's name in full,
+/// so a letter that writes only `CHUV` is tied to the entity of the full name.
+fn known_organization_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) -> Vec<Found> {
+    let (from, to) = range;
+    let mut found = Vec::new();
+    for position in from..to {
+        let unit = &units[position];
+        // `l'URSSAF`: the article is not part of the name.
+        let words = words_without_elision(unit);
+        let Some(first_word) = words.first() else {
+            continue;
+        };
+        for form in packs.known_forms_starting_with(first_word) {
+            let organization = &packs.known_organizations()[form.organization];
+            let last = match form.short {
+                Some(index) => {
+                    let short = &organization.short[index];
+                    if words.len() != 1 || written_without_elision(unit) != short.written {
+                        continue;
+                    }
+                    position
+                }
+                None => {
+                    if !unit.capitalised {
+                        continue;
+                    }
+                    // A one-word name that is also an ordinary word ("Assura") is a name only
+                    // away from the start of a sentence; an acronym is one anywhere.
+                    let shouting = written_without_elision(unit)
+                        .chars()
+                        .all(|c| !c.is_alphabetic() || c.is_uppercase());
+                    if organization.words.len() == 1 && unit.sentence_start && !shouting {
+                        continue;
+                    }
+                    let mut cursor = position;
+                    let mut matched = 0usize;
+                    while cursor < to && matched < organization.words.len() {
+                        let these = if cursor == position {
+                            words
+                        } else {
+                            &units[cursor].words[..]
+                        };
+                        if matched + these.len() > organization.words.len()
+                            || organization.words[matched..matched + these.len()] != these[..]
+                        {
+                            break;
+                        }
+                        matched += these.len();
+                        cursor += 1;
+                    }
+                    if matched != organization.words.len() {
+                        continue;
+                    }
+                    cursor - 1
+                }
+            };
+            found.push(Found {
+                first: position,
+                last,
+                priority: 0,
+                surface: organization.display.clone(),
+                type_id: EntityTypeId::organization(),
+                method: Method::OrganizationKnown,
+                titles_seen: Vec::new(),
+                acronym: organization
+                    .short
+                    .first()
+                    .map(|short| short.written.clone()),
+            });
+        }
+    }
+    found
+}
+
+/// The folded words of a unit without the elided article it may open with (`l'URSSAF`).
+fn words_without_elision(unit: &Unit) -> &[String] {
+    if unit.words.len() > 1
+        && unit.words[0].chars().count() == 1
+        && unit.written.contains(is_apostrophe)
+    {
+        &unit.words[1..]
+    } else {
+        &unit.words
+    }
+}
+
+/// The unit as written, without the elided article it may open with.
+fn written_without_elision(unit: &Unit) -> &str {
+    if unit.words.len() > 1 && unit.words[0].chars().count() == 1 {
+        if let Some((_, rest)) = unit.written.split_once(is_apostrophe) {
+            return rest;
+        }
+    }
+    &unit.written
+}
+
+/// The unit before a name just taken, looking back over 1 to [`MAX_PARTICLES_IN_A_ROW`] particles
+/// (`Papeterie du Lac`, `Cabinet van den Berg`): the position of the name they lead to. `at` is the
+/// unit right before the name.
+fn name_before_particles(units: &[Unit], at: usize, from: usize) -> Option<usize> {
+    let mut cursor = at;
+    let mut particles = 0usize;
+    while units[cursor].particle && particles < MAX_PARTICLES_IN_A_ROW {
+        particles += 1;
+        if cursor == from {
+            return None;
+        }
+        cursor -= 1;
+    }
+    (particles > 0 && units[cursor].name_like()).then_some(cursor)
 }
 
 fn organization_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) -> Vec<Found> {
@@ -501,17 +820,23 @@ fn organization_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) ->
             let mut cursor = after;
             let mut names = 0usize;
             let mut last = None;
+            // "Hopitaux universitaires de Zurich": lower case words between the opening word and
+            // the capitalised name belong to the organisation.
+            let mut descriptors_skipped = false;
+            if let Some(next) = skip_descriptors(units, cursor, to) {
+                cursor = next;
+                descriptors_skipped = true;
+            }
             while cursor < to && names < MAX_ORGANIZATION_UNITS {
                 if units[cursor].name_like() {
                     names += 1;
                     last = Some(cursor);
                     cursor += 1;
-                } else if (names > 0 || cursor == after)
-                    && units[cursor].particle
-                    && cursor + 1 < to
-                    && units[cursor + 1].name_like()
-                {
-                    cursor += 1;
+                } else if names > 0 || cursor == after || descriptors_skipped {
+                    match name_after_particles(units, cursor, to) {
+                        Some(next) => cursor = next,
+                        None => break,
+                    }
                 } else {
                     break;
                 }
@@ -521,10 +846,11 @@ fn organization_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) ->
                 first: position,
                 last,
                 priority: 2,
-                surface: render(&units[position..=last]),
+                surface: render_without_leading_elision(&units[position..=last]),
                 type_id: EntityTypeId::organization(),
                 method: Method::OrganizationPrefix,
                 titles_seen: Vec::new(),
+                acronym: None,
             });
         }
     }
@@ -550,12 +876,11 @@ fn organization_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) ->
                     names += 1;
                     first = Some(before);
                     cursor = before;
-                } else if names > 0
-                    && units[before].particle
-                    && before > from
-                    && units[before - 1].name_like()
-                {
-                    cursor = before;
+                } else if names > 0 {
+                    match name_before_particles(units, before, from) {
+                        Some(name_at) => cursor = name_at + 1,
+                        None => break,
+                    }
                 } else {
                     break;
                 }
@@ -566,17 +891,18 @@ fn organization_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) ->
                 first,
                 last,
                 priority: 1,
-                surface: render(&units[first..=last]),
+                surface: render_without_leading_elision(&units[first..=last]),
                 type_id: EntityTypeId::organization(),
                 method: Method::OrganizationMarker,
                 titles_seen: Vec::new(),
+                acronym: None,
             });
         }
     }
     found
 }
 
-fn untitled_finds(units: &[Unit], range: (usize, usize)) -> Vec<Found> {
+fn untitled_finds(units: &[Unit], range: (usize, usize), packs: &PackSet) -> Vec<Found> {
     let (from, to) = range;
     let mut found = Vec::new();
     let mut position = from;
@@ -590,23 +916,27 @@ fn untitled_finds(units: &[Unit], range: (usize, usize)) -> Vec<Found> {
         let mut names = 1usize;
         loop {
             let next = last + 1;
-            if next >= to {
+            if next >= to || units[next].after_ampersand {
                 break;
             }
             if units[next].name_like() {
                 last = next;
                 names += 1;
-            } else if units[next].particle && next + 1 < to && units[next + 1].name_like() {
-                last = next + 1;
+            } else if let Some(name_at) = name_after_particles(units, next, to) {
+                last = name_at;
                 names += 1;
             } else {
                 break;
             }
         }
         position = last + 1;
+        // "14 rue Jean Jaures", "place de l'Hotel de Ville", "Avenue du Mont-Blanc": places.
+        let a_place = is_address_marker(&units[first], packs)
+            || follows_an_address_marker(units, first, from, packs);
         let usable = (2..=MAX_PERSON_UNITS).contains(&names)
             && !units[first].sentence_start
-            && !units[last].initial;
+            && !units[last].initial
+            && !a_place;
         if usable {
             found.push(Found {
                 first,
@@ -616,14 +946,165 @@ fn untitled_finds(units: &[Unit], range: (usize, usize)) -> Vec<Found> {
                 type_id: EntityTypeId::person(),
                 method: Method::CapitalisedName,
                 titles_seen: Vec::new(),
+                acronym: None,
             });
         }
     }
     found
 }
 
+// ---------------------------------------------------------------------------------------------
+// A name alone on a line
+// ---------------------------------------------------------------------------------------------
+
+/// The lines of a text as `[start, end)` character offsets, line breaks excluded.
+fn lines_of(chars: &[char]) -> Vec<(usize, usize)> {
+    let mut lines = Vec::new();
+    let mut start = 0usize;
+    for (position, &c) in chars.iter().enumerate() {
+        if c == '\n' {
+            lines.push((start, position));
+            start = position + 1;
+        }
+    }
+    lines.push((start, chars.len()));
+    lines
+}
+
+fn is_organization_word(unit: &Unit, packs: &PackSet) -> bool {
+    let markers = packs.org_markers();
+    markers
+        .prefix
+        .iter()
+        .chain(&markers.suffix)
+        .any(|marker| marker.len() == 1 && unit_is_word(unit, &marker[0], true))
+}
+
+/// A recipient's name, alone on its line, in the block that opens a letter:
+///
+/// ```text
+/// Madame, Monsieur,          a salutation above: a person (BlockName, trusted at once)
+///
+/// Anne Marchand              two or three capitalised words and nothing else on the line
+/// 12 rue Pasteur, ...        or an address below with no salutation above (a candidate)
+/// ```
+///
+/// A heading (`Compte Rendu`), a street (`Rue du Rhone`), an organisation (`Cabinet Dupont`), a line in
+/// capitals or one with a digit or a comma never qualifies.
+fn block_name_finds(text: &str, units: &[Unit], packs: &PackSet) -> Vec<Found> {
+    let chars: Vec<char> = text.chars().collect();
+    let lines = lines_of(&chars);
+    let mut members: Vec<Vec<usize>> = vec![Vec::new(); lines.len()];
+    for (index, unit) in units.iter().enumerate() {
+        let line = lines.partition_point(|&(start, _)| start <= unit.start) - 1;
+        members[line].push(index);
+    }
+    let non_blank = |line: usize| {
+        chars[lines[line].0..lines[line].1]
+            .iter()
+            .any(|c| !c.is_whitespace())
+    };
+    let covered = |line: usize| -> bool {
+        let letters = chars[lines[line].0..lines[line].1]
+            .iter()
+            .filter(|c| !c.is_whitespace())
+            .count();
+        let units_length: usize = members[line]
+            .iter()
+            .map(|&index| units[index].end - units[index].start)
+            .sum();
+        letters == units_length
+    };
+
+    let mut found = Vec::new();
+    for line in 0..lines.len() {
+        let indexes = &members[line];
+        if indexes.len() < 2 || !covered(line) {
+            continue;
+        }
+        let line_units: Vec<&Unit> = indexes.iter().map(|&index| &units[index]).collect();
+        let names = line_units.iter().filter(|unit| unit.name_like()).count();
+        let well_formed = line_units.first().is_some_and(|unit| unit.name_like())
+            && line_units
+                .last()
+                .is_some_and(|unit| unit.name_like() && !unit.initial)
+            && (2..=MAX_PERSON_UNITS).contains(&names)
+            && line_units
+                .iter()
+                .all(|unit| (unit.name_like() || unit.particle) && !unit.after_ampersand)
+            && line_units.iter().any(|unit| {
+                !unit
+                    .written
+                    .chars()
+                    .all(|c| !c.is_alphabetic() || c.is_uppercase())
+            })
+            && line_units
+                .iter()
+                .all(|unit| !is_address_marker(unit, packs) && !is_organization_word(unit, packs));
+        if !well_formed {
+            continue;
+        }
+
+        let before = (0..line).rev().find(|&other| non_blank(other));
+        let salutation_above = before.is_some_and(|other| {
+            let above = &members[other];
+            !above.is_empty()
+                && above
+                    .iter()
+                    .all(|&index| units[index].title == TitleKind::Strong)
+                && chars[lines[other].0..lines[other].1]
+                    .iter()
+                    .filter(|c| !c.is_whitespace())
+                    .count()
+                    - above
+                        .iter()
+                        .map(|&index| units[index].end - units[index].start)
+                        .sum::<usize>()
+                    <= above.len() + 1
+        });
+        let after = (line + 1..lines.len()).find(|&other| non_blank(other));
+        let address_below = after.is_some_and(|other| {
+            let first_char = chars[lines[other].0..lines[other].1]
+                .iter()
+                .find(|c| !c.is_whitespace());
+            first_char.is_some_and(|c| c.is_numeric())
+                || members[other]
+                    .first()
+                    .is_some_and(|&index| is_address_marker(&units[index], packs))
+        });
+        let method = match (salutation_above, address_below) {
+            (true, _) => Method::BlockName,
+            (false, true) => Method::CapitalisedName,
+            (false, false) => continue,
+        };
+        let (first, last) = (indexes[0], indexes[indexes.len() - 1]);
+        found.push(Found {
+            first,
+            last,
+            priority: 4,
+            surface: render(&units[first..=last]),
+            type_id: EntityTypeId::person(),
+            method,
+            titles_seen: Vec::new(),
+            acronym: None,
+        });
+    }
+    found
+}
+
+/// Whether a find that was dropped for a better one is a pattern: evidence the better find, a name
+/// the base already holds, should still be credited to.
+fn is_pattern(method: Method) -> bool {
+    matches!(
+        method,
+        Method::TitleFullName | Method::OrganizationMarker | Method::OrganizationPrefix
+    )
+}
+
 /// Keep the finds that do not overlap a better one: the lowest priority number first, then the
-/// longest, then the leftmost.
+/// longest, then the leftmost. A name the base already holds (`GazetteerHit`) that a pattern found
+/// too (`Dr Jean Dupont`) keeps the **pattern's** method: the end-of-pass reading finds every name
+/// of the base again as a hit on its own earlier result, and the real evidence must survive it.
 fn settle(mut finds: Vec<Found>) -> Vec<Found> {
     finds.sort_by(|a, b| {
         a.priority
@@ -631,17 +1112,43 @@ fn settle(mut finds: Vec<Found>) -> Vec<Found> {
             .then((b.last - b.first).cmp(&(a.last - a.first)))
             .then(a.first.cmp(&b.first))
     });
-    let mut taken: Vec<(usize, usize)> = Vec::new();
-    let mut kept = Vec::new();
+    let mut kept: Vec<Found> = Vec::new();
+    // For each kept find, the best pattern it absorbed: (priority, method).
+    let mut credited: Vec<Option<(u8, Method)>> = Vec::new();
     for find in finds {
-        if taken
+        let overlapping = kept
             .iter()
-            .any(|&(first, last)| find.first <= last && first <= find.last)
-        {
-            continue;
+            .position(|other| find.first <= other.last && other.first <= find.last);
+        match overlapping {
+            Some(index) => {
+                let other = &kept[index];
+                if other.method == Method::GazetteerHit
+                    && is_pattern(find.method)
+                    && find.first >= other.first
+                    && find.last <= other.last
+                {
+                    let better =
+                        credited[index].is_none_or(|(priority, _)| find.priority < priority);
+                    if better {
+                        credited[index] = Some((find.priority, find.method));
+                    }
+                    for title in &find.titles_seen {
+                        if !kept[index].titles_seen.contains(title) {
+                            kept[index].titles_seen.push(title.clone());
+                        }
+                    }
+                }
+            }
+            None => {
+                kept.push(find);
+                credited.push(None);
+            }
         }
-        taken.push((find.first, find.last));
-        kept.push(find);
+    }
+    for (find, credit) in kept.iter_mut().zip(&credited) {
+        if let Some((_, method)) = credit {
+            find.method = *method;
+        }
     }
     kept.sort_by_key(|find| find.first);
     kept
@@ -768,12 +1275,18 @@ impl Reading<'_> {
         let units = scan_units(&blanked, &self.titles);
         let mut finds: Vec<Found> = Vec::new();
         for range in segments_of(&units) {
+            if !weak_scan {
+                finds.extend(known_organization_finds(&units, range, self.packs));
+            }
             finds.extend(gazetteer_finds(&units, range, self.gazetteer));
             if !weak_scan {
-                finds.extend(title_finds(&units, range));
+                finds.extend(title_finds(&units, range, self.packs));
                 finds.extend(organization_finds(&units, range, self.packs));
-                finds.extend(untitled_finds(&units, range));
+                finds.extend(untitled_finds(&units, range, self.packs));
             }
+        }
+        if !weak_scan {
+            finds.extend(block_name_finds(&blanked, &units, self.packs));
         }
 
         for find in settle(finds) {
@@ -784,6 +1297,7 @@ impl Reading<'_> {
                 end: units[find.last].end,
             });
             candidate.titles_seen = find.titles_seen;
+            candidate.acronym = find.acronym;
             if weak_scan {
                 candidate.confidence =
                     crate::knowledge::Confidence::new(candidate.confidence.value() * scale);
@@ -1328,7 +1842,9 @@ mod tests {
             &packs,
         );
         assert_eq!(found.candidates.len(), 1);
-        assert_eq!(found.candidates[0].method, Method::GazetteerHit);
+        // The name is the base's, and a title and a full name found it too: the evidence that is
+        // credited is the pattern (fix 4, batch 2: the strongest method of a place is kept).
+        assert_eq!(found.candidates[0].method, Method::TitleFullName);
         assert_eq!(found.candidates[0].titles_seen, ["dr"]);
     }
 

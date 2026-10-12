@@ -55,6 +55,35 @@
       "GmbH"
     ]
   },
+  "org_names": [
+    { "name": "Hôpitaux universitaires de Genève", "short": ["HUG"] },
+    { "name": "Centre hospitalier universitaire vaudois", "short": ["CHUV"] },
+    { "name": "Hôpital fribourgeois", "short": ["HFR"] },
+    { "name": "Réseau hospitalier neuchâtelois", "short": ["RHNe"] },
+    { "name": "Hôpital du Valais", "short": ["HVS"] },
+    { "name": "Office de l'assurance-invalidité du canton de Vaud" },
+    { "name": "Caisse cantonale vaudoise de compensation AVS", "short": ["CCVD"] },
+    { "name": "Fédération des médecins suisses", "short": ["FMH"] },
+    { "name": "Société vaudoise de médecine", "short": ["SVM"] },
+    { "name": "Office fédéral de la santé publique", "short": ["OFSP"] },
+    { "name": "Office fédéral des assurances sociales", "short": ["OFAS"] },
+    { "name": "Swissmedic" },
+    { "name": "SUVA" },
+    { "name": "Helsana" },
+    { "name": "Sanitas" },
+    { "name": "SWICA" },
+    { "name": "Visana" },
+    { "name": "Concordia" },
+    { "name": "Sympany" },
+    { "name": "Atupri" },
+    { "name": "CSS Assurance", "short": ["CSS"] },
+    { "name": "Groupe Mutuel" },
+    { "name": "Assura" },
+    { "name": "Unilabs" },
+    { "name": "Viollier" },
+    { "name": "Services industriels de Genève", "short": ["SIG"] },
+    { "name": "Swisscom" }
+  ],
   "identifier_schemes": [
     {
       "id": "avs",

@@ -26,6 +26,10 @@
     "prefix": [],
     "suffix": []
   },
+  "org_names": [
+    { "name": "EDF" },
+    { "name": "ENGIE" }
+  ],
   "identifier_schemes": [
     {
       "id": "siret",

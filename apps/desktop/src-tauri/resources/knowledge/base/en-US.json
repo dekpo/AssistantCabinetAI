@@ -21,12 +21,14 @@
     "invoice", "quote", "estimate", "order", "receipt", "statement", "letter", "mail", "note", "memo",
     "scan", "copy", "original", "draft", "version", "final", "template", "attachment", "report",
     "account", "contract", "certificate", "table", "list", "total", "summary",
-    "nul", "null", "none", "unknown", "n/a", "na", "blank", "yes", "no"
+    "nul", "null", "none", "unknown", "n/a", "na", "blank", "yes", "no",
+    "between", "from", "with", "without", "under", "for", "thanks", "hello", "regards"
   ],
   "org_markers": {
     "prefix": ["association", "company", "group", "foundation", "union", "city of", "county of"],
     "suffix": ["Inc", "LLC", "Ltd", "Corp", "Co", "LLP", "PLC", "GmbH"]
   },
+  "address_markers": ["street", "road", "avenue", "lane", "drive", "square", "boulevard", "place", "court", "way", "terrace"],
   "identifier_schemes": [
     {
       "id": "email",

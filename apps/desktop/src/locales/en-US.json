@@ -785,6 +785,8 @@
       "coref_in_document": "same person elsewhere in the document",
       "filename_token": "word from the file name",
       "capitalised_name": "capitalised words with no other support",
+      "organization_known": "organisation known to the vocabulary",
+      "block_name": "name alone under a salutation",
       "manual": "typed by hand",
       "other": "another method"
     },
@@ -793,6 +795,7 @@
       "token_set": "same words in another order",
       "initial": "initial and family name fit",
       "shared_identifier": "same identifier",
+      "swapped_order": "given name and family name the other way round",
       "other": "they look alike"
     },
     "matchState": {

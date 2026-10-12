@@ -36,10 +36,27 @@
       "ehpad",
       "maison de santé",
       "cabinet médical",
-      "cpam"
+      "cpam",
+      "chu",
+      "chru",
+      "ordre des médecins"
     ],
     "suffix": []
   },
+  "org_names": [
+    { "name": "Hospices Civils de Lyon", "short": ["HCL"] },
+    { "name": "CHU Grenoble Alpes" },
+    { "name": "Centre hospitalier Annecy Genevois", "short": ["CHANGE"] },
+    { "name": "URSSAF Rhône-Alpes" },
+    { "name": "URSSAF" },
+    { "name": "Agence régionale de santé", "short": ["ARS"] },
+    { "name": "ARS Auvergne-Rhône-Alpes" },
+    { "name": "Cerballiance Alpes" },
+    { "name": "Cerballiance" },
+    { "name": "Biogroup" },
+    { "name": "MGEN" },
+    { "name": "Harmonie Mutuelle" }
+  ],
   "identifier_schemes": [
     {
       "id": "nir",

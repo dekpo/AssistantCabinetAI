@@ -171,6 +171,14 @@ fn list_entries(pack: &Value, file: &str) -> Vec<(String, String)> {
             take(format!("org_markers.{side}[{index}]"), value);
         }
     }
+    for (index, value) in pack["address_markers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        take(format!("address_markers[{index}]"), value);
+    }
     for (index, column) in pack["columns"].as_array().into_iter().flatten().enumerate() {
         for (position, value) in column["headers"]
             .as_array()
@@ -217,6 +225,8 @@ fn a_pack_holds_words_and_phrases_never_a_sentence() {
             "title_spoken",
             "stop_words",
             "org_markers",
+            "org_names",
+            "address_markers",
             "identifier_schemes",
             "columns",
             "relations",
@@ -230,6 +240,41 @@ fn a_pack_holds_words_and_phrases_never_a_sentence() {
         }
     }
     assert!(checked > 300, "only {checked} entries checked");
+}
+
+/// A listed organisation is a name, never a sentence: the full name is at most a dozen words and
+/// carries no punctuation of prose, a short form is one word (`HUG`).
+#[test]
+fn a_pack_lists_organisations_by_name_and_never_by_sentence() {
+    let root = manifest().join("resources").join("knowledge");
+    let mut listed = 0;
+    for path in files_under(&root, "json") {
+        let pack: Value = serde_json::from_str(&read(&path)).expect("valid JSON");
+        let file = path.strip_prefix(&root).unwrap().display().to_string();
+        for (index, entry) in pack["org_names"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let name = entry["name"].as_str().unwrap_or_default();
+            assert!(
+                (1..=12).contains(&name.split_whitespace().count())
+                    && !name.contains(['?', '!', ';', ':'])
+                    && !name.trim_end().ends_with('.'),
+                "{file} org_names[{index}]: {name:?}"
+            );
+            for short in entry["short"].as_array().into_iter().flatten() {
+                let short = short.as_str().unwrap_or_default();
+                assert!(
+                    short.split_whitespace().count() == 1 && short.chars().count() >= 2,
+                    "{file} org_names[{index}].short: {short:?}"
+                );
+            }
+            listed += 1;
+        }
+    }
+    assert!(listed >= 40, "only {listed} organisations listed");
 }
 
 #[test]

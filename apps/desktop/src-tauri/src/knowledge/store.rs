@@ -22,6 +22,7 @@ use super::{
     EntityDraft, EntityFilter, EntityRecord, EntityRef, EntityStatus, FileSets, IntegrityReport,
     KnowledgeDelta, MentionDraft, MentionLocator, NameHit, NewAlias, NewEntity, Origin, Page,
     PossibleMatchDraft, RelationDraft, SignalDraft, SourceRef, SourceRow, CURRENT_SCHEMA_VERSION,
+    NOT_EXTRACTED,
 };
 use crate::error::AppError;
 
@@ -272,6 +273,7 @@ pub fn ensure_schema(connection: &Connection) -> Result<(), AppError> {
     db(tx.execute_batch(SCHEMA))?;
     add_missing_diagnostic_columns(&tx)?;
     add_missing_mention_columns(&tx)?;
+    add_missing_entity_columns(&tx)?;
     db(tx.execute_batch(SEEDS))?;
     db(tx.execute(
         "INSERT INTO kb_meta (key, value) VALUES ('schema_version', ?1)
@@ -321,6 +323,27 @@ fn add_missing_mention_columns(connection: &Connection) -> Result<(), AppError> 
     drop(statement);
     if !known.iter().any(|column| column == "split_from") {
         db(connection.execute("ALTER TABLE kb_mentions ADD COLUMN split_from INTEGER", []))?;
+    }
+    Ok(())
+}
+
+/// `kb_entities.promoted_from_candidate` (fix 4, batch 2): 1 when an entity became active only because
+/// a second source named it, so that it goes back to a candidate when that support is gone. A database
+/// made by lot 1 to fix 4 batch 1 has the table without it.
+fn add_missing_entity_columns(connection: &Connection) -> Result<(), AppError> {
+    let mut statement = db(connection.prepare("PRAGMA table_info(kb_entities)"))?;
+    let known: Vec<String> = db(statement.query_map([], |row| row.get::<_, String>(1)))?
+        .collect::<Result<_, _>>()
+        .map_err(|_| AppError::KnowledgeUnavailable)?;
+    drop(statement);
+    if !known
+        .iter()
+        .any(|column| column == "promoted_from_candidate")
+    {
+        db(connection.execute(
+            "ALTER TABLE kb_entities ADD COLUMN promoted_from_candidate INTEGER NOT NULL DEFAULT 0",
+            [],
+        ))?;
     }
     Ok(())
 }
@@ -496,6 +519,9 @@ const ORPHAN_CONDITION: &str = "
     AND NOT EXISTS (SELECT 1 FROM kb_entities c WHERE c.merged_into = kb_entities.entity_id)";
 
 pub fn gc_orphans(connection: &Connection) -> Result<usize, AppError> {
+    // Whatever just lost a source is settled together: a name two files agreed on goes back to a
+    // guess when only one is left, and one nothing holds on to is collected.
+    demote_candidates(connection)?;
     db(connection.execute(
         &format!("DELETE FROM kb_entities WHERE {ORPHAN_CONDITION}"),
         [],
@@ -810,7 +836,8 @@ fn resolve_draft(
             outcome.entities_matched += 1;
             if status == "candidate" && draft.status == EntityStatus::Active {
                 db(connection.execute(
-                    "UPDATE kb_entities SET status = 'active' WHERE entity_id = ?1",
+                    "UPDATE kb_entities SET status = 'active', promoted_from_candidate = 0
+                     WHERE entity_id = ?1",
                     [entity_id],
                 ))?;
                 touched.insert(entity_id);
@@ -1371,19 +1398,45 @@ fn apply_possible_matches(
     Ok(())
 }
 
+/// The number of distinct sources that name an entity, a merged entity's sources counting for the
+/// entity it was merged into.
+const SUPPORTING_SOURCES: &str = "(SELECT COUNT(DISTINCT m.source_id) FROM kb_mentions m
+                WHERE m.entity_id = kb_entities.entity_id
+                   OR m.entity_id IN (SELECT x.entity_id FROM kb_entities x
+                                      WHERE x.merged_into = kb_entities.entity_id))";
+
 /// A guess becomes a fact when a second file names it: an automatic candidate with mentions in two
 /// distinct sources turns active (master section 6, rule 5). One statement, run after every
 /// source, so a name seen in two files is trusted by the time the second one is written. A merged
-/// entity's mentions count for the entity it was merged into.
+/// entity's mentions count for the entity it was merged into. The promotion is remembered
+/// (`promoted_from_candidate`) so that [`demote_candidates`] can undo it.
 pub fn promote_candidates(tx: &Transaction<'_>) -> Result<usize, AppError> {
     db(tx.execute(
-        "UPDATE kb_entities
-         SET status = 'active', updated_at = CAST(strftime('%s', 'now') AS INTEGER)
-         WHERE status = 'candidate' AND origin = 'automatic'
-           AND (SELECT COUNT(DISTINCT m.source_id) FROM kb_mentions m
-                WHERE m.entity_id = kb_entities.entity_id
-                   OR m.entity_id IN (SELECT x.entity_id FROM kb_entities x
-                                      WHERE x.merged_into = kb_entities.entity_id)) >= 2",
+        &format!(
+            "UPDATE kb_entities
+             SET status = 'active', promoted_from_candidate = 1,
+                 updated_at = CAST(strftime('%s', 'now') AS INTEGER)
+             WHERE status = 'candidate' AND origin = 'automatic'
+               AND {SUPPORTING_SOURCES} >= 2"
+        ),
+        [],
+    ))
+}
+
+/// The other half of [`promote_candidates`]: an automatic entity that is active **only** because two
+/// sources agreed goes back to a candidate when fewer than two name it any more (a file was deleted,
+/// changed, or read again without the name). An entity a pattern made active at once (a title and a
+/// full name, a legal suffix, a column, a known organisation) never carries the mark and is never
+/// demoted; neither is anything the user typed or confirmed (`origin = 'manual'`).
+pub fn demote_candidates(connection: &Connection) -> Result<usize, AppError> {
+    db(connection.execute(
+        &format!(
+            "UPDATE kb_entities
+             SET status = 'candidate', promoted_from_candidate = 0,
+                 updated_at = CAST(strftime('%s', 'now') AS INTEGER)
+             WHERE status = 'active' AND origin = 'automatic' AND promoted_from_candidate = 1
+               AND {SUPPORTING_SOURCES} < 2"
+        ),
         [],
     ))
 }
@@ -1935,6 +1988,8 @@ pub fn delete_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErro
         EntityStatus::Merged => return Err(AppError::KnowledgeMergeRefused),
         EntityStatus::Candidate | EntityStatus::Active => {}
     }
+    // The workbooks this name was read in, kept in the log: a restore makes exactly these due again.
+    let workbooks = workbooks_naming(tx, entity_id)?;
     db(tx.execute("DELETE FROM kb_mentions WHERE entity_id = ?1", [entity_id]))?;
     db(tx.execute(
         "DELETE FROM kb_relations WHERE subject = ?1 OR object = ?1",
@@ -1949,8 +2004,66 @@ pub fn delete_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErro
     log_op(
         tx,
         "delete",
-        json!({ "entity": entity_id, "previous_status": entity.status.as_code() }),
+        json!({
+            "entity": entity_id,
+            "previous_status": entity.status.as_code(),
+            "data_sources": workbooks,
+        }),
     )?;
+    Ok(())
+}
+
+/// The relative paths of the workbooks that hold a mention of this entity.
+fn workbooks_naming(connection: &Connection, entity_id: i64) -> Result<Vec<String>, AppError> {
+    let mut statement = db(connection.prepare(
+        "SELECT DISTINCT s.relative_path FROM kb_mentions m
+         JOIN kb_sources s ON s.source_id = m.source_id
+         WHERE m.entity_id = ?1 AND s.domain = 'data'
+         ORDER BY s.relative_path",
+    ))?;
+    let rows = db(statement.query_map([entity_id], |row| row.get::<_, String>(0)))?;
+    db(rows.collect())
+}
+
+/// Whether an entity (or one merged into it) has a mention in a source of this folder.
+pub fn entity_has_mention_in_domain(
+    connection: &Connection,
+    entity_id: i64,
+    domain: Domain,
+) -> Result<bool, AppError> {
+    let found: i64 = db(connection.query_row(
+        "SELECT EXISTS (SELECT 1 FROM kb_mentions m JOIN kb_sources s ON s.source_id = m.source_id
+                        WHERE s.domain = ?2
+                          AND (m.entity_id = ?1
+                               OR m.entity_id IN (SELECT x.entity_id FROM kb_entities x
+                                                  WHERE x.merged_into = ?1)))",
+        params![entity_id, domain.as_code()],
+        |row| row.get(0),
+    ))?;
+    Ok(found != 0)
+}
+
+/// Make workbooks due for a new reading by the next Data Analyse, whatever their content: the source
+/// is recorded as read by an older extractor. `paths` empty means every workbook the base knows. The
+/// original files are untouched and nothing is read now.
+fn make_workbooks_due(connection: &Connection, paths: Option<&[String]>) -> Result<(), AppError> {
+    match paths {
+        Some(paths) => {
+            for path in paths {
+                db(connection.execute(
+                    "UPDATE kb_sources SET kb_version = ?1
+                     WHERE domain = 'data' AND relative_path = ?2",
+                    params![NOT_EXTRACTED, path],
+                ))?;
+            }
+        }
+        None => {
+            db(connection.execute(
+                "UPDATE kb_sources SET kb_version = ?1 WHERE domain = 'data'",
+                [NOT_EXTRACTED],
+            ))?;
+        }
+    }
     Ok(())
 }
 
@@ -1969,8 +2082,9 @@ pub fn restore_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErr
             |row| row.get(0),
         )
         .optional())?;
-    let previous = payload
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+    let logged = payload.and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    let previous = logged
+        .as_ref()
         .and_then(|value| {
             value["previous_status"]
                 .as_str()
@@ -1978,6 +2092,18 @@ pub fn restore_entity(tx: &Transaction<'_>, entity_id: i64) -> Result<(), AppErr
         })
         .filter(|status| matches!(status, EntityStatus::Candidate | EntityStatus::Active))
         .unwrap_or(EntityStatus::Active);
+    // The workbooks that named it come back with the next Data Analyse (their mentions were removed
+    // with the name). A tombstone from before this record existed makes every workbook due.
+    let workbooks: Option<Vec<String>> = logged
+        .as_ref()
+        .and_then(|value| value["data_sources"].as_array())
+        .map(|paths| {
+            paths
+                .iter()
+                .filter_map(|path| path.as_str().map(str::to_string))
+                .collect()
+        });
+    make_workbooks_due(tx, workbooks.as_deref())?;
     db(tx.execute(
         "UPDATE kb_entities SET status = ?1,
                 updated_at = CAST(strftime('%s', 'now') AS INTEGER)
@@ -2508,14 +2634,19 @@ pub fn known_name_forms(
 /// `kb_possible_matches`, in either order, after following merges. The pair is a question for the
 /// user and never a merge; the targeting step only uses it to keep the files of the other spelling
 /// in the search (`knowledge::reduce`).
+///
+/// `with_swapped_orders` says whether the pairs of reason `swapped_order` (`Lucas Roy` and `Roy Lucas`:
+/// the same person or two) count. They do for the tables, where the engine filters the rows by the name
+/// it is given anyway; they do not for the documents, where a search over both would mix two people.
 pub fn open_possible_partners(
     connection: &Connection,
     entity_ids: &[i64],
+    with_swapped_orders: bool,
 ) -> Result<BTreeMap<i64, BTreeSet<i64>>, AppError> {
     let mut found: BTreeMap<i64, BTreeSet<i64>> = BTreeMap::new();
     let mut statement = db(connection.prepare(
         "SELECT p.entity_a, p.entity_b FROM kb_possible_matches p
-         WHERE p.state = 'open'
+         WHERE p.state = 'open' AND (?2 OR p.reason <> 'swapped_order')
            AND (p.entity_a IN (SELECT entity_id FROM kb_effective_entity WHERE effective_id = ?1)
              OR p.entity_b IN (SELECT entity_id FROM kb_effective_entity WHERE effective_id = ?1))",
     ))?;
@@ -2523,9 +2654,10 @@ pub fn open_possible_partners(
         let Some(effective) = effective_entity(connection, *entity_id)? else {
             continue;
         };
-        let rows = db(statement.query_map([effective.entity_id], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-        }))?;
+        let rows = db(statement
+            .query_map(params![effective.entity_id, with_swapped_orders], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+            }))?;
         let mut partners = BTreeSet::new();
         for row in rows {
             let (a, b) = db(row)?;

@@ -58,8 +58,10 @@ impl KnowledgeMode {
 /// What the extractor of the current build knows how to read. A source whose `kb_version` is lower
 /// is read again by the next pass the user starts, so improving an extractor means raising this
 /// number. 1: the extractors of lots 4 and 5. 2: the Swiss titles (`Dre`, `Dresse`, `Docteure`,
-/// `Professeure`, `Pre`) are titles, not the first word of a name (fix 4, batch 1).
-pub const CURRENT_KB_VERSION: u32 = 2;
+/// `Professeure`, `Pre`) are titles, not the first word of a name (fix 4, batch 1). 3: organisations
+/// without a marker word, names cut at their edges, a name alone in an address block, a name split by
+/// a line break, a particle or an apostrophe inside a name (fix 4, batch 2).
+pub const CURRENT_KB_VERSION: u32 = 3;
 
 /// The confidence a column of a table needs for its values to be read as entities. A column below
 /// it is recorded all the same, with the reason it was not read.
@@ -682,6 +684,12 @@ pub enum Method {
     FilenameToken,
     /// A capitalised word run with no support at all.
     CapitalisedName,
+    /// An organisation a pack lists by name (or by its short form): `HUG`, `SUVA`. Backed by the
+    /// list, so trusted at once.
+    OrganizationKnown,
+    /// A name alone on a line, right under a salutation (`Madame,`): how a letter addresses its
+    /// recipient. Backed by the layout, so trusted at once.
+    BlockName,
     /// Typed by the user.
     Manual,
 }
@@ -699,6 +707,8 @@ impl Method {
             Self::CorefInDocument => "coref_in_document",
             Self::FilenameToken => "filename_token",
             Self::CapitalisedName => "capitalised_name",
+            Self::OrganizationKnown => "organization_known",
+            Self::BlockName => "block_name",
             Self::Manual => "manual",
         }
     }
@@ -715,6 +725,8 @@ impl Method {
             "coref_in_document" => Some(Self::CorefInDocument),
             "filename_token" => Some(Self::FilenameToken),
             "capitalised_name" => Some(Self::CapitalisedName),
+            "organization_known" => Some(Self::OrganizationKnown),
+            "block_name" => Some(Self::BlockName),
             "manual" => Some(Self::Manual),
             _ => None,
         }
@@ -731,7 +743,8 @@ impl Method {
             Self::ColumnValue => 0.95,
             Self::GazetteerHit => 0.90,
             Self::TitleFullName => 0.85,
-            Self::OrganizationMarker => 0.80,
+            Self::OrganizationMarker | Self::OrganizationKnown => 0.80,
+            Self::BlockName => 0.60,
             Self::TitleSurname | Self::OrganizationPrefix | Self::CorefInDocument => 0.70,
             Self::FilenameToken => 0.50,
             Self::CapitalisedName => 0.40,
@@ -750,6 +763,8 @@ impl Method {
                 | Self::GazetteerHit
                 | Self::TitleFullName
                 | Self::OrganizationMarker
+                | Self::OrganizationKnown
+                | Self::BlockName
                 | Self::Manual
         )
     }

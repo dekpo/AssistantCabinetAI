@@ -58,7 +58,7 @@ jobs:
       # fixed, never skipped.
       - name: cargo test (library and integration targets)
         working-directory: apps/desktop/src-tauri
-        run: cargo test --lib --tests
+        run: cargo test --lib --tests --no-fail-fast
 
   server:
     name: server (${{ matrix.os }})

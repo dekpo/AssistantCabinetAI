@@ -57,7 +57,7 @@ reports in `docs/test-reports/knowledge-base-pass-1/`.
 | **K-A** | 0 to 3 | The slowness is **measured** (per-stage timings of a question and of an Analyse pass), the lexical search is held to the selection, and the knowledge store and its ports exist. Nothing changes on screen |
 | **K-B** | 4 and 5 | The files the user has analysed feed the Knowledge Base, and the Analyse summary says what was found |
 | **K-C** | 6 and 7 | Questions are targeted inside the user's own selection, in `suggest` mode first, with a visible line and a one-click widen; the shadow measurement accumulates |
-| **K-D** | 8 to 10 | The user manages the knowledge; suggestions, entity autocomplete and the speech-ready vocabulary exist; activity profiles are proposed |
+| **K-D** | 8 and 9 | The user manages the knowledge; suggestions, entity autocomplete and the speech-ready vocabulary exist. Lot 10 (activity profiles) was built, tried and **withdrawn** on 12 October 2026 (`docs/DECISIONS.md`); the notion of module returns later, with precise use cases |
 | **K-E** | 11 | The release gate: benchmarks and the manual protocol decide whether `auto` may become the default, and `main` receives the programme |
 
 ### Tracks that run beside it, and that it neither blocks nor waits for

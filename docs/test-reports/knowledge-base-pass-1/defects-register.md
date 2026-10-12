@@ -88,6 +88,12 @@ Status values: `open` (just found, effect not yet analysed), `blocking` (fix bef
 - **Found by the owner's run of the lot 9 test and fixed in the branch (so not rows):** the « i » invisible on the highlighted row and on the chip; the block under the Documents card vanishing after a second « Analyser » (it was drawn inside the pass summary, which is empty after a pass that changed nothing); the two folder cards of « Réglages » squashed by a style class (`card`) the lot's sheet had reused.
 - **Rows added: KBD-21, KBD-22, KBD-23, KBD-24.** All four were found by running the real classifier and router on the sentences the lot proposes (KBD-24 only by walking the human test's own fixtures, which is why the walk is part of the lot); none is the knowledge base's doing; all four are `deferred`. **Row changed: none.** **No row is `blocking`.**
 
+## Notes added by lot 10 (12 October 2026): lot withdrawn
+
+- **Lot 10 (activity profiles) was built, tried by the owner and withdrawn the same day** (`docs/DECISIONS.md`, "KB lot 10, activity profiles: built, tried by the owner, withdrawn"). Nothing of it is in the product, so **no row is added and no row is changed**. **No row is `blocking`.**
+- A modelling limit found while building it is **not** registered as a defect because the code that had it is gone: the country packs of one domain cannot share their general words (a Swiss library written with general medical words would look like `health-fr`). It is written in the decision, under "To remember if the notion returns".
+- Rows that named files the lot touched (KBD-01, KBD-04, KBD-11, KBD-12, KBD-13, KBD-16, KBD-20 to KBD-24): unchanged.
+
 ## How lots use this file
 
 - At the start of a lot: read every row that is not `fixed` or `not-a-defect`, and the rows that name a file your lot touches.

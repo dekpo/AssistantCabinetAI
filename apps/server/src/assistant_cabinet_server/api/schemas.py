@@ -144,5 +144,8 @@ class HealthResponse(BaseModel):
     context_windows: dict[str, int] = Field(default_factory=dict)
     #: What one answer may take out of that window (`MAX_OUTPUT_TOKENS`).
     max_output_tokens: int
+    #: The most characters one request may carry (`MAX_CONTEXT_CHARS`). The client holds its prompt
+    #: under it, so a window larger than this cap can use is never asked for.
+    max_context_chars: int
     #: Machine codes describing why the status is degraded. Empty when everything answers.
     issues: list[str] = Field(default_factory=list)

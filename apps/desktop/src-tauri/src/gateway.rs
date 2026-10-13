@@ -12,9 +12,12 @@ use serde_json::{json, Value};
 
 use crate::error::AppError;
 
-/// Ceiling on what one request may carry. The gateway caps again; this one keeps a runaway
-/// conversation from being sent at all.
-pub const MAX_CONTEXT_CHARS: usize = 24_000;
+/// Safety ceiling on what one request may carry: it keeps a runaway conversation from being sent at
+/// all. It is no longer the working limit. That is the model's own window, which the server device
+/// publishes per model, held under the cap the gateway publishes (`conversation::ContextBudget`).
+/// It was 24,000 characters until 13 October 2026, which made every window above about 10,000
+/// tokens memory for nothing (`docs/CONTEXT-BUDGET.md`).
+pub const MAX_CONTEXT_CHARS: usize = 200_000;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(4);
@@ -79,6 +82,9 @@ pub struct HealthSnapshot {
     pub context_windows: HashMap<String, usize>,
     /// What the gateway reserves for one answer (`MAX_OUTPUT_TOKENS`).
     pub max_output_tokens: Option<usize>,
+    /// The most characters the gateway accepts in one request (`MAX_CONTEXT_CHARS` on the server
+    /// device). `None` from a gateway that predates it.
+    pub max_context_chars: Option<usize>,
 }
 
 /// The gateway body, in its own snake_case vocabulary.
@@ -97,6 +103,8 @@ struct HealthBody {
     context_windows: HashMap<String, usize>,
     #[serde(default)]
     max_output_tokens: Option<usize>,
+    #[serde(default)]
+    max_context_chars: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,6 +170,7 @@ impl GatewayClient {
             output_locales: body.output_locales,
             context_windows: body.context_windows,
             max_output_tokens: body.max_output_tokens,
+            max_context_chars: body.max_context_chars,
         })
     }
 

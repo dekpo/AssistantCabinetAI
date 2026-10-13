@@ -66,6 +66,16 @@ def test_health_publishes_each_chat_alias_window_and_the_answer_reserve() -> Non
     assert body["max_output_tokens"] == 2_048
 
 
+def test_health_publishes_the_request_cap_the_client_must_stay_under() -> None:
+    default = create_app(settings=build_settings(), provider=FakeProvider())
+    with TestClient(default) as client:
+        assert client.get("/health").json()["max_context_chars"] == 200_000
+
+    capped = create_app(settings=build_settings(MAX_CONTEXT_CHARS=64000), provider=FakeProvider())
+    with TestClient(capped) as client:
+        assert client.get("/health").json()["max_context_chars"] == 64_000
+
+
 def test_health_does_not_ask_a_runtime_that_is_down() -> None:
     provider = FakeProvider(reachable=False, context_limit=1_024)
     app = create_app(settings=build_settings(), provider=provider)

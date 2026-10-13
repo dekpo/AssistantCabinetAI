@@ -55,7 +55,9 @@ pub const MIXED_INSTRUCTION: &str =
 /// How much of the document share of the budget this tier sends, under the existing cap
 /// (mechanism 4: "the context cap is split between the blocks, a documented share each"). Smaller
 /// than retrieval's own `MAX_EVIDENCE_CHARS`, since the table block and the instruction also have
-/// to fit beside it in the same turn.
+/// to fit beside it in the same turn. This is the share at the default window; a model with a
+/// larger window gets it scaled the same way retrieval's limits are (`ContextBudget::
+/// scaled_over_baseline`), so the table block and the instruction keep their proportion.
 pub const MIXED_DOCUMENT_SHARE_CHARS: usize = 4_000;
 
 /// Why one side of a mixed answer has nothing to show, named rather than left to the absence of a
@@ -165,7 +167,10 @@ pub async fn answer(
     // Capped to this tier's own share of the budget before anything else touches it: citation
     // numbers in the model's eventual answer must agree with exactly what is sent, not with
     // whatever retrieval originally found.
-    let document_sources = cap_document_share(&document_sources, MIXED_DOCUMENT_SHARE_CHARS);
+    let share = context
+        .budget
+        .scaled_over_baseline(MIXED_DOCUMENT_SHARE_CHARS);
+    let document_sources = cap_document_share(&document_sources, share);
     on_sources(&document_sources);
     let documents_unavailable = documents_unavailable
         .or_else(|| document_sources.is_empty().then_some(MixedPartUnavailable::NoEvidence));

@@ -52,5 +52,6 @@ async def read_health(
         output_locales=locales.available,
         context_windows=context_windows,
         max_output_tokens=settings.max_output_tokens,
+        max_context_chars=settings.max_context_chars,
         issues=issues,
     )

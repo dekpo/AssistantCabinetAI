@@ -134,6 +134,14 @@ uv run python scripts/measure_context.py --url http://127.0.0.1:8080 --alias cab
 It sends synthetic conversations only - never a document - with 0, 1, 2 and 4 remembered exchanges, and prints
 the time to answer and the prompt size the runtime reports.
 
+The window is also what decides **how many excerpts** a question may carry: from 13 October 2026 the desktop
+app sends more passages, and covers more files on a question about every document, in proportion to the window
+of the model it is about to ask (`docs/CONTEXT-BUDGET.md`, which also says how far to raise it and how to
+measure the cost). On the server device, after changing `MODEL_CONTEXT_WINDOWS` in `.env`, run
+`docker compose up -d server` (not `restart`, which does not read `.env` again) and check
+`curl http://<server>:8080/health`: `context_windows` is what applies, `max_context_chars` is the cap the
+desktop stays under.
+
 Open WebUI now goes through the gateway (`OPENAI_API_BASE_URL`), with `ENABLE_OLLAMA_API=false`, so
 the workbench sees the same alias catalogue as the practice window. The gateway does not check API
 keys yet; per-person keys are sprint 4.

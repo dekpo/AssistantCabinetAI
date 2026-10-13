@@ -41,7 +41,7 @@ use crate::analysis_scope::{ScopeEntry, ScopeMode};
 use crate::data_folder::DataFolder;
 use crate::error::AppError;
 use crate::index_store::IndexStore;
-use crate::retrieval::{self, Evidence, RetrievalScope, SearchOutcome};
+use crate::retrieval::{self, Evidence, RetrievalLimits, RetrievalScope, SearchOutcome};
 use crate::tabular_answer::{TabularAnswer, WorkbookHint, WorkbookHintEntity};
 
 /// The words and rules a question is read with: the packs, the titles and the phonetic encoder of
@@ -513,6 +513,26 @@ pub fn search_documents(
     search_text: &str,
     query_embedding: &[f32],
 ) -> Result<DocumentSearch, AppError> {
+    search_documents_within(
+        index,
+        plan,
+        kind,
+        search_text,
+        query_embedding,
+        RetrievalLimits::BASELINE,
+    )
+}
+
+/// `search_documents`, with the limits of the model that will read the result
+/// (`RetrievalLimits::for_budget`). With the baseline limits it is `search_documents`.
+pub fn search_documents_within(
+    index: &IndexStore,
+    plan: &TargetingPlan,
+    kind: DocumentPlan<'_>,
+    search_text: &str,
+    query_embedding: &[f32],
+    limits: RetrievalLimits,
+) -> Result<DocumentSearch, AppError> {
     let terms = plan.extra_lexical_terms();
     let reduced = match kind {
         DocumentPlan::OneFile(_) => None,
@@ -526,6 +546,7 @@ pub fn search_documents(
                 &terms,
                 query_embedding,
                 RetrievalScope::File(relative_path),
+                limits,
             ),
             DocumentPlan::EveryDocument(paths) => {
                 retrieval::search_per_document_counted_with_terms(
@@ -534,6 +555,7 @@ pub fn search_documents(
                     &terms,
                     query_embedding,
                     candidates.unwrap_or(paths),
+                    limits,
                 )
             }
             DocumentPlan::WholeFolder {
@@ -550,6 +572,7 @@ pub fn search_documents(
                     (None, true) => RetrievalScope::Files(scoped_paths),
                     (None, false) => RetrievalScope::CurrentFolder(present_paths),
                 },
+                limits,
             ),
         }
     };

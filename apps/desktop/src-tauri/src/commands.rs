@@ -360,7 +360,11 @@ pub async fn check_server_health(state: State<'_, AppState>) -> Result<HealthSna
         .model_budgets
         .lock()
         .map_err(|_| AppError::Internal)?
-        .update(snapshot.context_windows.clone(), snapshot.max_output_tokens);
+        .update(
+            snapshot.context_windows.clone(),
+            snapshot.max_output_tokens,
+            snapshot.max_context_chars,
+        );
     Ok(snapshot)
 }
 
@@ -1819,7 +1823,7 @@ async fn sourced_answer(
         .iter()
         .map(|file| file.relative_path.clone())
         .collect();
-    let searched = targeting::search_documents(
+    let searched = targeting::search_documents_within(
         &index,
         &targeting_plan,
         match &plan {
@@ -1835,6 +1839,8 @@ async fn sourced_answer(
         },
         &search_text,
         &query_embedding,
+        // How much of the folder this model can read: the excerpts follow its window.
+        retrieval::RetrievalLimits::for_budget(&writer.budget),
     )?;
     measured.search_ms = stage.lap_ms();
     targeting::note_documents(&index, &targeting_plan, &searched, measured);
@@ -2464,6 +2470,14 @@ async fn mixed_tier(
     targeting::note_workbooks(&index, &targeting_plan, None, measured);
     let mut widened = false;
 
+    // The chosen model's budget, read before the search: how much of the documents the search may
+    // keep follows the window of the model that will read them.
+    let budget = state
+        .model_budgets
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .for_alias(&model_alias);
+
     // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
     // search held to the document selection - `index` borrowed only in the synchronous stretch
     // right after the embed `.await`, exactly as tier 1's own retrieval already is.
@@ -2482,7 +2496,7 @@ async fn mixed_tier(
         match embedded {
             Ok(vectors) => {
                 let query_embedding = vectors.into_iter().next().unwrap_or_default();
-                let searched = targeting::search_documents(
+                let searched = targeting::search_documents_within(
                     &index,
                     &targeting_plan,
                     DocumentPlan::WholeFolder {
@@ -2492,6 +2506,7 @@ async fn mixed_tier(
                     },
                     &search_text,
                     &query_embedding,
+                    retrieval::RetrievalLimits::for_budget(&budget),
                 );
                 measured.search_ms = stage.lap_ms();
                 match searched {
@@ -2511,11 +2526,6 @@ async fn mixed_tier(
         }
     };
 
-    let budget = state
-        .model_budgets
-        .lock()
-        .map_err(|_| AppError::Internal)?
-        .for_alias(&model_alias);
     let context = mixed_answer::MixedContext {
         locale: &locale,
         gateway: &state.gateway,

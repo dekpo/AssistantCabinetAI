@@ -70,7 +70,8 @@ services:
       DEFAULT_EMBEDDING_ALIAS: ${DEFAULT_EMBEDDING_ALIAS:-cabinet-embed}
       # Safety net for a request that arrives without an output locale. Never silently English.
       DEFAULT_OUTPUT_LOCALE: ${DEFAULT_OUTPUT_LOCALE:-fr-FR}
-      MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-48000}
+      # A guard against a runaway request, not the working limit (the model's window is, below).
+      MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-200000}
       # The counterpart: how long an answer may be. Not a tuning knob - without it a model that
       # falls into a repetition loop writes until a client gives up (docs/TROUBLESHOOTING.md).
       MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-2048}

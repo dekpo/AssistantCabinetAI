@@ -71,20 +71,46 @@ pub struct ContextBudget {
     pub window_tokens: usize,
     /// What the gateway reserves for the answer (`MAX_OUTPUT_TOKENS`).
     pub output_tokens: usize,
+    /// The most characters the gateway accepts in one request (`MAX_CONTEXT_CHARS` on the server
+    /// device), its own system prompt included. A window larger than this cap can use would only
+    /// end in a refusal, so the prompt is held under it.
+    pub gateway_cap_chars: usize,
 }
 
+/// The cap of a gateway that does not publish its own (`MAX_CONTEXT_CHARS` default), which is also
+/// what a gateway older than 13 October 2026 enforces.
+pub const LEGACY_GATEWAY_CAP_CHARS: usize = 48_000;
+
 impl ContextBudget {
-    /// The gateway's own defaults (`DEFAULT_CONTEXT_WINDOW`, `MAX_OUTPUT_TOKENS`), used until it
-    /// has said otherwise.
+    /// The gateway's own defaults (`DEFAULT_CONTEXT_WINDOW`, `MAX_OUTPUT_TOKENS`,
+    /// `MAX_CONTEXT_CHARS`), used until it has said otherwise.
     pub const DEFAULT: Self = Self {
         window_tokens: 8_192,
         output_tokens: 2_048,
+        gateway_cap_chars: LEGACY_GATEWAY_CAP_CHARS,
     };
 
-    /// Characters the whole prompt may take, under Rust's own ceiling.
+    /// Characters the whole prompt may take: the window minus the answer's reserve, under the
+    /// smaller of Rust's own safety ceiling and what the gateway accepts (less its own prompt).
     pub fn prompt_chars(&self) -> usize {
-        (self.window_tokens.saturating_sub(self.output_tokens) * CHARS_PER_TOKEN)
-            .min(MAX_CONTEXT_CHARS)
+        let from_window = self.window_tokens.saturating_sub(self.output_tokens) * CHARS_PER_TOKEN;
+        let gateway_room = self
+            .gateway_cap_chars
+            .saturating_sub(GATEWAY_PROMPT_RESERVE_CHARS);
+        from_window.min(MAX_CONTEXT_CHARS).min(gateway_room)
+    }
+
+    /// `baseline`, grown in proportion to how much more than the default window's prompt this
+    /// model can take, and never below `baseline`: a model at or under the default window reads
+    /// exactly what it always read, a model with twice the room gets twice the amount. Used for
+    /// everything that is a share of the prompt (how many excerpts, how many characters of them).
+    pub fn scaled_over_baseline(&self, baseline: usize) -> usize {
+        let reference = Self::DEFAULT.prompt_chars();
+        let prompt = self.prompt_chars();
+        match prompt > reference {
+            true => baseline * prompt / reference,
+            false => baseline,
+        }
     }
 
     /// Characters left for past exchanges once the instruction, the excerpts and the question -
@@ -101,12 +127,19 @@ impl ContextBudget {
 pub struct ModelBudgets {
     windows: HashMap<String, usize>,
     output_tokens: Option<usize>,
+    gateway_cap_chars: Option<usize>,
 }
 
 impl ModelBudgets {
-    pub fn update(&mut self, windows: HashMap<String, usize>, output_tokens: Option<usize>) {
+    pub fn update(
+        &mut self,
+        windows: HashMap<String, usize>,
+        output_tokens: Option<usize>,
+        gateway_cap_chars: Option<usize>,
+    ) {
         self.windows = windows;
         self.output_tokens = output_tokens;
+        self.gateway_cap_chars = gateway_cap_chars;
     }
 
     /// The budget for `alias`, or the gateway's defaults for anything it has not published.
@@ -120,6 +153,9 @@ impl ModelBudgets {
             output_tokens: self
                 .output_tokens
                 .unwrap_or(ContextBudget::DEFAULT.output_tokens),
+            gateway_cap_chars: self
+                .gateway_cap_chars
+                .unwrap_or(ContextBudget::DEFAULT.gateway_cap_chars),
         }
     }
 }
@@ -301,6 +337,7 @@ mod tests {
         ContextBudget {
             window_tokens,
             output_tokens: 2_048,
+            gateway_cap_chars: ContextBudget::DEFAULT.gateway_cap_chars,
         }
     }
 
@@ -434,25 +471,79 @@ mod tests {
     }
 
     #[test]
-    fn the_budget_is_the_window_minus_the_answer_under_the_rust_ceiling() {
+    fn the_budget_is_the_window_minus_the_answer_under_the_ceilings() {
         let budget = ContextBudget {
             window_tokens: 8_192,
             output_tokens: 2_048,
+            gateway_cap_chars: 200_000,
         };
         assert_eq!(budget.prompt_chars(), 6_144 * 3);
         assert_eq!(budget.history_chars(6_000), 6_144 * 3 - 6_000 - 2_000);
 
-        let huge = ContextBudget {
-            window_tokens: 128_000,
+        // The window no longer stops at the old 24,000-character ceiling: 12,288 tokens, which the
+        // owner's server device already publishes, now gives all of its room to the prompt.
+        let twelve_k = ContextBudget {
+            window_tokens: 12_288,
             output_tokens: 2_048,
+            gateway_cap_chars: 200_000,
+        };
+        assert_eq!(twelve_k.prompt_chars(), 10_240 * 3);
+
+        let huge = ContextBudget {
+            window_tokens: 1_000_000,
+            output_tokens: 2_048,
+            gateway_cap_chars: 10_000_000,
         };
         assert_eq!(huge.prompt_chars(), MAX_CONTEXT_CHARS);
 
         let tiny = ContextBudget {
             window_tokens: 2_048,
             output_tokens: 2_048,
+            gateway_cap_chars: 200_000,
         };
         assert_eq!(tiny.history_chars(100), 0);
+    }
+
+    #[test]
+    fn the_prompt_stays_under_what_the_gateway_accepts() {
+        // A window of 32,768 tokens would take 92,160 characters; a gateway that accepts 48,000
+        // (its default) would refuse the request, so the prompt is held to its cap less its own
+        // system prompt instead of finding out from a 413.
+        let budget = ContextBudget {
+            window_tokens: 32_768,
+            output_tokens: 2_048,
+            gateway_cap_chars: 48_000,
+        };
+        assert_eq!(budget.prompt_chars(), 48_000 - GATEWAY_PROMPT_RESERVE_CHARS);
+    }
+
+    #[test]
+    fn a_window_at_or_under_the_default_reads_exactly_what_it_always_read() {
+        for window_tokens in [2_048, 4_096, 8_192] {
+            let budget = budget_of(window_tokens);
+            assert_eq!(budget.scaled_over_baseline(6), 6, "window {window_tokens}");
+            assert_eq!(
+                crate::retrieval::RetrievalLimits::for_budget(&budget),
+                crate::retrieval::RetrievalLimits::BASELINE,
+                "window {window_tokens}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_larger_window_reads_proportionally_more_of_the_folder() {
+        let wide = ContextBudget {
+            window_tokens: 20_480,
+            output_tokens: 2_048,
+            gateway_cap_chars: 200_000,
+        };
+        // 18,432 characters at the default window, 55,296 at this one: three times as many.
+        let limits = crate::retrieval::RetrievalLimits::for_budget(&wide);
+        assert_eq!(limits.max_chunks, 6 * 3);
+        assert_eq!(limits.max_chars, 6_000 * 3);
+        assert_eq!(limits.max_per_document_chars, 12_000 * 3);
+        // Every share stays inside the prompt it is a share of.
+        assert!(limits.max_per_document_chars < wide.prompt_chars());
     }
 
     #[test]
@@ -463,16 +554,32 @@ mod tests {
         budgets.update(
             HashMap::from([("cabinet-chat".to_string(), 4_096)]),
             Some(1_024),
+            Some(100_000),
         );
 
         assert_eq!(
             budgets.for_alias("cabinet-chat"),
             ContextBudget {
                 window_tokens: 4_096,
-                output_tokens: 1_024
+                output_tokens: 1_024,
+                gateway_cap_chars: 100_000,
             }
         );
         assert_eq!(budgets.for_alias("cabinet-other").window_tokens, 8_192);
+    }
+
+    #[test]
+    fn a_gateway_that_publishes_no_cap_is_held_to_the_legacy_one() {
+        let mut budgets = ModelBudgets::default();
+        budgets.update(
+            HashMap::from([("cabinet-chat".to_string(), 32_768)]),
+            Some(2_048),
+            None,
+        );
+        assert_eq!(
+            budgets.for_alias("cabinet-chat").gateway_cap_chars,
+            LEGACY_GATEWAY_CAP_CHARS
+        );
     }
 
     #[test]

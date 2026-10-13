@@ -4,21 +4,59 @@
 
 use serde::Serialize;
 
+use crate::conversation::ContextBudget;
 use crate::extraction::PageOrigin;
 use crate::index_store::{cosine_similarity, IndexStore, LexicalHit};
 
-/// How many excerpts an answer may cite at most.
+/// How many excerpts an answer may cite at most, for a model whose window is the baseline
+/// (`ContextBudget::DEFAULT`) or smaller. A larger window raises it (`RetrievalLimits`).
 pub const MAX_EVIDENCE_CHUNKS: usize = 6;
-/// A hard ceiling on the combined size sent to the gateway, well under the chat context cap.
+/// The combined size of those excerpts, at the baseline window.
 pub const MAX_EVIDENCE_CHARS: usize = 6_000;
 /// Below this similarity a vector hit is noise rather than evidence.
 const MIN_VECTOR_SCORE: f32 = 0.15;
 
-/// The ceiling for an answer that must cover every document rather than the most relevant few.
+/// The ceiling for an answer that must cover every document rather than the most relevant few, at
+/// the baseline window.
 /// Larger than `MAX_EVIDENCE_CHARS`, because one excerpt from each of ten files is legitimately
 /// more text than six excerpts, and still well under the chat context cap so the question, the
 /// instruction and the Work Folder context all fit beside it.
 pub const MAX_PER_DOCUMENT_CHARS: usize = 12_000;
+
+/// How much one search may send to the model: how many excerpts, and how many characters for the
+/// most relevant ones and for one excerpt per document.
+///
+/// These used to be three constants, whatever the model. They are now a function of the window the
+/// server publishes for the model chosen for the question (`for_budget`), so a larger window reads
+/// more of the folder and a small one reads exactly what it always did. Before 13 October 2026 a
+/// question about every document stopped after about ten files whatever the window
+/// (`docs/CONTEXT-BUDGET.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetrievalLimits {
+    pub max_chunks: usize,
+    pub max_chars: usize,
+    pub max_per_document_chars: usize,
+}
+
+impl RetrievalLimits {
+    /// What every model got before the limits followed the window; still what a model at or below
+    /// the baseline window gets.
+    pub const BASELINE: Self = Self {
+        max_chunks: MAX_EVIDENCE_CHUNKS,
+        max_chars: MAX_EVIDENCE_CHARS,
+        max_per_document_chars: MAX_PER_DOCUMENT_CHARS,
+    };
+
+    /// The baseline, scaled by how much more than the baseline prompt this model can read.
+    pub fn for_budget(budget: &ContextBudget) -> Self {
+        Self {
+            max_chunks: budget.scaled_over_baseline(Self::BASELINE.max_chunks),
+            max_chars: budget.scaled_over_baseline(Self::BASELINE.max_chars),
+            max_per_document_chars: budget
+                .scaled_over_baseline(Self::BASELINE.max_per_document_chars),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -101,23 +139,31 @@ pub fn search_scoped_counted(
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    search_scoped_counted_with_terms(index, query_text, &[], query_embedding, scope)
+    search_scoped_counted_with_terms(
+        index,
+        query_text,
+        &[],
+        query_embedding,
+        scope,
+        RetrievalLimits::BASELINE,
+    )
 }
 
 /// `search_scoped_counted`, with extra surface forms for the **lexical** part only: the other
 /// spellings of a name the question resolved to (`knowledge::targeting`). The embedding text is the
 /// question and nothing else, so what the vector half looks for is exactly what it was. With no
-/// extra term this is `search_scoped_counted`, byte for byte.
+/// extra term and the baseline limits this is `search_scoped_counted`, byte for byte.
 pub fn search_scoped_counted_with_terms(
     index: &IndexStore,
     query_text: &str,
     extra_terms: &[String],
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
+    limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    let mut lexical_hits = lexical_hits_in(index, query_text, scope)?;
-    lexical_hits.extend(term_hits_in(index, extra_terms, scope)?);
-    search_scoped_with_hits(index, query_embedding, scope, &lexical_hits)
+    let mut lexical_hits = lexical_hits_in(index, query_text, scope, limits)?;
+    lexical_hits.extend(term_hits_in(index, extra_terms, scope, limits)?);
+    search_scoped_with_hits(index, query_embedding, scope, &lexical_hits, limits)
 }
 
 /// The lexical bonus candidates for `scope`: the best full-text matches **among the scope's own
@@ -127,16 +173,15 @@ fn lexical_hits_in(
     index: &IndexStore,
     query_text: &str,
     scope: RetrievalScope<'_>,
+    limits: RetrievalLimits,
 ) -> Result<Vec<LexicalHit>, crate::error::AppError> {
     match scope {
-        RetrievalScope::WholeFolder => index.search_lexical(query_text, MAX_EVIDENCE_CHUNKS),
-        RetrievalScope::File(relative_path) => index.search_lexical_in(
-            query_text,
-            MAX_EVIDENCE_CHUNKS,
-            &[relative_path.to_string()],
-        ),
+        RetrievalScope::WholeFolder => index.search_lexical(query_text, limits.max_chunks),
+        RetrievalScope::File(relative_path) => {
+            index.search_lexical_in(query_text, limits.max_chunks, &[relative_path.to_string()])
+        }
         RetrievalScope::Files(relative_paths) | RetrievalScope::CurrentFolder(relative_paths) => {
-            index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)
+            index.search_lexical_in(query_text, limits.max_chunks, relative_paths)
         }
     }
 }
@@ -147,6 +192,7 @@ fn term_hits_in(
     index: &IndexStore,
     extra_terms: &[String],
     scope: RetrievalScope<'_>,
+    limits: RetrievalLimits,
 ) -> Result<Vec<LexicalHit>, crate::error::AppError> {
     if extra_terms.is_empty() {
         return Ok(Vec::new());
@@ -155,11 +201,11 @@ fn term_hits_in(
         RetrievalScope::WholeFolder => Ok(Vec::new()),
         RetrievalScope::File(relative_path) => index.search_lexical_terms_in(
             extra_terms,
-            MAX_EVIDENCE_CHUNKS,
+            limits.max_chunks,
             &[relative_path.to_string()],
         ),
         RetrievalScope::Files(relative_paths) | RetrievalScope::CurrentFolder(relative_paths) => {
-            index.search_lexical_terms_in(extra_terms, MAX_EVIDENCE_CHUNKS, relative_paths)
+            index.search_lexical_terms_in(extra_terms, limits.max_chunks, relative_paths)
         }
     }
 }
@@ -171,6 +217,7 @@ fn search_scoped_with_hits(
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
     lexical_hits: &[LexicalHit],
+    limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
     let all_chunks = match scope {
         RetrievalScope::WholeFolder => index.all_chunks()?,
@@ -233,10 +280,10 @@ fn search_scoped_with_hits(
     let mut selected = Vec::new();
     let mut total_chars = 0usize;
     for evidence in scored {
-        if selected.len() >= MAX_EVIDENCE_CHUNKS {
+        if selected.len() >= limits.max_chunks {
             break;
         }
-        if total_chars + evidence.text.len() > MAX_EVIDENCE_CHARS {
+        if total_chars + evidence.text.len() > limits.max_chars {
             continue;
         }
         total_chars += evidence.text.len();
@@ -283,7 +330,14 @@ pub fn search_per_document_counted(
     query_embedding: &[f32],
     relative_paths: &[String],
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    search_per_document_counted_with_terms(index, query_text, &[], query_embedding, relative_paths)
+    search_per_document_counted_with_terms(
+        index,
+        query_text,
+        &[],
+        query_embedding,
+        relative_paths,
+        RetrievalLimits::BASELINE,
+    )
 }
 
 /// `search_per_document_counted`, with extra surface forms for the lexical part only (see
@@ -294,6 +348,7 @@ pub fn search_per_document_counted_with_terms(
     extra_terms: &[String],
     query_embedding: &[f32],
     relative_paths: &[String],
+    limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
     let mut selected: Vec<Evidence> = Vec::new();
     let mut total_chars = 0usize;
@@ -303,11 +358,11 @@ pub fn search_per_document_counted_with_terms(
     // The full-text query is the same for every file, so it runs once, over all of them. Run per
     // file it repeated one query as many times as there were documents.
     let mut lexical_hits =
-        index.search_lexical_in(query_text, MAX_EVIDENCE_CHUNKS, relative_paths)?;
+        index.search_lexical_in(query_text, limits.max_chunks, relative_paths)?;
     if !extra_terms.is_empty() {
         lexical_hits.extend(index.search_lexical_terms_in(
             extra_terms,
-            MAX_EVIDENCE_CHUNKS,
+            limits.max_chunks,
             relative_paths,
         )?);
     }
@@ -318,6 +373,7 @@ pub fn search_per_document_counted_with_terms(
             query_embedding,
             RetrievalScope::File(relative_path),
             &lexical_hits,
+            limits,
         )?;
         chunks_considered += found.chunks_considered;
         best_vector_score = best_vector_score.max(found.best_vector_score);
@@ -333,7 +389,8 @@ pub fn search_per_document_counted_with_terms(
         let Some(evidence) = best else {
             continue;
         };
-        if total_chars + evidence.text.len() > MAX_PER_DOCUMENT_CHARS && !selected.is_empty() {
+        if total_chars + evidence.text.len() > limits.max_per_document_chars && !selected.is_empty()
+        {
             break;
         }
         total_chars += evidence.text.len();
@@ -483,6 +540,93 @@ mod tests {
                 .unwrap();
         }
         store
+    }
+
+    /// `count` files, each holding one passage of about a thousand characters that mentions the
+    /// query word, so that nothing but the limits decides how many reach the model.
+    fn folder_of(count: usize) -> (IndexStore, Vec<String>) {
+        let paths: Vec<String> = (0..count).map(|n| format!("file-{n:03}.pdf")).collect();
+        let ids: Vec<String> = (0..count).map(|n| format!("file-{n:03}#p1#s1")).collect();
+        let text = format!("cephalees {}", "x".repeat(990));
+        let store = store_with_documents(
+            paths
+                .iter()
+                .zip(&ids)
+                .map(|(path, id)| {
+                    (
+                        path.as_str(),
+                        vec![(id.as_str(), text.as_str(), vec![1.0, 0.0])],
+                    )
+                })
+                .collect(),
+        );
+        (store, paths)
+    }
+
+    fn limits_for_window(window_tokens: usize) -> RetrievalLimits {
+        RetrievalLimits::for_budget(&ContextBudget {
+            window_tokens,
+            output_tokens: 2_048,
+            gateway_cap_chars: 1_000_000,
+        })
+    }
+
+    /// The defect this scaling exists for (13 October 2026, 200 documents): a question about every
+    /// document stopped when twelve thousand characters were used, about a dozen files, whatever the
+    /// window of the model. At the default window that is still true; a larger window reads more.
+    #[test]
+    fn a_larger_window_covers_more_documents_of_a_question_about_every_document() {
+        let (store, files) = folder_of(80);
+        let covered = |limits: RetrievalLimits| {
+            search_per_document_counted_with_terms(
+                &store,
+                "cephalees",
+                &[],
+                &[1.0, 0.0],
+                &files,
+                limits,
+            )
+            .unwrap()
+            .evidence
+            .len()
+        };
+
+        let default_window = covered(limits_for_window(8_192));
+        let twelve_k = covered(limits_for_window(12_288));
+        let twenty_k = covered(limits_for_window(20_480));
+
+        assert_eq!(default_window, 12, "the default window is unchanged");
+        assert!(twelve_k > default_window, "{twelve_k}");
+        assert_eq!(
+            twenty_k, 36,
+            "three times the default prompt, three times the files"
+        );
+    }
+
+    #[test]
+    fn a_larger_window_cites_more_passages_of_an_ordinary_question() {
+        let (store, _) = folder_of(80);
+        let cited = |limits: RetrievalLimits| {
+            search_scoped_counted_with_terms(
+                &store,
+                "cephalees",
+                &[],
+                &[1.0, 0.0],
+                RetrievalScope::WholeFolder,
+                limits,
+            )
+            .unwrap()
+            .evidence
+            .len()
+        };
+
+        assert_eq!(
+            cited(limits_for_window(4_096)),
+            6,
+            "a small window is unchanged"
+        );
+        assert_eq!(cited(limits_for_window(8_192)), 6);
+        assert_eq!(cited(limits_for_window(20_480)), 18);
     }
 
     /// The knowledge base widens a reduced search on this number: it must be the closest passage by

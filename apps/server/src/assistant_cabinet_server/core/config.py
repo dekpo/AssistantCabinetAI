@@ -40,8 +40,13 @@ class Settings(BaseSettings):
     # Safety net for a request that arrives without `output_locale`.
     default_output_locale: str = Field(default="fr-FR", alias="DEFAULT_OUTPUT_LOCALE")
 
-    # Context cap. The client caps too, in Rust; the gateway does not trust the caller.
-    max_context_chars: int = Field(default=48_000, alias="MAX_CONTEXT_CHARS")
+    # Context cap. The client caps too, in Rust; the gateway does not trust the caller. It is a
+    # guard against a runaway request, not the working limit: that is the model's window
+    # (`DEFAULT_CONTEXT_WINDOW`, `MODEL_CONTEXT_WINDOWS`), which the client reads from `/health` and
+    # fits its prompt to, under this cap, which `/health` publishes too. It was 48,000 until
+    # 13 October 2026, which silently kept every window above about 16,000 tokens from being used
+    # (docs/CONTEXT-BUDGET.md).
+    max_context_chars: int = Field(default=200_000, alias="MAX_CONTEXT_CHARS")
 
     # Output cap, the counterpart of the one above. Nothing else in the chain bounds how long an
     # answer may be: `max_tokens` is optional in the request, no client of ours sends it, and a

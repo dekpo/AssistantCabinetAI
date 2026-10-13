@@ -229,8 +229,10 @@ about documents or not. What is remembered, and how much:
   gently and never blocks - "shorten your question" disappears - and never trims the one turn that actually
   answers the question to make room for older ones.
 - **The budget is the model's real window.** Characters are converted with a deliberately conservative
-  3 characters per token, the answer's own reserve (`MAX_OUTPUT_TOKENS`) is subtracted, and Rust's 24,000
-  character ceiling still applies on top.
+  3 characters per token, the answer's own reserve (`MAX_OUTPUT_TOKENS`) is subtracted, and the result is
+  held under the cap the gateway publishes (`MAX_CONTEXT_CHARS`) and under a 200,000-character safety ceiling
+  in Rust. The fixed 24,000-character ceiling is gone (13 October 2026), and the excerpts a question may
+  carry now grow with the window: `docs/CONTEXT-BUDGET.md`.
 - **A small model has a short memory.** That is a property of running models locally, and it is acceptable.
 - **Follow-up questions.** With memory, the model understands "and for the second one?". Retrieval still
   embeds a question, so a **short** question (eight words or fewer) is searched together with the previous

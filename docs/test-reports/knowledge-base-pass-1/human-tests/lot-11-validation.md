@@ -17,6 +17,9 @@ Written for the owner, who plays it once, and for the agent who reads her result
 5. **What the agent did not observe is said in the step.** The application window cannot be walked by the agent: every figure below was produced by the same code run on the same invented files, in the same order as this script (the folders were also built by the real helper commands on temporary copies and compared with the replay's: the same 216 files, the same names and sizes, but for two letters that the helper writes with Windows line breaks). The lines on screen, the buttons and the colours are what you check. The text recognition of the scans uses the real engine on your machine, so a figure that depends on a scan can differ by one: write what you see.
 6. **« Analyser » is « inactive » when it has the plain style and no number** (« Analyser », not « Analyser (3) »): the button always works, it is only lit and numbered while a pass would still change something.
 7. Every command is run from the repository root `C:\Users\elise\Documents\CURSOR\AssistantCabinetAI` and is written in full.
+8. **A line « Le chiffre « 66 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents. » under an answer that cites a page is a known false alarm** (defect KBD-49: the page of an excerpt is not among the figures the check knows). Write it, do not count it as a failure of the step.
+9. **The counts of names depend on your text recognition.** The expected figures of the card lines and of `names` are those of the agent's replay, which reads the scans perfectly; on your machine they come out a few higher (extra wrong names, all « à confirmer »). What must hold is the rule written beside them (same list before and after, one more after a new file, fewer after a removal). The owner's reference figures of 13 October 2026 are in `06-final-human-test-report.md`, section 6.
+10. **A step is one action.** If a step seems to say several things, do them in the order written and report each one under its own id; a step that is only a title says so.
 
 ---
 
@@ -86,7 +89,7 @@ Expected: `entities: 0   fingerprint of the list: e3b0c44298fc1c14` and `names o
 **You start with:** what Part 0 leaves.
 
 **A1** On « Dossier des documents », press « Analyser ». Write the **time it takes** (from the click to the end of the progress bar).
-Expected: the line under the title reads `30 fichiers, 28 analysés, 0 illisibles`; under the card: `3 fichiers lus par reconnaissance de texte.`, `2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).`, `42 personnes et organisations repérées, dont 0 déjà connues.`, `30 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).` **The button « Analyser » is plain, without a number** (before the Analyse-button fix it read « Analyser (2) » for ever, because of the `.odt` and the `.vtt`: if you see a number, it is a bug, defect KBD-47).
+Expected: the line under the title reads `30 fichiers, 28 analysés, 0 illisibles`; under the card: `3 fichiers lus par reconnaissance de texte.`, `2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).`, `42 personnes et organisations repérées, dont 0 déjà connue.`, `30 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).` **The button « Analyser » is plain, without a number** (before the Analyse-button fix it read « Analyser (2) » for ever, because of the `.odt` and the `.vtt`: if you see a number, it is a bug, defect KBD-47).
 
 **A2** On « Dossier des données », press « Analyser ».
 Expected: `8 fichiers, 7 analysés, 1 illisible` (`rendez-vous-2026.ods` is the one that cannot be read: « pas un tableur (CSV ou XLSX) »); under the card: `7 tableurs lus sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.`, `210 personnes et organisations repérées, dont 21 déjà connues.`, `278 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).`, `22 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 7 tableurs lus.`, `102 liens lus entre deux colonnes d'un tableur.`, `28 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.` The button « Analyser » of this card is plain, without a number.
@@ -127,9 +130,9 @@ Expected: the summaries read « Documents utilisés : tous » and « Données ut
 
 **A4-7** `Que dit le dossier de Madame Zénobie Quarante ?` Expected: the answer says that the documents do not say; no line.
 
-**A4-8** `Que dit J. Dupont ?` Expected: the row « Plusieurs personnes correspondent à « J. Dupont » : » offering `Jean Dupont (3 documents)` and `Jean-Pierre Dupont (1 document)`; no line.
+**A4-8** `Que dit J. Dupont ?` Expected: the row « Plusieurs personnes correspondent à « J. Dupont » : » offering `Jean Dupont (3 fichiers)` and `Jean-Pierre Dupont (1 fichier)`; no line.
 
-**A4-9** `Qu'a dit le Dr Martin ?` Expected: the row « Plusieurs personnes correspondent à « Dr Martin » : » offering `Pierre Martin (3 documents)` and `Paul Martin (3 documents)`; no line.
+**A4-9** `Qu'a dit le Dr Martin ?` Expected: the row « Plusieurs personnes correspondent à « Dr Martin » : » offering `Pierre Martin (3 fichiers)` and `Paul Martin (3 fichiers)`; no line.
 
 **A4-10** `Que dit le courrier de Véronique Monnier ?` Expected: right; source `...courrier-cardiologie-monnier-veronique.pdf`; `26 mai 2026`; no line.
 
@@ -165,15 +168,15 @@ Expected: the summaries read « Documents utilisés : tous » and « Données ut
 
 **A6-4** `Quels courriers viennent de la CSS Assurance ?` Expected: `Recherche ciblée : 1 document sur 28 — CSS Assurance`.
 
-**A6-5** `Montre la facture FAC-2026-014` Expected: `Recherche ciblée : 2 documents sur 28 — FAC-2026-014`.
+**A6-5** `Montre la facture FAC-2026-014` Expected: `Recherche ciblée : 2 documents sur 28` (a number is not shown as a name: nothing after « 28 »).
 
 **A6-6** `Quels documents parlent de la LAMal ?` Expected: **no line** (`LAMal` is a subject, not a name: nothing is narrowed).
 
 **A6-7** `Que dit le dossier de Madame Zénobie Quarante ?` Expected: **no line**; the documents do not say.
 
-**A6-8** `Que dit J. Dupont ?` Expected: **no line**; the row « Plusieurs personnes correspondent à « J. Dupont » : » with `Jean Dupont (3 documents)` and `Jean-Pierre Dupont (1 document)`.
+**A6-8** `Que dit J. Dupont ?` Expected: **no line**; the row « Plusieurs personnes correspondent à « J. Dupont » : » with `Jean Dupont (3 fichiers)` and `Jean-Pierre Dupont (1 fichier)`.
 
-**A6-9** `Qu'a dit le Dr Martin ?` Expected: **no line**; the row « Plusieurs personnes correspondent à « Dr Martin » : » with `Pierre Martin (3 documents)` and `Paul Martin (3 documents)`.
+**A6-9** `Qu'a dit le Dr Martin ?` Expected: **no line**; the row « Plusieurs personnes correspondent à « Dr Martin » : » with `Pierre Martin (3 fichiers)` and `Paul Martin (3 fichiers)`.
 
 **A6-10** `Que dit le courrier de Véronique Monnier ?` Expected: `Recherche ciblée : 1 document sur 28 — Véronique Monnier` (or the widened line). This letter is a **scan**: on the real text recognition its name is read right in some runs and wrong in others; if there is no line at all, the scan was misread, which is a result to write down.
 
@@ -196,10 +199,10 @@ Expected: `Questions recorded            : 20` (the ten of « Suggestions seulem
 **You start with:** what Part A leaves (mode « Automatique », all documents ticked, no data ticked).
 
 **B1** **A name that fits several people is asked about, never picked.** Clear the conversation. Type `Que dit J. Dupont ?`. Under the answer, press the name `Jean Dupont`.
-Expected: the row « Plusieurs personnes correspondent à « J. Dupont » : » offers `Jean Dupont (3 documents)` and `Jean-Pierre Dupont (1 document)`; **no** « Recherche ciblée » line before you press (nothing was narrowed). After the press, the question is asked again with that person as a chip (the chip reads the name; « Retirer ... » removes it) and **now** a « Recherche ciblée » line appears.
+Expected: the row « Plusieurs personnes correspondent à « J. Dupont » : » offers `Jean Dupont (3 fichiers)` and `Jean-Pierre Dupont (1 fichier)`; **no** « Recherche ciblée » line before you press (nothing was narrowed). After the press, the same question is asked again with the same words (there is **no chip**: the chips belong to the picker above the typing box, not to this row) and **now** the line `Recherche ciblée à votre demande : 3 documents sur 28 — Jean Dupont` appears (checked on the owner's run of 13 October 2026).
 
 **B2** Clear the conversation. Type `Qu'a dit le Dr Martin ?`.
-Expected: the row offers `Pierre Martin (3 documents)` and `Paul Martin (3 documents)` (the title « Dr » keeps the patients called Martin out of the choice); no line.
+Expected: the row offers `Pierre Martin (3 fichiers)` and `Paul Martin (3 fichiers)` (the title « Dr » keeps the patients called Martin out of the choice); no line.
 
 **B3** **The widen button gives the old answer back.** Clear the conversation. Type `Quels courriers viennent du Dr Marc Bersier ?`. Open « Sources » and write the list. Press « Élargir à ma sélection ». Open « Sources » again.
 Expected: the line reads `Recherche ciblée : 1 document sur 28 — Marc Bersier` with the buttons « Voir les fichiers » and « Élargir à ma sélection »; after the press the question is answered on all the documents and **the list is the one you wrote for A5-3** (sentence 3 in « Désactivé »), file for file. If it is not, it is a bug.
@@ -252,8 +255,15 @@ python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py lifec
 You read `wrote Courrier Quenneville été 2026.txt (spaces and an accent in the name: the next Analyse renames it)`. Press « Analyser ». Open « Voir » (the folder). Ask `Que dit Madame Sidonie Quenneville ?` again.
 Expected: the card reads `32 fichiers, 30 analysés, 0 illisibles`; `1 fichier renommé pour retirer les espaces et les accents.` and `Courrier Quenneville été 2026.txt → Courrier-Quenneville-ete-2026.txt`; in the folder the file has the clean name; the line reads `Recherche ciblée : 2 documents sur 30 — Sidonie Quenneville` (two files now).
 
-**C3** **The three Resets, then the base is rebuilt** (placed here, before any file is changed or deleted, so the rebuilt list can be compared with the old one name for name). Run `names` and write the output (**before**).
-Expected before: `person active 197`, `person candidate 1`, `entities: 578` (the other lines as at C0).
+**C3** *This step is only a title: do nothing here, do C3-0, then C3-a, C3-b, C3-c, C3-z in this order.* The three Resets, then the base is rebuilt. It comes before any file is changed or deleted, so that the rebuilt list can be compared with the old one name for name.
+
+**C3-0** Read the base **before** the Resets and write the whole output, including the fingerprint:
+
+```text
+python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+```
+
+Expected: `person active` one more than at C0 (the new person of C1), `entities` one more than at C0 (578 on the agent's replay), the other lines as at C0; write the fingerprint.
 
 **C3-a** Card « Dossier des documents » → « Reset » → confirm « Effacer l'analyse ? ».
 Expected: the card reads `32 fichiers, 0 analysés, 0 illisibles` and the button reads « Analyser (30) » (lit; the `.odt` and the `.vtt` are not counted). Press « Analyser ». Expected after: `32 fichiers, 30 analysés, 0 illisibles`, `3 fichiers lus par reconnaissance de texte.`, `2 fichiers n'ont pas été lus ...`, `45 personnes et organisations repérées, dont 24 déjà connues.`, `30 identifiants repérés ...`; the button plain again.
@@ -261,8 +271,16 @@ Expected: the card reads `32 fichiers, 0 analysés, 0 illisibles` and the button
 **C3-b** Card « Dossier des données » → « Reset » → confirm « Effacer l'analyse des données ? ».
 Expected: `8 fichiers, 0 analysés, 1 illisible` and the button « Analyser (7) ». Press « Analyser ». Expected after: `8 fichiers, 7 analysés, 1 illisible`; the button plain.
 
-**C3-c** « Réglages » → « Gérer… » → tab « Réinitialiser » → « Tout réinitialiser… » → confirm « Tout réinitialiser ». Close the dialog. Press « Analyser » on « Dossier des documents », then on « Dossier des données ». Run `names` (**after**).
-Expected: both cards keep `32 fichiers, 30 analysés, 0 illisibles` and `8 fichiers, 7 analysés, 1 illisible`; documents card lines: `2 fichiers n'ont pas été lus ...`, `43 personnes et organisations repérées, dont 0 déjà connues.`, `30 identifiants repérés ...`, `30 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.`; data card lines: `7 tableurs lus sur cet ordinateur, sans l'IA : ...`, `210 personnes et organisations repérées, dont 21 déjà connues.`, `278 identifiants repérés ...`, `22 colonnes de tableur reconnues (...) dans 7 tableurs lus.`, `102 liens lus entre deux colonnes d'un tableur.`, `30 documents déjà analysés relus ...`. `names` **after**: the same count and the same fingerprint as before (`entities: 578`): the base is a function of the files, nothing was typed by hand, so nothing is lost.
+**C3-c** « Réglages » → « Gérer… » → tab « Réinitialiser » → « Tout réinitialiser… » → confirm « Tout réinitialiser ». Close the dialog. Press « Analyser » on « Dossier des documents », then on « Dossier des données ».
+Expected: both cards keep `32 fichiers, 30 analysés, 0 illisibles` and `8 fichiers, 7 analysés, 1 illisible`; documents card lines: `2 fichiers n'ont pas été lus ...`, `43 personnes et organisations repérées, dont 0 déjà connue.`, `30 identifiants repérés ...`, `30 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.`; data card lines: `7 tableurs lus sur cet ordinateur, sans l'IA : ...`, `210 personnes et organisations repérées, dont 21 déjà connues.`, `278 identifiants repérés ...`, `22 colonnes de tableur reconnues (...) dans 7 tableurs lus.`, `102 liens lus entre deux colonnes d'un tableur.`, `30 documents déjà analysés relus ...`.
+
+**C3-z** Read the base **after** the three Resets and the two Analyses, and compare with C3-0:
+
+```text
+python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+```
+
+Expected: **the same count and the same fingerprint as C3-0**: the base is a function of the files, nothing was typed by hand, so nothing is lost. If the fingerprint differs, it is a bug: write both outputs.
 
 **C4** **A changed file: the old associations go, the new ones come.**
 
@@ -355,7 +373,7 @@ Expected: `identifier active 307`, `location active 51`, `organization active 38
 
 **S1** `À qui appartient le numéro AVS 756.3052.5778.43 ?` Expected: a normal answer written by the AI (**not** « Aucun fichier nommé 756.3052.5778.43 ne se trouve dans votre dossier de documents. », and the line « Réponse établie depuis votre dossier de documents, sans l'IA. » is not there); the line `Recherche ciblée : 1 document sur 92` (the end of the line, after the dash, is the number or its label: write it); « Sources » lists `2026-03-26_decompte-helsana-martin-marie.pdf`.
 
-**S2** `Quels courriers a écrit la Dre Anne-Sophie Vuagniaux ?` Expected: `Recherche ciblée : 4 documents sur 92 — Anne-Sophie Vuagniaux` (the name **without** `Dre`); « Voir les fichiers »: `2026-01-08_courrier-endocrinologie-girardin-thierry.pdf`, `2026-06-25_courrier-orl.docx`, `2026-10-01_courrier-dermatologie.pdf`, `2026-10-04_resultats-analyses-maillard-pascal.pdf`. Write the four names.
+**S2** `Quels courriers a écrit la Dre Anne-Sophie Vuagniaux ?` Expected: `Recherche ciblée : 4 documents sur 92 — Anne-Sophie Vuagniaux` (the name **without** `Dre`); « Voir les fichiers »: `2026-01-08_courrier-endocrinologie-girardin-thierry.pdf`, `2026-06-25_courrier-orl.docx`, `2026-10-01_courrier-dermatologie.pdf`, `2026-10-04_resultats-analyses-maillard-pascal.pdf`. Write the names. The last file is a scan: if its text is misread by the recognition on your machine the line says 3 documents (the owner's run of 13 October: 3, without `resultats-analyses-maillard-pascal.pdf`).
 
 **S3** `Que dit la Dre Vuagniaux ?` Expected: **no** row « Plusieurs personnes correspondent à « Dre Vuagniaux » : » (a patient, Gilles Vuagniaux, shares the surname; the title tells them apart); the line `Recherche ciblée : 4 documents sur 92 — Anne-Sophie Vuagniaux`, or « Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés. » (the narrowed search found too little by meaning; note it, it is not a failure of this step).
 
@@ -363,17 +381,17 @@ Expected: `identifier active 307`, `location active 51`, `organization active 38
 
 **S5** `Quels documents viennent de Genève ?` Expected: **no** « Recherche ciblée » line (`Genève` is a commune written in tables: it no longer narrows the documents); up to six sources.
 
-**S6** `Quels courriers viennent du CHUV ?` Expected: `Recherche ciblée : 5 documents sur 92 — Centre hospitalier universitaire vaudois` (the full name although you typed the acronym); files `2026-03-09_courrier-orl-petrovic-elena.docx`, `2026-03-12_courrier-cardiologie.docx`, `2026-06-25_courrier-orl.docx`, `2026-08-01_courrier-rhumatologie.pdf`, `2026-10-01_courrier-dermatologie.pdf`.
+**S6** `Quels courriers viennent du CHUV ?` Expected: `Recherche ciblée : 5 documents sur 92 — Centre hospitalier universitaire vaudois` (the full name although you typed the acronym; or the widened line « Recherche élargie à toute votre sélection : ... », see the rule of A6: it happened on the owner's run); files `2026-03-09_courrier-orl-petrovic-elena.docx`, `2026-03-12_courrier-cardiologie.docx`, `2026-06-25_courrier-orl.docx`, `2026-08-01_courrier-rhumatologie.pdf`, `2026-10-01_courrier-dermatologie.pdf`.
 
 **S7** `Quels documents concernent les Hôpitaux universitaires de Genève ?` Expected: the same line and the same two files as S4 (the acronym and the full name are one entity).
 
-**S8** `Résume le dossier de Giuseppe D'Amico.` Expected: `Recherche ciblée : 1 document sur 92 — Giuseppe D'Amico`; the file `2026-03-26_courrier-cpam74.pdf` (he is written alone on a line, above his street, in that letter). It must not name another D'Amico.
+**S8** `Résume le dossier de Giuseppe D'Amico.` Expected: `Recherche ciblée : 1 document sur 92 — Giuseppe D'Amico`; the file `2026-03-26_courrier-cpam74.pdf` (he is written alone on a line, above his street, in that letter). It must not name another D'Amico. The widened line is also a correct reading (it happened on the owner's run).
 
 **S9-1** `Quels documents parlent de Lucas Roy ?` Expected: `Recherche ciblée : 2 documents sur 92 — Lucas Roy`; files `2026-08-17_courrier-orl-roy-lucas.md` and `2026-10-01_courrier-dermatologie.pdf`.
 
 **S9-2** `Quels documents parlent de Roy Lucas ?` Expected: `Recherche ciblée : 2 documents sur 92 — Roy Lucas`; files `2026-04-20_courrier-rhumatologie-lucas-roy.pdf` and `2026-10-01_courrier-dermatologie.pdf`: two different people, two different sets (the dermatology letter names both).
 
-**S10** `Que dit le courrier de Aïcha N'Diaye ?` Expected: `Recherche ciblée : 1 document sur 92 — Aïcha N'Diaye`; the file `2026-03-23_resultats-analyses-n-diaye-aicha.pdf`.
+**S10** `Que dit le courrier de Aïcha N'Diaye ?` Expected: `Recherche ciblée : 1 document sur 92 — Aïcha N'Diaye`; the file `2026-03-23_resultats-analyses-n-diaye-aicha.pdf` (or the widened line, as on the owner's run; this file is a scan).
 
 **Tables.** Selection: on « Dossier des documents » **untick** « Tous les documents » (« Documents utilisés : aucun »); on « Dossier des données » tick « Tous les tableurs » (« Données utilisées : toutes »). Each question names its workbook. The answers are computed by the table engine, without the AI: here a label « sans l'IA » is the right one. The numbers may show a thin space.
 
@@ -419,7 +437,7 @@ Expected: `identifier active 307`, `location active 51`, `organization active 38
 
 **S-M1** `Combien de lignes ?` Expected: « Plusieurs tableurs sont sélectionnés. Lequel voulez-vous ? Nommez-le dans la question : » followed by **twelve** workbooks: `contrats-2026.xls`, `contrats-2026.xlsx`, `factures-fournisseurs-2026.xlsx`, `patients-ch.xlsx`, `patients-fr.csv`, `patients-france.csv`, `patients-suisse.csv`, `planning-garde-2026.xlsx`, `rdv-dates-ambigues.csv`, `rdv-export-titre.csv`, `rdv-medecins.csv`, `rendez-vous-2026.xlsx`.
 
-**S-M2** `Combien de documents ai-je ?` Expected: a folder answer « 92 ont été analysés. » and no choice of workbook (before the fix: a row count of a workbook).
+**S-M2** `Combien de documents ai-je ?` Expected: a folder answer « 92 fichiers ont été analysés. » and no choice of workbook (before the fix: a row count of a workbook).
 
 **S-M3** `Que disent mes documents à propos de Jean Dupont ?` Expected: no « Plusieurs tableurs sont sélectionnés » at all: the question is answered from the documents (an answer and « Sources » listing documents). The wording depends on the model; judge only that the choice of a workbook is **not** shown (before the fix: « Quel classeur ? »).
 

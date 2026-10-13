@@ -148,3 +148,69 @@ question note:
 
 Improvement means: more files named, no new error, and a time the owner accepts. Anything else is
 a cost without a gain and the window goes back.
+
+## Measured on the tower (13 October 2026)
+
+The numbers the change was judged on, from the application's own timing log
+(`retrieval-timings.jsonl`) during the final human test. `ministral-3:3b` on the LAN tower
+(`192.168.1.83`). The excerpts only are counted; the instruction adds a few hundred characters.
+
+| Window | Passages sent | Characters | First word | Whole answer |
+|---|---|---|---|---|
+| 12,288 (before) | 6 | 2,000 to 5,800 | 20 to 29 s | 24 to 49 s |
+| 12,288 | 1 to 2 (a narrowed or named-file question) | 120 to 670 | 16 to 20 s | 19 to 24 s |
+| 32,768 | 30 | 20,624 | 89 to 94 s | 105 to 112 s |
+| 32,768 | 29 | 28,998 | 82 to 83 s | 92 to 97 s |
+| 32,768 | 33 | 32,847 | 91 s | 95 to 96 s |
+| 32,768 | 37 | 36,720 | 112 s | 117 s |
+| 65,536 | 62 | 46,847 | failed after 21 s (HTTP 500) | |
+| 49,152 | | | "extremely slow" (not measured) | |
+
+What it says:
+
+- A first word takes **16 to 18 s even for a 120-character prompt**: a floor that comes from the
+  machine, not from the amount of text. The cause is not in the log (to check on the tower:
+  `ollama ps`, column PROCESSOR; `nvidia-smi`).
+- Beyond the floor the prompt costs about **90 tokens per second** (3 characters per token).
+- At 32,768, 29 to 37 passages came from **four or five distinct files**: the extra passages are
+  further pages of the same long file, not further files.
+- The improvement in **answers** at a large window was not measured (the replay of the 19 sentences
+  of step E2 was not done).
+
+**Setting recommended on this tower until the search sends less text:**
+`MODEL_CONTEXT_WINDOWS=ministral-3:3b=12288` (10 passages), or 16384 (14 passages) at most. Written
+as a comment beside the variable in `.env.example`. Do not use 32768 or more on this machine. The
+Mac mini must be measured again (`apps/server/scripts/measure_context.py`); these figures describe
+the tower only.
+
+Why a larger window is the wrong lever for most questions: see
+`docs/test-reports/knowledge-base-pass-1/07-record-study-fixes-and-freeze.md`, sections 4 to 8. A
+question whose answer is a set of files is answered better by asking the index for every file that
+holds the word (a word search of the existing index found 105 of the 109 expected files for six
+such questions, where six passages found 36), and a question about a person needs one to six
+passages, not thirty.
+
+## Reusing this change without the knowledge base
+
+The change is one commit, `03fd4ef` ("feat: size the excerpts sent to the model from its published
+context window"), 15 files, 532 insertions. It is kept reachable by the tag `kb-context-budget-change`
+(see the git section of the study above). It does **not** need the knowledge base to work: the budget
+(`conversation::ContextBudget::scaled_over_baseline`, `retrieval::RetrievalLimits`, the server's
+`max_context_chars`) is independent of it.
+
+Checked on 13 October 2026 by a dry run on `main` (a throw-away working folder, removed after):
+`git cherry-pick -n 03fd4ef` applies cleanly to `.env.example`, `conversation.rs`, `gateway.rs`,
+`mixed_answer.rs`, the three server files, `compose.yaml`, `OPERATIONS.md`, `SELECTION-AND-MEMORY.md`
+and this file, and stops on **three** files:
+
+| File | Why | What to do |
+|---|---|---|
+| `knowledge/targeting.rs` | the file does not exist on `main` | drop that part: it only passes `RetrievalLimits` through `search_documents_within` |
+| `retrieval.rs` | the knowledge base added code around the same functions | keep the `RetrievalLimits` struct and `for_budget`, and make the search functions take it |
+| `commands.rs` | the two calls that pass the limits sit inside the knowledge base's search | pass `RetrievalLimits::for_budget(&writer.budget)` to the search call of the document path |
+
+The server half (`/health` publishes `max_context_chars`, default 200,000) has no conflict. Tests
+that pin the figures: `retrieval::tests::a_larger_window_covers_more_documents_of_a_question_about_every_document`,
+`...cites_more_passages_of_an_ordinary_question`, `conversation::tests`, and
+`apps/server/tests/test_context_window.py`. If the knowledge base is rewritten, port those tests
+first: they are the specification of this change.

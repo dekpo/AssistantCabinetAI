@@ -1,0 +1,2264 @@
+Part 0 - Preparation (15 min)
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py status
+Settings folder : C:\Users\elise\AppData\Roaming\com.assistantcabinetai.desktop
+Index folder    : C:\Users\elise\AppData\Local\com.assistantcabinetai.desktop
+Backup folder   : C:\Users\elise\kb-backup-lot-11 (exists)
+Application     : closed
+knowledgeMode   : suggest
+writeTimingLog  : True
+Documents folder: C:\Users\elise\AssistantCabinetAI\kb-lot10
+Data folder     : C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+Timing log      : present (73 line(s))
+Index           : present
+Core library    : present (C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\fixtures\knowledge-sandbox)
+Large library   : present (C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\data\knowledge-sandbox-1000)
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py backup
+saved   index.sqlite3
+saved   settings.json
+saved   knowledge-identifier.key
+Backup in C:\Users\elise\kb-backup-lot-11
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py prepare 30
+wrote 30 invented documents in C:\Users\elise\AssistantCabinetAI\kb-lot11
+  30 documents: 28 the application reads, 2 it does not read (formats: odt, vtt)
+  scans (OCR): 3; PDF pages: 16
+wrote 8 invented workbooks in C:\Users\elise\AssistantCabinetAI\kb-lot11-data (formats: csv, ods, xls, xlsx)
+"workFolder" is now C:\Users\elise\AssistantCabinetAI\kb-lot11; "dataFolder" is now C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+"knowledgeMode" is "suggest", "writeTimingLog" is true and both health modules (France and Switzerland) are on. ("restore" puts your settings back.)
+Start the application now.
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py clear-log
+deleted retrieval-timings.jsonl
+emptied kb_diagnostics (5 row(s))
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\apps\desktop>pnpm tauri dev
+$ tauri "dev"
+     Running BeforeDevCommand (`pnpm dev`)
+$ vite
+
+  VITE v7.3.6  ready in 279 ms
+
+  ➜  Local:   http://localhost:1420/
+  ➜  Network: use --host to expose
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\apps\desktop\src-tauri for changes...
+   Compiling assistant-cabinet-ai v0.1.0 (C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\apps\desktop\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.54s
+     Running `target\debug\assistant-cabinet-ai.exe`
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+entities: 0   fingerprint of the list: e3b0c44298fc1c14
+names of the test questions found in the base: none
+
+Part A
+
+Dossier des Documents
+Analyse : 12 secondes
+3 fichiers lus par reconnaissance de texte.
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+47 personnes et organisations repérées, dont 0 déjà connue.
+30 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+
+Dossier des Données
+Analyse : 1 seconde
+7 tableurs lus sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.
+210 personnes et organisations repérées, dont 21 déjà connues.
+278 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+22 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 7 tableurs lus.
+102 liens lus entre deux colonnes d'un tableur.
+28 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+A4 In « Suggestions seulement », ask the ten sentences, one by one, clearing the conversation before each.
+
+Vous: Résume le dossier de Sophie Rochat.
+Assistant: - **Date des échanges** : 8 février 2026 (facture médicale).
+- **Consultation** : Sophie Rochat (N° AVS : 756.9617.2765.34) a consulté un médecin en Suisse.
+- **Décision de prise en charge** :
+  - Montant total facturé : CHF 486.63.
+  - Franchise annuelle : CHF 200.00 (déduite).
+  - Quote-part : 10 % (déduite).
+  - Montant net pris en charge : CHF 286.63 (extrait du *decompte-css-rochat-sophie.pdf*, page 1).
+*Pas de détails sur les résultats d’analyses ou rendez-vous ultérieurs dans ce courrier.*
+Généré par ministral-3:3b en 35s
+Le chiffre « 200.00 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Le chiffre « 286.63 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Que dit le dossier de Jean Dupontet ?
+Assistant: - **Extrait** : *2026-06-20_resultats-analyses.pdf* (page 1)
+  - **Patient** : Dupontet Jean
+  - **N° de sécurité sociale** : 1 49 11 74 144 545 77
+  - **Résultats** :
+    - Hémoglobine glyquée : 6,3 %
+    - Créatinine : 103 µmol/L
+    - Cholestérol total : 5,7 mmol/L
+    - Glycémie à jeun : 5,8 mmol/L
+- **Extrait** : *2026-02-12_courrier-orl-dupont-jean.pdf* (page 1)
+  - **Suivi** : traitement par bisoprolol poursuivi à la dose habituelle.
+  - **Prochain rendez-vous** : 13 mai 2026.
+*(Le dossier ne mentionne pas explicitement d'autres détails médicaux ou administratifs dans ces extraits.)*
+Généré par ministral-3:3b en 41s
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Quels courriers viennent du Dr Marc Bersier ?
+Assistant: - **2026-02-25_courrier-cardiologie-monnier-veronique.pdf** (courriers-entrants/2026-02)
+Généré par ministral-3:3b en 31s
+Sources :
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Vous: Quels courriers viennent de la CSS Assurance ?
+Assistant: - **caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf**
+- **caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf** *(non de la CSS)*
+Généré par ministral-3:3b en 31s
+Sources :
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+
+Vous: Montre la facture FAC-2026-014
+Assistant: - **Facture FAC-2026-014** de **MedSupply SA** (extrait [1], page 1)
+  - Date : 14 avril 2026
+  - Montant total HT : CHF 326,30
+  - TVA : CHF 26,43
+  - Total à payer : CHF 352,73
+  - Échéance : 14 mai 2026
+---
+- **Facture FAC-2026-14** de **Papeterie du Lac SARL** (extrait [2], page 1)
+  - Date : 17 juin 2026
+  - Montant total HT : 77,60 €
+  - TVA : 15,52 €
+  - Total à payer : 93,12 €
+  - Échéance : 17 juillet 2026
+---
+*Seule la première facture porte le numéro exact **FAC-2026-014** dans les extraits.*
+Généré par ministral-3:3b en 44s
+Sources :
+- comptabilite/factures/2026-04-14_facture-medsupply-fac-2026-014.pdf, page 1
+- comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- contrats/2026-03-04_contrat-maintenance-bureautique-leman.docx, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+
+Vous: Quels documents parlent de la LAMal ?
+Assistant: - Extrait de *caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf* (page 1).
+- Extrait de *caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf* (page 1).
+Généré par ministral-3:3b en 31s
+Sources :
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+
+Vous: Que dit le dossier de Madame Zénobie Quarante ?
+Assistant: Je n’ai pas trouvé d’exemples ou de documents mentionnant **Madame Zénobie Quarante** dans les extraits fournis.
+Généré par ministral-3:3b en 29s
+Sources :
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Que dit J. Dupont ?
+Assistant: - **Jean Dupont** (né en 1958) a consulté pour un **bilan endocrinologique** le **7 février 2026** (extrait courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1).
+- Il est sous traitement par **bisoprolol** et a un **prochain rendez-vous le 13 mai 2026** (extrait idem).
+Généré par ministral-3:3b en 35s
+Sources :
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+Plusieurs personnes correspondent à « J. Dupont » :
+Jean Dupont (3 fichiers)Jean-Pierre Dupont (1 fichier)
+
+Vous: Qu'a dit le Dr Martin ?
+Assistant: - **Pour Marie Martin** (extrait [1], page 1) :
+  - A poursuivi le traitement par **salbutamol**.
+  - A indiqué le **prochain rendez-vous le 3 août 2026**.
+- **Pour Lucas Roy** (extrait [2], page 1) :
+  - A poursuivi le traitement par **amlodipine**.
+  - A indiqué le **prochain rendez-vous le 15 novembre 2026**.
+- **Pour Jean-Pierre Dupont** (extrait [3], page 1) :
+  - A poursuivi le traitement par **sertraline**.
+  - A indiqué le **prochain rendez-vous le 18 octobre 2026**.
+Généré par ministral-3:3b en 35s
+Sources :
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- reunions/2026-09-01_pv-reunion-cabinet.docx, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+Plusieurs personnes correspondent à « Dr Martin » :
+Pierre Martin (3 fichiers)Paul Martin (3 fichiers)
+
+Vous: Que dit le courrier de Véronique Monnier ?
+Assistant: - Extrait : **courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf (page 1)**
+  - **Objet** : Consultation pour un bilan endocrinologique.
+  - **N° AVS** : 756.9204 3092 25.
+  - **Prochaine consultation** : 26 mai 2026.
+  - **Adressé à la caisse** pour traitement des résultats.
+Généré par ministral-3:3b en 35s
+Sources :
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+
+A5 « Réglages » → « Ciblage intelligent » → « Désactivé » (no restart). Ask the ten sentences again, same rule. This is the search as it was before the knowledge base: no line and no row at all.
+
+Vous: Résume le dossier de Sophie Rochat.
+Assistant: - **Nom** : Sophie Rochat
+- **Adresse** : Place de la Palud 31, 1003 Lausanne
+- **N° AVS** : 756.9617.2765.34
+- **Police** : 7.213.392-9
+**Courriers liés** :
+- **20 mars 2026** : Décision de prise en charge par la CSS Assurance (extrait 5).
+  - Facture pour consultation du **8 février 2026**.
+  - Montant pris en charge : CHF 486,63 (après franchise annuelle CHF 2 000 et quote-part 10 %).
+  - Versement prévu dans les **10 jours**.
+  - Décision valide au sens de la LAMal. Opposition possible dans les **30 jours**.
+Généré par ministral-3:3b en 38s
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Que dit le dossier de Jean Dupontet ?
+Assistant: - **Extrait** : *2026-06-20_resultats-analyses.pdf* (page 1)
+  - **Dossier n°** : 74394
+  - **Patient** : DUPONTET Jean
+  - **N° de sécurité sociale** : 1 49 11 74 144 545 77
+  - **Résultats** :
+    - Hémoglobine glyquée : 6,3 %
+    - Créatinine : 103 µmol/L
+    - Cholestérol total : 5,7 mmol/L
+    - Glycémie à jeun : 5,8 mmol/L
+- **Extrait** : *2026-02-12_courrier-orl-dupont-jean.pdf* (page 1)
+  - **Traitement** : bisoprolol (poursuit à la dose habituelle)
+  - **Suivi** : modalités et calendrier des prochains rendez-vous mentionnés (prochain : 13 mai 2026).
+- **Extrait** : *2026-08-11_courrier-cpam74-dupont-jean.pdf* (page 1)
+  - **Remboursement** : 59,01 € pour un dossier n° 283685.
+Généré par ministral-3:3b en 41s
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Quels courriers viennent du Dr Marc Bersier ?
+Assistant: - **2026-02-25_courrier-cardiologie-monnier-veronique.pdf** (extrait, page 1).
+Généré par ministral-3:3b en 29s
+Sources :
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Vous: Quels courriers viennent de la CSS Assurance ?
+Assistant: - **caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf**
+- **caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf** *(non de la CSS)*
+Généré par ministral-3:3b en 31s
+Sources :
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+
+Vous: Montre la facture FAC-2026-014
+Assistant: - **Facture FAC-2026-014** (MedSupply SA) :
+  **Extrait** : *comptabilite/factures/2026-04-14_facture-medsupply-fac-2026-014.pdf* (page 1).
+- **Facture FAC-2026-014** (Papeterie du Lac SARL) :
+  **Extrait** : *comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf* (page 1).
+Généré par ministral-3:3b en 36s
+Sources :
+- comptabilite/factures/2026-04-14_facture-medsupply-fac-2026-014.pdf, page 1
+- comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- contrats/2026-03-04_contrat-maintenance-bureautique-leman.docx, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Quels documents parlent de la LAMal ?
+Assistant: - Extrait de **caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf** (page 1)
+Généré par ministral-3:3b en 31s
+Sources :
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+
+Vous: Que dit le dossier de Madame Zénobie Quarante ?
+Assistant: Je n’ai pas trouvé d’exemple de document lié à Madame Zénobie Quarante dans les extraits fournis.
+Généré par ministral-3:3b en 28s
+Sources :
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Que dit J. Dupont ?
+Assistant: - **Jean Dupont** (né en 1958) a consulté le **7 février 2026** pour un bilan endocrinologique (extrait **2**).
+- Il est sous traitement par **bisoprolol** (extrait **2**).
+- Prochain rendez-vous prévu le **13 mai 2026** (extrait **2**).
+Généré par ministral-3:3b en 46s
+Sources :
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+
+Vous: Qu'a dit le Dr Martin ?
+Assistant: - **Marie Martin** (extrait 1, page 1) :
+  - A reçu le 1er mai 2026 pour des vertiges récurrents.
+  - Examen clinique rassurant.
+  - Traitement par salbutamol poursuivi à la dose habituelle.
+  - Prochain rendez-vous : 3 août 2026.
+- **Lucas Roy** (extrait 2, page 1) :
+  - A reçu le 28 juillet 2026 pour le suivi d’une hypertension artérielle.
+  - Examen clinique rassurant.
+  - Traitement par amlodipine poursuivi à la dose habituelle.
+  - Prochain rendez-vous : 15 novembre 2026.
+- **Jean-Pierre Dupont** (extrait 3, page 1) :
+  - A reçu le 11 juillet 2026 pour des vertiges récurrents.
+  - Examen clinique rassurant.
+  - Traitement par sertraline poursuivi à la dose habituelle.
+  - Prochain rendez-vous : 18 octobre 2026.
+Généré par ministral-3:3b en 42s
+Sources :
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- reunions/2026-09-01_pv-reunion-cabinet.docx, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+
+Vous: Que dit le courrier de Véronique Monnier ?
+Assistant: - **Extrait** : *courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf (page 1)*
+  - **Objet** : Consultation pour un bilan endocrinologique.
+  - **N° AVS** : 756.9204 3092 25.
+  - **Rendez-vous** : 26 mai 2026.
+  - **Adressé à la caisse** pour suivi.
+Généré par ministral-3:3b en 34s
+Sources :
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+
+A6 « Réglages » → « Ciblage intelligent » → « Automatique ». Ask the ten sentences again, same rule.
+
+Vous: Résume le dossier de Sophie Rochat.
+Assistant: - **Nom** : Sophie Rochat
+- **Adresse** : Place de la Palud 31, 1003 Lausanne
+- **N° AVS** : 756.9617.2765.34
+- **Police d’assurance** : 7.213.392-9
+**Courriers liés** :
+- **20 mars 2026** : *decompte-css-rochat-sophie.pdf* (décision de prise en charge pour une consultation du 8 février 2026).
+  - **Montant pris en charge** : CHF 486,63 (après franchise annuelle de CHF 2000 et quote-part de 10 %).
+  - **Versement** : Compte dans les 10 jours.
+Généré par ministral-3:3b en 37s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Que dit le dossier de Jean Dupontet ?
+Assistant: - **Résultats d'analyses du 20 juin 2026** (extrait [4], page 1) :
+  - **Hémoglobine glyquée** : 6,3 %
+  - **Créatinine** : 103 µmol/L
+  - **Cholestérol total** : 5,7 mmol/L
+  - **Glycémie à jeun** : 5,8 mmol/L
+  - **N° de sécurité sociale** : 1 49 11 74 144 545 77
+  - **Dossier n°** : 74394
+- **Courrier de synthèse** (extrait [2], page 1) :
+  - Prochain rendez-vous prévu le **13 mai 2026**.
+  - Traitement par **bisoprolol** poursuivi à la dose habituelle.
+  - **N° de sécurité sociale** : 1 58 03 74 443 192 09 (lié au dossier de Jean Dupont).
+Généré par ministral-3:3b en 38s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Quels courriers viennent du Dr Marc Bersier ?
+Assistant: - **courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf** (page 1) :
+  Le document mentionne le nom du Dr Marc Bersier comme auteur du compte rendu.
+Généré par ministral-3:3b en 25s
+Recherche ciblée : 1 document sur 28 — Marc Bersier
+Sources :
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels courriers viennent de la CSS Assurance ?
+Assistant: - **caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf** (page 1) :
+  Extrait du décompte CSS pour Sophie Rochat.
+Généré par ministral-3:3b en 24s
+Recherche ciblée : 1 document sur 28 — CSS Assurance
+Sources :
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Montre la facture FAC-2026-014
+Assistant: - **Facture MedSupply SA** (comptabilite/factures/2026-04-14_facture-medsupply-fac-2026-014.pdf, page 1):
+  - **Date** : 14 avril 2026
+  - **Montant HT** : CHF 326.30
+  - **Produits** :
+    - Thermomètre frontal – 3 × CHF 39.00
+    - Abaisse-langue, boîte de 100 – 4 × CHF 5.10
+    - Cartouches d’encre – 2 × CHF 62.00
+    - Ramette de papier A4 – 11 × CHF 5.90
+- **Facture Papeterie du Lac SARL** (comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1):
+  - **Date** : 17 juin 2026
+  - **Montant HT** : 77,60 €
+  - **Produits** :
+    - Papier d’examen, rouleau – 10 × 4,20 €
+    - Gants d’examen (2 boîtes de 100) – 3 × 8,90 €
+Généré par ministral-3:3b en 37s
+Recherche ciblée : 2 documents sur 28
+Sources :
+- comptabilite/factures/2026-04-14_facture-medsupply-fac-2026-014.pdf, page 1
+- comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1
+
+Vous: Quels documents parlent de la LAMal ?
+Assistant: - Extrait de **caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf** (page 1)
+Généré par ministral-3:3b en 29s
+Sources :
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- comptabilite/factures/2026-06-17_facture-papeterie-lac-fac-2026-014.pdf, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+
+Vous: Que dit le dossier de Madame Zénobie Quarante ?
+Assistant: Je n’ai pas trouvé d’exactement de référence ou de document nommé **Madame Zénobie Quarante** dans les extraits fournis.
+Généré par ministral-3:3b en 27s
+Sources :
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Que dit J. Dupont ?
+Assistant: - **Jean Dupont** (né en 1958) a consulté pour un **bilan endocrinologique** le **7 février 2026** (extrait courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1).
+- Il est suivi pour un traitement par **bisoprolol** (extrait ibidem).
+- Prochain rendez-vous prévu le **13 mai 2026** (extrait ibidem).
+Généré par ministral-3:3b en 34s
+Sources :
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+Plusieurs personnes correspondent à « J. Dupont » :
+Jean Dupont (3 fichiers)Jean-Pierre Dupont (1 fichier)
+
+Vous: Qu'a dit le Dr Martin ?
+Assistant: - **Pour Marie Martin** (extrait **1**, page 1) :
+  - *"J'ai reçu Marie Martin le 1er mai 2026 pour des vertiges récurrents."*
+  - *"L'examen clinique est rassurant et les résultats récents sont conformes à ce qui était attendu."*
+  - *"Le traitement par salbutamol est poursuivi à la dose habituelle."*
+  - *"Prochain rendez-vous : 3 août 2026."*
+- **Pour Lucas Roy** (extrait **2**, page 1) :
+  - *"J'ai reçu M. Roy le 28 juillet 2026 pour le suivi d'une hypertension artérielle."*
+  - *"L'examen clinique est rassurant et les résultats récents sont conformes à ce qui était attendu."*
+  - *"Le traitement par amlodipine est poursuivi à la dose habituelle."*
+  - *"Prochain rendez-vous : 15 novembre 2026."*
+- **Pour Jean-Pierre Dupont** (extrait **3**, page 1) :
+  - *"J'ai reçu M. Dupont le 11 juillet 2026 pour des vertiges récurrents."*
+  - *"L'examen clinique est rassurant et les résultats récents sont conformes à ce qui était attendu."*
+  - *"Le traitement par sertraline est poursuivi à la dose habituelle."*
+  - *"Prochain rendez-vous : 18 octobre 2026."*
+Généré par ministral-3:3b en 45s
+Sources :
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- reunions/2026-09-01_pv-reunion-cabinet.docx, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+Plusieurs personnes correspondent à « Dr Martin » :
+Pierre Martin (3 fichiers)Paul Martin (3 fichiers)
+
+Vous: Que dit le courrier de Véronique Monnier ?
+Assistant: - Extrait : **courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf (page 1)**
+  - **Objet** : Consultation pour un bilan endocrinologique.
+  - **N° AVS** : 756.9204 3092 25.
+  - **Dernier rendez-vous** : 26 mai 2026.
+  - **Adressé à la CPAM** pour traitement.
+Généré par ministral-3:3b en 33s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+
+A7
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py report
+Questions recorded            : 20
+  with a name the base knows  : 12
+  the base would reduce       : 12  (60.0 %)
+  reduced for real (auto/chip): 6
+  widened again               : 3
+  median reduction            : 96 %
+Release gate, raw (every cited file)       : 24.1 %  (14 of 58)
+  lost: 44 cited files that mention no name of the question (filler or extraction gap), 0 left out by the cap, 0 files that name an entity the base did not use
+Release gate, adjusted (filler excluded)   : 100.0 %  (a cited file counts only when it names an entity of the question)
+Why a question was not reduced: {'ambiguous': 4, 'no_entity': 4}
+
+By mode (questions that searched the documents; milliseconds, median / worst):
+  off       10 questions | embedding 1642 / 2678 | search 2 / 5 | knowledge 0 / 0 | first word 25626 / 40277 | total 34976 / 46242 | files selected 28 / 28 | chunks scored 28 / 28
+  suggest   10 questions | embedding 1737 / 2644 | search 3 / 5 | knowledge 5 / 16 | first word 26294 / 27547 | total 34966 / 43560 | files selected 28 / 28 | chunks scored 28 / 28
+  auto      10 questions | embedding 1713 / 1744 | search 2 / 6 | knowledge 4 / 8 | first word 24184 / 26288 | total 33527 / 44544 | files selected 28 / 28 | chunks scored 28 / 28
+
+Part B
+
+Vous: Que dit J. Dupont ?
+Assistant: - **Jean Dupont** (né en 1958) est mentionné dans :
+  - **extrait [2]** (page 1) : consultation pour un bilan endocrinologique, traitement par **bisoprolol**, prochain rendez-vous le **13 mai 2026**.
+  - **extrait [4]** (page 1) : mention du **Monsieur Jean-Pierre Dupont** (différent du précédent, né en 1971).
+Généré par ministral-3:3b en 31s
+Sources :
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+Plusieurs personnes correspondent à « J. Dupont » :
+Jean Dupont (3 fichiers)Jean-Pierre Dupont (1 fichier)
+
+Vous: Que dit J. Dupont ?
+Assistant: - **Traitement poursuivi** : bisoprolol à la dose habituelle (extrait [1], page 1).
+- **Suivi** : modalités et calendrier des prochains rendez-vous mentionnés (extrait [1], page 1).
+- **Prochain rendez-vous** : 13 mai 2026 (extrait [1], page 1).
+Généré par ministral-3:3b en 27s
+Recherche ciblée à votre demande : 3 documents sur 28 — Jean Dupont
+Sources :
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+
+B1 dit: Après l'appui, la question est reposée en incluant cette personne sous forme de pastille (la pastille affiche le nom ; « Retirer... » permet de la supprimer) et une ligne « Recherche ciblée » apparaît désormais.
+Mais en cliquant sur "Jean Dupont" la question reposée est identique à la première et il n'y a aucune pastille visible dans l'application
+
+Vous: Qu'a dit le Dr Martin ?
+Assistant: - **Pour Marie Martin** (extrait [1], page 1) :
+  - A poursuivi le traitement par **salbutamol**.
+  - A indiqué un prochain rendez-vous le **3 août 2026**.
+- **Pour Lucas Roy** (extrait [2], page 1) :
+  - A poursuivi le traitement par **amlodipine**.
+  - A indiqué un prochain rendez-vous le **15 novembre 2026**.
+- **Pour Jean-Pierre Dupont** (extrait [3], page 1) :
+  - A poursuivi le traitement par **sertraline**.
+  - A indiqué un prochain rendez-vous le **18 octobre 2026**.
+Généré par ministral-3:3b en 33s
+Sources :
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- reunions/2026-09-01_pv-reunion-cabinet.docx, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+Plusieurs personnes correspondent à « Dr Martin » :
+Pierre Martin (3 fichiers)Paul Martin (3 fichiers)
+
+Vous: Quels courriers viennent du Dr Marc Bersier ?
+Assistant: - **2026-02-25_courrier-cardiologie-monnier-veronique-veronique.pdf** (dans courriers-entrants/2026-02)
+Généré par ministral-3:3b en 25s
+Recherche ciblée : 1 document sur 28 — Marc Bersier
+Sources :
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+Recherche ciblée : 1 document sur 28 — Marc Bersier
+Élargir à ma sélection
+Voir les fichiers
+
+Clic sur Élargir à ma sélection
+Vous: Quels courriers viennent du Dr Marc Bersier ?
+Assistant: - **2026-02-25_courrier-cardiologie-monnier-veronique.pdf** (courriers-entrants/2026-02)
+Généré par ministral-3:3b en 31s
+Sources :
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Vous: Résume le dossier de Sophie Rochat.
+Assistant: Dans les extraits fournis, aucun document ne mentionne un dossier pour Sophie Rochat.
+Aucune information trouvée.
+Généré par ministral-3:3b en 29s
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Résume le dossier de Sophie Rochat.
+Assistant: Dans les extraits fournis, aucun document ne mentionne un dossier pour Sophie Rochat.
+Aucune information trouvée.
+Généré par ministral-3:3b en 27s
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Que dit 2026-03-20_decompte-css-rochat-sophie.pdf ?
+Assistant: 2026-03-20_decompte-css-rochat-sophie.pdf se trouve dans votre dossier de documents mais n'est pas sélectionné pour cette conversation. Cochez-le dans la liste des documents pour l'utiliser.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B5
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+identifier     active     295
+location       active     51
+organization   active     29
+organization   candidate  6
+person         active     196
+person         candidate  5
+entities: 582   fingerprint of the list: 521f5df9eda6faee
+names of the test questions found in the base: none
+
+Vous: Que dit le dossier de Madame Zénobie Quarante ?
+Assistant: Je n’ai pas trouvé d’exemple de document nommé **Madame Zénobie Quarante** dans les extraits fournis.
+Généré par ministral-3:3b en 27s
+Sources :
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Quels documents concernent Hyacinthe Vaudroz ?
+Assistant: Aucun document dans les extraits ne mentionne **Hyacinthe Vaudroz**.
+Généré par ministral-3:3b en 30s
+Sources :
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- comptabilite/factures/2026-04-14_facture-medsupply-fac-2026-014.pdf, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+
+Vous: Que dit le Dr Ernest Blondeau ?
+Assistant: Aucune mention du Dr Ernest Blondeau dans les extraits fournis.
+Généré par ministral-3:3b en 30s
+Sources :
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- scans/2026-10/2026-10-07_ordonnance.png, page 1 (lu par reconnaissance de texte)
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+
+Vous: Que dit Léopold Tschumi ?
+Assistant: Aucun document ne mentionne Léopold Tschumi dans les extraits fournis.
+Généré par ministral-3:3b en 29s
+Sources :
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- scans/2026-10/2026-10-07_ordonnance.png, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+
+B5
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+identifier     active     295
+location       active     51
+organization   active     29
+organization   candidate  6
+person         active     196
+person         candidate  5
+entities: 582   fingerprint of the list: 521f5df9eda6faee
+names of the test questions found in the base: none
+
+Réglages » → « Gérer… » → onglet « Entités » : recherchez Zénobie, Vaudroz, Blondeau.
+la fenêtre ne trouve rien pour les trois noms.
+
+B6
+Vous: Que dit le courrier de Sophie Rochat ?
+Assistant: - **Date du courrier** : 20 mars 2026.
+- **Organisme** : CSS Assurance (Service des prestations).
+- **Montant pris en charge** : CHF 486,63 (après franchise annuelle de CHF 2 000,00 et quote-part de 10 %).
+- **Facture concernée** : Médecin du **8 février 2026**.
+- **Police d’assurance** : 7.213.392-9.
+- **N° AVS** : 756.9617.2765.34.
+- **Adresse** : Sophie Rochat, Place de la Palud 31, 1003 Lausanne.
+- **Délai pour opposition** : 30 jours.
+- **Décision** : Valable au sens de la **LAMal**.
+Généré par ministral-3:3b en 38s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+
+Vous: Et son numéro AVS ?
+Assistant: - **Numéro AVS** : 756.9617.2765.34
+  *(extrait du fichier **decompte-css-rochat-sophie.pdf**, page 1)*
+Généré par ministral-3:3b en 32s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+
+Vous: Que contiennent les notes internes ?
+Assistant: - **Extrait 2** (*administratif/notes/2026-08-01_note-interne-stock.md*, page 1) :
+  - **Sujet** : Vérification du stock de gants et compresses.
+  - **Fréquence** : Le premier lundi de chaque mois.
+  - **Action** : Commande part le mardi matin.
+  - **Contact** : Sandrine Colas.
+Généré par ministral-3:3b en 32s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+
+Pas de bouton Élargir à ma sélection
+
+Vous: Que contiennent les notes internes ?
+Assistant: Les notes internes contiennent :
+- **2026-08-01_note-interne-stock.md** (administratif/notes/):
+  - Rappel sur la vérification du stock de gants et de compresses le **1er lundi du mois**.
+  - La commande part le **mardi matin**.
+  - Contact : Sandrine Colas.
+- **2026-04-30_note-interne-photocopieuse.txt** (administratif/notes/):
+  - Échéance du contrat de maintenance de la photocopieuse en **décembre**.
+  - À renouveler avant la fin **novembre**.
+Généré par ministral-3:3b en 33s
+Sources :
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- administratif/notes/2026-04-30_note-interne-photocopieuse.txt, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- messagerie/2026-08-27_message.txt, page 1
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+
+Part C
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+identifier     active     295
+location       active     51
+organization   active     29
+organization   candidate  6
+person         active     196
+person         candidate  5
+entities: 582   fingerprint of the list: 521f5df9eda6faee
+names of the test questions found in the base: none
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py lifecycle add
+wrote courriers-entrants\courrier-quenneville-nouveau.txt (a person the library has never seen: Sidonie Quenneville)
+
+Vous: Que dit Madame Sidonie Quenneville ?
+Assistant: Extrait de **courriers-entrants/courrier-quenneville-nouveau.txt (page 1)** :
+- **Adresse** : 12 rue des Acacias, 74100 Annemasse.
+- **Objet** : demande de rendez-vous.
+- **Désir** : un rendez-vous de suivi dans le courant du mois d’**octobre 2026**.
+- **Rappel** : sa caisse maladie est la **CSS Assurance**.
+Généré par ministral-3:3b en 23s
+Recherche ciblée : 1 document sur 29 — Sidonie Quenneville
+Sources :
+- courriers-entrants/courrier-quenneville-nouveau.txt, page 1
+
+Contenu de la carte du dosssier des documents:
+31 fichiers, 29 analysés , 0 illisible .
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+50 personnes et organisations repérées, dont 49 déjà connues.
+30 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+28 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+C2
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py lifecycle add-spaced
+wrote Courrier Quenneville été 2026.txt (spaces and an accent in the name: the next Analyse renames it)
+
+Analyser -> fichier renommé Courrier-Quenneville-ete-2026.txt
+Carte des documents
+32 fichiers, 30 analysés , 0 illisible .
+1 fichier renommé pour retirer les espaces et les accents.
+Courrier Quenneville été 2026.txt → Courrier-Quenneville-ete-2026.txt
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+1 personne ou organisation repérée, dont 1 déjà connue.
+
+
+Vous: Que dit Madame Sidonie Quenneville ?
+Assistant: - Extrait de **courriers-entrants/courrier-quenneville-nouveau.txt** (page 1):
+  - Demande un rendez-vous de suivi dans le courant du mois d'octobre 2026.
+  - Rappelle sa caisse maladie est la **CSS Assurance**.
+Généré par ministral-3:3b en 20s
+Recherche ciblée : 2 documents sur 30 — Sidonie Quenneville
+Sources :
+- Courrier-Quenneville-ete-2026.txt, page 1
+- courriers-entrants/courrier-quenneville-nouveau.txt, page 1
+
+C3
+Attention je ne suis pas certain d'avoir compris les consignes en C3
+Je procède donc à la suite C3 a, b et c comme indiqué sans prendre en compte les informations de la section C3 (je suppose que C3 est juste une introduction à la suite…)
+Il faut être très clair et précis dans toutes les consignes des tests à consigner pour toutes les autres sessions.
+
+C3-a
+Après reset: bouton « Analyzer (30) »
+32 fichiers, 0 analysé , 0 illisible .
+Après Analyser: (13 secondes environ)
+32 fichiers, 30 analysés , 0 illisible .
+3 fichiers lus par reconnaissance de texte.
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+49 personnes et organisations repérées, dont 24 déjà connues.
+30 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+le bouton est à nouveau clair
+
+C3-b
+Après reset: bouton « Analyzer (7) »
+8 fichiers, 0 analysé , 1 illisible .
+Après Analyser: (1 seconde)
+8 fichiers, 7 analysés , 1 illisible .
+7 tableurs lus sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.
+210 personnes et organisations repérées, dont 24 déjà connues.
+278 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+22 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 7 tableurs lus.
+102 liens lus entre deux colonnes d'un tableur.
+30 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+le bouton est à nouveau clair
+
+C3-c
+Après Tout réinitialiser dans Réglages -> Gérer 
+Dossier des documents
+Analyser (1 seconde)
+32 fichiers, 30 analysés , 0 illisible .
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+48 personnes et organisations repérées, dont 0 déjà connue.
+30 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+30 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+Dossier des données
+Analyser (1 seconde)
+8 fichiers, 7 analysés , 1 illisible .
+7 tableurs lus sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.
+210 personnes et organisations repérées, dont 21 déjà connues.
+278 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+22 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 7 tableurs lus.
+102 liens lus entre deux colonnes d'un tableur.
+30 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+C4
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py lifecycle modify
+changed courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt: Laurence Fabre -> Laurence Quéméner
+
+Vous: Que dit Laurence Quéméner ?
+Assistant: - **Date du dernier rendez-vous** : 18 février 2026 (extrait, courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1).
+- **Traitement en cours** : amoxicilline (extrait, idem, page 1).
+- **Suivi** : modalités et calendrier des prochains rendez-vous mentionnés (extrait, idem, page 1).
+- **Prochain rendez-vous** : 25 mai 2026 (extrait, idem, page 1).
+Généré par ministral-3:3b en 29s
+Sources :
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/courrier-quenneville-nouveau.txt, page 1
+- Courrier-Quenneville-ete-2026.txt, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+
+C5
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py lifecycle delete
+deleted caisses-assurances/suisse/2026-03-20_decompte-css-rochat-sophie.pdf (a letter about Sophie Rochat)
+
+Vous: Résume le dossier de Sophie Rochat.
+Assistant: Dans les extraits fournis, aucun document ne mentionne un dossier pour Sophie Rochat.
+Aucune information trouvée.
+Généré par ministral-3:3b en 28s
+Sources :
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-03-08_courrier-patient-meunier-veronique.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- caisses-assurances/france/2026-08-11_courrier-cpam74-dupont-jean.pdf, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+
+Vous: Quels courriers viennent de la CSS Assurance ?
+Assistant: Aucun courrier dans les extraits fournis ne mentionne explicitement la CSS Assurance comme origine.
+Généré par ministral-3:3b en 21s
+Recherche ciblée : 1 document sur 29 — CSS Assurance
+Sources :
+- courriers-entrants/courrier-quenneville-nouveau.txt, page 1
+
+C6
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py tier 100
+added 70 documents: the library goes from 30 to 100
+  100 documents: 89 the application reads, 11 it does not read (formats: csv, eml, odp, odt, ppt, pptx, rtf, vtt, xlsx)
+  scans (OCR): 10; PDF pages: 170
+Start the application and press Analyser.
+
+Dossier des documents
+101 fichiers, 29 analysés , 0 illisible .
+1 document retiré du dossier, oublié de l'analyse.
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+Analyser (2 minutes 2 secondes)
+101 fichiers, 90 analysés , 0 illisible .
+5 fichiers lus par reconnaissance de texte.
+8 fichiers n'ont pas été lus : leur format n'est pas pris en charge (2 .odt, 1 .eml, 1 .odp, 1 .ppt, 1 .pptx, 1 .rtf, 1 .vtt).
+124 personnes et organisations repérées, dont 108 déjà connues.
+77 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+62 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py tier 30
+removed 70 documents: the library goes from 100 to 30
+  30 documents: 28 the application reads, 2 it does not read (formats: odt, vtt)
+  scans (OCR): 3; PDF pages: 16
+Start the application and press Analyser.
+
+Dossier des documents
+31 fichiers, 29 analysés , 0 illisible .
+61 documents retirés du dossier, oubliés de l'analyse.
+2 fichiers n'ont pas été lus : leur format n'est pas pris en charge (1 .odt, 1 .vtt).
+
+Etapes C6 rejouée deux fois pour voir les temps d'analyse (pratiquement identiques à quelques secondes prêt)
+
+Part D
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py tier 100
+added 70 documents: the library goes from 30 to 100
+  100 documents: 89 the application reads, 11 it does not read (formats: csv, eml, odp, odt, ppt, pptx, rtf, vtt, xlsx)
+  scans (OCR): 10; PDF pages: 170
+Start the application and press Analyser.
+
+Documents: Analyser (2 minutes 5 secondes)
+mêmes lignes qu'après la croissance de C6
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py status
+Settings folder : C:\Users\elise\AppData\Roaming\com.assistantcabinetai.desktop
+Index folder    : C:\Users\elise\AppData\Local\com.assistantcabinetai.desktop
+Backup folder   : C:\Users\elise\kb-backup-lot-11 (exists)
+Application     : RUNNING
+knowledgeMode   : auto
+writeTimingLog  : True
+Documents folder: C:\Users\elise\AssistantCabinetAI\kb-lot11  <- the test folder
+Data folder     : C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+  holds         : 101 files (library tier 100)
+Timing log      : present (51 line(s))
+Index           : present
+Core library    : present (C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\fixtures\knowledge-sandbox)
+Large library   : present (C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\data\knowledge-sandbox-1000)
+
+
+3 Questions Ciblage intelligent Désactivé
+
+Vous: Qui renouvelle le code de l'armoire à pharmacie ?
+Assistant: **Extrait : documentation/guide-pratique-cabinet.pdf (page 66).**
+Renouvellement du code de l'armoire à pharmacie : **Sandrine Colas**, chaque premier lundi du mois.
+Généré par ministral-3:3b en 28s
+Le chiffre « 66 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Sources :
+- documentation/guide-pratique-cabinet.pdf, pages 55, 66, 110
+- documentation/manuel-qualite.docx, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+
+Vous: À qui signaler un écart de la chaîne du froid ?
+Assistant: Extrait de **documentation/manuel-qualite.docx (page 1)** :
+*"Les écarts de la chaîne du froid sont signalés à Nadia Bensaïd."*
+Généré par ministral-3:3b en 56s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 86, 91, 101
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+
+Vous: Résume le dossier de Fatima Benali.
+Assistant: - **Date de la première consultation** : 1er août 2026 (extrait *courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf*).
+- **Sujet** : Contrôle postopératoire pour Mme Fatima Benali (née en 1985).
+- **N° AVS** : 756.9474.3948.46 (extrait *courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf*).
+- **Traitement en cours** : Salbutamol à la dose habituelle (extrait *courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf*).
+- **Résultats biologiques** :
+  - Culture positive à SARS-CoV-2 (> 10^5 UFC/mL) (extrait *laboratoire/2026-01/2026-01-29_resultats-analyses-benali-fatima.pdf*).
+  - Autres résultats : Hémoglobine glyquée 7,0 %, Créatinine 87 µmol/L, Cholestérol total 5,8 mmol/L, Glycémie à jeun 7,0 mmol/L (extrait *laboratoire/2026-01/2026-01-29_resultats-analyses-benali-fatima.pdf*).
+- **Suivi** : Prochain rendez-vous prévu le 30 octobre 2026 (extrait *courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf*).
+- **Prise en charge financière** :
+  - Facture du 7 août 2026 : CHF 151,05 (après franchise annuelle de CHF 2000 et quote-part de 10 %) (extrait *caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf*).
+  - Dossier lié à la caisse via un courrier de synthèse (extrait *courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf*).
+Généré par ministral-3:3b en 54s
+Sources :
+- courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf, page 1
+- patients/courriers/2026-07-28_courrier-patient-crettenand-gregoire.txt, page 1
+- patients/courriers/2026-02-06_courrier-patient-zufferey-stephane.docx, page 1
+- patients/courriers/2026-08-12_courrier-patient-martin-claire.pdf, page 1
+- laboratoire/2026-01/2026-01-29_resultats-analyses-benali-fatima.pdf, page 1
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+
+3 Questions Ciblage intelligent Automatique
+
+Vous: Qui renouvelle le code de l'armoire à pharmacie ?
+Assistant: D'après l'extrait [1] (documentation/guide-pratique-cabinet.pdf, page 66), **Sandrine Colas** renouvelle le code de l'armoire à pharmacie chaque premier lundi du mois.
+Généré par ministral-3:3b en 28s
+Le chiffre « 66 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Sources :
+- documentation/guide-pratique-cabinet.pdf, pages 55, 66, 110
+- documentation/manuel-qualite.docx, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+
+Vous: À qui signaler un écart de la chaîne du froid ?
+Assistant: Extrait de **documentation/manuel-qualite.docx (page 1)** :
+*"Les écarts de la chaîne du froid sont signalés à Nadia Bensaïd."*
+Généré par ministral-3:3b en 28s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 86, 91, 101
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+
+Vous: Résume le dossier de Fatima Benali.
+Assistant: - **Date des premiers contacts documentés** : 20 juillet 2026 (extrait [1]).
+- **Consultation** : Contrôle postopératoire pour Mme Fatima Benali (extrait [1]).
+- **Résultats biologiques** :
+  - Hémoglobine glyquée : 7,0 % (extrait [2]).
+  - Créatinine : 87 µmol/L (extrait [2]).
+  - Cholestérol total : 5,8 mmol/L (extrait [2]).
+  - Glycémie à jeun : 7,0 mmol/L (extrait [2]).
+  - Infection confirmée par SARS-CoV-2 (culture positive > 10^5 UFC/mL) (extrait [2]).
+- **Traitement** : Salbutamol poursuivi à la dose habituelle (extrait [1]).
+- **Suivi** :
+  - Courrier de synthèse envoyé à la caisse (extrait [1]).
+  - Prochain rendez-vous prévu le **30 octobre 2026** (extrait [1]).
+- **Prise en charge financière** :
+  - Facture du 7 août 2026 : CHF 151,05 (extrait [3]).
+  - Franchise annuelle : CHF 2 000,00 (extrait [3]).
+  - Quote-part : 10 % (extrait [3]).
+- **Identifiants** :
+  - N° AVS : 756.9474.3948.46 (extrait [1], [2], [3]).
+Généré par ministral-3:3b en 44s
+Recherche ciblée : 3 documents sur 90 — Fatima Benali
+Sources :
+- courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf, page 1
+- laboratoire/2026-01/2026-01-29_resultats-analyses-benali-fatima.pdf, page 1
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+
+
+Part S
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py extra-files
+wrote patients-france.csv in C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+wrote patients-suisse.csv in C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+wrote rdv-dates-ambigues.csv in C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+wrote rdv-export-titre.csv in C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+wrote rdv-medecins.csv in C:\Users\elise\AssistantCabinetAI\kb-lot11-data
+wrote 2026/janvier/neurologie.txt in C:\Users\elise\AssistantCabinetAI\kb-lot11
+wrote 2026/mars/neurologie.txt in C:\Users\elise\AssistantCabinetAI\kb-lot11
+Start the application, press Analyser on the Documents card and on the Data card.
+
+Documents après analyse:
+103 fichiers, 92 analysés , 0 illisible .
+8 fichiers n'ont pas été lus : leur format n'est pas pris en charge (2 .odt, 1 .eml, 1 .odp, 1 .ppt, 1 .pptx, 1 .rtf, 1 .vtt).
+
+Données après analyse:
+13 fichiers, 12 analysés , 1 illisible .
+12 tableurs lus sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.
+25 personnes et organisations repérées, dont 22 déjà connues.
+8 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 5 tableurs lus.
+19 liens lus entre deux colonnes d'un tableur.
+92 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+les deux boutons sont en clair
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+identifier     active     307
+location       active     51
+organization   active     38
+organization   candidate  7
+person         active     214
+person         candidate  15
+entities: 632   fingerprint of the list: f1e362dde4d9d188
+names of the test questions found in the base: ['Sidonie Quenneville']
+
+S1 à S10
+
+Vous: À qui appartient le numéro AVS 756.3052.5778.43 ?
+Assistant: Extrait de **kb-lot11/caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf**, page 1.
+Le numéro **AVS 756.3052.5778.43** appartient à **Marie Martin**.
+Généré par ministral-3:3b en 24s
+Recherche ciblée : 1 document sur 92
+Sources :
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+
+Vous: Quels courriers a écrit la Dre Anne-Sophie Vuagniaux ?
+Assistant: - **2026-06-25_courrier-orl.docx** (courriers-entrants/2026-06)
+- **2026-10-01_courrier-dermatologie.pdf** (courriers-entrants/2026-10)
+- **2026-01-08_courrier-endocrinologie-girardin-thierry.pdf** (courriers-entrants/2026-01)
+Généré par ministral-3:3b en 31s
+Recherche ciblée : 3 documents sur 92 — Anne-Sophie Vuagniaux
+Sources :
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-08_courrier-endocrinologie-girardin-thierry.pdf, page 1
+
+Vous: Que dit la Dre Vuagniaux ?
+Assistant: - **Date de la dernière consultation de Fabienne Girardin** : 8 juin 2026 (extrait [1], page 1).
+- **Traitement prescrit** : amoxicilline (extrait [1], page 1).
+- **Prochain rendez-vous pour Fabienne Girardin** : 23 septembre 2026 (extrait [1], page 1).
+- **Date de la dernière consultation de Thierry Girardin** : 30 décembre 2025 (extrait [3], page 1).
+- **Traitement prescrit pour Thierry Girardin** : ramipril (extrait [3], page 1).
+- **Prochain rendez-vous pour Thierry Girardin** : 8 avril 2026 (extrait [3], page 1).
+- **Médicament poursuivi pour Lucas Roy** : ramipril (extrait [2], page 1).
+- **Prochain rendez-vous pour Lucas Roy** : 30 décembre 2026 (extrait [2], page 1).
+- **Mention du suivi et des prochains rendez-vous** : informé(e) des modalités de suivi et calendrier (extrait [1], [2], [3], page 1).
+- **Courrier de synthèse** : adressé à la caisse (extrait [1], [2], [3], page 1).
+- **Examen clinique** : toujours décrit comme rassurant (extrait [1], [2], [3], page 1).
+- **Contrôle biologique** : demandé systématiquement (extrait [1], [2], [3], page 1).
+Généré par ministral-3:3b en 50s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-08_courrier-endocrinologie-girardin-thierry.pdf, page 1
+- documentation/manuel-qualite.docx, page 1
+- patients/courriers/2026-03-04_courrier-patient.docx, page 1
+- documentation/guide-pratique-cabinet.pdf, page 60
+
+Vous: Quels documents concernent HUG ?
+Assistant: - **documentation/guide-pratique-cabinet.pdf** (page 84) : mentionne que le guide a été relu par **Pr Jean-Luc Rapin** et par **HUG**.
+Aucun autre document ne mentionne explicitement HUG.
+Généré par ministral-3:3b en 31s
+Le chiffre « 84 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Recherche ciblée : 2 documents sur 92 — Hôpitaux universitaires de Genève
+Sources :
+- documentation/guide-pratique-cabinet.pdf, pages 17, 23, 26, 27, 84
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+
+Vous: Quels documents viennent de Genève ?
+Assistant: - [1] courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx (page 1)
+  * Clinique La Source, Genève (Chemin des Vignes 80, 1201 Genève)
+  * Dr Hélène Marchetti, Annemasse (74100 Annemasse) – adresse postale en Suisse romande, mais pas à Genève.
+- [2] courriers-entrants/2026-02/2026-02-08_courrier-rhumatologie-zufferey-gael.pdf (page 1)
+  * Réseau hospitalier neuchâtelois (RHNe), Genève (Route de Lausanne 36, 1201 Genève).
+- [4] courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx (page 1)
+  * Hôpital fribourgeois, Genève (Route de Lausanne 36, 1201 Genève).
+- [5] courriers-entrants/2026-04/2026-04-23_courrier-dermatologie.docx (page 1)
+  * Hôpital fribourgeois, Genève (Chemin des Vignes 80, 1201 Genève).
+**Documents originaux à Genève :**
+- [2], [4], [5]
+Généré par ministral-3:3b en 47s
+Sources :
+- courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx, page 1
+- courriers-entrants/2026-02/2026-02-08_courrier-rhumatologie-zufferey-gael.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx, page 1
+- courriers-entrants/2026-04/2026-04-23_courrier-dermatologie.docx, page 1
+- laboratoire/2026-10/2026-10-04_resultats-analyses-maillard-pascal.pdf, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels courriers viennent du CHUV ?
+Assistant: - 2026-03-12_courrier-cardiologie.docx
+- 2026-06-25_courrier-orl.docx
+- 2026-10-01_courrier-dermatologie.pdf
+- 2026-08-01_courrier-rhumatologie.pdf
+Généré par ministral-3:3b en 36s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- courriers-entrants/2026-03/2026-03-12_courrier-cardiologie.docx, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+- courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf, page 1
+- courriers-entrants/2026-03/2026-03-09_courrier-orl-petrovic-elena.docx, page 1
+- caisses-assurances/france/2026-07-24_courrier-cpam69-de-la-fontaine-matthieu.pdf, page 1
+
+Vous: Résume le dossier de Giuseppe D'Amico.
+Assistant: Extrait de **caisses-assurances/france/2026-03-26_courrier-cpam74.pdf** (page 1):
+- **Dossier concerné** : Giuseppe D'Amico
+- **Numéro de dossier** : 911052
+- **Décision** : Remboursement partiel de **37,22 €** versé sur le compte indiqué dans le dossier.
+- **Indemnités journalières** : calculées sur les **trois derniers mois de salaire** (si applicable).
+- **Source** : CPAM de la Haute-Savoie.
+Généré par ministral-3:3b en 32s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- patients/courriers/2026-07-28_courrier-patient-crettenand-gregoire.txt, page 1
+- patients/courriers/2026-07-18_courrier-patient-demirci-ibrahim.pdf, page 1
+- patients/courriers/2026-02-06_courrier-patient-zufferey-stephane.docx, page 1
+- patients/courriers/2026-09-01_courrier-patient.docx, page 1
+- patients/courriers/2026-08-12_courrier-patient-martin-claire.pdf, page 1
+- caisses-assurances/france/2026-03-26_courrier-cpam74.pdf, page 1
+
+Vous: Quels documents parlent de Lucas Roy ?
+Assistant: - Extrait de **courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md** (page 1)
+- Extrait de **courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf** (page 1)
+Généré par ministral-3:3b en 28s
+Recherche ciblée : 2 documents sur 92 — Lucas Roy
+Sources :
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+
+
+Vous: Quels documents parlent de Roy Lucas ?
+Assistant: - **2026-04-20_courrier-rhumatologie-lucas-roy.pdf** (page 1)
+- **2026-10-01_courrier-dermatologie.pdf** (page 1)
+Généré par ministral-3:3b en 27s
+Recherche ciblée : 2 documents sur 92 — Roy Lucas
+Sources :
+- courriers-entrants/2026-04/2026-04-20_courrier-rhumatologie-lucas-roy.pdf, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+
+Vous: Que dit le courrier de Aïcha N'Diaye ?
+Assistant: - **Date des résultats** : 23 mars 2026 (extrait 5).
+- **Résultats mentionnés** :
+  - Hémoglobine glyquée : 5,8 %
+  - Créatinine : 93 µmol/L
+  - Cholestérol total : 5,4 mmol/L
+  - Glycémie à jeun : 5,6 mmol/L
+- **Laboratoire** : Cerballance Alpes (extrait 5).
+Généré par ministral-3:3b en 33s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- caisses-assurances/france/2026-04-24_courrier-cpam69.png, page 1 (lu par reconnaissance de texte)
+- caisses-assurances/france/2026-10-07_courrier-harmonie.pdf, page 1
+- caisses-assurances/france/2026-07-25_courrier-mgen.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- laboratoire/2026-03/2026-03-23_resultats-analyses-n-diaye-aicha.pdf, page 1 (lu par reconnaissance de texte)
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+
+S-T1 à S-T11-3
+
+Vous: Quelle est la somme des montants dans patients-suisse.csv ?
+Assistant: Somme de Montant : **8 941,54 CHF**.
+Calculé sur 10 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- patients-suisse.csv, feuille patients-suisse, colonne Montant
+
+Vous: Quel est le montant maximum dans patients-suisse.csv ?
+Assistant: Plus grande valeur de Montant : **2 310,25 CHF**.
+Calculé sur 10 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- patients-suisse.csv, feuille patients-suisse, colonne Montant
+
+Vous: Quelle est la somme des montants dans patients-france.csv ?
+Assistant: Somme de Montant : **8 941,54 €**.
+Calculé sur 10 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- patients-france.csv, feuille patients-france, colonne Montant
+
+Vous: Combien de lignes dans factures-fournisseurs-2026.xlsx ?
+Assistant: La feuille Factures contient 39 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- factures-fournisseurs-2026.xlsx, feuille Factures
+
+Vous: Combien de lignes dans rdv-export-titre.csv ?
+Assistant: La feuille rdv-export-titre contient 10 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-export-titre.csv, feuille rdv-export-titre
+
+Vous: Combien de lignes pour Dr Jean Dupont dans rdv-medecins.csv ?
+Assistant: Nombre de lignes : **3**.
+Calculé sur 3 lignes.
+Compris comme : medecin = Dr Jean Dupont.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-medecins.csv, feuille rdv-medecins
+
+Vous: Combien de lignes pour Jean Dupont dans rdv-medecins.csv ?
+Assistant: Nombre de lignes : **3**.
+Calculé sur 3 lignes.
+Compris comme : medecin = Dr Jean Dupont.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-medecins.csv, feuille rdv-medecins
+
+Vous: Quelle est la somme de montant pour Dr Jean Dupont dans rdv-medecins.csv ?
+Assistant: Somme de montant : **150**.
+Calculé sur 3 lignes.
+Compris comme : medecin = Dr Jean Dupont.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-medecins.csv, feuille rdv-medecins, colonne montant
+
+Vous: Combien de lignes pour Dr Paul Martin dans rdv-medecins.csv ?
+Assistant: Nombre de lignes : **2**.
+Calculé sur 2 lignes.
+Compris comme : medecin = Dr Paul Martin.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-medecins.csv, feuille rdv-medecins
+
+Vous: Combien de lignes pour Martin dans rdv-medecins.csv ?
+Assistant: Nombre de lignes : **3**.
+Calculé sur 3 lignes.
+Compris comme : medecin parmi Dr Paul Martin, Dr Pierre Martin.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-medecins.csv, feuille rdv-medecins
+
+Vous: Combien de lignes pour Alice Archer en mars 2026 dans rdv-medecins.csv ?
+Assistant: Nombre de lignes : **2**.
+Calculé sur 2 lignes.
+Compris comme : patient = Alice Archer et date en mars et date en 2026.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-medecins.csv, feuille rdv-medecins
+
+Vous: Combien de lignes pour Alice Archer dans rdv-dates-ambigues.csv ?
+Assistant: Nombre de lignes : **2**.
+Calculé sur 2 lignes.
+Compris comme : patient = Alice Archer.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- rdv-dates-ambigues.csv, feuille rdv-dates-ambigues
+
+Vous: Combien de lignes pour Alice Archer en mars 2026 dans rdv-dates-ambigues.csv ?
+Assistant: Ce filtre porte sur un jour, un mois, une année ou une période, mais cette colonne de rdv-dates-ambigues.csv n'est pas une colonne de dates reconnue.
+Colonne concernée : date.
+Ses colonnes sont : patient, date, medecin.
+Essayez de demander une somme, un minimum, un maximum, un nombre de lignes, la liste des valeurs d'une colonne, ou le groupe qui a le plus grand total.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+
+Vous: Combien de lignes en 2026 dans rdv-dates-ambigues.csv ?
+Assistant: Ce filtre porte sur un jour, un mois, une année ou une période, mais cette colonne de rdv-dates-ambigues.csv n'est pas une colonne de dates reconnue.
+Colonne concernée : date.
+Ses colonnes sont : patient, date, medecin.
+Essayez de demander une somme, un minimum, un maximum, un nombre de lignes, la liste des valeurs d'une colonne, ou le groupe qui a le plus grand total.
+Votre question précédente n'a pas pu être calculée non plus : nommez exactement l'une des colonnes ci-dessus.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+
+Vous: Combien de lignes pour Alice Archer en mars dans rdv-dates-ambigues.csv ?
+Assistant: Ce filtre porte sur un jour, un mois, une année ou une période, mais cette colonne de rdv-dates-ambigues.csv n'est pas une colonne de dates reconnue.
+Colonne concernée : date.
+Ses colonnes sont : patient, date, medecin.
+Essayez de demander une somme, un minimum, un maximum, un nombre de lignes, la liste des valeurs d'une colonne, ou le groupe qui a le plus grand total.
+Votre question précédente n'a pas pu être calculée non plus : nommez exactement l'une des colonnes ci-dessus.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+
+S-F1 à S-F3
+
+Vous: Que dit mars/neurologie.txt ?
+Assistant: extrait de **2026/mars/neurologie.txt (page 1)** :
+- Consultation de contrôle.
+- Bilan stable.
+- Prochain rendez-vous prévu dans **trois mois**.
+Généré par ministral-3:3b en 22s
+Sources :
+- 2026/mars/neurologie.txt, page 1
+
+Vous: Que dit neurologie.txt ?
+Assistant: Plusieurs fichiers s'appellent neurologie.txt. Lequel voulez-vous ?
+- 2026/janvier/neurologie.txt
+- 2026/mars/neurologie.txt
+Réponse établie depuis votre dossier de documents, sans l'IA.
+Cliquez sur un fichier pour poser la question à son sujet.
+2026/janvier/neurologie.txt2026/mars/neurologie.txt
+
+Vous: Que dit avril/neurologie.txt ?
+Assistant: Aucun fichier nommé avril/neurologie.txt ne se trouve dans votre dossier de documents.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+S-M1 à S-M3
+
+Vous: Combien de lignes ?
+Assistant: Plusieurs tableurs sont sélectionnés. Lequel voulez-vous ? Nommez-le dans la question :
+- contrats-2026.xls
+- contrats-2026.xlsx
+- factures-fournisseurs-2026.xlsx
+- patients-ch.xlsx
+- patients-fr.csv
+- patients-france.csv
+- patients-suisse.csv
+- planning-garde-2026.xlsx
+- rdv-dates-ambigues.csv
+- rdv-export-titre.csv
+- rdv-medecins.csv
+- rendez-vous-2026.xlsx
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.
+Cliquez sur un fichier pour poser la question à son sujet.
+contrats-2026.xlscontrats-2026.xlsxfactures-fournisseurs-2026.xlsxpatients-ch.xlsxpatients-fr.csvpatients-france.csvpatients-suisse.csvplanning-garde-2026.xlsxrdv-dates-ambigues.csvrdv-export-titre.csvrdv-medecins.csvrendez-vous-2026.xlsx
+
+Vous: Combien de documents ai-je ?
+Assistant: 92 fichiers ont été analysés.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+Vous: Que disent mes documents à propos de Jean Dupont ?
+Assistant: - **Jean Dupont (né en 1958)** :
+  - Consultation pour un bilan endocrinologique le **7 février 2026** (extrait [1]).
+  - Suivi du traitement par **bisoprolol** à la dose habituelle.
+  - Prochain rendez-vous prévu le **13 mai 2026**.
+- **Jean-Pierre Dupont (né en 1971)** :
+  - Consultation pour hypertension artérielle le **23 mars 2026** (extrait [2]).
+  - Suivi du traitement par **lévothyroxine** à la dose habituelle.
+  - Prochain rendez-vous prévu le **30 juin 2026**.
+- **Jean-Pierre Dupont (même identité, né en 1971)** :
+  - Consultation pour vertiges récurrents le **11 juillet 2026** (extrait [3]).
+  - Suivi du traitement par **sertraline** à la dose habituelle.
+  - Prochain rendez-vous prévu le **18 octobre 2026**.
+- **Rupture de stock** :
+  - Sur **sertraline** pour Jean-Pierre Dupont jusqu’à la fin du mois d’août 2026 (extrait [4]).
+Généré par ministral-3:3b en 38s
+Cette question ne portait sur aucune de vos tables.
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-04/2026-04-01_courrier-neurologie-dupont-jean-pierre.docx, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+
+S-K1 à S-K5 -> tout est conforme
+
+Part G
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py tier 200
+added 100 documents: the library goes from 100 to 200
+  200 documents: 176 the application reads, 24 it does not read (formats: csv, eml, odp, odt, ppt, pptx, rtf, vtt, xlsx)
+  scans (OCR): 28; PDF pages: 224
+Start the application and press Analyser.
+
+Documents analysés (43 secondes)
+203 fichiers, 179 analysés , 0 illisible .
+18 fichiers lus par reconnaissance de texte.
+21 fichiers n'ont pas été lus : leur format n'est pas pris en charge (7 .odt, 5 .rtf, 4 .eml, 2 .vtt, 1 .odp, 1 .ppt, 1 .pptx).
+169 personnes et organisations repérées, dont 137 déjà connues.
+135 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+92 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py names
+identifier     active     348
+location       active     51
+organization   active     50
+organization   candidate  8
+person         active     222
+person         candidate  26
+entities: 705   fingerprint of the list: 408031198a83050b
+names of the test questions found in the base: ['Sidonie Quenneville']
+
+Questions G2-11 à G2-6 Ciblage intelligent Désactivé
+
+Vous: Qui renouvelle le code de l'armoire à pharmacie ?
+Assistant: Renouvellement du code de l'armoire à pharmacie :
+- **Sandrine Colas** (extrait **documentation/guide-pratique-cabinet.pdf**, page 66).
+Généré par ministral-3:3b en 26s
+Le chiffre « 66 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Sources :
+- documentation/guide-pratique-cabinet.pdf, pages 55, 66
+- courriers-entrants/pharmacies/2026-08-03_courrier-pharmacie.docx, page 1
+- courriers-entrants/pharmacies/2026-07-23_courrier-pharmacie.docx, page 1
+- scans/2026-02/2026-02-10_courrier-pharmacie.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+
+Vous: À qui signaler un écart de la chaîne du froid ?
+Assistant: Extrait de **documentation/manuel-qualite.docx (page 1)** :
+*« Les écarts de la chaîne du froid sont signalés à Nadia Bensaïd. »*
+Généré par ministral-3:3b en 29s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- administratif/notes/2026-09-12_note-interne-informatique.txt, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 86, 91, 101
+
+Vous: Résume le dossier de Fatima Benali.
+Assistant: Voici un résumé des éléments trouvés dans les documents :
+- **Médecin traitant** : Dr Hélène Marcheltti (8 rue du Léman, Annemasse).
+- **Consultation du 31 mai 2026** : Honoraires de 55,00 € pour une médecine générale (extrait [1]).
+- **Consultation rhumatologique** (1er août 2026) :
+  - Contrôle postopératoire pour Fatima Benali (née en 1985).
+  - N° AVS : **756.9474.3948.46** (extrait [2]).
+  - Suivi du traitement par salbutamol.
+  - Prochain rendez-vous prévu le **30 octobre 2026**.
+- **Résultats d’analyses (29 janvier 2026)** :
+  - Culture positive à SARS-CoV-2 (> 10^5 UFC/mL) (extrait [4]).
+- **Rupture de stock** :
+  - Ibuprofène indisponible (extrait [3]).
+- **Prestations assurées** :
+  - **Groupe Mutuel** (7 août 2026) : CHF 151,05 pris en charge après franchise (extrait [5]).
+  - **Sanitas** (13 juillet 2026) : CHF 503,87 pour une consultation précédente (extrait [6]).
+Généré par ministral-3:3b en 44s
+Sources :
+- scans/2026-05/2026-05-31_note-honoraires-benali-fatima.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-03_courrier-pharmacie.docx, page 1
+- laboratoire/2026-01/2026-01-29_resultats-analyses-benali-fatima.pdf, page 1
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+- caisses-assurances/suisse/2026-07-13_decompte-sanitas.jpg, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels documents concernent la Dre Vuagniaux ?
+Assistant: - **2026-03-22_courrier-endocrinologie.pdf** (courriers-entrants/2026-03)
+- **2026-10-01_courrier-dermatologie.pdf** (courriers-entrants/2026-10)
+- **2026-06-25_courrier-orl.docx** (courriers-entrants/2026-06) *(pas explicitement signé par elle, mais mention du CHUV et de son nom en objet)*
+- **2026-01-08_courrier-endocrinologie-girardin-thierry.pdf** *(pas de mention directe de Dre Vuagniaux dans l'extrait, mais le nom est présent dans le contexte du CHUV)*
+*Les autres documents ne sont pas signés par Dre Vuagniaux.*
+Généré par ministral-3:3b en 39s
+Sources :
+- courriers-entrants/2026-03/2026-03-22_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- courriers-entrants/2026-01/2026-01-08_courrier-endocrinologie-girardin-thierry.pdf, page 1
+- administratif/planning/2026-03-31_planning-garde.txt, page 1
+- administratif/planning/2026-04-03_planning-garde.txt, page 1
+
+Vous: Quels documents viennent de Genève ?
+Assistant: - Extrait [1] : *caisses-assurances/suisse/2026-03-04_decompte-suva.pdf* (pas clairement lié à un patient)
+- Extrait [2] : *courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx* (adresse Clinique La Source : *Chemin des Vignes 80, 1201 Genève*)
+- Extrait [3] : *courriers-entrants/2026-09/2026-09-26_courrier-endocrinologie.pdf* (adresse Hôpitaux universitaires de Genève : *Route de Lausanne 36, 1201 Genève*)
+- Extrait [4] : *courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf* (même adresse que l'extrait [3])
+- Extrait [5] : *courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx* (adresse Hôpital fribourgeois : *Route de Lausanne 36, 1201 Genève* – mentionnée comme Genève dans le contexte)
+**Documents clairement liés à Genève** :
+- 2026-01-16_courrier-neurologie.docx
+- 2026-09-26_courrier-endocrinologie.pdf
+- 2026-02-12_courrier-orl-dupont-jean.pdf
+- 2026-08-04_courrier-orl-demirci-ibrahim.docx
+Généré par ministral-3:3b en 49s
+Sources :
+- caisses-assurances/suisse/2026-03-04_decompte-suva.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx, page 1
+- courriers-entrants/2026-09/2026-09-26_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx, page 1
+- laboratoire/2026-10/2026-10-04_resultats-analyses-maillard-pascal.pdf, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels documents parlent de la LAMal ?
+Assistant: - Extrait de **caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-05-05_decompte-css.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx** (page 1)
+Généré par ministral-3:3b en 35s
+Sources :
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-09-18_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-05-03_decompte-css-bochud-rosemarie.docx, page 1
+- caisses-assurances/suisse/2026-05-05_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx, page 1
+
+Questions G2-11 à G2-6 Ciblage intelligent Automatique
+
+Vous: Qui renouvelle le code de l'armoire à pharmacie ?
+Assistant: Renouvellement du code de l'armoire à pharmacie :
+**Sandrine Colas** (page 66, *documentation/guide-pratique-cabinet.pdf*).
+Généré par ministral-3:3b en 25s
+Le chiffre « 66 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Sources :
+- documentation/guide-pratique-cabinet.pdf, pages 55, 66
+- courriers-entrants/pharmacies/2026-08-03_courrier-pharmacie.docx, page 1
+- courriers-entrants/pharmacies/2026-07-23_courrier-pharmacie.docx, page 1
+- scans/2026-02/2026-02-10_courrier-pharmacie.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+
+Vous: À qui signaler un écart de la chaîne du froid ?
+Assistant: Extrait de **documentation/manuel-qualite.docx (page 1)** :
+*"Les écarts de la chaîne du froid sont signalés à Nadia Bensaïd."*
+Généré par ministral-3:3b en 27s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+- administratif/notes/2026-09-12_note-interne-informatique.txt, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 86, 91, 101
+
+Vous: Résume le dossier de Fatima Benali.
+Assistant: - **N° AVS** : 756.9474.3948.46 (extrait [1], [2], [4], [5])
+**Consultations médicales :**
+- **31 mai 2026** : Consultation chez le Dr Hélène Marcheltti (facture 55,00 €, règlement par carte bancaire) (extrait [1]).
+- **20 juillet 2026** : Contrôle postopératoire chez Dre Sandra Pasquier (extrait [2]).
+- **Prochain rendez-vous** : 30 octobre 2026 (extrait [2]).
+**Traitements et adaptations :**
+- **Salbutamol** : poursuite à la dose habituelle (extrait [2]).
+- **Ibuprofène** : rupture de stock en pharmacie (adaptation nécessaire) (extrait [3]).
+**Résultats d’analyses (29 janvier 2026) :**
+- Culture positive à SARS-CoV-2 (extrait [4]).
+**Prise en charge financière :**
+- Facture du 7 août 2026 : CHF 151,05 (après franchise et quote-part) (extrait [5]).
+Généré par ministral-3:3b en 37s
+Recherche ciblée : 5 documents sur 179 — Fatima Benali
+Sources :
+- scans/2026-05/2026-05-31_note-honoraires-benali-fatima.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-08/2026-08-01_courrier-rhumatologie.pdf, page 1
+- courriers-entrants/pharmacies/2026-08-03_courrier-pharmacie.docx, page 1
+- laboratoire/2026-01/2026-01-29_resultats-analyses-benali-fatima.pdf, page 1
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+
+Vous: Quels documents concernent la Dre Vuagniaux ?
+Assistant: - **2026-03-22_courrier-endocrinologie.pdf** (courriers-entrants/2026-03)
+- **2026-10-01_courrier-dermatologie.pdf** (courriers-entrants/2026-10)
+- **2026-06-25_courrier-orl.docx** (courriers-entrants/2026-06)
+- **2026-01-08_courrier-endocrinologie-girardin-thierry.pdf** (administratif/planning/2026-01-08_courrier-endocrinologie-girardin-thierry.pdf) *(non trouvé dans le contexte, vérifiez le nom exact du fichier)*
+- **2026-03-31_planning-garde.txt** (administratif/planning) *(planning, pas de document de consultation)*
+Généré par ministral-3:3b en 39s
+Recherche élargie à toute votre sélection : peu de résultats dans les documents ciblés.
+Sources :
+- courriers-entrants/2026-03/2026-03-22_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+- courriers-entrants/2026-01/2026-01-08_courrier-endocrinologie-girardin-thierry.pdf, page 1
+- administratif/planning/2026-03-31_planning-garde.txt, page 1
+- administratif/planning/2026-04-03_planning-garde.txt, page 1
+
+Vous: Quels documents viennent de Genève ?
+Assistant: - **2026-01-16_courrier-neurologie.docx** (courriers-entrants/2026-01)
+- **2026-03-04_decompte-suva.pdf** (caisses-assurances/suisse)
+- **2026-09-26_courrier-endocrinologie.pdf** (courriers-entrants/2026-09)
+- **2026-02-12_courrier-orl-dupont-jean.pdf** (courriers-entrants/2026-02)
+- **2026-08-04_courrier-orl-demirci-ibrahim.docx** (courriers-entrants/2026-08)
+Généré par ministral-3:3b en 37s
+Sources :
+- caisses-assurances/suisse/2026-03-04_decompte-suva.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx, page 1
+- courriers-entrants/2026-09/2026-09-26_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx, page 1
+- laboratoire/2026-10/2026-10-04_resultats-analyses-maillard-pascal.pdf, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels documents parlent de la LAMal ?
+Assistant: - Extrait de **caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-05-05_decompte-css.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx** (page 1)
+Généré par ministral-3:3b en 34s
+Sources :
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-09-18_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-05-03_decompte-css-bochud-rosemarie.docx, page 1
+- caisses-assurances/suisse/2026-05-05_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx, page 1
+
+
+G3
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py report
+Questions recorded            : 78
+  with a name the base knows  : 34
+  the base would reduce       : 33  (42.3 %)
+  reduced for real (auto/chip): 27
+  widened again               : 12
+  median reduction            : 96 %
+Release gate, raw (every cited file)       : 45.7 %  (63 of 138)
+  lost: 75 cited files that mention no name of the question (filler or extraction gap), 0 left out by the cap, 0 files that name an entity the base did not use
+Release gate, adjusted (filler excluded)   : 100.0 %  (a cited file counts only when it names an entity of the question)
+Why a question was not reduced: {'ambiguous': 6, 'named_file': 17, 'no_discriminating_entity': 1, 'no_entity': 20, 'user_widened': 1}
+
+By mode (questions that searched the documents; milliseconds, median / worst):
+  off       20 questions | embedding 1729 / 25481 | search 6 / 78 | knowledge 0 / 0 | first word 25783 / 40277 | total 35606 / 56275 | files selected 28 / 179 | chunks scored 28 / 968
+  suggest   10 questions | embedding 1737 / 2644 | search 3 / 5 | knowledge 5 / 16 | first word 26294 / 27547 | total34966 / 43560 | files selected 28 / 28 | chunks scored 28 / 28
+  auto      52 questions | embedding 1712 / 2913 | search 4 / 97 | knowledge 5 / 12 | first word 23994 / 30029 | total 30461 / 49721 | files selected 28 / 179 | chunks scored 28 / 968
+
+Part E
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py questions daily
+List 'daily' for a library of 200 documents: type the sentences exactly as written.
+
+  1. [Q001] Combien de documents ai-je ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+  2. [Q002] Quel est le dernier courrier reçu ?    (documents cochés: tous les documents; fichiers qui contiennent laréponse: 0)
+  3. [Q003] Quels sont les horaires d'ouverture du cabinet ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+  4. [Q004] Que dit la procédure sur le lavage des mains ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+  5. [Q005] Comment éliminer les aiguilles usagées ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+  6. [Q006] Qu'est-ce qui est prévu pour la chaîne du froid des vaccins ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+  7. [Q007] Que dit le contrat de la photocopieuse ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+  8. [Q008] Quels résultats parlent de Staphylococcus aureus ?    (documents cochés: tous les documents; fichiers quicontiennent la réponse: 1)
+  9. [Q009] Y a-t-il un compte rendu qui cite Klebsiella pneumoniae ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 10. [Q010] Quels documents parlent de la LAMal ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 13)
+ 11. [Q011] Quels courriers évoquent la franchise annuelle ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 13)
+ 12. [Q012] Quels documents viennent de Genève ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 33)
+ 13. [Q013] Quels courriers sont liés à Lausanne ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 20)
+ 14. [Q014] Y a-t-il des documents qui parlent de Nyon ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 8)
+ 15. [Q015] Quels documents mentionnent Annecy ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 24)
+ 16. [Q016] Que dit le courrier de Marie Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 17. [Q017] Que dit le courrier de Jean Dupontet ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 3)
+ 18. [Q018] Y a-t-il des résultats d'analyses pour Jean-Pierre Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 19. [Q019] Que dit le courrier de Marie Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 6)
+ 20. [Q020] Que dit le courrier de Claire Martin ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 4)
+ 21. [Q021] Que dit le courrier de Luc Martin ?    (documents cochés: tous les documents; fichiers qui contiennent laréponse: 2)
+ 22. [Q022] Quels documents concernent Laurent Favre ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 23. [Q023] Que dit le courrier de Laurence Fabre ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 24. [Q024] Y a-t-il des résultats d'analyses pour Véronique Monnier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 25. [Q025] Y a-t-il des résultats d'analyses pour Véronique Meunier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 26. [Q026] Que dit le courrier de Fabienne Girardin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 27. [Q027] Y a-t-il des résultats d'analyses pour Frédéric Girard ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 28. [Q028] Quels documents parlent de Lucas Roy ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 1)
+ 29. [Q029] Quels documents parlent de Roy Lucas ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 2)
+ 30. [Q030] Y a-t-il des résultats d'analyses pour Thomas Pierre ?    (documents cochés: tous les documents; fichiersqui contiennent la réponse: 2)
+ 31. [Q031] Quels documents parlent de Pierre Thomas ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 32. [Q032] Résume le dossier de Sophie Rochat.    (documents cochés: tous les documents; fichiers qui contiennent laréponse: 2)
+ 33. [Q033] Résume le dossier de Mathieu Cuendet.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 34. [Q034] Résume le dossier de Isabelle Pittet.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 35. [Q035] Quels documents concernent Nathalie Chappuis ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 36. [Q036] Quels documents parlent de Pascal Maillard ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 37. [Q037] Quels documents concernent Céline Bovet ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 38. [Q038] Que dit le courrier de Alain Jaccard ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 0)
+ 39. [Q039] Résume le dossier de Christelle Délèze.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 40. [Q040] Résume le dossier de Grégoire Crettenand.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 41. [Q041] Y a-t-il des résultats d'analyses pour Marie-Claude Vuilleumier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 42. [Q042] Résume le dossier de Jean-Claude Python.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 43. [Q043] Y a-t-il des résultats d'analyses pour Pierre-Alain Oberson ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 44. [Q044] Résume le dossier de Anne-Laure Genoud.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+ 45. [Q045] Que dit le courrier de Raphaël Tschopp ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 46. [Q046] Que dit le courrier de Stéphane Zufferey ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 47. [Q047] Résume le dossier de Fatima Benali.    (documents cochés: tous les documents; fichiers qui contiennent laréponse: 6)
+ 48. [Q048] Y a-t-il des résultats d'analyses pour Mohamed El Khoury ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 49. [Q049] Quels documents concernent Thi Lan Nguyen ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 50. [Q050] Quels documents concernent Andrzej Kowalski ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 51. [Q051] Que dit le courrier de Maria Dos Santos Ferreira ?    (documents cochés: tous les documents; fichiers quicontiennent la réponse: 1)
+ 52. [Q052] Quels documents concernent Ibrahim Demirci ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 53. [Q053] Y a-t-il des résultats d'analyses pour Elena Petrović ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+ 54. [Q054] Résume le dossier de Giuseppe D'Amico.    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 1)
+ 55. [Q055] Que dit le courrier de Aïcha N'Diaye ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 1)
+ 56. [Q056] Quels documents parlent de Sean O'Brien ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 57. [Q057] Résume le dossier de Jörg Müller.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 58. [Q058] Quels documents parlent de Anna Hasanović ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 59. [Q059] Y a-t-il des résultats d'analyses pour Luca Bernasconi ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 60. [Q060] Quels documents parlent de Laurence Le Gall ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 61. [Q061] Y a-t-il des résultats d'analyses pour Matthieu de la Fontaine ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+ 62. [Q062] Quels documents concernent Camille d'Aubigné ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 63. [Q063] Résume le dossier de Zoë Lüthi.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 64. [Q064] Quels documents parlent de Åsa Lindqvist ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 65. [Q065] Quels documents concernent Jean Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 16)
+ 66. [Q066] Que dit le courrier du Dr Jean Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 16)
+ 67. [Q067] Quel est le prochain rendez-vous de Jean Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 16 fact: ['13 mai 2026'])
+ 68. [Q068] Quels documents concernent Jean-Pierre Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 69. [Q069] Que dit le dossier de Jean Dupontet ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 70. [Q070] Que dit le dossier de Marie Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+ 71. [Q071] Résume les courriers de Madame Marie Martin.    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 6)
+ 72. [Q072] Quels documents concernent Claire Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+ 73. [Q073] Que dit J. Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 19)    
+ 74. [Q074] Que dit DUPONT Jean ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 16)  
+ 75. [Q075] Que dit Jean-Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 16)  
+ 76. [Q076] Que dit Dupont J ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 19)     
+ 77. [Q077] Que dit M. Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 21)    
+ 78. [Q078] Que dit Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 21)       
+ 79. [Q079] Que dit Mme Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 10)   
+ 80. [Q080] Que dit Favre ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+ 81. [Q081] Que dit le dossier de Giuseppe D'Amico ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 82. [Q082] Que dit le dossier de Aïcha N'Diaye ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 83. [Q083] Que dit le dossier de Sean O'Brien ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 84. [Q084] Que dit le dossier de Camille d'Aubigne ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 85. [Q085] Que dit le dossier de Matthieu de la Fontaine ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+ 86. [Q086] Que dit le dossier de Elena Petrovic ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 4)
+ 87. [Q087] Que dit le dossier de Maria Dos Santos Ferreira ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 88. [Q088] Quel courrier concerne le Dr Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 23)
+ 89. [Q089] Qu'a dit le Dr Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 23)
+ 90. [Q090] Quels courriers viennent du Dr Pierre Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 10)
+ 91. [Q091] Quels documents concernent le Dr Paul Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 15)
+ 92. [Q092] Que dit la Dre Vuagniaux ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse:7)
+ 93. [Q093] Quels courriers a écrit la Dre Anne-Sophie Vuagniaux ?    (documents cochés: tous les documents; fichiersqui contiennent la réponse: 7)
+ 94. [Q094] Quels courriers viennent du Dr Marc Bersier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 95. [Q095] Que dit le Dr Cuénoud ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3) 
+ 96. [Q096] Quels documents concernent le Dr Yann Grandjean ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+ 97. [Q097] Que dit le Pr Rapin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)   
+ 98. [Q098] Quels courriers viennent du Dr Haddad ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+ 99. [Q099] Que dit le Dr Gaillard ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+100. [Q100] Que dit le Dr Olivier Favre ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+101. [Q101] Quels documents concernent le Dr Roche ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+102. [Q102] Quels documents concernent le Dr Hélène Marchetti ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 107)
+103. [Q103] Quels documents concernent les Hôpitaux universitaires de Genève ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+104. [Q104] Quels documents concernent HUG ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+105. [Q105] Quels courriers viennent du CHUV ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+106. [Q106] Quels documents concernent le Centre hospitalier universitaire vaudois ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+107. [Q107] Quels courriers de la CPAM de la Haute-Savoie avons-nous ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+108. [Q108] Quels documents concernent Helsana ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+109. [Q109] Quels courriers viennent de la CSS Assurance ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 4)
+110. [Q110] Que dit le Groupe Mutuel ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse:2)
+111. [Q111] Quelles factures viennent de MedSupply ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+112. [Q112] Quels documents concernent la Papeterie du Lac ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+113. [Q113] Quels contrats avons-nous avec Bureautique Léman ?    (documents cochés: tous les documents; fichiers quicontiennent la réponse: 5)
+114. [Q114] Quels résultats viennent d'Unilabs ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+115. [Q115] Quels résultats viennent de Cerballiance ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+116. [Q116] Quels courriers viennent du Centre hospitalier Annecy Genevois ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 7)
+117. [Q117] Quels documents concernent la Clinique La Source ?    (documents cochés: tous les documents; fichiers quicontiennent la réponse: 3)
+118. [Q118] Quels documents concernent l'URSSAF ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+119. [Q119] Quels documents concernent l'ARS Auvergne-Rhône-Alpes ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+120. [Q120] Quels documents concernent la SUVA ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+121. [Q121] Quels courriers viennent de l'Étude Chappuis & Associés ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+122. [Q122] Quels documents concernent la Pharmacie Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+123. [Q123] Que dit Dupont Immobilier SA ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+124. [Q124] Quelles factures viennent du Garage Martin & Fils ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+125. [Q125] Quelle correspondance existe entre Pierre Martin et Jean-Pierre Dupont ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+126. [Q126] Quelle correspondance existe entre Jean Dupontet et Paul Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+127. [Q127] Quelle correspondance existe entre Pierre Martin et Marie Martin ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+128. [Q128] Quelle correspondance existe entre Laurent Favre et Olivier Favre ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+129. [Q129] Quelle correspondance existe entre Éric Gaillard et Laurence Fabre ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+130. [Q130] Quelle correspondance existe entre Marc Bersier et Véronique Monnier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+131. [Q131] Montre la facture FAC-2026-014    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2 fact: ['CHF 352.73'])
+132. [Q132] Quel est le montant de la facture FAC-2026-114 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['438,00 €'])
+133. [Q133] Quel est le montant de la facture FAC-2026-116 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['432,84 €'])
+134. [Q134] Quel est le montant de la facture FAC-2026-117 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['CHF 774.32'])
+135. [Q135] Que dit le contrat CTR-2026-0041 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+136. [Q136] Que dit le contrat CTR-2026-0141 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+137. [Q137] Que dit le contrat CTR-2026-0142 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+138. [Q138] À qui appartient le numéro AVS 756.3052.5778.43 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+139. [Q139] À qui appartient le numéro AVS 756.9163.8555.59 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+140. [Q140] À qui appartient le numéro AVS 756.9617.2765.34 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+141. [Q141] À qui appartient le numéro de sécurité sociale 1 58 03 74 443 192 09 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+142. [Q142] À qui appartient le numéro de sécurité sociale 1 71 08 74 235 355 97 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+143. [Q143] À qui appartient le numéro de sécurité sociale 1 49 11 74 144 545 77 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 3)
+144. [Q144] Quel document porte la police n° 6.126.452-9 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+145. [Q145] Quel document porte la police n° 7.213.392-9 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+146. [Q146] Quelle facture porte l'IBAN CH88 0053 1473 1495 6118 1 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+147. [Q147] Quelle facture porte l'IBAN FR76 2523 9808 1380 7101 8026 451 ?    (documents cochés: tous les documents;fichiers qui contiennent la réponse: 1)
+148. [Q148] Quel courrier vient de l'adresse marie.dupont@mail.example ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+149. [Q149] Quel courrier vient de l'adresse nathalie.chappuis@mail.example ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+150. [Q150] À qui est le numéro de téléphone 022 555 44 19 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 6)
+151. [Q151] À qui est le numéro de téléphone 01 99 00 50 67 ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 5)
+152. [Q152] Montre la facture FAC-2026-999    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+153. [Q153] Que dit le dossier de Madame Zénobie Quarante ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+154. [Q154] Quels documents concernent Hyacinthe Vaudroz ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+155. [Q155] Que dit le Dr Ernest Blondeau ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+156. [Q156] Quels courriers viennent de la Boulangerie Clochette SARL ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+157. [Q157] Quels documents concernent Léopold Tschumi-Bauer ?    (documents cochés: tous les documents; fichiers quicontiennent la réponse: 0)
+158. [Q158] Que dit la clinique des Mimosas ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 0)
+159. [Q159] Que dit 2026-07-20_courrier-dermatologie.docx ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+160. [Q160] Que dit 2026-05-05_courrier-neurologie-martin-marie.pdf ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+161. [Q161] Que dit 2026-04-14_facture-medsupply-fac-2026-014.pdf ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+162. [Q162] Que dit guide-pratique-cabinet.pdf ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+163. [Q163] Que dit dupont-jean.pdf ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+164. [Q164] Que dit pierre-martin.txt ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+165. [Q165] Que dit paul-martin.txt ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+166. [Q166] Que dit manuel-qualite.docx ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+167. [Q167] Que dit le fichier dupont-jean.pdf ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+168. [Q168] Auprès de qui la formation à l'hygiène est-elle déclarée ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Ordre des médecins de la Haute-Savoie'])
+169. [Q169] Quel prestataire enlève les collecteurs d'aiguilles ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Pharma-Dépôt Romandie SA'])
+170. [Q170] Qui renouvelle le code de l'armoire à pharmacie ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Sandrine Colas'])
+171. [Q171] Qui appeler en cas de doute sur une homonymie ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Marchetti'])
+172. [Q172] Qui a relu le guide de pratique ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Rapin'])
+173. [Q173] Avec qui est tenu le contrat de maintenance des copieurs ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Bureautique Léman SA'])
+174. [Q174] À qui signaler un écart de la chaîne du froid ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['Nadia Bensaïd'])
+175. [Q175] À qui sont transmis les contrôles annuels des appareils ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1 fact: ['ARS'])
+176. [Q176] Que dit le courrier de Véronique Monnier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+177. [Q177] Que dit le courrier de Véronique Meunier ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+178. [Q178] Que dit le courrier de Isabelle Pittet ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 1)
+179. [Q179] Que dit le courrier de Laurent Favre ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 2)
+180. [Q180] Que dit le courrier de Pascal Maillard ?    (documents cochés: tous les documents; fichiers qui contiennent la réponse: 2)
+181. [Q181] Que dit le courrier de Aïcha N'Diaye ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 1)
+182. [Q195] Que dit le courrier de Sophie Rochat ?    (documents cochés: tous les documents; fichiers qui contiennentla réponse: 2)
+183. [Q205] Quel est le total TTC de la facture FAC-2026-014 de MedSupply ?    (documents cochés: tous les documents;fichiers qui contiennent la réponse: 1 fact: ['CHF 352.73'])
+
+E2 - Questions posées en mode Suggestion seulement
+
+Vous: Combien de documents ai-je ?
+Assistant: 179 fichiers ont été analysés.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+Vous: Quel est le dernier courrier reçu ?
+Assistant: - **Date du dernier courrier** : 13 septembre 2026
+- **Titre du courrier** : *2026-09-13_courrier-rhumatologie.pdf*
+- **Localisation** : *courriers-entrants/2026-09/*
+*(Extrait [1], page 1)*
+Généré par ministral-3:3b en 32s
+Sources :
+- courriers-entrants/2026-09/2026-09-13_courrier-rhumatologie.pdf, page 1
+- courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+- courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx, page 1
+- courriers-entrants/2026-01/2026-01-30_courrier-compte-rendu.pdf, page 1
+
+Vous: Quels sont les horaires d'ouverture du cabinet ?
+Assistant: - **Paul Martin** :
+  - Lundi : 14 h à 18 h (extrait de *paul-martin.txt*, page 1).
+Aucune autre source ne mentionne les horaires d'ouverture du cabinet.
+Généré par ministral-3:3b en 24s
+Sources :
+- reunions/2026-10-09_convocation-reunion.txt, page 1
+- reunions/2026-04-10_convocation-reunion.md, page 1
+- juridique/2026-09-05_courrier-etude-chappuis.pdf, page 1
+- juridique/2026-05-29_courrier-etude-chappuis.jpg, page 1 (lu par reconnaissance de texte)
+- juridique/2026-02-14_courrier-etude-chappuis.pdf, page 1
+- paul-martin.txt, page 1
+
+Vous: Que dit la procédure sur le lavage des mains ?
+Assistant: - Extrait du fichier **administratif/procedures/2026-01-13_procedure-hygiene.pdf**, page 1 :
+  - Le lavage des mains est réalisé **avant et après chaque examen**.
+  - La solution hydroalcoolique est utilisée **en l'absence de point d'eau**.
+  - Les ongles restent **courts et sans vernis**.
+Généré par ministral-3:3b en 27s
+Sources :
+- administratif/procedures/2026-01-13_procedure-hygiene.pdf, page 1
+- administratif/procedures/2026-04-08_procedure-rgpd.jpg, page 1 (lu par reconnaissance de texte)
+- administratif/procedures/2026-03-23_procedure-dechets.md, page 1
+- reunions/2026-08-30_pv-reunion-cabinet.docx, page 1
+- reunions/2026-02-03_pv-reunion-cabinet.txt, page 1
+- reunions/2026-09-01_pv-reunion-cabinet.docx, page 1
+
+Vous: Comment éliminer les aiguilles usagées ?
+Assistant: - **Collecteur homologué** : les aiguilles et objets tranchants sont déposés dans un collecteur homologué.
+  *(administratif/procedures/2026-03-23_procedure-dechets.md, page 1)*
+- **Fermeture** : le collecteur est fermé aux deux tiers de sa capacité avant enlèvement.
+  *(administratif/procedures/2026-03-23_procedure-dechets.md, page 1)*
+- **Prestataire agréé** : l’enlèvement est assuré par un prestataire agréé.
+  *(documentation/guide-pratique-cabinet.pdf, pages 32, 48, 57, 69 ; manuel-qualite.docx, page 1)*
+Généré par ministral-3:3b en 36s
+Le chiffre « 32 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Le chiffre « 48 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Le chiffre « 57 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Le chiffre « 69 » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.
+Sources :
+- administratif/procedures/2026-03-23_procedure-dechets.md, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 32, 48, 72, 77
+- documentation/manuel-qualite.docx, page 1
+
+Vous: Qu'est-ce qui est prévu pour la chaîne du froid des vaccins ?
+Assistant: Dans les extraits fournis, **aucune mention explicite** concernant la chaîne du froid des vaccins n'est trouvée.
+Pas de référence dans :
+- documentation/manuel-qualite.docx
+- documentation/guide-pratique-cabinet.pdf
+- administratif/notes/2026-08-01_note-interne-stock.md
+Généré par ministral-3:3b en 29s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 8, 50
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Question reposée en mode Automatique
+Vous: Qu'est-ce qui est prévu pour la chaîne du froid des vaccins ?
+Assistant: Dans les extraits fournis, **aucune mention explicite** concernant la chaîne du froid des vaccins n'est trouvée.
+Pas de référence dans :
+- documentation/manuel-qualite.docx
+- documentation/guide-pratique-cabinet.pdf
+- 2026-08-01_note-interne-stock.md
+Généré par ministral-3:3b en 31s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 8, 50
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Question reposée en mode Désactivé
+Vous: Qu'est-ce qui est prévu pour la chaîne du froid des vaccins ?
+Assistant: Extrait non trouvé concernant la chaîne du froid des vaccins dans les documents consultés.
+Généré par ministral-3:3b en 28s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 8, 50
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Question reposée encore en mode Automatique
+Vous: Qu'est-ce qui est prévu pour la chaîne du froid des vaccins ?
+Assistant: Dans les extraits fournis, **aucune mention explicite** concernant la chaîne du froid des vaccins n'est trouvée.
+Pas de référence dans :
+- documentation/manuel-qualite.docx
+- documentation/guide-pratique-cabinet.pdf
+- 2026-08-01_note-interne-stock.md
+Généré par ministral-3:3b en 31s
+Sources :
+- documentation/manuel-qualite.docx, page 1
+- documentation/guide-pratique-cabinet.pdf, pages 8, 50
+- administratif/notes/2026-08-01_note-interne-stock.md, page 1
+
+Retour en mode Suggestion seulement pour la suite
+
+Vous: Que dit le contrat de la photocopieuse ?
+Assistant: - **Échéance du contrat de maintenance** : décembre 2026.
+  *Extrait : [1] et [2]*
+- **Date limite de renouvellement** : fin novembre.
+  *Extrait : [1] et [2]*
+Généré par ministral-3:3b en 26s
+Sources :
+- administratif/notes/2026-04-30_note-interne-photocopieuse.txt, page 1
+- administratif/notes/2026-08-08_note-interne-photocopieuse.txt, page 1
+- contrats/2026-05-16_contrat-nettoyage-edf.docx, page 1
+- contrats/assurances/2026-05-21_attestation-assurance-rc.pdf, page 1
+- contrats/2026-03-04_contrat-maintenance-bureautique-leman.docx, page 1
+- contrats/assurances/2026-02-22_attestation-assurance-rc.pdf, page 1
+
+Vous: Quels résultats parlent de Staphylococcus aureus ?
+Assistant: Extrait de **laboratoire/2026-01/2026-01-09_resultats-analyses-bovet-celine.pdf (page 1)** :
+- **Examen cytobactériologique des urines** : culture positive à *Staphylococcus aureus* (> 10^5 UFC/mL).
+Généré par ministral-3:3b en 29s
+Sources :
+- laboratoire/2026-01/2026-01-09_resultats-analyses-bovet-celine.pdf, page 1
+- laboratoire/2026-06/2026-06-07_resultats-analyses-favre-laurent.jpg, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-04/2026-04-19_resultats-analyses-rappaz-veronique.pdf, page 1
+- laboratoire/2026-07/2026-07-18_resultats-analyses-favre-laurent.pdf, page 1
+- laboratoire/2026-07/2026-07-24_resultats-analyses-favre-pierre-alain.pdf, page 1
+- laboratoire/2026-08/2026-08-26_resultats-analyses-luthi-zoe.pdf, page 1
+
+Vous: Y a-t-il un compte rendu qui cite Klebsiella pneumoniae ?
+Assistant: Oui, extrait du fichier **laboratoire/2026-03/2026-03-25_resultats-analyses-lindqvist-asa.pdf**, page 1.
+Généré par ministral-3:3b en 28s
+Sources :
+- laboratoire/2026-03/2026-03-25_resultats-analyses-lindqvist-asa.pdf, page 1
+- courriers-entrants/2026-01/2026-01-11_courrier-endocrinologie-hasanovic-anna.pdf, page 1 (lu par reconnaissance de texte)
+- 2026/janvier/neurologie.txt, page 1
+- 2026/mars/neurologie.txt, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels documents parlent de la LAMal ?
+Assistant: - Extrait de **caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-05-05_decompte-css.pdf** (page 1)
+- Extrait de **caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx** (page 1)
+Généré par ministral-3:3b en 34s
+Sources :
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-09-18_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-05-03_decompte-css-bochud-rosemarie.docx, page 1
+- caisses-assurances/suisse/2026-05-05_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx, page 1
+
+Vous: Quels courriers évoquent la franchise annuelle ?
+Assistant: - Extrait **caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf** (page 1):
+  Franche annuelle : CHF 1000.00
+- Extrait **caisses-assurances/suisse/2026-05-05_decompte-css.pdf** (page 1):
+  Franche annuelle : CHF 1000.00
+- Extrait **caisses-assurances/suisse/2026-05-03_decompte-css-bochud-rosemarie.docx** (page 1):
+  Franche annuelle : CHF 2000.00
+- Extrait **caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf** (page 1):
+  Franche annuelle : CHF 2000.00
+- Extrait **caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx** (page 1):
+  Franche annuelle : CHF 2000.00
+- Extrait **caisses-assurances/suisse/2026-09-18_decompte-css.pdf** (page 1):
+  Franche annuelle : CHF 300.00
+Généré par ministral-3:3b en 45s
+Sources :
+- caisses-assurances/suisse/2026-08-17_decompte-groupe-mutuel.pdf, page 1
+- caisses-assurances/suisse/2026-03-26_decompte-helsana-martin-marie.pdf, page 1
+- caisses-assurances/suisse/2026-09-09_decompte-swica-petrovic-elena.docx, page 1
+- caisses-assurances/suisse/2026-05-05_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-09-18_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-05-03_decompte-css-bochud-rosemarie.docx, page 1
+
+Vous: Quels documents viennent de Genève ?
+Assistant: - **2026-01-16_courrier-neurologie.docx** (courriers-entrants/2026-01)
+- **2026-03-04_decompte-suva.pdf** (caisses-assurances/suisse)
+- **2026-09-26_courrier-endocrinologie.pdf** (courriers-entrants/2026-09)
+- **2026-02-12_courrier-orl-dupont-jean.pdf** (courriers-entrants/2026-02)
+- **2026-08-04_courrier-orl-demirci-ibrahim.docx** (courriers-entrants/2026-08)
+Généré par ministral-3:3b en 38s
+Sources :
+- caisses-assurances/suisse/2026-03-04_decompte-suva.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-01/2026-01-16_courrier-neurologie.docx, page 1
+- courriers-entrants/2026-09/2026-09-26_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-08/2026-08-04_courrier-orl-demirci-ibrahim.docx, page 1
+- laboratoire/2026-10/2026-10-04_resultats-analyses-maillard-pascal.pdf, page 1 (lu par reconnaissance de texte)
+
+Vous: Quels courriers sont liés à Lausanne ?
+Assistant: - **2026-03-22_courrier-endocrinologie.pdf** (extrait [1])
+- **2026-01-31_courrier-orl-cuendet-mathieu.pdf** (extrait [2])
+- **2026-10-01_courrier-dermatologie.pdf** (extrait [3])
+- **2026-06-25_courrier-orl.docx** (extrait [6])
+Généré par ministral-3:3b en 37s
+Sources :
+- courriers-entrants/2026-03/2026-03-22_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-31_courrier-orl-cuendet-mathieu.pdf, page 1
+- courriers-entrants/2026-10/2026-10-01_courrier-dermatologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-08_courrier-endocrinologie-girardin-thierry.pdf, page 1
+- courriers-entrants/2026-03/2026-03-27_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-orl.docx, page 1
+
+Vous: Y a-t-il des documents qui parlent de Nyon ?
+Assistant: Oui, les documents suivants mentionnent Nyon :
+- **courriers-entrants/2026-01/2026-01-11_courrier-endocrinologie-hasanovic-anna.pdf** (page 1)
+- **courriers-entrants/2026-04/2026-04-02_courrier-endocrinologie-nguyen-thi-lan.docx** (page 1)
+- **courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf** (page 1)
+- **dupont-jean.pdf** (page 1)
+Généré par ministral-3:3b en 40s
+Sources :
+- courriers-entrants/2026-01/2026-01-11_courrier-endocrinologie-hasanovic-anna.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-04/2026-04-02_courrier-endocrinologie-nguyen-thi-lan.docx, page 1
+- courriers-entrants/2026-02/2026-02-25_courrier-cardiologie-monnier-veronique.pdf, page 1 (lu par reconnaissance de texte)
+- dupont-jean.pdf, page 1
+- courriers-entrants/2026-01/2026-01-30_courrier-compte-rendu.pdf, page 1
+- courriers-entrants/2026-03/2026-03-12_courrier-cardiologie.docx, page 1
+
+Vous: Quels documents mentionnent Annecy ?
+Assistant: - Extrait de **courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md** (page 1)
+  - Adresse : *30 avenue de Verdun, 74000 Annecy*
+  - Date : *Annecy, le 17 août 2026*
+- Extrait de **courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf** (page 1)
+  - Adresse : *Centre hospitalier Annecy Genevois* (74000 Annecy)
+  - Date : *Annecy, le 5 mai 2026*
+- Extrait de **courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx** (page 1)
+  - Adresse : *Centre hospitalier Annecy Genevois* (74000 Annecy)
+  - Date : *Annecy, le 20 juillet 2026*
+- Extrait de **courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf** (page 1)
+  - Adresse : *Clinique Générale d'Annecy* (74000 Annecy)
+  - Date : *Annecy, le 30 juin 2026*
+Généré par ministral-3:3b en 50s
+Sources :
+- patients/courriers/2026-09-01_courrier-patient.docx, page 1
+- courriers-entrants/2026-08/2026-08-17_courrier-orl-roy-lucas.md, page 1
+- courriers-entrants/2026-02/2026-02-24_courrier-neurologie-fabre-laurence.txt, page 1
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+
+Vous: Que dit le courrier de Marie Dupont ?
+Assistant: - **Extrait [2] (patients/courriers/2026-03-30_courrier-patient.txt, page 1)**
+  Marie Dupont demande :
+  - Un rendez-vous dans le courant du mois prochain.
+  - Une copie des derniers résultats d’analyses.
+- **Extrait [3] (patients/courriers/2026-02-28_courrier-patient.txt, page 1)**
+  Même demande que ci-dessus, datée du **28 février 2026**.
+Généré par ministral-3:3b en 34s
+Sources :
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- patients/courriers/2026-03-30_courrier-patient.txt, page 1
+- patients/courriers/2026-02-28_courrier-patient.txt, page 1
+- courriers-entrants/2026-06/2026-06-30_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+
+Vous: Que dit le courrier de Jean Dupontet ?
+Assistant: - **Courrier de MGEN (25 juillet 2026)** :
+  - Remboursement de **246,06 €** pour un dossier n° **949354**.
+  - N° de sécurité sociale : **1 49 11 74 144 545 77** (lié à Jean Dupontet).
+  - Indemnités journalières calculées sur les **3 derniers mois de salaire**.
+  - **Courrier** : *caisses-assurances/france/2026-07-25_courrier-mgen.pdf*, page 1.
+Généré par ministral-3:3b en 35s
+Sources :
+- courriers-entrants/pharmacies/2026-08-26_courrier-pharmacie.pdf, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-04/2026-04-22_courrier-rhumatologie-dupontet-jean.pdf, page 1
+- courriers-entrants/2026-04/2026-04-01_courrier-neurologie-dupont-jean-pierre.docx, page 1
+- caisses-assurances/france/2026-07-25_courrier-mgen.pdf, page 1
+- laboratoire/2026-06/2026-06-20_resultats-analyses.pdf, page 1
+
+Vous: Y a-t-il des résultats d'analyses pour Jean-Pierre Dupont ?
+Assistant: Non, aucun extrait ne mentionne de résultats d’analyses pour **Jean-Pierre Dupont**.
+Seuls les dossiers de **Jean Dupont** (né en 1958) et **Jean** (DUPONT Jean) sont présents dans les extraits.
+Généré par ministral-3:3b en 31s
+Sources :
+- scans/2026-01/2026-01-29_resultats-analyses.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-07/2026-07-20_courrier-dermatologie.docx, page 1
+- courriers-entrants/2026-02/2026-02-12_courrier-orl-dupont-jean.pdf, page 1
+- courriers-entrants/2026-04/2026-04-01_courrier-neurologie-dupont-jean-pierre.docx, page 1
+- laboratoire/2026-01/2026-01-10_resultats-analyses-nguyen-dominique.pdf, page 1
+- laboratoire/2026-01/2026-01-09_resultats-analyses-bovet-celine.pdf, page 1
+
+Vous: Que dit le courrier de Marie Martin ?
+Assistant: - **Date du courrier** : 5 mai 2026.
+- **Objet** : Consultation pour des vertiges récurrents chez Marie Martin, née en 1975.
+- **N° de sécurité sociale** : 2 75 09 74 355 357 48.
+- **Traitement en cours** : Salbutamol à la dose habituelle.
+- **Suivi** : Prochain rendez-vous prévu le **3 août 2026** (extrait *courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf*, page 1).
+Généré par ministral-3:3b en 34s
+Sources :
+- scans/2026-08/2026-08-03_ordonnance.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-05/2026-05-05_courrier-neurologie-martin-marie.pdf, page 1
+- courriers-entrants/2026-06/2026-06-22_courrier-cardiologie-martin-claire.pdf, page 1
+- patients/ordonnances/2026-01-12_ordonnance-martin-marie.jpg, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-05/2026-05-18_resultats-analyses.pdf, page 1
+- laboratoire/2026-05/2026-05-25_resultats-analyses.pdf, page 1
+
+
+Constat (E2). Sur 20 questions, le nombre de sources citées était nettement inférieur au nombre d'éléments attendus. Hypothèse : la quantité de texte envoyée au modèle était limitée.
+
+Cause trouvée dans le code. Cinq constantes du client fixaient cette quantité sans tenir compte du modèle ni de la fenêtre configurée sur le serveur :
+
+6 passages et 6 000 caractères pour une question ordinaire ;
+12 000 caractères pour une question « sur chaque document », soit environ 12 fichiers sur 200 ;
+4 000 caractères pour la part documents d'une réponse mixte ;
+24 000 caractères pour tout le prompt, de sorte qu'au-delà d'environ 10 000 tokens, la fenêtre du serveur ne servait à rien (la tour publiait 12 288).
+Ces limites ne dépendaient pas du nombre de documents indexés : la recherche dans l'index est locale. Seul le nombre de passages envoyés au modèle était borné. Cette cause est établie par lecture du code. Il reste à montrer qu'elle explique les sources manquantes de l'E2.
+Changement. Développé sur fix/kb-context-budget (commit 03fd4ef), puis fusionné dans fix/kb-wrap-up (fusion a661455, après le commit de clôture b442d9d). Le test E2 se rejoue donc depuis fix/kb-wrap-up, qui porte à la fois la clôture et le budget de contexte dynamique.
+Client Rust : les limites de passages sont calculées à partir de la fenêtre que le serveur publie pour le modèle de la question. À 8 192 tokens ou moins, le comportement est identique à avant. Le plafond de 24 000 caractères est remplacé par un plafond de sécurité de 200 000 caractères et par le plafond que publie le serveur.
+Serveur : /health publie un nouveau champ max_context_chars. Son défaut passe de 48 000 à 200 000. Un ancien serveur qui ne publie pas le champ est supposé plafonner à 48 000.
+Aucune nouvelle option dans l'interface. Le réglage reste MODEL_CONTEXT_WINDOWS sur le serveur.
+Documentation : docs/CONTEXT-BUDGET.md. Elle contient le défaut, la formule, le tableau des fenêtres, les limites et le retour arrière.
+Réglage retenu sur la tour : ministral-3:3b=32768, soit un prompt de 92 160 caractères, 30 passages et environ 60 fichiers couverts par une question « sur chaque document » (contre 6 passages et 12 fichiers avant). Valeurs essayées sur la tour :
+
+Fenêtre	Résultat
+65 536	Échec : erreur du modèle (HTTP 500 d'Ollama, 502 côté serveur) après 17 s, même pour une requête d'un mot. Cause probable : mémoire insuffisante au chargement. Cause non confirmée dans les logs d'Ollama.
+49 152	Réponses jugées extrêmement lentes par la testeuse (non mesuré).
+32 768	Fonctionne. Première requête synthétique d'un mot : 68 s, rechargement du modèle compris.
+Vérifications automatiques. Tous les tests Rust passent (756 tests unitaires plus l'ensemble des tests d'intégration), dont 6 nouveaux. Le garde de langue des sources passe. clippy ne signale rien de nouveau. Les tests Python du serveur n'ont pas été exécutés, faute de uv : seule la syntaxe a été vérifiée.
+
+Ce qui reste à établir. L'amélioration n'est pas mesurée. Il faut rejouer les mêmes 20 questions à 32 768 et noter :
+
+les sources citées avant et après ;
+la ligne de couverture « n de N documents » sur les questions « sur chaque document » ;
+les temps de réponse ;
+toute régression (chiffre faux, fichier mal attribué).
+Limites connues.
+
+Au-delà de 8 192 tokens, la limite de 2 échanges mémorisés à côté des sources n'existe plus. Elle avait été ajoutée après BUG-09. Elle était déjà inactive à 12 288, donc ce changement ne l'aggrave pas.
+Pour 1 000 fichiers, la question « sur chaque document » dépasse toute fenêtre. Il faudra le ciblage de la Knowledge Base ou, plus tard, un passage par lots lancé à la main.
+
+Peut-être que l'arrivé du Mac Mini M5 pro 64Go avec la suite du backend docker dessus changera la donne ... ?
+Attention:
+docs/DECISIONS.md contient encore trois lignes qui décrivent l'ancien plafond de 24 000 caractères. Elles sont remplacées par CONTEXT-BUDGET.md
+
+E3
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python docs\test-reports\knowledge-base-pass-1\human-tests\lot11_helper.py report
+Questions recorded            : 106
+  with a name the base knows  : 39
+  the base would reduce       : 38  (35.8 %)
+  reduced for real (auto/chip): 27
+  widened again               : 12
+  median reduction            : 96 %
+Release gate, raw (every cited file)       : 48.2 %  (81 of 168)
+  lost: 87 cited files that mention no name of the question (filler or extraction gap), 0 left out by the cap, 0 files that name an entity the base did not use
+Release gate, adjusted (filler excluded)   : 100.0 %  (a cited file counts only when it names an entity of the question)
+Why a question was not reduced: {'ambiguous': 6, 'named_file': 17, 'no_discriminating_entity': 1, 'no_entity': 43, 'user_widened': 1}
+
+By mode (questions that searched the documents; milliseconds, median / worst):
+  off       22 questions | embedding 1719 / 25481 | search 6 / 78 | knowledge 0 / 0 | first word 25626 / 40277 | total 35606 / 242091 | files selected 59 / 179 | chunks scored 28 / 968
+  suggest   36 questions | embedding 1670 / 2644 | search 56 / 113 | knowledge 5 / 16 | first word 26234 / 112006 | total 34966 / 117842 | files selected 179 / 179 | chunks scored 968 / 968
+  auto      54 questions | embedding 1697 / 2913 | search 4 / 97 | knowledge 4 / 12 | first word 24178 / 30029 | total 30461 / 49721 | files selected 29 / 179 | chunks scored 28 / 968

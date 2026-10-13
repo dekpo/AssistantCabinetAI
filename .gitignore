@@ -39,3 +39,5 @@ apps/desktop/src-tauri/tesseract*.exe
 apps/desktop/src-tauri/*.dll
 # Configuration locale de Claude Code / Cline
 .claudeignore
+.claude/settings.json
+.claude/settings.local.json

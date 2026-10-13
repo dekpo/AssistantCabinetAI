@@ -144,6 +144,9 @@ pub struct Settings {
     /// user (master decision D10). On by default. Read by the suggestions of a later lot; the
     /// setting exists now so the dialog and the stored file already carry it.
     pub knowledge_hide_names_in_suggestions: bool,
+    /// The copy buttons of the conversation (one answer, or the whole conversation) also copy the
+    /// lists of sources shown under each answer. Read by the client only. Off by default.
+    pub copy_sources: bool,
 }
 
 impl Default for Settings {
@@ -169,6 +172,7 @@ impl Default for Settings {
             knowledge_max_candidates: DEFAULT_KNOWLEDGE_MAX_CANDIDATES,
             knowledge_widen_below_score: DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE,
             knowledge_hide_names_in_suggestions: true,
+            copy_sources: false,
         }
     }
 }
@@ -407,6 +411,7 @@ mod tests {
             knowledge_max_candidates: 20,
             knowledge_widen_below_score: 0.35,
             knowledge_hide_names_in_suggestions: false,
+            copy_sources: true,
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
@@ -418,6 +423,7 @@ mod tests {
         assert_eq!(json["knowledgeMinScopeFiles"], 12);
         assert_eq!(json["knowledgeMaxCandidates"], 20);
         assert_eq!(json["knowledgeHideNamesInSuggestions"], false);
+        assert_eq!(json["copySources"], true);
         assert!((json["knowledgeMaxSelectivity"].as_f64().unwrap() - 0.5).abs() < 1e-6);
 
         assert_eq!(json["locale"], "fr-FR");
@@ -441,6 +447,14 @@ mod tests {
 
         assert!(older.knowledge_hide_names_in_suggestions);
         assert_eq!(older.knowledge_mode, KnowledgeMode::Auto);
+    }
+
+    #[test]
+    fn sources_are_not_copied_by_default_and_for_a_file_that_predates_the_setting() {
+        assert!(!Settings::default().copy_sources);
+
+        let older: Settings = serde_json::from_str(r#"{ "knowledgeMode": "auto" }"#).expect("reads");
+        assert!(!older.copy_sources);
     }
 
     #[test]

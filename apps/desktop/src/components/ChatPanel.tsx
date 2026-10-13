@@ -26,6 +26,7 @@ export function ChatPanel({
   indexing,
   onModelAliasChange,
   showDiagnostics,
+  copySources,
   onAddToSelection,
   revealNames,
   onRevealNamesChange,
@@ -48,6 +49,8 @@ export function ChatPanel({
   onModelAliasChange: (alias: string) => void;
   /** Shows the developer panel under the last answer. Off in normal use. */
   showDiagnostics: boolean;
+  /** Whether the copy buttons also copy the sources of each answer (the `copySources` setting). */
+  copySources: boolean;
   /** Adds the files of a name that is only in unselected files to the selection: her own click,
    * made in the name picker. */
   onAddToSelection: (outside: OutsideSelection) => void;
@@ -126,10 +129,12 @@ export function ChatPanel({
   };
 
   const copyAll = () => {
-    // Everything she sees except the lists of sources: the text as shown, the engine's own figure
-    // and the notes under each answer (`lib/annotations.ts`).
+    // Everything she sees: the text as shown, the engine's own figure and the notes under each
+    // answer (`lib/annotations.ts`), and the lists of sources when the `copySources` setting is on.
     const shown = entries.map((entry) =>
-      entry.role === "assistant" ? { ...entry, content: answerForCopy(t, locale, entry) } : entry,
+      entry.role === "assistant"
+        ? { ...entry, content: answerForCopy(t, locale, entry, copySources) }
+        : entry,
     );
     const text = formatConversation(shown, streamingId, (role) =>
       t(role === "user" ? "chat.authorUser" : "chat.authorAssistant"),
@@ -162,6 +167,7 @@ export function ChatPanel({
         onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
         onRetarget={(answerEntryId, choice) => void retarget(answerEntryId, choice)}
         showDiagnostics={showDiagnostics}
+        copySources={copySources}
         onAnalyse={(answerEntryId) => void analyseThenAsk(answerEntryId)}
         analysing={indexing.running}
         emptyExtra={

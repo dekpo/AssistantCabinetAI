@@ -4,7 +4,8 @@ import { coverageLine } from "./coverage";
 import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
 import { counted } from "./plural";
-import { formatTabularAnswer } from "./tabularAnswer";
+import { groupSources } from "./sourceGroups";
+import { formatTabularAnswer, tabularSourceLine } from "./tabularAnswer";
 import { targetingNoteText } from "./targeting";
 
 /**
@@ -14,7 +15,7 @@ import { targetingNoteText } from "./targeting";
  * out the engine's sub-answers and the notes under each answer).
  *
  * The lists of sources (documents, sheets) are not here: they are references, shown as their own
- * disclosure and left out of a copy on purpose.
+ * disclosure and copied only when the user turned the `copySources` setting on (`sourceLines`).
  */
 export function annotationLines(t: Translator, locale: string, entry: ChatEntry): string[] {
   const lines: string[] = [];
@@ -114,10 +115,34 @@ export function computedBlock(t: Translator, locale: string, entry: ChatEntry): 
   return [t("chat.mixedComputedTitle"), "", formatTabularAnswer(t, entry.mixedTable, locale)].join("\n");
 }
 
-/** What "Copy the conversation" puts on the clipboard for one answer: the text as shown (internal
- * names replaced), the engine's block, then the notes under it, including the line that says the
- * search was narrowed (what she copies is what she saw). Sources are left out. */
-export function answerForCopy(t: Translator, locale: string, entry: ChatEntry): string {
+/** The lists of sources under an answer, as plain lines under one heading: the documents (one line
+ * per file, with its pages), then the sheets and columns the engine read. Empty when there are none. */
+export function sourceLines(t: Translator, entry: ChatEntry): string[] {
+  const items = [
+    ...groupSources(entry.sources ?? []).map(
+      (group) =>
+        t(group.pages.length > 1 ? "chat.sourceItemPages" : "chat.sourceItemPage", {
+          path: group.relativePath,
+          pages: group.pages.join(", "),
+        }) + (group.ocr ? t("chat.sourceOcrMarker") : ""),
+    ),
+    ...(entry.tabularSource === undefined ? [] : [tabularSourceLine(t, entry.tabularSource)]),
+    ...(entry.mixedTableSource === undefined ? [] : [tabularSourceLine(t, entry.mixedTableSource)]),
+  ];
+  return items.length === 0 ? [] : [t("chat.sourcesCopyHeading"), ...items.map((item) => `- ${item}`)];
+}
+
+/** What a copy button puts on the clipboard for one answer, whether it is that answer's own button
+ * or "Copy the conversation": the text as shown (internal names replaced), the engine's block, then
+ * the notes under it, including the line that says the search was narrowed (what she copies is what
+ * she saw). The lists of sources follow only when `includeSources` is on (the `copySources`
+ * setting, off by default). */
+export function answerForCopy(
+  t: Translator,
+  locale: string,
+  entry: ChatEntry,
+  includeSources = false,
+): string {
   const parts = [localiseInternalNames(entry.content, t)];
   const computed = computedBlock(t, locale, entry);
   if (computed !== null) {
@@ -126,6 +151,10 @@ export function answerForCopy(t: Translator, locale: string, entry: ChatEntry): 
   const notes = [...annotationLines(t, locale, entry), ...targetingNoteText(t, entry.targeting)];
   if (notes.length > 0) {
     parts.push(notes.join("\n"));
+  }
+  const sources = includeSources ? sourceLines(t, entry) : [];
+  if (sources.length > 0) {
+    parts.push(sources.join("\n"));
   }
   return parts.join("\n\n");
 }

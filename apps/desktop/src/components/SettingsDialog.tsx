@@ -313,6 +313,18 @@ export function SettingsDialog({
           <span className="field__description">{t("settings.hideNamesDescription")}</span>
         </div>
 
+        <div className="field">
+          <label className="field__row">
+            <input
+              type="checkbox"
+              checked={settings.copySources}
+              onChange={(event) => onUpdate({ copySources: event.target.checked })}
+            />
+            <span className="field__label">{t("settings.copySourcesLabel")}</span>
+          </label>
+          <span className="field__description">{t("settings.copySourcesDescription")}</span>
+        </div>
+
         {/* The thresholds of the narrowing, the measurement switches and the developer panel, kept
             apart under one heading. None changes what an answer says; the thresholds change which
             files are searched when the mode is automatic or a name was picked. */}

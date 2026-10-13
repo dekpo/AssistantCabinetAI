@@ -23,6 +23,30 @@ export function countPending(files: FileRecord[]): number {
   ).length;
 }
 
+/** The kinds the document pass reads; mirrors `FileKind::is_document` in `file_record.rs`. */
+const DOCUMENT_KINDS: ReadonlySet<FileRecord["kind"]> = new Set([
+  "document_text",
+  "document_pdf",
+  "document_office",
+  "image",
+]);
+
+/**
+ * `countPending` for the Documents card: only files the document pass can read. A `.odt`, a
+ * `.vtt` or a workbook dropped in that folder never gets an index row, so it stays `discovered`
+ * for ever and would keep the button lit with a number analysing can never bring down. Same rule
+ * as `WorkFolderInventory::unanalysed_documents` on the Rust side, which feeds the answers'
+ * "not analysed" warning - the button and an answer cannot disagree. The Data card keeps
+ * `countPending`: its files are all `tabular_candidate`.
+ */
+export function countPendingDocuments(files: FileRecord[]): number {
+  return countPending(files.filter((file) => DOCUMENT_KINDS.has(file.kind)));
+}
+
+export function analysisPendingDocuments(files: FileRecord[]): boolean {
+  return countPendingDocuments(files) > 0;
+}
+
 /**
  * Where to draw the bar, as a fraction between 0 and 1. A pass over an empty folder is finished
  * the moment it starts, which is the only honest thing a bar can say about no work at all.

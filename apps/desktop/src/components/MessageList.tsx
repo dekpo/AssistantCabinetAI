@@ -4,7 +4,7 @@ import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
-import { annotationLines } from "../lib/annotations";
+import { annotationLines, answerForCopy } from "../lib/annotations";
 import { groupSources } from "../lib/sourceGroups";
 import { formatTabularAnswer, tabularSourceLine } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
@@ -36,6 +36,7 @@ export function MessageList({
   analysing,
   onRetarget,
   showDiagnostics,
+  copySources,
   emptyExtra,
 }: {
   entries: ChatEntry[];
@@ -56,6 +57,8 @@ export function MessageList({
   onRetarget: (answerEntryId: string, choice: TargetingChoice) => void;
   /** Shows the developer panel under the last answer. Off in normal use. */
   showDiagnostics: boolean;
+  /** Whether an answer's own copy button also copies its sources (the `copySources` setting). */
+  copySources: boolean;
   /** Drawn under the welcome text while the conversation is empty: the questions worth asking. */
   emptyExtra?: ReactNode;
 }) {
@@ -408,7 +411,7 @@ export function MessageList({
                   <button
                     type="button"
                     className="button button--compact"
-                    onClick={() => void copyToClipboard(shown)}
+                    onClick={() => void copyToClipboard(answerForCopy(t, locale, entry, copySources))}
                   >
                     {t("actions.copy")}
                   </button>

@@ -1,8 +1,13 @@
 """Does the file manipulations of the lot 11 human test, so nobody edits a file by hand.
 
-Run it from the repository root with Python 3 (the same Python as show_kb_tables.py):
+Run it from the repository root with Python 3 (the same Python as show_kb_tables.py). On Windows:
 
     python docs\\test-reports\\knowledge-base-pass-1\\human-tests\\lot11_helper.py <command>
+
+On macOS, the same command with its own spelling (the settings and the index live in
+~/Library/Application Support/com.assistantcabinetai.desktop):
+
+    python3 docs/test-reports/knowledge-base-pass-1/human-tests/lot11_helper.py <command>
 
 Close the application first for the commands that touch the settings or the index (backup, restore, prepare, mode,
 clear-log): the script checks and refuses while the application runs (--even-if-running overrides that). The commands
@@ -22,6 +27,10 @@ Commands
     swiss-file                  write two invented amount tables in "kb-lot11-data": patients-suisse.csv (amounts
                                 "CHF 1'450.00", dates 14.10.2026) and patients-france.csv (amounts "1 450,00 EUR",
                                 dates 14/10/2026), the same ten rows in both; Analyse the Data card afterwards
+    extra-files                 swiss-file, plus the invented files of the fix 4 batch 3 test: three small workbooks
+                                (rdv-medecins.csv, rdv-export-titre.csv, rdv-dates-ambigues.csv) in "kb-lot11-data" and
+                                two documents (2026/janvier/neurologie.txt, 2026/mars/neurologie.txt) in "kb-lot11";
+                                Analyse both cards afterwards
     tier <size>                 grow or shrink the test library to <size> documents (adds or removes files in
                                 kb-lot11 only), the way a real library grows
     mode off | suggest | auto   set "knowledgeMode" in settings.json
@@ -58,7 +67,8 @@ KEY_FILE = "knowledge-identifier.key"
 INDEX_FILE = "index.sqlite3"
 SETTINGS_FILE = "settings.json"
 TIMING_LOG = "retrieval-timings.jsonl"
-PROCESS_NAME = "assistant-cabinet-ai.exe"
+PROCESS_NAME = "assistant-cabinet-ai.exe"  # Windows; macOS and Linux use the name without ".exe"
+FILES = Path(__file__).resolve().parent  # the invented files of the test live beside this script
 BACKUP_NAME = "kb-backup-lot-11"
 DOCS_NAME = "kb-lot11"
 DATA_NAME = "kb-lot11-data"
@@ -109,7 +119,12 @@ def fail(text: str) -> int:
 
 def application_running() -> bool:
     if os.name != "nt":
-        return False
+        # macOS and Linux: the process is named without ".exe". Not walked on a Mac yet (Part M of the protocol).
+        try:
+            result = subprocess.run(["pgrep", "-x", PROCESS_NAME.removesuffix(".exe")], capture_output=True, check=False)
+        except OSError:
+            return False
+        return result.returncode == 0
     try:
         out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {PROCESS_NAME}"], capture_output=True, text=True, check=False).stdout
     except OSError:
@@ -352,6 +367,27 @@ def swiss_file() -> int:
     (Path(data) / "patients-france.csv").write_text(FRENCH_AMOUNTS, encoding="utf-8", newline="\n")
     say(f"wrote patients-suisse.csv and patients-france.csv in {data} (invented patients, ten rows each)")
     say("Start the application, press Analyser on the Data card.")
+    return 0
+
+
+def extra_files() -> int:
+    """The Swiss and French amount tables, and the invented files of the fix 4 batch 3 test, in one command."""
+    settings = read_settings()
+    docs = docs_folder(settings)
+    data = settings.get("dataFolder")
+    if docs is None or not docs.is_dir() or not data or Path(data).name != DATA_NAME or not Path(data).is_dir():
+        return fail("run 'prepare <size>' first: the files are written in " + DOCS_NAME + " and " + DATA_NAME)
+    sources = sorted((FILES / "lot-11-files" / "data").glob("*.csv")) + sorted((FILES / "fix-04-batch-3-files" / "data").glob("*.csv"))
+    for source in sources:
+        shutil.copy2(source, Path(data) / source.name)
+        say(f"wrote {source.name} in {data}")
+    for source in sorted((FILES / "fix-04-batch-3-files" / "docs").rglob("*.txt")):
+        relative = source.relative_to(FILES / "fix-04-batch-3-files" / "docs")
+        target = docs / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        say(f"wrote {relative.as_posix()} in {docs}")
+    say("Start the application, press Analyser on the Documents card and on the Data card.")
     return 0
 
 
@@ -626,6 +662,7 @@ COMMANDS = {
     "generate": (lambda a: generate(), False),
     "prepare": (lambda a: prepare(a[0]) if a else fail("usage: prepare 30 | 100 | 200 | 500 | 1000"), True),
     "swiss-file": (lambda a: swiss_file(), False),
+    "extra-files": (lambda a: extra_files(), False),
     "tier": (lambda a: tier(a[0]) if a else fail("usage: tier 30 | 100 | 200 | 500 | 1000"), False),
     "mode": (lambda a: set_mode(a[0]) if a else fail("usage: mode off | suggest | auto"), True),
     "lifecycle": (lambda a: lifecycle(a[0]) if a else fail("usage: lifecycle add | add-spaced | modify | delete | undo"), False),

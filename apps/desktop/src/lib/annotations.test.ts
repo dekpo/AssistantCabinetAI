@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
-import { annotationLines, answerForCopy, computedBlock } from "./annotations";
+import { annotationLines, answerForCopy, computedBlock, sourceLines } from "./annotations";
 import type { TabularAnswer, TargetingReport } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
@@ -78,8 +78,59 @@ describe("the engine's own figure beside a model's prose", () => {
   });
 });
 
+describe("copying the sources of an answer", () => {
+  const evidence = (relativePath: string, pageNumber: number, origin = "textLayer") => ({
+    chunkId: `${relativePath}-${pageNumber}`,
+    relativePath,
+    pageNumber,
+    section: 1,
+    text: "...",
+    score: 1,
+    origin,
+    confidence: null,
+  });
+  const withSources = entry({
+    content: "Le devis est de 1 200 euros.",
+    sources: [
+      evidence("devis.pdf", 1),
+      evidence("devis.pdf", 3),
+      evidence("scan.pdf", 2, "ocr"),
+    ] as ChatEntry["sources"],
+    tabularSource: { file: "factures.xlsx", sheet: "Factures", column: "montant" },
+  });
+
+  it("adds them under the answer, grouped by file, when the setting is on", () => {
+    const copied = answerForCopy(french, "fr-FR", withSources, true);
+
+    expect(copied.startsWith("Le devis est de 1 200 euros.")).toBe(true);
+    expect(copied).toContain("Sources :\n- devis.pdf, pages 1, 3\n- scan.pdf, page 2");
+    expect(copied).toContain("reconnaissance de texte");
+    expect(copied).toContain("- factures.xlsx, feuille Factures, colonne montant");
+  });
+
+  it("copies the sheet of a table answer and of a mixed answer", () => {
+    const lines = sourceLines(
+      english,
+      entry({ mixedTableSource: { file: "a.xlsx", sheet: "S1", column: null } }),
+    );
+    expect(lines[0]).toBe("Sources:");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("a.xlsx");
+  });
+
+  it("leaves them out when the setting is off, which is the default", () => {
+    expect(answerForCopy(french, "fr-FR", withSources)).toBe("Le devis est de 1 200 euros.");
+    expect(answerForCopy(french, "fr-FR", withSources, false)).not.toContain("devis.pdf");
+  });
+
+  it("adds nothing, not even the heading, to an answer that has no source", () => {
+    expect(sourceLines(french, entry({}))).toEqual([]);
+    expect(answerForCopy(french, "fr-FR", entry({}), true)).toBe("1 450,00 euros.");
+  });
+});
+
 describe("Copy the conversation", () => {
-  it("copies the text as shown, the engine's figure and the notes, and no list of sources", () => {
+  it("copies the text as shown, the engine's figure and the notes, and no list of sources by default", () => {
     const copied = answerForCopy(
       french,
       "fr-FR",

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { analysisFraction, analysisPending, countPending } from "./analysis";
+import {
+  analysisFraction,
+  analysisPending,
+  analysisPendingDocuments,
+  countPending,
+  countPendingDocuments,
+} from "./analysis";
 import type { FileRecord, IndexProgress, ProcessingStatus } from "./ipc";
 
 function progress(
@@ -56,6 +62,59 @@ describe("countPending", () => {
     for (const files of folders) {
       expect(countPending(files) > 0).toBe(analysisPending(files));
     }
+  });
+});
+
+function fileOfKind(
+  name: string,
+  kind: FileRecord["kind"],
+  processingStatus: ProcessingStatus,
+): FileRecord {
+  return {
+    ...file(processingStatus),
+    id: name,
+    relativePath: name,
+    name,
+    stem: name.split(".")[0] ?? name,
+    extension: name.split(".")[1] ?? "",
+    kind,
+    indexed: processingStatus === "indexed",
+  };
+}
+
+describe("countPendingDocuments", () => {
+  it("leaves the button inactive when only files the pass cannot read are left", () => {
+    // The pass never writes a row for these, so they stay "discovered" for ever.
+    const files = [
+      fileOfKind("a.odt", "unsupported", "discovered"),
+      fileOfKind("b.vtt", "unsupported", "discovered"),
+      fileOfKind("c.xlsx", "tabular_candidate", "discovered"),
+      fileOfKind("d.png", "image", "failed"),
+      fileOfKind("e.txt", "document_text", "indexed"),
+    ];
+
+    expect(countPendingDocuments(files)).toBe(0);
+    expect(analysisPendingDocuments(files)).toBe(false);
+  });
+
+  it("still counts every document kind the pass reads", () => {
+    const files = [
+      fileOfKind("a.txt", "document_text", "discovered"),
+      fileOfKind("b.pdf", "document_pdf", "pending"),
+      fileOfKind("c.docx", "document_office", "discovered"),
+      fileOfKind("d.jpg", "image", "pending"),
+      fileOfKind("e.odt", "unsupported", "discovered"),
+    ];
+
+    expect(countPendingDocuments(files)).toBe(4);
+    expect(analysisPendingDocuments(files)).toBe(true);
+  });
+
+  it("leaves a folder of workbooks to the Data card's own rule", () => {
+    const workbooks = [fileOfKind("t.csv", "tabular_candidate", "discovered")];
+
+    expect(countPending(workbooks)).toBe(1);
+    expect(countPendingDocuments(workbooks)).toBe(0);
   });
 });
 

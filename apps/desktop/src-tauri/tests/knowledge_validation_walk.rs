@@ -876,3 +876,796 @@ async fn print_what_the_targeting_line_will_say() {
         }
     }
 }
+
+// ------------------------------------------------------------------------------------ the final protocol
+
+fn human_tests_folder() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../docs/test-reports/knowledge-base-pass-1/human-tests")
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            std::fs::create_dir_all(&target).unwrap();
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// What `lot11_helper.py extra-files` writes: the Swiss and French amount tables, the three workbooks and the two
+/// `neurologie.txt` of the batch 3 test.
+fn write_extra_files(lab: &Lab) {
+    let human = human_tests_folder();
+    for folder in [
+        human.join("lot-11-files").join("data"),
+        human.join("fix-04-batch-3-files").join("data"),
+    ] {
+        for entry in std::fs::read_dir(folder).unwrap() {
+            let entry = entry.unwrap();
+            lab.write_data_bytes(
+                entry.file_name().to_str().unwrap(),
+                &std::fs::read(entry.path()).unwrap(),
+            );
+        }
+    }
+    copy_tree(
+        &human.join("fix-04-batch-3-files").join("docs"),
+        lab.work_path(),
+    );
+}
+
+/// One pass the way the Analyse buttons run it, with the card's figures printed.
+async fn card_pass(truth: &Truth, lab: &mut Lab, tier: usize, step: &str) {
+    let renamed = filename_sanitizer::sanitize_folder(lab.work_path());
+    let (ocr, rasterizer) = perfect_ocr(truth, tier);
+    let mut context = lab.context();
+    let url = lab.gateway.url.clone();
+    let summary = lab
+        .analyse_through(&mut context, &url, Some(&ocr), Some(&rasterizer))
+        .await;
+    let unread: Vec<String> = summary
+        .unread_formats
+        .iter()
+        .map(|f| format!("{} .{}", f.count, f.extension))
+        .collect();
+    println!(
+        "{step} documents card: analysed {}, unchanged {}, removed {}, renamed {}, read by OCR {}, empty {:?}, not read {unread:?}",
+        summary.indexed_files,
+        summary.unchanged_files,
+        summary.removed_files.len(),
+        renamed.renamed.len(),
+        summary.ocr_files.len(),
+        summary.empty_files
+    );
+    if let Some(k) = &summary.knowledge {
+        println!(
+            "{step}     names: {} found, {} already known, {} new ({} guesses), {} identifiers, {} documents re-read",
+            k.entities_detected, k.matched_existing, k.created_new, k.candidates, k.identifiers, k.refreshed_sources
+        );
+    }
+    let data = lab.analyse_data();
+    println!(
+        "{step} data card: read {}, analysed {}, unchanged {}, removed {}",
+        data.scanned_files,
+        data.indexed_files,
+        data.unchanged_files,
+        data.removed_files.len()
+    );
+    if let Some(k) = &data.knowledge {
+        println!(
+            "{step}     names: {} found, {} already known, {} identifiers, {} columns in {} workbooks, {} relations, {} documents re-read",
+            k.entities_detected, k.matched_existing, k.identifiers, k.semantic_columns, k.workbooks_analysed, k.relations, k.refreshed_sources
+        );
+    }
+    let inventory = assistant_cabinet_ai_lib::inventory::WorkFolderInventory::discover(
+        lab.work_path(),
+        Some(&lab.index),
+    )
+    .unwrap();
+    let lit_before_the_fix = inventory
+        .all_files()
+        .iter()
+        .filter(|f| {
+            matches!(
+                f.processing_status,
+                assistant_cabinet_ai_lib::file_record::ProcessingStatus::Discovered
+                    | assistant_cabinet_ai_lib::file_record::ProcessingStatus::Pending
+            )
+        })
+        .count();
+    println!(
+        "{step} Analyser button of the documents card: number {} (before the KBD-47 fix it would read {lit_before_the_fix})",
+        inventory.unanalysed_documents()
+    );
+    let status = inventory.summary();
+    println!(
+        "{step} documents card status line: {} files, {} analysed, {} unreadable",
+        status.total_files, status.indexed_files, status.unreadable_files
+    );
+    let data_status = lab.data_folder().report().summary;
+    println!(
+        "{step} data card status line: {} files, {} analysed, {} unreadable",
+        data_status.total_files, data_status.analysed_files, data_status.unreadable_files
+    );
+}
+
+/// The two status lines the folder cards print under their title.
+fn status_lines(lab: &Lab, step: &str) {
+    let inventory = assistant_cabinet_ai_lib::inventory::WorkFolderInventory::discover(
+        lab.work_path(),
+        Some(&lab.index),
+    )
+    .unwrap();
+    let status = inventory.summary();
+    println!(
+        "{step} documents card: {} files, {} analysed, {} unreadable; button number {}",
+        status.total_files,
+        status.indexed_files,
+        status.unreadable_files,
+        inventory.unanalysed_documents()
+    );
+    let data_folder = lab.data_folder();
+    let data = data_folder.report().summary;
+    let lit = data_folder
+        .files()
+        .all_files()
+        .iter()
+        .filter(|f| {
+            matches!(
+                f.processing_status,
+                assistant_cabinet_ai_lib::file_record::ProcessingStatus::Discovered
+                    | assistant_cabinet_ai_lib::file_record::ProcessingStatus::Pending
+            )
+        })
+        .count();
+    println!(
+        "{step} data card: {} files, {} analysed, {} unreadable; button number {lit}",
+        data.total_files, data.analysed_files, data.unreadable_files
+    );
+}
+
+/// The `names` command of the helper, as it prints.
+fn names_block(lab: &Lab, step: &str) {
+    let rows = entity_list(lab);
+    let mut counts: BTreeMap<(String, String), usize> = BTreeMap::new();
+    for (type_id, status, _) in &rows {
+        *counts.entry((type_id.clone(), status.clone())).or_default() += 1;
+    }
+    for ((type_id, status), number) in &counts {
+        println!("{step} names: {type_id:14} {status:10} {number}");
+    }
+    println!("{step} names: entities: {}", rows.len());
+}
+
+fn line(lab: Lab, step: &str, text: &str, selection: Option<&[String]>, workbooks: bool) -> Lab {
+    let vocabulary = QueryVocabulary::load("fr-FR", &PACKS).unwrap();
+    let library = Library {
+        lab,
+        tier: 0,
+        product_files: Vec::new(),
+        analyse_ms: 0,
+        summary: None,
+        passes: Vec::new(),
+    };
+    {
+        let replay = Replay::new(&library, &vocabulary);
+        let asked = replay.ask(
+            text,
+            KnowledgeMode::Auto,
+            &TargetingRequest::default(),
+            selection,
+            workbooks,
+        );
+        println!("{step} `{text}`");
+        match &asked.plan {
+            None => println!(
+                "    route {} (answered without a search)",
+                asked.route.code()
+            ),
+            Some(plan) => {
+                let d = &plan.reduction.documents;
+                println!(
+                    "    route {}, outcome {:?}, kept {} of {}, skipped {:?}, applied {}",
+                    asked.route.code(),
+                    d.outcome,
+                    d.candidates.len(),
+                    d.selected,
+                    d.skipped.map(|r| r.as_code()),
+                    d.is_applied()
+                );
+                if let Some(analysis) = &plan.analysis {
+                    for e in &analysis.entities {
+                        println!(
+                            "    name {} ({}, {:?}, {:.2}) in {} document(s)",
+                            e.display,
+                            e.type_id,
+                            e.status,
+                            e.confidence,
+                            e.document_files.len()
+                        );
+                    }
+                    for a in &analysis.ambiguities {
+                        let options: Vec<String> = a
+                            .candidates
+                            .iter()
+                            .map(|c| format!("{} ({} documents)", c.display, c.documents))
+                            .collect();
+                        println!("    asks which one: {}", options.join(" / "));
+                    }
+                    for p in &analysis.possibles {
+                        let options: Vec<String> = p
+                            .candidates
+                            .iter()
+                            .map(|c| format!("{} ({} documents)", c.display, c.documents))
+                            .collect();
+                        println!("    did you mean: {}", options.join(" / "));
+                    }
+                }
+                if d.is_applied() && d.candidates.len() <= 12 {
+                    let mut files = d.candidates.clone();
+                    files.sort();
+                    for file in files {
+                        println!("      keeps {file}");
+                    }
+                }
+            }
+        }
+    }
+    library.lab
+}
+
+fn data_answer(lab: &Lab, question: &str) -> String {
+    use assistant_cabinet_ai_lib::analysis_scope::ScopeMode;
+    use assistant_cabinet_ai_lib::tabular_answer::{self, PendingAnswer, TabularAnswer};
+    match tabular_answer::prepare(
+        question,
+        &lab.data_folder(),
+        &ScopeMode::WholeFolder,
+        "fr-FR",
+        &lab.index,
+        false,
+    ) {
+        Ok(PendingAnswer::Done(TabularAnswer::Value { value, locator, .. })) => {
+            format!("{value:?} filters={:?}", locator.filters)
+        }
+        Ok(PendingAnswer::Done(other)) => format!("{other:?}"),
+        Ok(_) => "(handed to the model)".to_string(),
+        Err(error) => format!("error {error:?}"),
+    }
+}
+
+fn mixed_answers(lab: &Lab, question: &str) {
+    use assistant_cabinet_ai_lib::analysis_scope::ScopeMode;
+    use assistant_cabinet_ai_lib::folder_questions::{self, Selection};
+    use assistant_cabinet_ai_lib::tabular_answer::{self, PendingAnswer};
+    let inventory = assistant_cabinet_ai_lib::inventory::WorkFolderInventory::discover(
+        lab.work_path(),
+        Some(&lab.index),
+    )
+    .unwrap();
+    let selection = Selection {
+        full: &inventory,
+        scoped: &inventory,
+        narrowed: false,
+        no_documents_chosen: false,
+    };
+    let data_only = match tabular_answer::prepare_if_data_only(
+        question,
+        &lab.data_folder(),
+        &ScopeMode::WholeFolder,
+        "fr-FR",
+        &lab.index,
+    )
+    .unwrap()
+    {
+        None => "None (goes on to the mixed tier)".to_string(),
+        Some(PendingAnswer::Done(answer)) => format!("data-only: {answer:?}"),
+        Some(_) => "data-only: model".to_string(),
+    };
+    let folder =
+        folder_questions::answer_in_mixed_selection(&selection, &lab.index, question, "fr-FR");
+    println!("D `{question}`\n    {data_only}\n    folder answer in the mixed tier: {folder:?}");
+}
+
+/// The whole of the final human test, in its order, with every figure it states. Prints; the integrity of the
+/// base is asserted after every pass (`clean`), the lifecycle invariants by the test above.
+///
+/// ```text
+/// cargo test --release --test knowledge_validation_walk print_the_figures_of_the_final_protocol -- --ignored --nocapture
+/// ```
+#[tokio::test]
+#[ignore]
+async fn print_the_figures_of_the_final_protocol() {
+    let truth = Truth::load();
+    let mut lab = lab_like_the_helper(&truth, 30);
+
+    println!("=== PART A (30 documents)");
+    card_pass(&truth, &mut lab, 30, "A1/A2").await;
+    clean(&lab);
+    names_block(&lab, "A");
+    for (n, text) in [
+        "R\u{e9}sume le dossier de Sophie Rochat.",
+        "Que dit le dossier de Jean Dupontet ?",
+        "Quels courriers viennent du Dr Marc Bersier ?",
+        "Quels courriers viennent de la CSS Assurance ?",
+        "Montre la facture FAC-2026-014",
+        "Quels documents parlent de la LAMal ?",
+        "Que dit le dossier de Madame Z\u{e9}nobie Quarante ?",
+        "Que dit J. Dupont ?",
+        "Qu'a dit le Dr Martin ?",
+        "Que dit le courrier de V\u{e9}ronique Monnier ?",
+    ]
+    .iter()
+    .enumerate()
+    {
+        lab = line(lab, &format!("A6-{}", n + 1), text, None, false);
+    }
+
+    println!("=== PART B (30 documents)");
+    lab = line(
+        lab,
+        "B3",
+        "Quels courriers viennent du Dr Marc Bersier ?",
+        None,
+        false,
+    );
+    {
+        let inventory = assistant_cabinet_ai_lib::inventory::WorkFolderInventory::discover(
+            lab.work_path(),
+            Some(&lab.index),
+        )
+        .unwrap();
+        let without: Vec<String> = inventory
+            .indexed_files()
+            .into_iter()
+            .map(|f| f.relative_path.clone())
+            .filter(|p| !p.ends_with("2026-03-20_decompte-css-rochat-sophie.pdf"))
+            .collect();
+        println!(
+            "B4: {} documents ticked of {}",
+            without.len(),
+            inventory.indexed_files().len()
+        );
+        lab = line(
+            lab,
+            "B4",
+            "R\u{e9}sume le dossier de Sophie Rochat.",
+            Some(&without),
+            false,
+        );
+        lab = line(
+            lab,
+            "B4",
+            "Que dit 2026-03-20_decompte-css-rochat-sophie.pdf ?",
+            Some(&without),
+            false,
+        );
+    }
+    names_block(&lab, "B5 before");
+    for text in [
+        "Que dit le dossier de Madame Z\u{e9}nobie Quarante ?",
+        "Quels documents concernent Hyacinthe Vaudroz ?",
+        "Que dit le Dr Ernest Blondeau ?",
+        "Que dit L\u{e9}opold Tschumi ?",
+    ] {
+        lab = line(lab, "B5", text, None, false);
+    }
+    names_block(&lab, "B5 after");
+
+    println!("=== PART C (30 documents, lifecycle)");
+    names_block(&lab, "C0");
+    lab.write("courriers-entrants/courrier-quenneville-nouveau.txt", "Madame Sidonie Quenneville\n12 rue des Acacias, 74100 Annemasse\n\nObjet : demande de rendez-vous.\nMadame Sidonie Quenneville souhaite un rendez-vous de suivi dans le courant du mois d'octobre 2026.\nElle rappelle que sa caisse maladie est la CSS Assurance.\n");
+    card_pass(&truth, &mut lab, 30, "C1").await;
+    names_block(&lab, "C1");
+    lab = line(
+        lab,
+        "C1",
+        "Que dit Madame Sidonie Quenneville ?",
+        None,
+        false,
+    );
+    lab.write(
+        "Courrier Quenneville \u{e9}t\u{e9} 2026.txt",
+        "Madame Sidonie Quenneville confirme son rendez-vous du 14 octobre 2026.\n",
+    );
+    card_pass(&truth, &mut lab, 30, "C2").await;
+    lab = line(
+        lab,
+        "C2",
+        "Que dit Madame Sidonie Quenneville ?",
+        None,
+        false,
+    );
+
+    let listed_before = entity_list(&lab);
+    names_block(&lab, "C3 before");
+    lab.index.clear().expect("clears the documents");
+    status_lines(&lab, "C3a after the Reset");
+    card_pass(&truth, &mut lab, 30, "C3a").await;
+    lab.index.clear_tabular_inventories().expect("clears");
+    lab.index.clear_tabular_workbooks().expect("clears");
+    status_lines(&lab, "C3b after the Reset");
+    let data = lab.analyse_data();
+    println!("C3b data pass: analysed {}", data.indexed_files);
+    status_lines(&lab, "C3b after the Analyse");
+    assistant_cabinet_ai_lib::knowledge::manage::reset(&lab.side(), true).expect("resets");
+    status_lines(&lab, "C3c after the whole Reset");
+    card_pass(&truth, &mut lab, 30, "C3c").await;
+    names_block(&lab, "C3 after");
+    println!("C3: identical list {}", entity_list(&lab) == listed_before);
+
+    let target = truth
+        .docs_in(30)
+        .find(|d| d.format == "txt" && d.kind == "lettre_confrere" && d.about.len() == 1)
+        .map(|d| (d.path.clone(), d.about[0].clone()))
+        .expect("a text letter about one patient");
+    let person = &truth.entities[&target.1];
+    let (given, family) = person.canonical.split_once(' ').unwrap();
+    let full = lab.work_path().join(&target.0);
+    let text = std::fs::read_to_string(&full).unwrap();
+    std::fs::write(&full, text.replace(family, "Qu\u{e9}m\u{e9}ner")).unwrap();
+    println!(
+        "C4 changed {}: {} -> {given} Quemener",
+        target.0, person.canonical
+    );
+    card_pass(&truth, &mut lab, 30, "C4").await;
+    names_block(&lab, "C4");
+    lab = line(
+        lab,
+        "C4",
+        "Que dit Laurence Qu\u{e9}m\u{e9}ner ?",
+        None,
+        false,
+    );
+    {
+        let rows: Vec<(String, String)> = lab
+            .side()
+            .prepare("SELECT status, canonical_name FROM kb_entities WHERE canonical_name LIKE 'Laurence%' ORDER BY canonical_name")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        println!("C4 every Laurence of the base: {rows:?}");
+    }
+    println!(
+        "C4 Laurence Fabre is in {:?}",
+        files_of(&lab, "Laurence Fabre")
+    );
+    println!(
+        "C4 Laurence Quemener is in {:?}",
+        files_of(&lab, "Laurence Qu\u{e9}m\u{e9}ner")
+    );
+
+    let victim = truth
+        .docs_in(30)
+        .find(|d| d.format == "pdf" && d.mentions.iter().any(|m| m.entity == "p-rochat-sophie"))
+        .map(|d| d.path.clone())
+        .expect("a letter about Sophie Rochat");
+    std::fs::remove_file(lab.work_path().join(&victim)).unwrap();
+    println!("C5 deleted {victim}");
+    card_pass(&truth, &mut lab, 30, "C5").await;
+    names_block(&lab, "C5");
+    lab = line(
+        lab,
+        "C5",
+        "R\u{e9}sume le dossier de Sophie Rochat.",
+        None,
+        false,
+    );
+    lab = line(
+        lab,
+        "C5",
+        "Quels courriers viennent de la CSS Assurance ?",
+        None,
+        false,
+    );
+
+    grow(&truth, &lab, 30, 100);
+    card_pass(&truth, &mut lab, 100, "C6 up").await;
+    names_block(&lab, "C6 at 100");
+    shrink(&truth, &lab, 30);
+    card_pass(&truth, &mut lab, 30, "C6 down").await;
+    names_block(&lab, "C6 back at 30");
+
+    println!("=== PART D (100 documents)");
+    grow(&truth, &lab, 30, 100);
+    card_pass(&truth, &mut lab, 100, "D1").await;
+    names_block(&lab, "D1");
+    for (n, text) in [
+        "Qui renouvelle le code de l'armoire \u{e0} pharmacie ?",
+        "\u{c0} qui signaler un \u{e9}cart de la cha\u{ee}ne du froid ?",
+        "R\u{e9}sume le dossier de Fatima Benali.",
+    ]
+    .iter()
+    .enumerate()
+    {
+        lab = line(lab, &format!("D2-{}", 11 + n), text, None, false);
+    }
+
+    println!("=== PART S (Switzerland and the fixes, 100 documents and the extra files)");
+    write_extra_files(&lab);
+    card_pass(&truth, &mut lab, 100, "S0").await;
+    names_block(&lab, "S0");
+    for (id, text) in [
+        (
+            "S1",
+            "\u{c0} qui appartient le num\u{e9}ro AVS 756.3052.5778.43 ?",
+        ),
+        (
+            "S2",
+            "Quels courriers a \u{e9}crit la Dre Anne-Sophie Vuagniaux ?",
+        ),
+        ("S3", "Que dit la Dre Vuagniaux ?"),
+        ("S4", "Quels documents concernent HUG ?"),
+        ("S5", "Quels documents viennent de Gen\u{e8}ve ?"),
+        ("S6", "Quels courriers viennent du CHUV ?"),
+        (
+            "S7",
+            "Quels documents concernent les H\u{f4}pitaux universitaires de Gen\u{e8}ve ?",
+        ),
+        ("S8", "R\u{e9}sume le dossier de Giuseppe D'Amico."),
+        ("S9a", "Quels documents parlent de Lucas Roy ?"),
+        ("S9b", "Quels documents parlent de Roy Lucas ?"),
+        ("S10", "Que dit le courrier de A\u{ef}cha N'Diaye ?"),
+    ] {
+        lab = line(lab, id, text, None, false);
+    }
+    println!("=== S tables");
+    for (id, question) in [
+        (
+            "T1",
+            "Quelle est la somme des montants dans patients-suisse.csv ?",
+        ),
+        (
+            "T2",
+            "Quel est le montant maximum dans patients-suisse.csv ?",
+        ),
+        (
+            "T3",
+            "Quelle est la somme des montants dans patients-france.csv ?",
+        ),
+        (
+            "T4",
+            "Combien de lignes dans factures-fournisseurs-2026.xlsx ?",
+        ),
+        ("T5", "Combien de lignes dans rdv-export-titre.csv ?"),
+        (
+            "T6a",
+            "Combien de lignes pour Dr Jean Dupont dans rdv-medecins.csv ?",
+        ),
+        (
+            "T6b",
+            "Combien de lignes pour Jean Dupont dans rdv-medecins.csv ?",
+        ),
+        (
+            "T7",
+            "Quelle est la somme de montant pour Dr Jean Dupont dans rdv-medecins.csv ?",
+        ),
+        (
+            "T8a",
+            "Combien de lignes pour Dr Paul Martin dans rdv-medecins.csv ?",
+        ),
+        (
+            "T8b",
+            "Combien de lignes pour Martin dans rdv-medecins.csv ?",
+        ),
+        (
+            "T9",
+            "Combien de lignes pour Alice Archer en mars 2026 dans rdv-medecins.csv ?",
+        ),
+        (
+            "T10",
+            "Combien de lignes pour Alice Archer dans rdv-dates-ambigues.csv ?",
+        ),
+        (
+            "T11a",
+            "Combien de lignes pour Alice Archer en mars 2026 dans rdv-dates-ambigues.csv ?",
+        ),
+        (
+            "T11b",
+            "Combien de lignes en 2026 dans rdv-dates-ambigues.csv ?",
+        ),
+        (
+            "T11c",
+            "Combien de lignes pour Alice Archer en mars dans rdv-dates-ambigues.csv ?",
+        ),
+    ] {
+        println!("{id} `{question}`\n    -> {}", data_answer(&lab, question));
+    }
+    println!("=== S files");
+    {
+        let inventory = assistant_cabinet_ai_lib::inventory::WorkFolderInventory::discover(
+            lab.work_path(),
+            Some(&lab.index),
+        )
+        .unwrap();
+        for question in [
+            "Que dit mars/neurologie.txt ?",
+            "Que dit neurologie.txt ?",
+            "Que dit avril/neurologie.txt ?",
+        ] {
+            let routed = assistant_cabinet_ai_lib::folder_questions::route(
+                &inventory, &lab.index, question, "fr-FR",
+            );
+            println!("F `{question}`\n    -> {routed:?}");
+        }
+        println!("F documents indexed: {}", inventory.indexed_files().len());
+    }
+    println!("=== S mixed");
+    for question in [
+        "Combien de lignes ?",
+        "Combien de documents ai-je ?",
+        "Que disent mes documents \u{e0} propos de Jean Dupont ?",
+    ] {
+        mixed_answers(&lab, question);
+    }
+
+    println!("=== S knowledge window");
+    {
+        let connection = lab.side();
+        let mut statement = connection
+            .prepare(
+                "SELECT e.type_id, e.status, e.canonical_name,
+                        (SELECT COUNT(DISTINCT s.relative_path) FROM kb_mentions m
+                           JOIN kb_sources s ON s.source_id = m.source_id
+                          WHERE m.entity_id = e.entity_id AND s.domain = 'documents'),
+                        (SELECT group_concat(a.display, ' | ') FROM kb_aliases a WHERE a.entity_id = e.entity_id)
+                 FROM kb_entities e WHERE e.status IN ('active', 'candidate') AND e.type_id = 'organization'
+                 ORDER BY e.canonical_name",
+            )
+            .unwrap();
+        let rows: Vec<(String, String, String, i64, Option<String>)> = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect();
+        for (_, status, name, documents, aliases) in rows {
+            println!(
+                "K org {status} / {name} / {documents} document(s) / {}",
+                aliases.unwrap_or_default()
+            );
+        }
+        let pairs: Vec<(String, String, String)> = connection
+            .prepare(
+                "SELECT a.canonical_name, b.canonical_name, p.reason
+                 FROM kb_possible_matches p
+                 JOIN kb_entities a ON a.entity_id = p.entity_a
+                 JOIN kb_entities b ON b.entity_id = p.entity_b
+                 WHERE p.reason <> 'initial' AND (a.canonical_name LIKE '%Roy%' OR b.canonical_name LIKE '%Roy%')",
+            )
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect();
+        println!("K pairs around Roy: {pairs:?}");
+        let persons: Vec<(String, String, i64)> = connection
+            .prepare(
+                "SELECT e.canonical_name, e.status,
+                        (SELECT COUNT(DISTINCT s.relative_path) FROM kb_mentions m
+                           JOIN kb_sources s ON s.source_id = m.source_id
+                          WHERE m.entity_id = e.entity_id AND s.domain = 'documents')
+                 FROM kb_entities e WHERE e.status IN ('active', 'candidate') AND e.type_id = 'person'
+                   AND (e.canonical_name LIKE '%Roy%' OR e.canonical_name LIKE '%hotel%')",
+            )
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect();
+        println!("K persons Roy/hotel: {persons:?}");
+        let hotels: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM kb_entities WHERE status IN ('active','candidate') AND type_id = 'person' AND normalized_name LIKE '%hotel%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        println!("K persons whose name holds hotel: {hotels}");
+    }
+    {
+        let id: i64 = lab
+            .side()
+            .query_row(
+                "SELECT entity_id FROM kb_entities WHERE canonical_name = 'Lucas Roy' AND status IN ('active','candidate')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Lucas Roy");
+        let show = |lab: &Lab, step: &str| {
+            let cells = common::knowledge::cells_mentions_of(&lab.side(), id);
+            let places: Vec<String> = cells
+                .iter()
+                .map(|m| {
+                    format!(
+                        "{} / {} ({}, rows {:?}, {} occurrence(s))",
+                        m.path,
+                        m.column.clone().unwrap_or_default(),
+                        m.method,
+                        m.sample_rows,
+                        m.occurrences
+                    )
+                })
+                .collect();
+            println!(
+                "K restore {step}: {} table mention(s) {places:?}",
+                cells.len()
+            );
+        };
+        show(&lab, "before");
+        let outcome =
+            assistant_cabinet_ai_lib::knowledge::manage::delete_entity(&lab.side(), id).unwrap();
+        println!("K deleted: documents due {}", outcome.documents_due);
+        let outcome =
+            assistant_cabinet_ai_lib::knowledge::manage::restore_entity(&lab.side(), id).unwrap();
+        println!("K restored: documents due {}", outcome.documents_due);
+        show(&lab, "after the restore");
+        lab.analyse_data();
+        show(&lab, "after the Data Analyse");
+        lab.analyse_data();
+        show(&lab, "after a second Data Analyse");
+    }
+
+    println!("=== PART G (200 documents)");
+    grow(&truth, &lab, 100, 200);
+    card_pass(&truth, &mut lab, 200, "G1").await;
+    names_block(&lab, "G1");
+    for (id, text) in [
+        (
+            "G2-11",
+            "Qui renouvelle le code de l'armoire \u{e0} pharmacie ?",
+        ),
+        (
+            "G2-12",
+            "\u{c0} qui signaler un \u{e9}cart de la cha\u{ee}ne du froid ?",
+        ),
+        ("G2-13", "R\u{e9}sume le dossier de Fatima Benali."),
+        ("G2-15", "Quels documents concernent la Dre Vuagniaux ?"),
+        ("G2-16", "Quels documents viennent de Gen\u{e8}ve ?"),
+        ("G2-6", "Quels documents parlent de la LAMal ?"),
+    ] {
+        lab = line(lab, id, text, None, false);
+    }
+
+    if let Ok(dump) = std::env::var("ACAI_WALK_DUMP") {
+        let mut listing = Vec::new();
+        for (label, root) in [("docs", lab.work_path()), ("data", lab.data.path())] {
+            let mut stack = vec![root.to_path_buf()];
+            while let Some(folder) = stack.pop() {
+                for entry in std::fs::read_dir(&folder).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else {
+                        let bytes = std::fs::read(&path).unwrap();
+                        listing.push(format!(
+                            "{label}/{} {}",
+                            path.strip_prefix(root)
+                                .unwrap()
+                                .to_string_lossy()
+                                .replace('\\', "/"),
+                            bytes.len()
+                        ));
+                    }
+                }
+            }
+        }
+        listing.sort();
+        std::fs::write(dump, listing.join("\n")).unwrap();
+    }
+}

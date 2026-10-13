@@ -61,6 +61,9 @@ export interface AppSettings {
   /** Question suggestions leave names out, because a screen is visible to whoever sits across
    * from the user. On by default. */
   knowledgeHideNamesInSuggestions: boolean;
+  /** The copy buttons (one answer, or the whole conversation) also copy the sources listed under
+   * each answer. Off by default. */
+  copySources: boolean;
 }
 
 export interface AppSnapshot {

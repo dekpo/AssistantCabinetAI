@@ -228,6 +228,7 @@ export default function App() {
             indexing={indexing}
             onModelAliasChange={(alias) => void update({ modelAlias: alias })}
             showDiagnostics={snapshot.settings.showDiagnostics}
+            copySources={snapshot.settings.copySources}
             onAddToSelection={(outside) => void addOutsideToSelection(outside)}
             revealNames={revealNames}
             onRevealNamesChange={setRevealNames}

@@ -1,6 +1,10 @@
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
-import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
+import {
+  analysisFraction,
+  analysisPendingDocuments,
+  countPendingDocuments,
+} from "../lib/analysis";
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { errorMessage, normaliseError, type AppError } from "../lib/errors";
 import { knowledgeLines } from "../lib/knowledgeSummary";
@@ -104,11 +108,11 @@ export function WorkFolderCard({
   const { finishedPasses, reset: resetIndexing } = indexing;
   /* Filled while one more pass would still change what the software knows, plain once it would
      not: the button says "do this next" exactly while that is true, and no longer. */
-  const pending = inventory !== null && analysisPending(inventory.files);
+  const pending = inventory !== null && analysisPendingDocuments(inventory.files);
   /* How many documents that pass would change. The button already said "there is something to
      do"; the number says how much, which is the difference between a badge she learns to ignore
      and one she acts on. */
-  const pendingCount = inventory === null ? 0 : countPending(inventory.files);
+  const pendingCount = inventory === null ? 0 : countPendingDocuments(inventory.files);
   /* What the selection says, and whether there is anything to select: "tous" means nothing while
      no document has been analysed. */
   const chosen = scope === undefined ? [] : scopedPaths(scope);

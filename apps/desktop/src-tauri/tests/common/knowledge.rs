@@ -79,6 +79,45 @@ pub fn snapshot(connection: &Connection) -> BTreeMap<String, Vec<String>> {
     out
 }
 
+/// The tables the deterministic table engine and the base's reading of the columns stand on. The file
+/// profile work is held to leave them **byte-identical** (`docs/LEXICAL-RETRIEVAL-DESIGN.md`, section 8).
+pub const TABULAR_TABLES: [&str; 3] = [
+    "tabular_inventories",
+    "tabular_workbooks",
+    "kb_column_semantics",
+];
+
+/// Every row of the three tabular tables as text, sorted, so two snapshots compare with `==`.
+pub fn tabular_snapshot(connection: &Connection) -> BTreeMap<String, Vec<String>> {
+    let mut out = BTreeMap::new();
+    for table in TABULAR_TABLES {
+        let mut statement = connection
+            .prepare(&format!("SELECT * FROM {table}"))
+            .expect("prepares");
+        let width = statement.column_count();
+        let mut rows: Vec<String> = statement
+            .query_map([], |row| {
+                let mut cells = Vec::with_capacity(width);
+                for index in 0..width {
+                    cells.push(match row.get_ref(index)? {
+                        ValueRef::Null => "NULL".to_string(),
+                        ValueRef::Integer(value) => value.to_string(),
+                        ValueRef::Real(value) => format!("{value:.6}"),
+                        ValueRef::Text(bytes) => String::from_utf8_lossy(bytes).to_string(),
+                        ValueRef::Blob(bytes) => format!("blob:{}", bytes.len()),
+                    });
+                }
+                Ok(cells.join("|"))
+            })
+            .expect("queries")
+            .collect::<Result<_, _>>()
+            .expect("reads");
+        rows.sort();
+        out.insert(table.to_string(), rows);
+    }
+    out
+}
+
 /// The number of rows a pass could have written, over every knowledge table but the seeds.
 pub fn knowledge_rows(connection: &Connection) -> usize {
     [

@@ -27,6 +27,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::file_record::{FileRecord, Readability};
 use crate::file_reference::{FileReferenceResolver, ReferenceStatus, ResolutionReason};
+use crate::finder::question_frame::{SetQuestion, SetQuestionVocabulary};
+use crate::finder::rank::{RankQuestionVocabulary, RankedEntry};
+use crate::finder::{Coverage, DocumentListing};
 use crate::inventory::WorkFolderInventory;
 
 /// The shipped packs. `include_str!` rather than a runtime resource lookup: the vocabulary is
@@ -70,6 +73,12 @@ struct PatternPack {
     distributive: Vec<String>,
     subjects: Subjects,
     extensions: HashMap<String, Vec<String>>,
+    /// The sentence that asks which files talk about X (`finder::question_frame`).
+    #[serde(default)]
+    set_question: Option<SetQuestionVocabulary>,
+    /// The sentence that asks for the latest or the earliest file (`finder::rank`).
+    #[serde(default)]
+    rank_question: Option<RankQuestionVocabulary>,
 }
 
 fn default_max_unknown_words() -> usize {
@@ -114,7 +123,13 @@ fn pack_for(locale: &str) -> Option<PatternPack> {
         })
         .or_else(|| PACKS.iter().find(|(tag, _)| *tag == FALLBACK_LOCALE))
         .map(|(_, body)| *body)?;
-    serde_json::from_str(body).ok()
+    let mut pack: PatternPack = serde_json::from_str(body).ok()?;
+    pack.set_question = pack.set_question.take().map(SetQuestionVocabulary::folded);
+    pack.rank_question = pack
+        .rank_question
+        .take()
+        .map(RankQuestionVocabulary::folded);
+    Some(pack)
 }
 
 /// The words the indexed documents actually contain.
@@ -142,7 +157,11 @@ impl CorpusWords for NoCorpus {
 /// What the interface is told, in machine codes. Every variant carries exactly the facts the
 /// sentence needs, and no document text.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum FolderAnswer {
     FileCount {
         total: usize,
@@ -210,6 +229,40 @@ pub enum FolderAnswer {
     /// themselves. Counting or listing an empty selection would read as a statement about the
     /// folder (`docs/SELECTION-AND-MEMORY.md`).
     NothingSelected,
+    /// Which of the selected files talk about X: a **word search** of the index, with no model and no
+    /// embedding. The first files carry their excerpt, the others only their path, and the total is always
+    /// stated (`finder::set_search`).
+    DocumentSearch {
+        /// X as the user wrote it.
+        query: String,
+        /// The words that were read, folded: the interface says it is a word search.
+        terms: Vec<String>,
+        /// Whether the last word was also read as the start of a word.
+        prefix: bool,
+        quoted: bool,
+        /// The business type the collection noun stood for, applied as a filter.
+        business_type: Option<String>,
+        /// X was an identifier, searched in every spelling.
+        identifier: bool,
+        total: usize,
+        listed: Vec<DocumentListing>,
+        others: Vec<String>,
+        coverage: Coverage,
+    },
+    /// "What is the latest letter received": the readable documents ranked by the date of their name, else
+    /// of their modification. The first of `ranking` is the answer; `mixed_basis` says the dates are not all
+    /// of one kind.
+    RankedFile {
+        latest: bool,
+        /// The collection noun as written, `None` when it names no kind of document.
+        noun: Option<String>,
+        /// The readable documents that were ranked or could not be.
+        candidates: usize,
+        /// Of those, the ones with no date at all.
+        unranked: usize,
+        mixed_basis: bool,
+        ranking: Vec<RankedEntry>,
+    },
 }
 
 /// Where a question goes.
@@ -229,6 +282,9 @@ pub enum QuestionRoute {
         /// Every indexed file, in canonical order. The authoritative list, not a ranking.
         files: Vec<FileRecord>,
     },
+    /// "Which documents talk about X": answered by the finder from the index, with no model and no
+    /// embedding call (`docs/DECISIONS.md`, 14 October 2026).
+    SetSearch(SetQuestion),
     /// Ordinary content question: the existing whole-folder retrieval, unchanged.
     GlobalRetrieval,
 }
@@ -299,6 +355,23 @@ pub fn route(
     }
 
     if let Some(pack) = pack {
+        // "Which documents talk about X" is a search of the words of X, not a question about what a
+        // document says: the index answers it whole, before the inventory's vocabulary reads it.
+        if let Some(set) = pack
+            .set_question
+            .as_ref()
+            .and_then(|vocabulary| vocabulary.parse(question))
+        {
+            return QuestionRoute::SetSearch(set);
+        }
+        // "What is the latest letter" is a ranking of the inventory, not a question about content.
+        if let (Some(rank), Some(set)) = (pack.rank_question.as_ref(), pack.set_question.as_ref()) {
+            if let Some(asked) = rank.parse(question, &set.nouns) {
+                return QuestionRoute::Deterministic(crate::finder::rank::answer(
+                    inventory, &asked,
+                ));
+            }
+        }
         // The filesystem questions come first, so "list all files" stays a listing rather than
         // becoming a request to read all of them.
         if let Some(answer) = folder_answer(inventory, corpus, question, &pack) {
@@ -312,6 +385,15 @@ pub fn route(
     }
 
     QuestionRoute::GlobalRetrieval
+}
+
+/// Read `question` as the sentence that asks which files talk about X, or `None`. Pure; the router uses it
+/// after the named-file check, and a caller that only needs to know can ask it directly.
+pub fn set_question(question: &str, locale: &str) -> Option<SetQuestion> {
+    pack_for(locale)?
+        .set_question
+        .as_ref()
+        .and_then(|vocabulary| vocabulary.parse(question))
 }
 
 /// What the conversation's selection allows, as the router needs to know it.
@@ -358,7 +440,9 @@ pub fn route_in_selection(
         QuestionRoute::Deterministic(FolderAnswer::NoMatchingFile { query }) => {
             QuestionRoute::Deterministic(FolderAnswer::NoMatchingFile { query })
         }
-        QuestionRoute::Deterministic(_) | QuestionRoute::PerDocumentRetrieval { .. } => {
+        QuestionRoute::Deterministic(_)
+        | QuestionRoute::PerDocumentRetrieval { .. }
+        | QuestionRoute::SetSearch(_) => {
             QuestionRoute::Deterministic(FolderAnswer::NothingSelected)
         }
         other => other,
@@ -920,12 +1004,24 @@ mod tests {
         // their contents rather than about the folder. Nothing else in the sentence says so.
         let corpus = Words(&["metformin", "glycemie", "camille"]);
 
-        assert_eq!(
+        // "Which documents mention X" asks for the files that hold a word: the finder answers it from the
+        // index (a decision of 14 October 2026), and the words of the documents no longer matter to it.
+        assert!(matches!(
             route(
                 &folder(),
                 &corpus,
                 "How many documents mention metformin?",
                 "en-US"
+            ),
+            QuestionRoute::SetSearch(_)
+        ));
+        // A question about what the documents say keeps its road.
+        assert_eq!(
+            route(
+                &folder(),
+                &corpus,
+                "Quel taux de glycemie pour Camille ?",
+                "fr-FR"
             ),
             QuestionRoute::GlobalRetrieval
         );
@@ -933,8 +1029,8 @@ mod tests {
             route(
                 &folder(),
                 &corpus,
-                "Quel taux de glycemie pour Camille ?",
-                "fr-FR"
+                "What did the metformin dose change to?",
+                "en-US"
             ),
             QuestionRoute::GlobalRetrieval
         );

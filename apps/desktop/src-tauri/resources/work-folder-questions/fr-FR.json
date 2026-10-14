@@ -282,5 +282,675 @@
       "jpeg",
       "jpg"
     ]
+  },
+  "set_question": {
+    "_comment": "La phrase qui demande quels fichiers parlent de X : ouverture, determinants, nom de collection, liaison, verbe, puis X (1 a max_terms mots, ou une expression entre guillemets). Compare sur les formes sans accent ni majuscule. Un autre mot entre le nom et le verbe est un filtre : la phrase garde alors son chemin (docs/LEXICAL-RETRIEVAL-DESIGN.md, 7).",
+    "max_terms": 4,
+    "max_quoted_terms": 8,
+    "openers": [
+      [
+        "quels"
+      ],
+      [
+        "quelles"
+      ],
+      [
+        "quel"
+      ],
+      [
+        "quelle"
+      ],
+      [
+        "lesquels"
+      ],
+      [
+        "lesquelles"
+      ],
+      [
+        "quels",
+        "sont"
+      ],
+      [
+        "quelles",
+        "sont"
+      ],
+      [
+        "y",
+        "a",
+        "t",
+        "il"
+      ],
+      [
+        "y",
+        "a",
+        "il"
+      ],
+      [
+        "est",
+        "ce",
+        "qu",
+        "il",
+        "y",
+        "a"
+      ],
+      [
+        "il",
+        "y",
+        "a"
+      ],
+      [
+        "combien",
+        "de"
+      ],
+      [
+        "combien"
+      ],
+      [
+        "liste"
+      ],
+      [
+        "listez"
+      ],
+      [
+        "donne",
+        "moi"
+      ],
+      [
+        "donnez",
+        "moi"
+      ],
+      [
+        "trouve"
+      ],
+      [
+        "trouvez"
+      ],
+      [
+        "cherche"
+      ],
+      [
+        "cherchez"
+      ],
+      [
+        "affiche"
+      ],
+      [
+        "montre",
+        "moi"
+      ],
+      [
+        "je",
+        "cherche"
+      ],
+      [
+        "je",
+        "veux",
+        "voir"
+      ],
+      [
+        "je",
+        "voudrais",
+        "voir"
+      ]
+    ],
+    "determiners": [
+      [
+        "les"
+      ],
+      [
+        "des"
+      ],
+      [
+        "de"
+      ],
+      [
+        "du"
+      ],
+      [
+        "tous"
+      ],
+      [
+        "toutes"
+      ],
+      [
+        "tous",
+        "les"
+      ],
+      [
+        "toutes",
+        "les"
+      ],
+      [
+        "mes"
+      ],
+      [
+        "ces"
+      ],
+      [
+        "ses"
+      ],
+      [
+        "l"
+      ],
+      [
+        "d"
+      ],
+      [
+        "un"
+      ],
+      [
+        "une"
+      ],
+      [
+        "sont"
+      ]
+    ],
+    "nouns": [
+      {
+        "words": [
+          "document"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "documents"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "fichier"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "fichiers"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "courrier"
+        ]
+      },
+      {
+        "words": [
+          "courriers"
+        ]
+      },
+      {
+        "words": [
+          "lettre"
+        ],
+        "kind": "letter"
+      },
+      {
+        "words": [
+          "lettres"
+        ],
+        "kind": "letter"
+      },
+      {
+        "words": [
+          "facture"
+        ],
+        "kind": "invoice"
+      },
+      {
+        "words": [
+          "factures"
+        ],
+        "kind": "invoice"
+      },
+      {
+        "words": [
+          "devis"
+        ],
+        "kind": "quote"
+      },
+      {
+        "words": [
+          "certificat"
+        ],
+        "kind": "certificate"
+      },
+      {
+        "words": [
+          "certificats"
+        ],
+        "kind": "certificate"
+      },
+      {
+        "words": [
+          "ordonnance"
+        ],
+        "kind": "prescription"
+      },
+      {
+        "words": [
+          "ordonnances"
+        ],
+        "kind": "prescription"
+      },
+      {
+        "words": [
+          "convocation"
+        ],
+        "kind": "appointment_letter"
+      },
+      {
+        "words": [
+          "convocations"
+        ],
+        "kind": "appointment_letter"
+      },
+      {
+        "words": [
+          "decompte"
+        ],
+        "kind": "insurer_statement"
+      },
+      {
+        "words": [
+          "decomptes"
+        ],
+        "kind": "insurer_statement"
+      },
+      {
+        "words": [
+          "resultat"
+        ],
+        "kind": "lab_result"
+      },
+      {
+        "words": [
+          "resultats"
+        ],
+        "kind": "lab_result"
+      },
+      {
+        "words": [
+          "resultats",
+          "d",
+          "analyses"
+        ],
+        "kind": "lab_result"
+      },
+      {
+        "words": [
+          "analyses"
+        ],
+        "kind": "lab_result"
+      }
+    ],
+    "linkers": [
+      [
+        "qui"
+      ],
+      [
+        "que"
+      ],
+      [
+        "dont"
+      ]
+    ],
+    "verbs": [
+      [
+        "parle",
+        "de"
+      ],
+      [
+        "parle",
+        "d"
+      ],
+      [
+        "parlent",
+        "de"
+      ],
+      [
+        "parlent",
+        "d"
+      ],
+      [
+        "mentionne"
+      ],
+      [
+        "mentionnent"
+      ],
+      [
+        "evoque"
+      ],
+      [
+        "evoquent"
+      ],
+      [
+        "vient",
+        "de"
+      ],
+      [
+        "vient",
+        "d"
+      ],
+      [
+        "viennent",
+        "de"
+      ],
+      [
+        "viennent",
+        "d"
+      ],
+      [
+        "concerne"
+      ],
+      [
+        "concernent"
+      ],
+      [
+        "contient"
+      ],
+      [
+        "contiennent"
+      ],
+      [
+        "cite"
+      ],
+      [
+        "citent"
+      ],
+      [
+        "traite",
+        "de"
+      ],
+      [
+        "traitent",
+        "de"
+      ],
+      [
+        "traite",
+        "d"
+      ],
+      [
+        "traitent",
+        "d"
+      ],
+      [
+        "sont",
+        "lies",
+        "a"
+      ],
+      [
+        "est",
+        "lie",
+        "a"
+      ],
+      [
+        "sont",
+        "liees",
+        "a"
+      ],
+      [
+        "est",
+        "liee",
+        "a"
+      ],
+      [
+        "lies",
+        "a"
+      ],
+      [
+        "lie",
+        "a"
+      ],
+      [
+        "portent",
+        "sur"
+      ],
+      [
+        "porte",
+        "sur"
+      ],
+      [
+        "se",
+        "rapportent",
+        "a"
+      ],
+      [
+        "se",
+        "rapporte",
+        "a"
+      ],
+      [
+        "vient",
+        "du"
+      ],
+      [
+        "viennent",
+        "du"
+      ],
+      [
+        "viennent",
+        "des"
+      ],
+      [
+        "parle",
+        "du"
+      ],
+      [
+        "parlent",
+        "du"
+      ],
+      [
+        "parlent",
+        "des"
+      ],
+      [
+        "traite",
+        "du"
+      ],
+      [
+        "traitent",
+        "du"
+      ],
+      [
+        "concerne",
+        "le"
+      ],
+      [
+        "concernent",
+        "le"
+      ]
+    ],
+    "articles": [
+      "le",
+      "la",
+      "les",
+      "l",
+      "un",
+      "une",
+      "des",
+      "du",
+      "de",
+      "d",
+      "au",
+      "aux",
+      "mon",
+      "ma",
+      "mes",
+      "ce",
+      "cet",
+      "cette",
+      "ces"
+    ],
+    "stop_terms": [
+      "quoi",
+      "quel",
+      "quels",
+      "quelle",
+      "quelles",
+      "qui",
+      "que",
+      "comment",
+      "pourquoi",
+      "combien",
+      "ou",
+      "quand",
+      "lequel",
+      "lesquels"
+    ],
+    "_comment_nouns": "Courrier est un mot trop large pour etre un filtre : un decompte d'assurance, une convocation ou un certificat sont des courriers. Mesure du 14 octobre 2026 : avec le filtre de type lettre, 17 des 111 fichiers des six phrases du test final etaient perdus. Seuls les noms precis filtrent."
+  },
+  "rank_question": {
+    "_comment": "La phrase qui demande le plus recent ou le plus ancien : ouverture, determinants, ordre, nom de collection (ceux de set_question), mot final facultatif. Tout autre mot est un filtre : la phrase garde alors son chemin (docs/LEXICAL-RETRIEVAL-DESIGN.md).",
+    "openers": [
+      [
+        "quel",
+        "est"
+      ],
+      [
+        "quelle",
+        "est"
+      ],
+      [
+        "quel"
+      ],
+      [
+        "quelle"
+      ],
+      [
+        "donne",
+        "moi"
+      ],
+      [
+        "donnez",
+        "moi"
+      ],
+      [
+        "montre",
+        "moi"
+      ],
+      [
+        "affiche"
+      ],
+      [
+        "trouve"
+      ],
+      [
+        "trouvez"
+      ],
+      [
+        "c",
+        "est"
+      ],
+      [
+        "il",
+        "y",
+        "a"
+      ]
+    ],
+    "determiners": [
+      [
+        "le"
+      ],
+      [
+        "la"
+      ],
+      [
+        "l"
+      ],
+      [
+        "un"
+      ],
+      [
+        "une"
+      ],
+      [
+        "mon"
+      ],
+      [
+        "ma"
+      ],
+      [
+        "est"
+      ],
+      [
+        "que"
+      ],
+      [
+        "qui"
+      ],
+      [
+        "est"
+      ]
+    ],
+    "latest": [
+      [
+        "dernier"
+      ],
+      [
+        "derniere"
+      ],
+      [
+        "plus",
+        "recent"
+      ],
+      [
+        "plus",
+        "recente"
+      ],
+      [
+        "le",
+        "plus",
+        "recent"
+      ],
+      [
+        "la",
+        "plus",
+        "recente"
+      ]
+    ],
+    "earliest": [
+      [
+        "premier"
+      ],
+      [
+        "premiere"
+      ],
+      [
+        "plus",
+        "ancien"
+      ],
+      [
+        "plus",
+        "ancienne"
+      ]
+    ],
+    "trailing": [
+      [
+        "recu"
+      ],
+      [
+        "recue"
+      ],
+      [
+        "arrive"
+      ],
+      [
+        "arrivee"
+      ],
+      [
+        "ajoute"
+      ],
+      [
+        "ajoutee"
+      ],
+      [
+        "enregistre"
+      ],
+      [
+        "enregistree"
+      ]
+    ]
   }
 }

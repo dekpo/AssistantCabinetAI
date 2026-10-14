@@ -240,5 +240,439 @@
       "jpg",
       "jpgs"
     ]
+  },
+  "set_question": {
+    "_comment": "The sentence that asks which files talk about X: opener, determiners, collection noun, linker, verb, then X (1 to max_terms words, or a quoted phrase). Compared on folded forms. Any other word between the noun and the verb is a filter and the sentence keeps its road (docs/LEXICAL-RETRIEVAL-DESIGN.md, 7).",
+    "max_terms": 4,
+    "max_quoted_terms": 8,
+    "openers": [
+      [
+        "which"
+      ],
+      [
+        "what"
+      ],
+      [
+        "list"
+      ],
+      [
+        "show",
+        "me"
+      ],
+      [
+        "find"
+      ],
+      [
+        "search",
+        "for"
+      ],
+      [
+        "are",
+        "there"
+      ],
+      [
+        "is",
+        "there"
+      ],
+      [
+        "how",
+        "many"
+      ],
+      [
+        "do",
+        "any"
+      ],
+      [
+        "does",
+        "any"
+      ],
+      [
+        "i",
+        "am",
+        "looking",
+        "for"
+      ],
+      [
+        "i",
+        "want",
+        "to",
+        "see"
+      ]
+    ],
+    "determiners": [
+      [
+        "the"
+      ],
+      [
+        "all"
+      ],
+      [
+        "all",
+        "the"
+      ],
+      [
+        "my"
+      ],
+      [
+        "these"
+      ],
+      [
+        "those"
+      ],
+      [
+        "of"
+      ],
+      [
+        "any"
+      ],
+      [
+        "a"
+      ],
+      [
+        "an"
+      ],
+      [
+        "are"
+      ],
+      [
+        "is"
+      ]
+    ],
+    "nouns": [
+      {
+        "words": [
+          "document"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "documents"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "file"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "files"
+        ],
+        "generic": true
+      },
+      {
+        "words": [
+          "letter"
+        ],
+        "kind": "letter"
+      },
+      {
+        "words": [
+          "letters"
+        ],
+        "kind": "letter"
+      },
+      {
+        "words": [
+          "invoice"
+        ],
+        "kind": "invoice"
+      },
+      {
+        "words": [
+          "invoices"
+        ],
+        "kind": "invoice"
+      },
+      {
+        "words": [
+          "quote"
+        ],
+        "kind": "quote"
+      },
+      {
+        "words": [
+          "quotes"
+        ],
+        "kind": "quote"
+      },
+      {
+        "words": [
+          "certificate"
+        ],
+        "kind": "certificate"
+      },
+      {
+        "words": [
+          "certificates"
+        ],
+        "kind": "certificate"
+      },
+      {
+        "words": [
+          "prescription"
+        ],
+        "kind": "prescription"
+      },
+      {
+        "words": [
+          "prescriptions"
+        ],
+        "kind": "prescription"
+      },
+      {
+        "words": [
+          "lab",
+          "result"
+        ],
+        "kind": "lab_result"
+      },
+      {
+        "words": [
+          "lab",
+          "results"
+        ],
+        "kind": "lab_result"
+      },
+      {
+        "words": [
+          "statement"
+        ],
+        "kind": "insurer_statement"
+      },
+      {
+        "words": [
+          "statements"
+        ],
+        "kind": "insurer_statement"
+      }
+    ],
+    "linkers": [
+      [
+        "that"
+      ],
+      [
+        "which"
+      ],
+      [
+        "who"
+      ]
+    ],
+    "verbs": [
+      [
+        "mention"
+      ],
+      [
+        "mentions"
+      ],
+      [
+        "mentioning"
+      ],
+      [
+        "talk",
+        "about"
+      ],
+      [
+        "talks",
+        "about"
+      ],
+      [
+        "speak",
+        "about"
+      ],
+      [
+        "speaks",
+        "about"
+      ],
+      [
+        "are",
+        "about"
+      ],
+      [
+        "is",
+        "about"
+      ],
+      [
+        "concern"
+      ],
+      [
+        "concerns"
+      ],
+      [
+        "come",
+        "from"
+      ],
+      [
+        "comes",
+        "from"
+      ],
+      [
+        "contain"
+      ],
+      [
+        "contains"
+      ],
+      [
+        "cite"
+      ],
+      [
+        "cites"
+      ],
+      [
+        "refer",
+        "to"
+      ],
+      [
+        "refers",
+        "to"
+      ],
+      [
+        "deal",
+        "with"
+      ],
+      [
+        "deals",
+        "with"
+      ],
+      [
+        "are",
+        "related",
+        "to"
+      ],
+      [
+        "is",
+        "related",
+        "to"
+      ],
+      [
+        "relate",
+        "to"
+      ],
+      [
+        "relates",
+        "to"
+      ]
+    ],
+    "articles": [
+      "the",
+      "a",
+      "an",
+      "my",
+      "this",
+      "that",
+      "these",
+      "those"
+    ],
+    "stop_terms": [
+      "what",
+      "which",
+      "who",
+      "whom",
+      "how",
+      "why",
+      "when",
+      "where"
+    ]
+  },
+  "rank_question": {
+    "_comment": "The sentence that asks for the latest or the earliest: opener, determiners, order, collection noun (those of set_question), optional last word. Any other word is a filter and the sentence keeps its road (docs/LEXICAL-RETRIEVAL-DESIGN.md).",
+    "openers": [
+      [
+        "what",
+        "is"
+      ],
+      [
+        "which",
+        "is"
+      ],
+      [
+        "what",
+        "s"
+      ],
+      [
+        "which"
+      ],
+      [
+        "show",
+        "me"
+      ],
+      [
+        "find",
+        "me"
+      ],
+      [
+        "find"
+      ],
+      [
+        "give",
+        "me"
+      ]
+    ],
+    "determiners": [
+      [
+        "the"
+      ],
+      [
+        "a"
+      ],
+      [
+        "an"
+      ],
+      [
+        "my"
+      ],
+      [
+        "is"
+      ],
+      [
+        "that"
+      ],
+      [
+        "which"
+      ]
+    ],
+    "latest": [
+      [
+        "latest"
+      ],
+      [
+        "last"
+      ],
+      [
+        "most",
+        "recent"
+      ],
+      [
+        "newest"
+      ]
+    ],
+    "earliest": [
+      [
+        "first"
+      ],
+      [
+        "earliest"
+      ],
+      [
+        "oldest"
+      ]
+    ],
+    "trailing": [
+      [
+        "received"
+      ],
+      [
+        "added"
+      ],
+      [
+        "saved"
+      ],
+      [
+        "arrived"
+      ]
+    ]
   }
 }

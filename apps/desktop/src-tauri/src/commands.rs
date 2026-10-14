@@ -16,14 +16,16 @@ use crate::analysis_scope::{AnalysisScope, GroundingTier, ScopeMode};
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::data_folder::{self, DataFolder, DataFolderReport};
+use crate::discovery;
 use crate::error::AppError;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::FileReferenceResolver;
 use crate::fill_plan;
+use crate::finder::{self, FinderQuery, FinderResult, FinderScope, InventoryFile};
 use crate::file_profile;
 use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
-use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
+use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot, GROUNDED_TEMPERATURE};
 use crate::index_store::IndexStore;
 use crate::indexing::{self, IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, FolderNode, InventorySummary, WorkFolderInventory};
@@ -468,6 +470,57 @@ pub fn profile_index_status(
 ) -> Result<file_profile::store::ProfileIndexStatus, AppError> {
     let index = open_index(&app)?;
     Ok(file_profile::store::index_status(index.connection()))
+}
+
+/// Find files of one folder by what the index and the file system know, with no model, no embedding and
+/// no file read (`docs/LEXICAL-RETRIEVAL-DESIGN.md` 6). Cheap enough to run while the user types: it walks
+/// the folder's names, reads the profile tables and starts nothing heavy. It never changes the selection.
+#[tauri::command]
+pub async fn find_files(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    domain: file_profile::build::Domain,
+    mut query: FinderQuery,
+    scope: FinderScope,
+) -> Result<FinderResult, AppError> {
+    let (folder, locale, pack_ids) = state.read(|settings| {
+        (
+            match domain {
+                file_profile::build::Domain::Documents => settings.work_folder.clone(),
+                file_profile::build::Domain::Data => settings.data_folder.clone(),
+            },
+            settings
+                .locale
+                .clone()
+                .unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string()),
+            settings.knowledge_pack_ids(),
+        )
+    })?;
+    let Some(folder) = folder else {
+        return Err(match domain {
+            file_profile::build::Domain::Documents => AppError::NoWorkFolderSet,
+            file_profile::build::Domain::Data => AppError::NoDataFolderSet,
+        });
+    };
+    let inventory: Vec<InventoryFile> = discovery::discover_all(Path::new(&folder))
+        .iter()
+        .map(InventoryFile::from)
+        .collect();
+    // A number typed in any spelling meets the number stored in the profile: the identifiers of the active
+    // packs are read from what was typed, here, where the packs are known.
+    if query.identifiers.is_empty() {
+        if let Some(text) = query.text.as_deref() {
+            let ids: Vec<&str> = pack_ids.iter().map(String::as_str).collect();
+            if let (Ok(packs), Ok(vocabulary)) = (
+                PackSet::load(&locale, &ids),
+                file_profile::vocabulary::ProfileVocabulary::load(&ids),
+            ) {
+                query.identifiers = finder::set_search::identifier_forms(text, &packs, &vocabulary);
+            }
+        }
+    }
+    let index = open_index(&app)?;
+    finder::find(index.connection(), domain, &inventory, &query, &scope)
 }
 
 /// Whether the local index has anything to search yet. The chat panel checks this before
@@ -1487,6 +1540,7 @@ impl Writer<'_> {
         instruction: String,
         history: &[ChatTurn],
         question: String,
+        temperature: Option<f32>,
         on_event: &Channel<ChatStreamEvent>,
     ) -> Result<Generation, AppError> {
         let final_turn = format!("{instruction}\n\nQuestion: {question}");
@@ -1506,12 +1560,13 @@ impl Writer<'_> {
         let answer = self
             .state
             .gateway
-            .chat(
+            .chat_at(
                 &self.server_url,
                 &self.model_alias,
                 self.locale.as_deref(),
                 &turns,
                 self.idle_timeout,
+                temperature,
                 |delta| {
                     first_token.get_or_init(|| elapsed_ms(started.elapsed()));
                     let _ = on_event.send(ChatStreamEvent::Delta {
@@ -1734,6 +1789,60 @@ async fn sourced_answer(
                 targeting: None,
             });
         }
+        QuestionRoute::SetSearch(set) => {
+            // A word search of the selected files: read from the index, so no embedding call and no
+            // generation. Answered the same with the AI machine stopped.
+            let (locale_tag, pack_ids) = state.read(|settings| {
+                (
+                    settings
+                        .locale
+                        .clone()
+                        .unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string()),
+                    settings.knowledge_pack_ids(),
+                )
+            })?;
+            let ids: Vec<&str> = pack_ids.iter().map(String::as_str).collect();
+            let identifiers = match (
+                PackSet::load(&locale_tag, &ids),
+                file_profile::vocabulary::ProfileVocabulary::load(&ids),
+            ) {
+                (Ok(packs), Ok(vocabulary)) => {
+                    finder::set_search::identifier_forms(&set.text, &packs, &vocabulary)
+                }
+                _ => Vec::new(),
+            };
+            let scoped_files: Vec<InventoryFile> = inventory
+                .all_files()
+                .iter()
+                .map(InventoryFile::from)
+                .collect();
+            let answer =
+                finder::set_search::answer(index.connection(), &scoped_files, &set, identifiers)?;
+            measured.path = RetrievalPath::DocumentSearch;
+            let unanalysed = match &answer {
+                FolderAnswer::DocumentSearch { coverage, .. } => coverage.unanalysed,
+                _ => 0,
+            };
+            let _ = on_event.send(ChatStreamEvent::FolderAnswer {
+                answer: answer.clone(),
+            });
+            return Ok(AskAnswer {
+                answer: String::new(),
+                sources: Vec::new(),
+                folder_answer: Some(answer),
+                coverage: None,
+                unanalysed_files: unanalysed,
+                scope_outdated,
+                without_documents: false,
+                tabular_answer: None,
+                documents_not_needed: false,
+                mixed_answer: None,
+                unverified_numbers: Vec::new(),
+                fill_plan: None,
+                diagnostics: None,
+                targeting: None,
+            });
+        }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
         QuestionRoute::PerDocumentRetrieval { files } => {
             Plan::EveryDocument(files.into_iter().map(|file| file.relative_path).collect())
@@ -1758,6 +1867,8 @@ async fn sourced_answer(
                 conversation::NO_DOCUMENTS_INSTRUCTION.to_string(),
                 &history,
                 question,
+                // An open conversation rests on no material: the gateway's own default.
+                None,
                 on_event,
             )
             .await?;
@@ -1929,7 +2040,13 @@ async fn sourced_answer(
     let history = conversation::history_beside_sources(&history, writer.budget);
     let asked = question.clone();
     let generated = writer
-        .write(grounding, &history, question, on_event)
+        .write(
+            grounding,
+            &history,
+            question,
+            Some(GROUNDED_TEMPERATURE),
+            on_event,
+        )
         .await?;
     measured.generation_first_token_ms = generated.first_token_ms;
     measured.generation_total_ms = generated.total_ms;
@@ -1941,7 +2058,10 @@ async fn sourced_answer(
     let mut known: Vec<&str> = evidence.iter().map(|item| item.text.as_str()).collect();
     known.extend(evidence.iter().map(|item| item.relative_path.as_str()));
     known.push(&asked);
-    let unverified_numbers = number_check::unsupported_numbers(&answer, &known, 2);
+    // The pages the excerpts come from are known figures too: a correct citation is no false alarm.
+    let pages: Vec<u32> = evidence.iter().map(|item| item.page_number).collect();
+    let unverified_numbers =
+        number_check::unsupported_numbers_with_pages(&answer, &known, &pages, 2);
 
     Ok(AskAnswer {
         answer,

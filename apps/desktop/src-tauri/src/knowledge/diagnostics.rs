@@ -81,6 +81,8 @@ pub enum RetrievalPath {
     Mixed,
     /// A question about the folder itself, answered from the inventory.
     FolderAnswer,
+    /// "Which documents talk about X", answered by the finder from the index: no model, no embedding.
+    DocumentSearch,
     /// No document selected: answered from the conversation alone.
     WithoutDocuments,
 }

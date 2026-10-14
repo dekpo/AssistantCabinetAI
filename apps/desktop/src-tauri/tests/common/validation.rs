@@ -685,7 +685,9 @@ impl<'a> Replay<'a> {
         let workbook_paths: Vec<String> =
             workbooks.iter().map(|f| f.relative_path.clone()).collect();
         let (kind, plan_files, blocked) = match route {
-            QuestionRoute::Deterministic(_) => {
+            // The finder answers a set sentence from the index with no retrieval, as the inventory answers
+            // a folder question: for the replay both are "answered without the documents".
+            QuestionRoute::Deterministic(_) | QuestionRoute::SetSearch(_) => {
                 return Asked {
                     route: if no_documents_chosen {
                         RouteKind::NothingSelected

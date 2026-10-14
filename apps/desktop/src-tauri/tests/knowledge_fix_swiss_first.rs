@@ -259,8 +259,6 @@ async fn an_identifier_or_an_acronym_goes_to_the_documents_not_to_the_file_route
     for question in [
         "\u{c0} qui appartient le num\u{e9}ro AVS 756.3052.5778.43 ?",
         "Quel document porte la police n\u{b0} 6.126.452-9 ?",
-        "Quels documents concernent HUG ?",
-        "Quels courriers viennent du CHUV ?",
         "\u{c0} qui est l'adresse jean.dupont@email.com ?",
         "Qui a le t\u{e9}l\u{e9}phone 04.50.12.34.56 ?",
     ] {
@@ -269,6 +267,22 @@ async fn an_identifier_or_an_acronym_goes_to_the_documents_not_to_the_file_route
             matches!(routed, QuestionRoute::GlobalRetrieval),
             "{question:?} -> {routed:?}"
         );
+    }
+}
+
+/// Which documents talk about an acronym is a word search of the index (14 October 2026): it never reaches
+/// the file router either, which is what this family of defects (KBD-35) was about.
+#[tokio::test]
+async fn an_acronym_in_a_set_sentence_is_searched_as_a_word_and_not_read_as_a_file_question() {
+    let lab = routing_world().await;
+    for (question, word) in [
+        ("Quels documents concernent HUG ?", "HUG"),
+        ("Quels courriers viennent du CHUV ?", "CHUV"),
+    ] {
+        match route(&lab, question) {
+            QuestionRoute::SetSearch(set) => assert_eq!(set.text, word, "{question:?}"),
+            other => panic!("{question:?} -> {other:?}"),
+        }
     }
 }
 

@@ -11,6 +11,8 @@
 //! collects (`name.name_words`, `roles`, `metadata`, `header.letterhead`) and is a separate step, so that
 //! the knowledge mode `off` still gives a complete layer 1.
 
+use serde::{Deserialize, Serialize};
+
 use super::dates::{collect_dates, DocumentDates};
 use super::header::{read_header, HeaderReading, TitleSource, TITLE_FIRST_LINE_CONFIDENCE};
 use super::metadata::{MetadataKind, MetadataReading};
@@ -23,7 +25,8 @@ use crate::knowledge::packs::PackSet;
 pub const BODY_CHARS: usize = 1500;
 
 /// Which of the two folders a file belongs to; the same relative path can exist in both.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Domain {
     Documents,
     Data,

@@ -1041,17 +1041,27 @@ async fn g2_a_word_from_the_documents_still_sends_the_question_to_retrieval() {
     let indexed = index_fixture("flat").await;
     let inventory = inventory_of("flat", &indexed);
 
-    // "glycemie" is in the lab report, so this is a question about what the documents say - which
-    // no amount of shared grammar with a counting question may override.
+    // "glycemie" is in the lab report. "How many documents talk about glycemie" is a word search and goes
+    // to the finder (14 October 2026); a question about what the documents say - which no amount of shared
+    // grammar with a counting question may override - still goes to retrieval.
     assert!(
         indexed.index.contains("glycemie"),
         "the fixture must carry the word"
     );
-    assert_eq!(
+    assert!(matches!(
         route(
             &inventory,
             &indexed.index,
             "Combien de documents parlent de glycemie ?",
+            "fr-FR"
+        ),
+        QuestionRoute::SetSearch(_)
+    ));
+    assert_eq!(
+        route(
+            &inventory,
+            &indexed.index,
+            "Quel est le taux de glycemie dans les documents ?",
             "fr-FR"
         ),
         QuestionRoute::GlobalRetrieval

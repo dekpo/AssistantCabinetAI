@@ -215,6 +215,12 @@ impl NameProfile {
     /// **last** word may be only the start of one (the field is used while typing). A date prefix and the
     /// file's own extension typed in the query are not words.
     pub fn matches(&self, query: &str) -> bool {
+        self.matches_as(query, true)
+    }
+
+    /// [`NameProfile::matches`], with the last word read as a start only when `last_may_be_start` (a field
+    /// being typed), and as a whole word otherwise (a sentence already finished).
+    pub fn matches_as(&self, query: &str, last_may_be_start: bool) -> bool {
         let wanted = fold(query.trim()).replace('\\', "/");
         if wanted.is_empty() {
             return false;
@@ -241,7 +247,8 @@ impl NameProfile {
         let exact_word = |token: &str| words.contains(&token);
         others.iter().all(|token| exact_word(token))
             && (exact_word(last)
-                || (last.chars().count() >= MIN_PREFIX_LETTERS
+                || (last_may_be_start
+                    && last.chars().count() >= MIN_PREFIX_LETTERS
                     && words.iter().any(|word| word.starts_with(last.as_str()))))
     }
 }

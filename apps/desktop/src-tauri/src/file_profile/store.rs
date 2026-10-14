@@ -105,6 +105,8 @@ CREATE TABLE IF NOT EXISTS file_profile_fields (
 );
 CREATE INDEX IF NOT EXISTS file_profile_fields_by_file
     ON file_profile_fields (domain, relative_path);
+CREATE INDEX IF NOT EXISTS file_profile_fields_by_kind
+    ON file_profile_fields (kind, domain, relative_path);
 CREATE TABLE IF NOT EXISTS file_profile_entities (
     domain TEXT NOT NULL,
     relative_path TEXT NOT NULL,

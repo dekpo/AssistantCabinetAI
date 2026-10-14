@@ -561,6 +561,7 @@ async fn print_what_the_interface_shows_for_the_human_test() {
                 }
                 QuestionRoute::PerDocumentRetrieval { .. } => "each document".to_string(),
                 QuestionRoute::GlobalRetrieval => "global retrieval".to_string(),
+                QuestionRoute::SetSearch(_) => "word search".to_string(),
             };
         let documents = lab.documents();
         let plan = lab.plan(

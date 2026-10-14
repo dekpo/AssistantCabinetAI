@@ -18,6 +18,7 @@ pub mod file_record;
 pub mod file_reference;
 pub mod fill_plan;
 pub mod filename_sanitizer;
+pub mod finder;
 pub mod folder_questions;
 pub mod gateway;
 pub mod index_store;
@@ -91,6 +92,7 @@ pub fn run() {
             commands::knowledge_reset,
             commands::has_indexed_documents,
             commands::profile_index_status,
+            commands::find_files,
             commands::work_folder_inventory,
             commands::reveal_work_folder,
             commands::reveal_work_file,

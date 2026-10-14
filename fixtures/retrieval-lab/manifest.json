@@ -1,0 +1,15 @@
+{
+ "seed": 0,
+ "documents": 29,
+ "workbooks": 0,
+ "questions": 39,
+ "generated_by": "scripts/gen-retrieval-lab.py",
+ "book_extracts": 0,
+ "by_format": {
+  "docx": 6,
+  "md": 2,
+  "pdf": 14,
+  "txt": 7
+ },
+ "pages_total": 30
+}

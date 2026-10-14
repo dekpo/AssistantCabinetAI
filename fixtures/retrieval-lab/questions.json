@@ -1,0 +1,1187 @@
+[
+ {
+  "id": "L001",
+  "category": "paraphrase",
+  "text": "Combien l'assurance a-t-elle remboursé à Odile Ferrand ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-03-04_lettre-caisse-ferrand.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-03-04_lettre-caisse-ferrand.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "212.40"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L002",
+  "category": "paraphrase",
+  "text": "Quel remboursement Sophie Rochat a-t-elle reçu de sa caisse ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-03-11_lettre-caisse-rochat.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-03-11_lettre-caisse-rochat.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "148.90"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L003",
+  "category": "paraphrase",
+  "text": "Quelle somme la caisse a-t-elle versée à Yvonne Praz ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-05-27_lettre-caisse-praz.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-05-27_lettre-caisse-praz.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "96.30"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L004",
+  "category": "keyword",
+  "text": "Quelle est la créatinine de Laurent Bonvin ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-04-02_resultat-laboratoire-bonvin.docx"
+  ],
+  "relevant_readable": [
+   "courriers/2026-04-02_resultat-laboratoire-bonvin.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "84 µmol/L"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "keyword",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L005",
+  "category": "paraphrase",
+  "text": "Quel est le taux de sucre dans le sang de Pierre Moret à jeun ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "resultats/2026-04-09_resultat-glycemie-moret.txt"
+  ],
+  "relevant_readable": [
+   "resultats/2026-04-09_resultat-glycemie-moret.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "5.8 mmol/L"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L006",
+  "category": "paraphrase",
+  "text": "Quel est le taux de sucre dans le sang de Raymond Jaquet ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "resultats/2026-07-08_resultat-glycemie-jaquet.txt"
+  ],
+  "relevant_readable": [
+   "resultats/2026-07-08_resultat-glycemie-jaquet.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "6.9 mmol/L"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L007",
+  "category": "paraphrase",
+  "text": "Quand l'équipe se réunit-elle désormais ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "comptes-rendus/2026-04-15_compte-rendu-reunion-equipe.txt"
+  ],
+  "relevant_readable": [
+   "comptes-rendus/2026-04-15_compte-rendu-reunion-equipe.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "mardi à 12h15"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L008",
+  "category": "paraphrase",
+  "text": "Quand est proposée la demi-journée de perfectionnement ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "comptes-rendus/2026-06-24_compte-rendu-reunion-formation.txt"
+  ],
+  "relevant_readable": [
+   "comptes-rendus/2026-06-24_compte-rendu-reunion-formation.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "jeudi à 14h00"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L009",
+  "category": "keyword",
+  "text": "Quel budget est prévu pour l'autoclave ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "comptes-rendus/2026-05-06_compte-rendu-reunion-materiel.docx"
+  ],
+  "relevant_readable": [
+   "comptes-rendus/2026-05-06_compte-rendu-reunion-materiel.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 9 800"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "keyword",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L010",
+  "category": "keyword",
+  "text": "Quel est le montant total du devis informatique de Léman ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "factures/2026-05-12_devis-informatique-leman.pdf"
+  ],
+  "relevant_readable": [
+   "factures/2026-05-12_devis-informatique-leman.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 3 420.00"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "keyword",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L011",
+  "category": "keyword",
+  "text": "Quel est le montant total du devis informatique d'Alpina ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "factures/2026-07-22_devis-informatique-alpina.pdf"
+  ],
+  "relevant_readable": [
+   "factures/2026-07-22_devis-informatique-alpina.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 2 980.00"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "keyword",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L012",
+  "category": "paraphrase",
+  "text": "Quand est la consultation de Madeleine Vuillemin ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-05-20_lettre-medecin-conseil-vuillemin.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-05-20_lettre-medecin-conseil-vuillemin.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "24 juin 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L013",
+  "category": "paraphrase",
+  "text": "Combien de temps Hugo Gaillard est-il en incapacité de travailler ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-06-03_lettre-arret-travail-gaillard.docx"
+  ],
+  "relevant_readable": [
+   "courriers/2026-06-03_lettre-arret-travail-gaillard.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "14 jours"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L014",
+  "category": "paraphrase",
+  "text": "Quand Noémie Martinet doit-elle refaire son vaccin antitétanique ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-06-10_lettre-vaccination-martinet.txt"
+  ],
+  "relevant_readable": [
+   "courriers/2026-06-10_lettre-vaccination-martinet.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "dans dix ans"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L015",
+  "category": "paraphrase",
+  "text": "Quel est le mauvais cholestérol d'Alice Dubois ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "resultats/2026-06-17_resultat-cholesterol-dubois-alice.pdf"
+  ],
+  "relevant_readable": [
+   "resultats/2026-06-17_resultat-cholesterol-dubois-alice.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "3.4 mmol/L"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L016",
+  "category": "paraphrase",
+  "text": "Quel est le mauvais cholestérol de Charles Dubois ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "resultats/2026-06-17_resultat-cholesterol-dubois-charles.pdf"
+  ],
+  "relevant_readable": [
+   "resultats/2026-06-17_resultat-cholesterol-dubois-charles.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "4.1 mmol/L"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L017",
+  "category": "paraphrase",
+  "text": "Quelle est la mensualité du contrat de ménage ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "contrats/2026-07-01_contrat-nettoyage-proprex.pdf"
+  ],
+  "relevant_readable": [
+   "contrats/2026-07-01_contrat-nettoyage-proprex.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 640"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L018",
+  "category": "keyword",
+  "text": "Quelle est la prime annuelle de l'assurance de responsabilité civile ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "contrats/2026-07-15_attestation-assurance-rc.docx"
+  ],
+  "relevant_readable": [
+   "contrats/2026-07-15_attestation-assurance-rc.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 1 150"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "keyword",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L019",
+  "category": "paraphrase",
+  "text": "Combien a coûté le trajet en ambulance de Gilbert Aebi ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-08-04_facture-transport-aebi.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-08-04_facture-transport-aebi.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 385"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "paraphrase",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L020",
+  "category": "keyword",
+  "text": "Quand a lieu la formation à l'hygiène des mains ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "comptes-rendus/2026-08-19_note-formation-hygiene.md"
+  ],
+  "relevant_readable": [
+   "comptes-rendus/2026-08-19_note-formation-hygiene.md"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "9 octobre 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "keyword",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L021",
+  "category": "identifier",
+  "text": "Quel est le total de la facture 2026-0417 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "factures/2026-02-03_facture-fac-2026-0417.pdf"
+  ],
+  "relevant_readable": [
+   "factures/2026-02-03_facture-fac-2026-0417.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 275.00"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "identifier",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L022",
+  "category": "identifier",
+  "text": "Quel est le montant de la facture FAC-2026-0418 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "factures/2026-02-17_facture-fac-2026-0418.pdf"
+  ],
+  "relevant_readable": [
+   "factures/2026-02-17_facture-fac-2026-0418.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 310.50"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "identifier",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L023",
+  "category": "identifier",
+  "text": "Quel document mentionne l'IBAN CH9300762011623852957 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "paiements/2026-03-02_ordre-de-paiement.txt"
+  ],
+  "relevant_readable": [
+   "paiements/2026-03-02_ordre-de-paiement.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "Pharma-Dépôt Romandie"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "identifier",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L024",
+  "category": "identifier",
+  "text": "À qui appartient le numéro AVS 7561234567897 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "patients/2026-03-09_dossier-administratif-praz.docx"
+  ],
+  "relevant_readable": [
+   "patients/2026-03-09_dossier-administratif-praz.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "Yvonne Praz"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "identifier",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L025",
+  "category": "identifier",
+  "text": "Quel patient a le numéro d'assurance-maladie 285057800608441 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "patients/2026-03-23_dossier-administratif-pellet.pdf"
+  ],
+  "relevant_readable": [
+   "patients/2026-03-23_dossier-administratif-pellet.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "Sylvain Pellet"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "identifier",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L026",
+  "category": "identifier",
+  "text": "Quel est le montant de la franchise du sinistre SIN-7781-B ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-04-28_reference-sinistre.txt"
+  ],
+  "relevant_readable": [
+   "courriers/2026-04-28_reference-sinistre.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 500"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "identifier",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L027",
+  "category": "table_break",
+  "text": "Quelle est la part à payer par le patient pour une radiographie du poignet ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "tarifs/2026-09-01_tarif-des-prestations.pdf"
+  ],
+  "relevant_readable": [
+   "tarifs/2026-09-01_tarif-des-prestations.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "84.50"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "table_break",
+  "fact_pages": [
+   2
+  ]
+ },
+ {
+  "id": "L028",
+  "category": "table_break",
+  "text": "Combien le patient doit-il payer pour un électrocardiogramme, et sous quelle colonne ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "tarifs/2026-09-01_tarif-des-prestations.pdf"
+  ],
+  "relevant_readable": [
+   "tarifs/2026-09-01_tarif-des-prestations.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "Participation patient",
+    "41.80"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "table_break",
+  "fact_pages": [
+   2
+  ]
+ },
+ {
+  "id": "L029",
+  "category": "table_break",
+  "text": "Quel est le tarif de base de l'échographie abdominale ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "tarifs/2026-09-01_tarif-des-prestations.pdf"
+  ],
+  "relevant_readable": [
+   "tarifs/2026-09-01_tarif-des-prestations.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "160.00"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "table_break",
+  "fact_pages": [
+   2
+  ]
+ },
+ {
+  "id": "L030",
+  "category": "list_item",
+  "text": "Quelle est la septième étape de l'accueil d'un nouveau patient ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "procedures/2026-09-14_procedure-accueil.docx"
+  ],
+  "relevant_readable": [
+   "procedures/2026-09-14_procedure-accueil.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "Remettre le formulaire de consentement"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "list_item",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L031",
+  "category": "heading",
+  "text": "Combien de temps conserve-t-on les dossiers ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "procedures/2026-09-21_politique-de-conservation.md"
+  ],
+  "relevant_readable": [
+   "procedures/2026-09-21_politique-de-conservation.md"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "vingt ans"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "heading",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L032",
+  "category": "absent",
+  "text": "Combien l'assurance a-t-elle remboursé à Valérie Nusbaumer ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L033",
+  "category": "absent",
+  "text": "Quel est le total de la facture FAC-2026-0999 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L034",
+  "category": "absent",
+  "text": "Quel est le mauvais cholestérol de Bruno Aeschlimann ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L035",
+  "category": "absent",
+  "text": "Quand a lieu la formation à la radioprotection ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L036",
+  "category": "absent",
+  "text": "Quelle est la prime annuelle d'assurance du véhicule ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L037",
+  "category": "absent",
+  "text": "Quel budget est prévu pour le scanner ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L038",
+  "category": "absent",
+  "text": "À qui appartient le numéro AVS 7569999999991 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ },
+ {
+  "id": "L039",
+  "category": "absent",
+  "text": "Quels sont les horaires d'ouverture du secrétariat ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [],
+  "relevant_readable": [],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": []
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "absent",
+  "fact_pages": []
+ }
+]

@@ -108,6 +108,9 @@ pub struct IndexSummary {
     /// (`knowledge_mode = off`, or a pass that never had a context) and for the Data Folder's pass
     /// until lot 5. Never a name.
     pub knowledge: Option<KnowledgeSummary>,
+    /// What the file profile pass did, as counts (`file_profile::store`). `None` when it could not
+    /// start; it never blocks a pass.
+    pub profile: Option<crate::file_profile::store::ProfileSummary>,
 }
 
 /// How many files of one format the pass could not read. The format is the extension, lowercase and
@@ -523,6 +526,11 @@ pub async fn run_with_knowledge(
         _ => None,
     };
 
+    // The profile of every analysed document, from what is already stored: nothing is read again but the
+    // properties of a file that changed. A failure costs nothing but a missing summary.
+    let profile =
+        crate::file_profile::store::run_documents(index, work_folder, knowledge.as_deref(), locale);
+
     on_progress(IndexProgress {
         processed_files: total_files,
         total_files,
@@ -548,6 +556,7 @@ pub async fn run_with_knowledge(
         chunk_count: index.chunk_count()?,
         timings: Some(timings),
         knowledge: knowledge_summary,
+        profile,
     })
 }
 

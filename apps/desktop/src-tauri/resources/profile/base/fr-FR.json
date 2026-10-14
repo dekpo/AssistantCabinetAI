@@ -1,0 +1,491 @@
+{
+  "schema": 1,
+  "id": "base",
+  "locale": "fr-FR",
+  "generic_values": {
+    "exact": [
+      "admin",
+      "administrateur",
+      "administrator",
+      "utilisateur",
+      "utilisateur microsoft office",
+      "microsoft office user",
+      "user",
+      "owner",
+      "proprietaire",
+      "auteur",
+      "author",
+      "unknown",
+      "inconnu",
+      "anonymous",
+      "anonyme",
+      "pc",
+      "home",
+      "maison",
+      "microsoft",
+      "microsoft corporation",
+      "microsoft word",
+      "microsoft office",
+      "word",
+      "writer",
+      "libreoffice",
+      "openoffice",
+      "acrobat",
+      "pdfcreator",
+      "scanner",
+      "scan",
+      "scanned document",
+      "document numerise",
+      "sans titre",
+      "untitled",
+      "titre",
+      "title",
+      "document",
+      "nouveau document",
+      "new document",
+      "document sans titre",
+      "default",
+      "pages",
+      "numbers",
+      "windows",
+      "macos",
+      "mac os x",
+      "wps"
+    ],
+    "prefix": [
+      "microsoft word",
+      "microsoft office",
+      "microsoft excel",
+      "microsoft powerpoint",
+      "document1",
+      "document2",
+      "document3",
+      "classeur1",
+      "classeur2",
+      "book1",
+      "scan0",
+      "scan 0",
+      "img 0",
+      "img0",
+      "dsc0",
+      "dsc 0",
+      "canon ir",
+      "canon imagerunner",
+      "canon image",
+      "canon mf",
+      "ricoh",
+      "konica minolta",
+      "bizhub",
+      "xerox",
+      "kyocera",
+      "sharp mx",
+      "toshiba e studio",
+      "epson",
+      "hp scan",
+      "hp officejet",
+      "hp laserjet",
+      "hp color laserjet",
+      "samsung",
+      "lexmark",
+      "fujitsu scansnap",
+      "scansnap",
+      "pscript5",
+      "adobe acrobat",
+      "adobe pdf",
+      "acrobat distiller",
+      "pdfcreator",
+      "pdf24",
+      "cutepdf",
+      "dopdf",
+      "foxit",
+      "libreoffice",
+      "openoffice",
+      "google docs",
+      "quartz pdfcontext",
+      "brother mfc",
+      "brother dcp",
+      "brother hl"
+    ]
+  },
+  "file_name_extensions": [
+    "doc",
+    "docx",
+    "docm",
+    "odt",
+    "rtf",
+    "txt",
+    "md",
+    "pdf",
+    "xls",
+    "xlsx",
+    "xlsm",
+    "csv",
+    "ods",
+    "jpg",
+    "jpeg",
+    "png",
+    "tif",
+    "tiff",
+    "scan"
+  ],
+  "months": [
+    [
+      "janvier",
+      "janv"
+    ],
+    [
+      "fevrier",
+      "fevr",
+      "fev"
+    ],
+    [
+      "mars"
+    ],
+    [
+      "avril",
+      "avr"
+    ],
+    [
+      "mai"
+    ],
+    [
+      "juin"
+    ],
+    [
+      "juillet",
+      "juil"
+    ],
+    [
+      "aout"
+    ],
+    [
+      "septembre",
+      "sept"
+    ],
+    [
+      "octobre",
+      "oct"
+    ],
+    [
+      "novembre",
+      "nov"
+    ],
+    [
+      "decembre",
+      "dec"
+    ]
+  ],
+  "header_labels": {
+    "subject_line": [
+      "objet",
+      "concerne",
+      "sujet"
+    ],
+    "date": [
+      "date",
+      "date du document",
+      "date d emission",
+      "date de facture"
+    ],
+    "references": {
+      "case": [
+        "dossier n",
+        "dossier numero",
+        "dossier no",
+        "numero de dossier"
+      ],
+      "invoice": [
+        "facture n",
+        "facture numero",
+        "facture no"
+      ],
+      "policy": [
+        "police n",
+        "police numero",
+        "police no"
+      ],
+      "contract": [
+        "contrat n",
+        "contrat numero",
+        "contrat no"
+      ],
+      "quote": [
+        "devis n",
+        "devis numero",
+        "devis no"
+      ]
+    },
+    "roles": {
+      "subject": [
+        "patient",
+        "patiente",
+        "beneficiaire",
+        "assure",
+        "assuree",
+        "personne concernee"
+      ],
+      "recipient": [
+        "destinataire",
+        "client",
+        "cliente",
+        "a l attention de"
+      ],
+      "sender": [
+        "expediteur",
+        "expeditrice"
+      ],
+      "author": [
+        "prescripteur",
+        "redacteur",
+        "redactrice",
+        "auteur",
+        "redige par",
+        "etabli par"
+      ],
+      "issuer": [
+        "emetteur",
+        "emis par",
+        "delivre par"
+      ]
+    },
+    "date_markers": [
+      "le",
+      "du",
+      "en date du",
+      "fait le"
+    ]
+  },
+  "document_types": [
+    {
+      "code": "letter",
+      "scope": "documents",
+      "generic": true,
+      "name": [
+        "courrier",
+        "lettre"
+      ],
+      "title": [
+        "courrier",
+        "lettre"
+      ],
+      "header": [
+        "madame monsieur",
+        "madame le docteur",
+        "monsieur le docteur",
+        "cher confrere",
+        "chere consoeur",
+        "veuillez agreer",
+        "salutations distinguees"
+      ]
+    },
+    {
+      "code": "invoice",
+      "scope": "documents",
+      "name": [
+        "facture",
+        "note honoraires",
+        "note d honoraires"
+      ],
+      "title": [
+        "facture",
+        "note d honoraires",
+        "note honoraires"
+      ],
+      "body": [
+        "total ttc",
+        "total ht",
+        "montant ttc"
+      ]
+    },
+    {
+      "code": "quote",
+      "scope": "documents",
+      "name": [
+        "devis"
+      ],
+      "title": [
+        "devis"
+      ],
+      "body": [
+        "validite du devis"
+      ]
+    },
+    {
+      "code": "certificate",
+      "scope": "documents",
+      "name": [
+        "certificat",
+        "attestation",
+        "arret travail"
+      ],
+      "title": [
+        "certificat",
+        "attestation",
+        "arret de travail",
+        "arret travail"
+      ],
+      "body": [
+        "je soussigne",
+        "je soussignee",
+        "certifie que",
+        "atteste que"
+      ]
+    },
+    {
+      "code": "meeting_minutes",
+      "scope": "documents",
+      "name": [
+        "pv",
+        "proces verbal",
+        "compte rendu de reunion",
+        "compte rendu reunion"
+      ],
+      "title": [
+        "proces verbal",
+        "compte rendu de reunion",
+        "compte rendu reunion"
+      ],
+      "body": [
+        "ordre du jour",
+        "presents"
+      ]
+    },
+    {
+      "code": "appointment_letter",
+      "scope": "documents",
+      "name": [
+        "convocation"
+      ],
+      "title": [
+        "convocation",
+        "invitation"
+      ]
+    },
+    {
+      "code": "patient_list",
+      "scope": "data",
+      "name": [
+        "patients",
+        "patient",
+        "clients",
+        "client",
+        "liste patients",
+        "liste clients"
+      ],
+      "header": [
+        "patient",
+        "nom du patient",
+        "client",
+        "nom du client"
+      ],
+      "sheet": [
+        "patients",
+        "clients"
+      ]
+    },
+    {
+      "code": "invoicing",
+      "scope": "data",
+      "name": [
+        "facturation",
+        "factures",
+        "facture",
+        "honoraires"
+      ],
+      "header": [
+        "facture",
+        "numero de facture",
+        "honoraires",
+        "montant"
+      ],
+      "sheet": [
+        "facturation",
+        "factures",
+        "honoraires"
+      ]
+    },
+    {
+      "code": "accounting",
+      "scope": "data",
+      "name": [
+        "comptabilite",
+        "compta",
+        "bilan",
+        "grand livre",
+        "journal"
+      ],
+      "header": [
+        "compte",
+        "debit",
+        "credit",
+        "solde"
+      ],
+      "sheet": [
+        "comptabilite",
+        "bilan",
+        "journal",
+        "grand livre"
+      ]
+    },
+    {
+      "code": "schedule",
+      "scope": "data",
+      "name": [
+        "planning",
+        "agenda",
+        "horaires",
+        "rendez vous",
+        "rdv",
+        "garde"
+      ],
+      "header": [
+        "rendez vous",
+        "horaire",
+        "date du rendez vous",
+        "heure"
+      ],
+      "sheet": [
+        "planning",
+        "agenda",
+        "horaires",
+        "rendez vous",
+        "rdv"
+      ]
+    },
+    {
+      "code": "stock",
+      "scope": "data",
+      "name": [
+        "stock",
+        "inventaire",
+        "commandes",
+        "commande",
+        "articles"
+      ],
+      "header": [
+        "article",
+        "quantite",
+        "reference article",
+        "stock"
+      ],
+      "sheet": [
+        "stock",
+        "inventaire",
+        "commandes"
+      ]
+    }
+  ],
+  "identifier_layouts": {
+    "iban": [
+      [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        3
+      ]
+    ]
+  }
+}

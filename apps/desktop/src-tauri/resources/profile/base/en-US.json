@@ -1,0 +1,445 @@
+{
+  "schema": 1,
+  "id": "base",
+  "locale": "en-US",
+  "generic_values": {
+    "exact": [
+      "admin",
+      "administrator",
+      "user",
+      "microsoft office user",
+      "owner",
+      "author",
+      "unknown",
+      "anonymous",
+      "pc",
+      "home",
+      "microsoft",
+      "microsoft corporation",
+      "microsoft word",
+      "microsoft office",
+      "word",
+      "writer",
+      "libreoffice",
+      "openoffice",
+      "acrobat",
+      "pdfcreator",
+      "scanner",
+      "scan",
+      "scanned document",
+      "untitled",
+      "title",
+      "document",
+      "new document",
+      "default",
+      "pages",
+      "numbers",
+      "windows",
+      "macos",
+      "mac os x",
+      "wps"
+    ],
+    "prefix": [
+      "microsoft word",
+      "microsoft office",
+      "microsoft excel",
+      "microsoft powerpoint",
+      "document1",
+      "document2",
+      "document3",
+      "book1",
+      "scan0",
+      "scan 0",
+      "img 0",
+      "img0",
+      "dsc0",
+      "dsc 0",
+      "canon ir",
+      "canon imagerunner",
+      "canon image",
+      "canon mf",
+      "ricoh",
+      "konica minolta",
+      "bizhub",
+      "xerox",
+      "kyocera",
+      "sharp mx",
+      "toshiba e studio",
+      "epson",
+      "hp scan",
+      "hp officejet",
+      "hp laserjet",
+      "hp color laserjet",
+      "samsung",
+      "lexmark",
+      "fujitsu scansnap",
+      "scansnap",
+      "pscript5",
+      "adobe acrobat",
+      "adobe pdf",
+      "acrobat distiller",
+      "pdfcreator",
+      "pdf24",
+      "cutepdf",
+      "dopdf",
+      "foxit",
+      "libreoffice",
+      "openoffice",
+      "google docs",
+      "quartz pdfcontext",
+      "brother mfc",
+      "brother dcp",
+      "brother hl"
+    ]
+  },
+  "file_name_extensions": [
+    "doc",
+    "docx",
+    "docm",
+    "odt",
+    "rtf",
+    "txt",
+    "md",
+    "pdf",
+    "xls",
+    "xlsx",
+    "xlsm",
+    "csv",
+    "ods",
+    "jpg",
+    "jpeg",
+    "png",
+    "tif",
+    "tiff",
+    "scan"
+  ],
+  "months": [
+    [
+      "january",
+      "jan"
+    ],
+    [
+      "february",
+      "feb"
+    ],
+    [
+      "march",
+      "mar"
+    ],
+    [
+      "april",
+      "apr"
+    ],
+    [
+      "may"
+    ],
+    [
+      "june",
+      "jun"
+    ],
+    [
+      "july",
+      "jul"
+    ],
+    [
+      "august",
+      "aug"
+    ],
+    [
+      "september",
+      "sept",
+      "sep"
+    ],
+    [
+      "october",
+      "oct"
+    ],
+    [
+      "november",
+      "nov"
+    ],
+    [
+      "december",
+      "dec"
+    ]
+  ],
+  "header_labels": {
+    "subject_line": [
+      "subject",
+      "regarding"
+    ],
+    "date": [
+      "date",
+      "date of issue",
+      "invoice date"
+    ],
+    "references": {
+      "case": [
+        "case no",
+        "case number",
+        "file no",
+        "file number"
+      ],
+      "invoice": [
+        "invoice no",
+        "invoice number"
+      ],
+      "policy": [
+        "policy no",
+        "policy number"
+      ],
+      "contract": [
+        "contract no",
+        "contract number"
+      ],
+      "quote": [
+        "quote no",
+        "quote number",
+        "quotation no"
+      ]
+    },
+    "roles": {
+      "subject": [
+        "patient",
+        "beneficiary",
+        "insured"
+      ],
+      "recipient": [
+        "recipient",
+        "client",
+        "customer",
+        "attention"
+      ],
+      "sender": [
+        "sender"
+      ],
+      "author": [
+        "prescriber",
+        "author",
+        "written by",
+        "prepared by",
+        "signed by"
+      ],
+      "issuer": [
+        "issuer",
+        "issued by"
+      ]
+    },
+    "date_markers": [
+      "on",
+      "dated",
+      "dated on"
+    ]
+  },
+  "document_types": [
+    {
+      "code": "letter",
+      "scope": "documents",
+      "generic": true,
+      "name": [
+        "letter"
+      ],
+      "title": [
+        "letter"
+      ],
+      "header": [
+        "dear sir madam",
+        "dear madam",
+        "dear colleague",
+        "yours sincerely",
+        "yours faithfully"
+      ]
+    },
+    {
+      "code": "invoice",
+      "scope": "documents",
+      "name": [
+        "invoice",
+        "bill"
+      ],
+      "title": [
+        "invoice"
+      ],
+      "body": [
+        "total due",
+        "amount due",
+        "vat"
+      ]
+    },
+    {
+      "code": "quote",
+      "scope": "documents",
+      "name": [
+        "quote",
+        "quotation",
+        "estimate"
+      ],
+      "title": [
+        "quote",
+        "quotation"
+      ],
+      "body": [
+        "valid for"
+      ]
+    },
+    {
+      "code": "certificate",
+      "scope": "documents",
+      "name": [
+        "certificate",
+        "attestation",
+        "sick note"
+      ],
+      "title": [
+        "certificate",
+        "attestation",
+        "sick note"
+      ],
+      "body": [
+        "i the undersigned",
+        "hereby certify",
+        "certify that"
+      ]
+    },
+    {
+      "code": "meeting_minutes",
+      "scope": "documents",
+      "name": [
+        "minutes",
+        "meeting minutes"
+      ],
+      "title": [
+        "minutes",
+        "meeting minutes"
+      ],
+      "body": [
+        "agenda",
+        "attendees"
+      ]
+    },
+    {
+      "code": "appointment_letter",
+      "scope": "documents",
+      "name": [
+        "convocation",
+        "summons"
+      ],
+      "title": [
+        "convocation",
+        "invitation"
+      ]
+    },
+    {
+      "code": "patient_list",
+      "scope": "data",
+      "name": [
+        "patients",
+        "clients",
+        "patient list",
+        "client list"
+      ],
+      "header": [
+        "patient",
+        "client"
+      ],
+      "sheet": [
+        "patients",
+        "clients"
+      ]
+    },
+    {
+      "code": "invoicing",
+      "scope": "data",
+      "name": [
+        "invoicing",
+        "invoices",
+        "billing"
+      ],
+      "header": [
+        "invoice",
+        "invoice number",
+        "amount"
+      ],
+      "sheet": [
+        "invoicing",
+        "invoices",
+        "billing"
+      ]
+    },
+    {
+      "code": "accounting",
+      "scope": "data",
+      "name": [
+        "accounting",
+        "ledger",
+        "balance",
+        "journal"
+      ],
+      "header": [
+        "account",
+        "debit",
+        "credit",
+        "balance"
+      ],
+      "sheet": [
+        "accounting",
+        "ledger",
+        "balance"
+      ]
+    },
+    {
+      "code": "schedule",
+      "scope": "data",
+      "name": [
+        "schedule",
+        "agenda",
+        "timetable",
+        "appointments",
+        "roster"
+      ],
+      "header": [
+        "appointment",
+        "time",
+        "start time"
+      ],
+      "sheet": [
+        "schedule",
+        "agenda",
+        "appointments"
+      ]
+    },
+    {
+      "code": "stock",
+      "scope": "data",
+      "name": [
+        "stock",
+        "inventory",
+        "orders",
+        "order"
+      ],
+      "header": [
+        "item",
+        "quantity",
+        "stock"
+      ],
+      "sheet": [
+        "stock",
+        "inventory",
+        "orders"
+      ]
+    }
+  ],
+  "identifier_layouts": {
+    "iban": [
+      [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        3
+      ]
+    ]
+  }
+}

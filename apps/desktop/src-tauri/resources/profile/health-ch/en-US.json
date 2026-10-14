@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "id": "health-ch",
+  "locale": "en-US",
+  "generic_values": {
+    "exact": [
+      "secretariat",
+      "reception",
+      "cabinet medical",
+      "cabinet",
+      "praxis"
+    ],
+    "prefix": [
+      "triamed",
+      "medistar",
+      "elexis",
+      "medidata",
+      "tarmed"
+    ]
+  },
+  "document_types": [
+    {
+      "code": "lab_result",
+      "scope": "documents",
+      "name": [
+        "lab results",
+        "laboratory results",
+        "blood test",
+        "test results"
+      ],
+      "title": [
+        "lab results",
+        "laboratory results",
+        "test results"
+      ],
+      "body": [
+        "reference range",
+        "specimen"
+      ]
+    },
+    {
+      "code": "prescription",
+      "scope": "documents",
+      "name": [
+        "prescription"
+      ],
+      "title": [
+        "prescription"
+      ],
+      "body": [
+        "refillable",
+        "tablet",
+        "dosage"
+      ]
+    },
+    {
+      "code": "insurer_statement",
+      "scope": "documents",
+      "name": [
+        "statement",
+        "reimbursement",
+        "coverage decision",
+        "helsana",
+        "css",
+        "sanitas",
+        "swica",
+        "visana",
+        "assura",
+        "concordia",
+        "groupe mutuel"
+      ],
+      "title": [
+        "coverage decision",
+        "statement of benefits",
+        "reimbursement"
+      ],
+      "body": [
+        "deductible",
+        "daily allowance"
+      ]
+    }
+  ],
+  "identifier_layouts": {
+    "avs": [
+      [
+        3,
+        4,
+        4,
+        2
+      ]
+    ],
+    "ch_iban": [
+      [
+        4,
+        4,
+        4,
+        4,
+        4,
+        1
+      ]
+    ]
+  }
+}

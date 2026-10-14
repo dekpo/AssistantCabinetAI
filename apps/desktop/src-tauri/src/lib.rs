@@ -13,6 +13,7 @@ pub mod data_folder;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
+pub mod file_profile;
 pub mod file_record;
 pub mod file_reference;
 pub mod fill_plan;
@@ -89,6 +90,7 @@ pub fn run() {
             commands::knowledge_undo,
             commands::knowledge_reset,
             commands::has_indexed_documents,
+            commands::profile_index_status,
             commands::work_folder_inventory,
             commands::reveal_work_folder,
             commands::reveal_work_file,

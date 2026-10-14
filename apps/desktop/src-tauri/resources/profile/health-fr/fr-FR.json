@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "id": "health-fr",
+  "locale": "fr-FR",
+  "generic_values": {
+    "exact": [
+      "secretariat",
+      "accueil",
+      "cabinet medical",
+      "medecin",
+      "docteur"
+    ],
+    "prefix": [
+      "weda",
+      "hellodoc",
+      "crossway",
+      "dxcare",
+      "doctolib",
+      "maiia",
+      "dedalus"
+    ]
+  },
+  "document_types": [
+    {
+      "code": "lab_result",
+      "scope": "documents",
+      "name": [
+        "resultats analyses",
+        "resultats d analyses",
+        "analyses",
+        "laboratoire",
+        "bilan sanguin"
+      ],
+      "title": [
+        "resultats d analyses",
+        "resultats analyses",
+        "resultats de laboratoire",
+        "bilan biologique"
+      ],
+      "body": [
+        "valeurs de reference",
+        "prelevement"
+      ]
+    },
+    {
+      "code": "prescription",
+      "scope": "documents",
+      "name": [
+        "ordonnance"
+      ],
+      "title": [
+        "ordonnance"
+      ],
+      "body": [
+        "renouvelable",
+        "comprime",
+        "posologie"
+      ]
+    },
+    {
+      "code": "insurer_statement",
+      "scope": "documents",
+      "name": [
+        "decompte",
+        "remboursement",
+        "prise en charge",
+        "cpam",
+        "carsat",
+        "msa",
+        "ameli",
+        "harmonie"
+      ],
+      "title": [
+        "decision de prise en charge",
+        "decompte de prestations",
+        "decompte",
+        "remboursement",
+        "prise en charge"
+      ],
+      "body": [
+        "quote part",
+        "franchise annuelle",
+        "indemnites journalieres"
+      ]
+    }
+  ],
+  "identifier_layouts": {
+    "nir": [
+      [
+        1,
+        2,
+        2,
+        2,
+        3,
+        3,
+        2
+      ],
+      [
+        1,
+        2,
+        2,
+        2,
+        3,
+        3
+      ]
+    ]
+  }
+}

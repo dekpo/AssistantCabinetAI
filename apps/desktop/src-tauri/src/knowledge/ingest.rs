@@ -137,6 +137,9 @@ pub struct KnowledgeContext {
     pub kb_version: u32,
     locale: String,
     packs: PackSet,
+    /// The pack ids the user switched on, whatever the mode: the file profile reads its business types
+    /// and header labels with them even when the knowledge base reads nothing.
+    profile_packs: Vec<String>,
     titles: TitleSet,
     encoder: Box<dyn PhoneticEncoder>,
     extractor: Box<dyn EntityExtractor>,
@@ -217,6 +220,22 @@ impl KnowledgeContext {
         Ok(context)
     }
 
+    /// The same context, told which packs the user switched on. A context that reads nothing (the mode
+    /// `off`) is built without them; the file profile still needs them.
+    pub fn with_profile_packs(mut self, ids: &[String]) -> Self {
+        self.profile_packs = ids.to_vec();
+        self
+    }
+
+    /// The pack ids the user switched on (`with_profile_packs` or the ones the context was built with).
+    pub fn profile_pack_ids(&self) -> Vec<&str> {
+        self.profile_packs.iter().map(String::as_str).collect()
+    }
+
+    pub fn locale(&self) -> &str {
+        &self.locale
+    }
+
     /// [`KnowledgeContext::standard`] over an index, for callers outside the crate (the tests).
     pub fn for_index(
         index: &IndexStore,
@@ -243,6 +262,7 @@ impl KnowledgeContext {
             locale: locale.to_string(),
             titles,
             packs,
+            profile_packs: active_packs.iter().map(|id| id.to_string()).collect(),
             encoder: encoder_for_locale(locale),
             extractor: Box::new(DeterministicTextExtractor),
             tables: if mode.reads_files() {

@@ -116,6 +116,7 @@ dependencies = [
  "getrandom 0.2.17",
  "hmac",
  "image",
+ "lopdf",
  "pdf-extract",
  "pdfium-render",
  "quick-xml 0.41.0",

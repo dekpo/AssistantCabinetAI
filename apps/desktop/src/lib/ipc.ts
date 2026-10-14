@@ -507,6 +507,21 @@ export interface IndexSummary {
   timings: AnalysisTimings | null;
   /** Null when the knowledge base took no part (`knowledgeMode: "off"`). */
   knowledge?: KnowledgeSummary | null;
+  /** What the file profile pass did, as counts. Null when it could not start; it never blocks a pass. */
+  profile?: ProfileSummary | null;
+}
+
+/** The file profile pass of an Analyse (`file_profile::store`). Counts only, never a name. */
+export interface ProfileSummary {
+  built: number;
+  relinked: number;
+  unchanged: number;
+  removed: number;
+  errors: number;
+  /** False when the pass was cancelled before its last file. */
+  complete: boolean;
+  /** What the pass cost, in milliseconds. */
+  elapsedMs: number;
 }
 
 export type AnalysisPass = "documents" | "data";

@@ -352,6 +352,11 @@ pub fn analyse_with_knowledge(
     }
     timings.total_ms = pass_timer.total_ms();
 
+    // The profile of every analysed workbook: reads the inventories this pass just wrote, never
+    // writes to them.
+    let profile =
+        crate::file_profile::store::run_workbooks(index, root, knowledge.as_deref(), locale);
+
     Ok(IndexSummary {
         scanned_files: total_files,
         indexed_files: usable,
@@ -370,6 +375,7 @@ pub fn analyse_with_knowledge(
         chunk_count: 0,
         timings: Some(timings),
         knowledge: knowledge_summary,
+        profile,
     })
 }
 

@@ -20,6 +20,7 @@ use crate::error::AppError;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::FileReferenceResolver;
 use crate::fill_plan;
+use crate::file_profile;
 use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot};
@@ -204,7 +205,8 @@ fn knowledge_context(
     packs: &[String],
 ) -> Result<KnowledgeContext, AppError> {
     if !mode.reads_files() {
-        return KnowledgeContext::off(locale);
+        // The knowledge base reads nothing, but the file profile still reads with the packs she chose.
+        return KnowledgeContext::off(locale).map(|context| context.with_profile_packs(packs));
     }
     let directory = app
         .path()
@@ -418,6 +420,13 @@ pub async fn index_work_folder(
     log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
+    // The names the files had before the rename: the file profile keeps them searchable. A failure to
+    // record them costs a searchable alias, never the pass.
+    let _ = file_profile::store::record_original_names(
+        index.connection(),
+        file_profile::build::Domain::Documents,
+        &sanitised.renamed,
+    );
     // The knowledge base never blocks a pass: if it cannot start (a damaged pack, a key that cannot
     // be read) the documents are analysed exactly as before and the summary says that part of the
     // analysis did not complete.
@@ -448,6 +457,17 @@ pub async fn index_work_folder(
     summary.rename_failed_files = sanitised.failed;
     log_analysis_timing(&app, &state, &summary);
     Ok(summary)
+}
+
+/// Whether each folder's analysis has its file profile, by one cheap lookup, so the interface can say
+/// that the index must be redone when it has not (an index written before the profile existed). It
+/// reads and changes nothing: only an Analyse the user starts fills the profile.
+#[tauri::command]
+pub fn profile_index_status(
+    app: AppHandle,
+) -> Result<file_profile::store::ProfileIndexStatus, AppError> {
+    let index = open_index(&app)?;
+    Ok(file_profile::store::index_status(index.connection()))
 }
 
 /// Whether the local index has anything to search yet. The chat panel checks this before
@@ -540,6 +560,7 @@ pub fn reveal_work_file(state: State<'_, AppState>, relative_path: String) -> Re
 pub fn reset_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
     let mut index = open_index(&app)?;
     index.clear()?;
+    index.clear_profiles(file_profile::build::Domain::Documents)?;
     // Otherwise the next inventory would answer from hashes taken before the reset and show
     // files as still indexed when nothing is.
     state.file_hashes.forget_all();
@@ -576,6 +597,11 @@ pub fn index_data_folder(
     log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
+    let _ = file_profile::store::record_original_names(
+        index.connection(),
+        file_profile::build::Domain::Data,
+        &sanitised.renamed,
+    );
     // The knowledge base never blocks a pass: if it cannot start, the workbooks are analysed exactly
     // as before and the summary says that part of the analysis did not complete.
     let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs).ok();
@@ -640,6 +666,7 @@ pub fn reset_data_index(app: AppHandle, state: State<'_, AppState>) -> Result<()
     let mut index = open_index(&app)?;
     index.clear_tabular_inventories()?;
     index.clear_tabular_workbooks()?;
+    index.clear_profiles(file_profile::build::Domain::Data)?;
     state.data_file_hashes.forget_all();
     Ok(())
 }

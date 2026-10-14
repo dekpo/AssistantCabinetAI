@@ -81,6 +81,13 @@ pdfium-render = { version = "0.9.4", default-features = false, features = [
 ] }
 image = { version = "0.25.6", default-features = false, features = ["png"] }
 
+# The PDF Info dictionary and the XMP packet, for the file profile's metadata reader
+# (`file_profile::metadata`). Already in the dependency tree through `pdf-extract`, at the same
+# version and with the same features, so this adds no new code to the build; it only names a crate the
+# build already compiles. Pure Rust, so it needs no `pdfium` library and reads the same on Windows and
+# macOS.
+lopdf = { version = "0.42", default-features = false }
+
 [dev-dependencies]
 tempfile = "3"
 tiny_http = "0.12.0"

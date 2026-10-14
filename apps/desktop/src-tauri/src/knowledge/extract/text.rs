@@ -84,7 +84,7 @@ const WRAPPED_LINE_FILL_PERCENT: usize = 85;
 
 /// Whether a word of a gazetteer phrase names the whole entity (a full name, an alias a person
 /// typed) or only part of it (a surname, an initial and a surname, a title and a surname).
-fn names_the_whole_entity(kind: AliasKind) -> bool {
+pub fn names_the_whole_entity(kind: AliasKind) -> bool {
     matches!(
         kind,
         AliasKind::CanonicalVariant

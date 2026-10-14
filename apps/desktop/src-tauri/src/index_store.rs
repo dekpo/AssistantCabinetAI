@@ -187,6 +187,8 @@ impl IndexStore {
         // the index that cannot be opened, not "the knowledge base is unavailable".
         crate::knowledge::store::ensure_schema(connection)
             .map_err(|_| AppError::IndexUnavailable)?;
+        // The file profile's own tables, also purely additive (`file_profile::store`).
+        crate::file_profile::store::ensure_schema(connection)?;
         Ok(())
     }
 

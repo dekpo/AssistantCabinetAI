@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "id": "health-ch",
+  "locale": "fr-FR",
+  "generic_values": {
+    "exact": [
+      "secretariat",
+      "reception",
+      "cabinet medical",
+      "cabinet",
+      "praxis"
+    ],
+    "prefix": [
+      "triamed",
+      "medistar",
+      "elexis",
+      "medidata",
+      "tarmed"
+    ]
+  },
+  "document_types": [
+    {
+      "code": "lab_result",
+      "scope": "documents",
+      "name": [
+        "resultats analyses",
+        "resultats d analyses",
+        "analyses",
+        "laboratoire",
+        "bilan sanguin"
+      ],
+      "title": [
+        "resultats d analyses",
+        "resultats analyses",
+        "resultats de laboratoire",
+        "bilan biologique"
+      ],
+      "body": [
+        "valeurs de reference",
+        "prelevement"
+      ]
+    },
+    {
+      "code": "prescription",
+      "scope": "documents",
+      "name": [
+        "ordonnance"
+      ],
+      "title": [
+        "ordonnance"
+      ],
+      "body": [
+        "renouvelable",
+        "comprime",
+        "posologie"
+      ]
+    },
+    {
+      "code": "insurer_statement",
+      "scope": "documents",
+      "name": [
+        "decompte",
+        "remboursement",
+        "prise en charge",
+        "helsana",
+        "css",
+        "sanitas",
+        "swica",
+        "visana",
+        "assura",
+        "concordia",
+        "groupe mutuel"
+      ],
+      "title": [
+        "decision de prise en charge",
+        "decompte de prestations",
+        "decompte",
+        "remboursement",
+        "prise en charge"
+      ],
+      "body": [
+        "quote part",
+        "franchise annuelle",
+        "indemnites journalieres"
+      ]
+    }
+  ],
+  "identifier_layouts": {
+    "avs": [
+      [
+        3,
+        4,
+        4,
+        2
+      ]
+    ],
+    "ch_iban": [
+      [
+        4,
+        4,
+        4,
+        4,
+        4,
+        1
+      ]
+    ]
+  }
+}

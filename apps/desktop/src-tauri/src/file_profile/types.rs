@@ -86,10 +86,19 @@ pub struct TypeAssignment {
 
 /// The type of a file, or `None` when the evidence is not enough or is ambiguous.
 pub fn classify(vocabulary: &ProfileVocabulary, input: &TypeInput<'_>) -> Option<TypeAssignment> {
+    classify_among(vocabulary, input, &|_| true)
+}
+
+/// [`classify`] over the rules `accept` keeps: the same weights, the same threshold, the same ambiguity.
+pub fn classify_among(
+    vocabulary: &ProfileVocabulary,
+    input: &TypeInput<'_>,
+    accept: &dyn Fn(&DocumentTypeRule) -> bool,
+) -> Option<TypeAssignment> {
     let mut candidates: Vec<(&DocumentTypeRule, TypeAssignment)> = Vec::new();
     for rule in vocabulary
         .document_types()
-        .filter(|rule| rule.scope == input.scope)
+        .filter(|rule| rule.scope == input.scope && accept(rule))
     {
         let mut sources: Vec<TypeSource> = Vec::new();
         let mut consider = |source: TypeSource, found: bool| {
@@ -159,6 +168,31 @@ pub fn classify(vocabulary: &ProfileVocabulary, input: &TypeInput<'_>) -> Option
         return if rival { None } else { Some((*top).clone()) };
     }
     best(true).first().map(|assignment| (*assignment).clone())
+}
+
+/// The type a file is left with when a user type (`user`, a specific one) meets the type it already had
+/// (`existing`, `existing_generic` when it is the catch-all). The same rules as [`classify`]: a specific type
+/// beats the generic one, two specific types within the margin are an ambiguity and leave none, otherwise the
+/// more confident wins.
+pub fn combine(
+    existing: Option<TypeAssignment>,
+    user: Option<TypeAssignment>,
+    existing_generic: bool,
+) -> Option<TypeAssignment> {
+    match (existing, user) {
+        (existing, None) => existing,
+        (None, Some(user)) => Some(user),
+        (Some(_), Some(user)) if existing_generic => Some(user),
+        (Some(existing), Some(user)) => {
+            if (existing.confidence - user.confidence).abs() < AMBIGUITY_MARGIN {
+                None
+            } else if user.confidence > existing.confidence {
+                Some(user)
+            } else {
+                Some(existing)
+            }
+        }
+    }
 }
 
 fn any_phrase(phrases: &[Phrase], words: &[String]) -> bool {
@@ -349,5 +383,41 @@ mod tests {
     fn a_document_never_gets_a_data_type_and_the_reverse() {
         let found = document("planning-garde", "Planning de garde", "", "");
         assert!(found.is_none(), "schedule is a workbook type: {found:?}");
+    }
+
+    fn assigned(code: &str, confidence: f32) -> TypeAssignment {
+        TypeAssignment {
+            code: code.to_string(),
+            confidence,
+            sources: vec![TypeSource::Name],
+        }
+    }
+
+    #[test]
+    fn a_type_of_the_user_meets_the_type_a_file_already_has_under_the_rules_of_a_full_reading() {
+        let user = Some(assigned("user_x", 0.80));
+        // No type yet: the user's wins. The catch-all: a specific type beats it.
+        assert_eq!(combine(None, user.clone(), false), user);
+        assert_eq!(
+            combine(Some(assigned("letter", 0.70)), user.clone(), true),
+            user
+        );
+        // Two specific types close to each other are an ambiguity: none.
+        assert_eq!(
+            combine(Some(assigned("invoice", 0.78)), user.clone(), false),
+            None
+        );
+        // Otherwise the more confident one.
+        assert_eq!(
+            combine(Some(assigned("invoice", 0.70)), user.clone(), false),
+            user
+        );
+        let stronger = Some(assigned("invoice", 0.90));
+        assert_eq!(combine(stronger.clone(), user, false), stronger);
+        // No user type: what the file had.
+        assert_eq!(
+            combine(Some(assigned("invoice", 0.70)), None, false),
+            Some(assigned("invoice", 0.70))
+        );
     }
 }

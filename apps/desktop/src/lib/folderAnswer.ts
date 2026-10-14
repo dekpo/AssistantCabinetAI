@@ -1,5 +1,5 @@
 import type { Translator } from "../i18n/translate";
-import type { FileRecord, FolderAnswer } from "./ipc";
+import type { DocumentSearchAnswer, FileRecord, FolderAnswer } from "./ipc";
 import { counted } from "./plural";
 
 /**
@@ -98,6 +98,16 @@ export function formatFolderAnswer(t: Translator, answer: FolderAnswer): string 
       return t("folderAnswer.nothingSelected");
     case "document_search":
       return documentSearch(t, answer);
+    case "document_search_both":
+      return [
+        t("folderAnswer.search.sectionDocuments"),
+        "",
+        documentSearch(t, answer.documents),
+        "",
+        t("folderAnswer.search.sectionWorkbooks"),
+        "",
+        documentSearch(t, answer.workbooks),
+      ].join("\n");
     case "ranked_file":
       return rankedFile(t, answer);
   }
@@ -107,13 +117,17 @@ type RankedFile = Extract<FolderAnswer, { kind: "ranked_file" }>;
 
 /**
  * The latest or earliest file, with the ranking it comes from and where each date comes from: the
- * date written at the start of the name, else the modification date, which is the date of a copy.
+ * date written in the document, else at the start of the name, else the modification date, which is the
+ * date of a copy.
  */
 function rankedFile(t: Translator, answer: RankedFile): string {
   if (answer.ranking.length === 0) {
-    return answer.noun === null
-      ? t("folderAnswer.rank.none")
-      : t("folderAnswer.rank.noneNoun", { noun: answer.noun });
+    if (answer.noun === null) {
+      return t("folderAnswer.rank.none");
+    }
+    return t(answer.byType ? "folderAnswer.rank.noneType" : "folderAnswer.rank.noneNoun", {
+      noun: answer.noun,
+    });
   }
   const order = answer.latest ? "Latest" : "Earliest";
   const count = counted(
@@ -124,7 +138,10 @@ function rankedFile(t: Translator, answer: RankedFile): string {
   const lines = [
     answer.noun === null
       ? t(`folderAnswer.rank.intro${order}`, { count })
-      : t(`folderAnswer.rank.intro${order}Noun`, { count, noun: answer.noun }),
+      : t(`folderAnswer.rank.intro${order}${answer.byType ? "Type" : "Noun"}`, {
+          count,
+          noun: answer.noun,
+        }),
     "",
     ...answer.ranking.map(
       (entry) =>
@@ -140,7 +157,7 @@ function rankedFile(t: Translator, answer: RankedFile): string {
   return lines.join("\n");
 }
 
-type DocumentSearch = Extract<FolderAnswer, { kind: "document_search" }>;
+type DocumentSearch = DocumentSearchAnswer;
 
 /**
  * A set answer: what was searched, how many files hold it, the first ones with their passage, the
@@ -148,12 +165,16 @@ type DocumentSearch = Extract<FolderAnswer, { kind: "document_search" }>;
  */
 function documentSearch(t: Translator, answer: DocumentSearch): string {
   const count = files(t, answer.total);
-  const intro = answer.identifier
+  const base = answer.identifier
     ? "folderAnswer.search.introIdentifier"
     : answer.quoted
       ? "folderAnswer.search.introPhrase"
       : "folderAnswer.search.intro";
+  const intro = answer.domain === "data" ? `${base}Data` : base;
   const lines = [t(intro, { query: answer.query, count })];
+  if (answer.entity !== null) {
+    lines.push("", t("folderAnswer.search.entity", { query: answer.query, name: answer.entity }));
+  }
   if (answer.businessType !== null) {
     lines.push(
       "",

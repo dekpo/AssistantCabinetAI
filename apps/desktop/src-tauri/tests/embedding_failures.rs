@@ -116,7 +116,9 @@ async fn a_server_that_is_briefly_unavailable_is_retried() {
             }
         });
 
-        let vectors = client(quick_deadlines())
+        // Every reply is immediate: the deadline is not what is tested, and a short one expires on a loaded
+        // machine before the reply is read, which turns the refusal into a timeout.
+        let vectors = client(patient_deadlines())
             .embed(&gateway.url, "cabinet-embed", &texts(2))
             .await
             .unwrap_or_else(|error| panic!("status {status} was not retried: {}", error.code()));
@@ -135,7 +137,10 @@ async fn a_refusal_of_the_request_itself_is_never_retried() {
     ] {
         let gateway = FakeGateway::start(move |_| Reply::refusal(status, code));
 
-        let error = client(quick_deadlines())
+        // The refusal is immediate: the deadline is not what is tested. With the 250 ms one, a machine under
+        // load (the whole suite at once) let it pass before the reply was read, the refusal became a timeout
+        // and was retried, which is the failure this test saw once.
+        let error = client(patient_deadlines())
             .embed(&gateway.url, "cabinet-embed", &texts(2))
             .await
             .expect_err("the gateway refuses");

@@ -64,6 +64,9 @@ export interface AppSettings {
   /** The copy buttons (one answer, or the whole conversation) also copy the sources listed under
    * each answer. Off by default. */
   copySources: boolean;
+  /** The user's own names: a property that holds one of them never makes her the author of a file.
+   * Edited in `settings.json` for now; the dialog does not show it. */
+  ownNames: string[];
 }
 
 export interface AppSnapshot {
@@ -214,22 +217,10 @@ export type FolderAnswer =
   /** "Which documents talk about X": a word search of the selected files, answered from the index
    * with no model. The first files carry their excerpt, the others only their path, and the total
    * is always stated. */
-  | {
-      kind: "document_search";
-      query: string;
-      /** The folded words that were read: the answer says it is a word search. */
-      terms: string[];
-      prefix: boolean;
-      quoted: boolean;
-      /** The business type the collection noun stood for (`invoice`), applied as a filter. */
-      businessType: string | null;
-      /** X was an identifier, searched in every spelling. */
-      identifier: boolean;
-      total: number;
-      listed: DocumentListing[];
-      others: string[];
-      coverage: FinderCoverage;
-    }
+  | DocumentSearchAnswer
+  /** The same sentence with documents and workbooks both selected: one search per folder, each stating
+   * its own folder. */
+  | { kind: "document_search_both"; documents: DocumentSearchAnswer; workbooks: DocumentSearchAnswer }
   /** "What is the latest letter received": the readable documents ranked by date. The first of
    * `ranking` is the answer. */
   | {
@@ -237,6 +228,8 @@ export type FolderAnswer =
       latest: boolean;
       /** The collection noun as written, null when it names no kind of document. */
       noun: string | null;
+      /** The noun stood for a business type: the profiles were read, not the words of the path. */
+      byType: boolean;
       /** The readable documents that were ranked or could not be. */
       candidates: number;
       /** Of those, the ones with no date at all. */
@@ -246,13 +239,45 @@ export type FolderAnswer =
       ranking: RankedEntry[];
     };
 
+/** A word search of one folder's files: the first files carry their excerpt, the others only their path,
+ * and the total is always stated. */
+export interface DocumentSearchAnswer {
+      kind: "document_search";
+      /** The folder that was searched. */
+      domain: "documents" | "data";
+      query: string;
+      /** The folded words that were read: the answer says it is a word search. */
+      terms: string[];
+      prefix: boolean;
+      quoted: boolean;
+      /** The business type the collection noun stood for (`invoice`), applied as a filter. */
+      businessType: string | null;
+      /** X was an identifier, searched in every spelling. */
+      identifier: boolean;
+      /** X is the name of exactly one entity of the knowledge base: its canonical name. The files linked
+       * to it are listed with the files that write its names. */
+      entity: string | null;
+      total: number;
+      listed: DocumentListing[];
+      others: string[];
+      coverage: FinderCoverage;
+}
+
 /** One file of a ranking: its date, and where the date comes from. */
 export interface RankedEntry {
   relativePath: string;
   /** `YYYY-MM-DD`. */
   date: string;
-  /** `filename` (the date at the start of the name) or `modified` (the modification date). */
-  basis: "filename" | "modified";
+  /** What the date comes from: the start of the name, the modification date, or the source the profile
+   * recorded for the document's own date. */
+  basis:
+    | "filename"
+    | "modified"
+    | "header_label"
+    | "header_dated"
+    | "header_title"
+    | "header_text"
+    | "metadata_created";
 }
 
 /** One file of a set answer, with the passage that matched. */

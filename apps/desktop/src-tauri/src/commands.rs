@@ -391,7 +391,7 @@ pub async fn index_work_folder(
     state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let (work_folder, server_url, embedding_alias, locale, mode, packs) =
+    let (work_folder, server_url, embedding_alias, locale, mode, packs, own_names) =
         state.read(|settings| {
             (
                 settings.work_folder.clone(),
@@ -400,6 +400,7 @@ pub async fn index_work_folder(
                 settings.locale.clone(),
                 settings.knowledge_mode,
                 settings.knowledge_pack_ids(),
+                settings.own_names.clone(),
             )
         })?;
     let Some(work_folder) = work_folder else {
@@ -432,7 +433,9 @@ pub async fn index_work_folder(
     // The knowledge base never blocks a pass: if it cannot start (a damaged pack, a key that cannot
     // be read) the documents are analysed exactly as before and the summary says that part of the
     // analysis did not complete.
-    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs).ok();
+    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs)
+        .ok()
+        .map(|context| context.with_own_names(&own_names));
     let mut summary = indexing::run_with_knowledge(
         &mut index,
         &state.gateway,
@@ -630,12 +633,13 @@ pub fn index_data_folder(
     state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let (data_folder, locale, mode, packs) = state.read(|settings| {
+    let (data_folder, locale, mode, packs, own_names) = state.read(|settings| {
         (
             settings.data_folder.clone(),
             settings.locale.clone(),
             settings.knowledge_mode,
             settings.knowledge_pack_ids(),
+            settings.own_names.clone(),
         )
     })?;
     let Some(data_folder) = data_folder else {
@@ -657,7 +661,9 @@ pub fn index_data_folder(
     );
     // The knowledge base never blocks a pass: if it cannot start, the workbooks are analysed exactly
     // as before and the summary says that part of the analysis did not complete.
-    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs).ok();
+    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs)
+        .ok()
+        .map(|context| context.with_own_names(&own_names));
     let mut summary = data_folder::analyse_with_knowledge(
         Path::new(&data_folder),
         &mut index,
@@ -1792,32 +1798,35 @@ async fn sourced_answer(
         QuestionRoute::SetSearch(set) => {
             // A word search of the selected files: read from the index, so no embedding call and no
             // generation. Answered the same with the AI machine stopped.
-            let (locale_tag, pack_ids) = state.read(|settings| {
-                (
-                    settings
-                        .locale
-                        .clone()
-                        .unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string()),
-                    settings.knowledge_pack_ids(),
-                )
-            })?;
-            let ids: Vec<&str> = pack_ids.iter().map(String::as_str).collect();
-            let identifiers = match (
-                PackSet::load(&locale_tag, &ids),
-                file_profile::vocabulary::ProfileVocabulary::load(&ids),
-            ) {
-                (Ok(packs), Ok(vocabulary)) => {
-                    finder::set_search::identifier_forms(&set.text, &packs, &vocabulary)
-                }
-                _ => Vec::new(),
-            };
+            let (identifiers, names_vocabulary) = set_search_tools(state, &set.text)?;
             let scoped_files: Vec<InventoryFile> = inventory
                 .all_files()
                 .iter()
                 .map(InventoryFile::from)
                 .collect();
-            let answer =
-                finder::set_search::answer(index.connection(), &scoped_files, &set, identifiers)?;
+            // A name that is exactly one entity of the knowledge base also finds the files linked to it. When
+            // the vocabulary cannot be loaded the sentence is the word search it always was.
+            let names = names_vocabulary
+                .as_ref()
+                .map(|vocabulary| finder::names::KnowledgeNames {
+                    connection: index.connection(),
+                    vocabulary,
+                });
+            let answer = match &names {
+                Some(names) => finder::set_search::answer_with_names(
+                    index.connection(),
+                    &scoped_files,
+                    &set,
+                    identifiers,
+                    names,
+                )?,
+                None => finder::set_search::answer(
+                    index.connection(),
+                    &scoped_files,
+                    &set,
+                    identifiers,
+                )?,
+            };
             measured.path = RetrievalPath::DocumentSearch;
             let unanalysed = match &answer {
                 FolderAnswer::DocumentSearch { coverage, .. } => coverage.unanalysed,
@@ -2300,6 +2309,35 @@ async fn mixed_data_only_tier(
     }))
 }
 
+/// What a set sentence needs besides the finder: the identifiers the packs read in what the user typed (in
+/// every spelling), and the vocabulary that tells whether X is the name of exactly one entity. A pack or a
+/// vocabulary that cannot be loaded leaves the sentence the word search it always was.
+fn set_search_tools(
+    state: &AppState,
+    text: &str,
+) -> Result<(Vec<String>, Option<Arc<QueryVocabulary>>), AppError> {
+    let (locale_tag, pack_ids) = state.read(|settings| {
+        (
+            settings
+                .locale
+                .clone()
+                .unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string()),
+            settings.knowledge_pack_ids(),
+        )
+    })?;
+    let ids: Vec<&str> = pack_ids.iter().map(String::as_str).collect();
+    let identifiers = match (
+        PackSet::load(&locale_tag, &ids),
+        file_profile::vocabulary::ProfileVocabulary::load(&ids),
+    ) {
+        (Ok(packs), Ok(vocabulary)) => {
+            finder::set_search::identifier_forms(text, &packs, &vocabulary)
+        }
+        _ => Vec::new(),
+    };
+    Ok((identifiers, state.vocabulary(&locale_tag, &pack_ids).ok()))
+}
+
 /// Documents and tables are both selected and the question is about the documents themselves ("how
 /// many documents do I have?", "list my files"): answered from the inventory of the selected
 /// documents, exactly as the documents tier answers it, with no model and no table. `None` for every
@@ -2332,12 +2370,68 @@ fn mixed_folder_tier(
         narrowed: resolution.narrowed,
         no_documents_chosen: resolution.no_documents_chosen,
     };
-    let Some(answer) = folder_questions::answer_in_mixed_selection(&selection, &index, question, &locale)
-    else {
-        return Ok(None);
+    // "Which documents talk about X" covers the tables too: one list per folder, each stating its folder,
+    // read from the index with no model (`docs/DECISIONS.md`, 14 October 2026).
+    let set_sentence =
+        match folder_questions::route_in_selection(&selection, &index, question, &locale) {
+            QuestionRoute::SetSearch(set) => Some(set),
+            _ => None,
+        };
+    let answer = if let Some(set) = set_sentence {
+        measured.path = RetrievalPath::DocumentSearch;
+        let data_folder = state.read(|settings| settings.data_folder.clone())?;
+        let Some(data_folder) = data_folder else {
+            return Ok(None);
+        };
+        let data = DataFolder::discover(
+            Path::new(&data_folder),
+            Some(&index),
+            &state.data_file_hashes,
+        )?;
+        let workbooks: Vec<InventoryFile> =
+            tabular_answer::selected_workbook_paths(&data, &scope.data_mode)
+                .iter()
+                .filter_map(|path| data.files().find_by_relative_path(path))
+                .map(InventoryFile::from)
+                .collect();
+        let documents: Vec<InventoryFile> = resolution
+            .inventory
+            .all_files()
+            .iter()
+            .map(InventoryFile::from)
+            .collect();
+        let (identifiers, names_vocabulary) = set_search_tools(state, &set.text)?;
+        let names = names_vocabulary
+            .as_ref()
+            .map(|vocabulary| finder::names::KnowledgeNames {
+                connection: index.connection(),
+                vocabulary,
+            });
+        let no_names = finder::names::NoNames;
+        let resolver: &dyn finder::names::NameResolver = match &names {
+            Some(names) => names,
+            None => &no_names,
+        };
+        finder::set_search::answer_both(
+            index.connection(),
+            &documents,
+            &workbooks,
+            &set,
+            identifiers,
+            resolver,
+        )?
+    } else {
+        let Some(answer) =
+            folder_questions::answer_in_mixed_selection(&selection, &index, question, &locale)
+        else {
+            return Ok(None);
+        };
+        answer
     };
     measured.routing_ms += stage.lap_ms();
-    measured.path = RetrievalPath::FolderAnswer;
+    if !matches!(answer, FolderAnswer::DocumentSearchBoth { .. }) {
+        measured.path = RetrievalPath::FolderAnswer;
+    }
     let scope_outdated: Vec<String> = resolution
         .missing
         .into_iter()

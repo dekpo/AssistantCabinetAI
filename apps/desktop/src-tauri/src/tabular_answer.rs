@@ -972,6 +972,20 @@ pub fn selected_workbook_files(data: &DataFolder, selection: &ScopeMode) -> Vec<
         .collect()
 }
 
+/// Every workbook a selection keeps: the ones she named that are still there as she chose them, analysed or
+/// not, or for "all" the analysed ones. What a search by name or by profile is offered, so the answer can say
+/// how many of the named ones could not be searched. Empty when none of them is there.
+pub fn selected_workbook_paths(data: &DataFolder, selection: &ScopeMode) -> Vec<String> {
+    chosen_workbooks(data, selection)
+        .map(|chosen| {
+            chosen
+                .iter()
+                .map(|each| each.record.relative_path.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// A workbook the selection keeps, as the readers that only look at it (the knowledge base's
 /// question suggestions) need it: where it is, which content it was analysed under, and the sheets
 /// the selection narrowed it to (`None` is every sheet).

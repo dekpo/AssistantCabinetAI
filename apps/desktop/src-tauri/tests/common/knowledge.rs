@@ -312,6 +312,8 @@ pub struct Lab {
     pub packs: Vec<&'static str>,
     pub mode: KnowledgeMode,
     pub key: [u8; 32],
+    /// The user's own names, as the settings carry them.
+    pub own_names: Vec<String>,
 }
 
 impl Lab {
@@ -329,6 +331,7 @@ impl Lab {
             packs: Vec::new(),
             mode: KnowledgeMode::Suggest,
             key: [7; 32],
+            own_names: Vec::new(),
         }
     }
 
@@ -369,6 +372,7 @@ impl Lab {
             IdentifierKey::from_bytes(self.key),
         )
         .expect("builds the context")
+        .with_own_names(&self.own_names)
     }
 
     pub async fn analyse(&mut self) -> IndexSummary {

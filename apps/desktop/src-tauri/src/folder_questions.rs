@@ -25,10 +25,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::file_profile::build::Domain;
 use crate::file_record::{FileRecord, Readability};
 use crate::file_reference::{FileReferenceResolver, ReferenceStatus, ResolutionReason};
 use crate::finder::question_frame::{SetQuestion, SetQuestionVocabulary};
-use crate::finder::rank::{RankQuestionVocabulary, RankedEntry};
+use crate::finder::rank::{ProfileFacts, RankQuestionVocabulary, RankedEntry};
 use crate::finder::{Coverage, DocumentListing};
 use crate::inventory::WorkFolderInventory;
 
@@ -142,6 +143,12 @@ fn pack_for(locale: &str) -> Option<PatternPack> {
 pub trait CorpusWords {
     /// Whether `word` appears in any indexed document. Lowercase, already tokenised.
     fn contains(&self, word: &str) -> bool;
+
+    /// The documents' profiles, when the index holds them: the rank sentence reads the document date and
+    /// the business type there. A corpus with no index has none.
+    fn profiles(&self) -> Option<&dyn ProfileFacts> {
+        None
+    }
 }
 
 /// A corpus with nothing in it: a folder that has never been analysed. Every question then reads
@@ -233,6 +240,8 @@ pub enum FolderAnswer {
     /// embedding. The first files carry their excerpt, the others only their path, and the total is always
     /// stated (`finder::set_search`).
     DocumentSearch {
+        /// The folder that was searched.
+        domain: Domain,
         /// X as the user wrote it.
         query: String,
         /// The words that were read, folded: the interface says it is a word search.
@@ -244,10 +253,19 @@ pub enum FolderAnswer {
         business_type: Option<String>,
         /// X was an identifier, searched in every spelling.
         identifier: bool,
+        /// X is the name of exactly one entity of the knowledge base: its canonical name. The files linked
+        /// to it are listed with the files that write its surfaces.
+        entity: Option<String>,
         total: usize,
         listed: Vec<DocumentListing>,
         others: Vec<String>,
         coverage: Coverage,
+    },
+    /// The same sentence with documents and workbooks both selected: one search per folder, each stating its
+    /// own folder, so a list of files that talk about X covers the tables too. Both are `DocumentSearch`.
+    DocumentSearchBoth {
+        documents: Box<FolderAnswer>,
+        workbooks: Box<FolderAnswer>,
     },
     /// "What is the latest letter received": the readable documents ranked by the date of their name, else
     /// of their modification. The first of `ranking` is the answer; `mixed_basis` says the dates are not all
@@ -256,6 +274,8 @@ pub enum FolderAnswer {
         latest: bool,
         /// The collection noun as written, `None` when it names no kind of document.
         noun: Option<String>,
+        /// The noun stood for a business type: the profiles were read, not the words of the path.
+        by_type: bool,
         /// The readable documents that were ranked or could not be.
         candidates: usize,
         /// Of those, the ones with no date at all.
@@ -368,7 +388,9 @@ pub fn route(
         if let (Some(rank), Some(set)) = (pack.rank_question.as_ref(), pack.set_question.as_ref()) {
             if let Some(asked) = rank.parse(question, &set.nouns) {
                 return QuestionRoute::Deterministic(crate::finder::rank::answer(
-                    inventory, &asked,
+                    inventory,
+                    &asked,
+                    corpus.profiles(),
                 ));
             }
         }

@@ -236,12 +236,14 @@ describe("a word search of the selected files", () => {
   ];
   const search: FolderAnswer = {
     kind: "document_search",
+    domain: "documents",
     query: "franchise annuelle",
     terms: ["franchise", "annuelle"],
     prefix: false,
     quoted: false,
     businessType: null,
     identifier: false,
+    entity: null,
     total: 3,
     listed,
     others: ["autres/2026-05-01_note.txt"],
@@ -284,6 +286,47 @@ describe("a word search of the selected files", () => {
     expect(identifier).not.toContain("Only the word itself is searched");
   });
 
+  it("says when the typed name is one entity of the knowledge base", () => {
+    const text = formatFolderAnswer(french, {
+      ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
+      query: "Mimi Martin",
+      entity: "Marie Martin",
+    });
+    expect(text).toContain("« Mimi Martin » est reconnu comme Marie Martin");
+    expect(formatFolderAnswer(french, search)).not.toContain("est reconnu comme");
+  });
+
+  it("states the folder of each list when documents and spreadsheets are both searched", () => {
+    const documents = search as Extract<FolderAnswer, { kind: "document_search" }>;
+    const text = formatFolderAnswer(french, {
+      kind: "document_search_both",
+      documents,
+      workbooks: {
+        ...documents,
+        domain: "data",
+        query: "dermatologie",
+        total: 1,
+        listed: [
+          {
+            relativePath: "rendez-vous.csv",
+            title: null,
+            businessType: null,
+            excerpt: null,
+            page: null,
+          },
+        ],
+        others: [],
+        coverage: { searched: 3, unreadable: 0, unanalysed: 1, partial: 0 },
+      },
+    });
+
+    expect(text.indexOf("**Documents**")).toBeLessThan(text.indexOf("**Tableurs**"));
+    expect(text).toContain("dans les documents sélectionnés");
+    expect(text).toContain("Recherche du mot « dermatologie » : 1 fichier dans les tableurs sélectionnés.");
+    expect(text).toContain("- rendez-vous.csv");
+    expect(text).toContain("cherchés par leur nom seulement : 1 fichier");
+  });
+
   it("says that nothing was found without inventing a file", () => {
     const text = formatFolderAnswer(english, {
       ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
@@ -302,6 +345,7 @@ describe("a ranking by date", () => {
     kind: "ranked_file",
     latest: true,
     noun: "courrier",
+    byType: false,
     candidates: 3,
     unranked: 1,
     mixedBasis: true,
@@ -322,6 +366,26 @@ describe("a ranking by date", () => {
     expect(text).toContain("- courrier-sans-date.txt — 2026-06-01 (date de modification du fichier)");
     expect(text).toContain("Les dates ne sont pas toutes de même nature");
     expect(text).toContain("1 fichier sans date connue, non classés.");
+  });
+
+  it("says when the dates come from the document and when the noun is a type", () => {
+    const text = formatFolderAnswer(french, {
+      ...(ranked as Extract<FolderAnswer, { kind: "ranked_file" }>),
+      noun: "factures",
+      byType: true,
+      mixedBasis: false,
+      unranked: 0,
+      ranking: [
+        { relativePath: "medsupply-fac-020.txt", date: "2026-06-02", basis: "header_label" },
+        { relativePath: "2026-03-01_facture-a.txt", date: "2026-05-20", basis: "header_label" },
+      ],
+    });
+
+    expect(text).toContain("Parmi 3 fichiers lisibles de type « factures »");
+    expect(text).toContain(
+      "- medsupply-fac-020.txt — 2026-06-02 (date écrite dans le document, avec son intitulé)",
+    );
+    expect(text).not.toContain("dont le nom contient");
   });
 
   it("says earliest, and does not name a noun that names no kind of document", () => {

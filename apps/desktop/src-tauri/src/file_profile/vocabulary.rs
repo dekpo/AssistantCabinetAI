@@ -378,12 +378,29 @@ impl ProfileVocabulary {
 
     /// The same vocabulary, plus names that must never be taken from a property: the user's own name
     /// and the practice's (a word processor stamps the licence holder on every document).
+    ///
+    /// The names are part of the vocabulary's hash: a profile built before a name was added is built again by
+    /// the next Analyse, and none is built again while the names stay the same.
     pub fn with_user_names(mut self, names: &[String]) -> Self {
+        let mut added: Vec<String> = Vec::new();
         for name in names {
             let key = words_key(name);
             if !key.is_empty() {
-                self.generic_exact.insert(key);
+                self.generic_exact.insert(key.clone());
+                added.push(key);
             }
+        }
+        if !added.is_empty() {
+            added.sort();
+            added.dedup();
+            let mut hasher = Sha256::new();
+            hasher.update(self.hash.as_bytes());
+            hasher.update(format!("\nuser_names:{}\n", added.join("|")).as_bytes());
+            self.hash = hasher
+                .finalize()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
         }
         self
     }
@@ -419,6 +436,33 @@ impl ProfileVocabulary {
             }
             None => false,
         }
+    }
+
+    /// The same vocabulary, plus the user's own business types (`user_types.rs`). Their codes start with
+    /// `user_`, so none meets a shipped one. Their phrases are part of the hash: a change builds the profiles
+    /// again at the next Analyse, and none is built again while the types stay the same.
+    pub fn with_user_types(mut self, rules: Vec<DocumentTypeRule>) -> Self {
+        if rules.is_empty() {
+            return self;
+        }
+        let mut hasher = Sha256::new();
+        hasher.update(self.hash.as_bytes());
+        for rule in rules {
+            hasher.update(
+                format!(
+                    "\nuser_type:{}:{:?}:{:?}:{:?}:{:?}:{:?}\n",
+                    rule.code, rule.name, rule.title, rule.header, rule.body, rule.sheet
+                )
+                .as_bytes(),
+            );
+            self.types.insert(rule.code.clone(), rule);
+        }
+        self.hash = hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        self
     }
 
     /// A digest of every word read, so a later step can tell that the vocabulary changed.

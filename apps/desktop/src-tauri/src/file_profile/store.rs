@@ -6,6 +6,7 @@
 //! file_profile_entities        the people and organisations a file is linked to, with role and method
 //! file_profile_sections        (empty for now) the table of contents and per-section facts of a long document
 //! file_profile_original_names  the name a file had before the Analyse cleaned it
+//! file_profile_user_types      the user's own business types: manual rows, written by no Analyse (`user_types.rs`)
 //! file_profile_fts             the profile's text, one column per kind of text, for `bm25()` weights later
 //! file_profile_meta            the schema version each folder was last profiled under
 //! ```
@@ -139,6 +140,12 @@ CREATE TABLE IF NOT EXISTS file_profile_original_names (
     relative_path TEXT NOT NULL,
     original_name TEXT NOT NULL,
     PRIMARY KEY (domain, relative_path)
+);
+CREATE TABLE IF NOT EXISTS file_profile_user_types (
+    code TEXT PRIMARY KEY,
+    scope TEXT NOT NULL CHECK (scope IN ('documents', 'data')),
+    label TEXT NOT NULL,
+    rule_json TEXT NOT NULL
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS file_profile_fts USING fts5(
     domain UNINDEXED,
@@ -1530,7 +1537,12 @@ fn run(
     let ids: Vec<&str> = knowledge
         .map(|context| context.profile_pack_ids())
         .unwrap_or_default();
-    let vocabulary = ProfileVocabulary::load(&ids).ok()?;
+    let vocabulary = super::user_types::with_stored_types(
+        ProfileVocabulary::load(&ids)
+            .ok()?
+            .with_user_names(knowledge.map_or(&[][..], |context| context.own_names())),
+        index.connection(),
+    );
     let packs = PackSet::load(knowledge.map_or(locale, |context| context.locale()), &ids).ok()?;
     let gazetteer = knowledge
         .filter(|context| context.mode.reads_files())

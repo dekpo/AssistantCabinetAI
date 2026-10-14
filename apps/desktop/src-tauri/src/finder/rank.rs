@@ -8,13 +8,17 @@
 //! or the noun first (`the letter that is the latest`). Answered from the inventory alone: no model, no
 //! retrieval. The sentence is exactly this shape or it keeps its road; any other word is a filter.
 //!
-//! The collection noun filters by **words of the file's path** (`courrier` meets `courrier-orl.pdf` and a
-//! folder `courriers/`), over the readable documents. A noun that names no kind (`documents`) covers every
-//! readable document. Files are ranked by the date at the start of their clean name (`2026-10-01_...`),
-//! else by their modification date, and the answer says which of the two each date is, because a
+//! A collection noun that stands for a business type (`factures`, `ordonnances`) filters by the **type in the
+//! file's profile**; any other noun filters by **words of the file's path** (`courrier` meets
+//! `courrier-orl.pdf` and a folder `courriers/`), and so does a file with no profile yet, which the
+//! Analyse has not read. A noun that names no kind (`documents`) covers every readable document.
+//!
+//! Files are ranked by the document date of their profile (the date written in the document, else the one
+//! at the start of the clean name, with the source the profile recorded), else by the date at the start of
+//! the clean name, else by the modification date. The answer says what each date comes from, because a
 //! modification date is the date of a copy and not always the date of the letter.
 
-use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +31,31 @@ use crate::knowledge::normalize::fold;
 
 /// The files listed under the answer, the first being the answer itself.
 pub const RANKING_SHOWN: usize = 5;
+
+/// What the profile of one file says that a ranking needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileFact {
+    /// The content identity the profile was built from; a profile of other content is not read.
+    pub content_id: String,
+    pub business_type: Option<String>,
+    /// The chosen document date, `YYYY-MM-DD`, and the source the profile recorded for it.
+    pub date: Option<(String, String)>,
+}
+
+/// The rank sentence reads the profiles through this port: the router holds no connection.
+pub trait ProfileFacts {
+    /// One entry per profiled document, by relative path.
+    fn documents(&self) -> HashMap<String, ProfileFact>;
+}
+
+/// The source code of the profile's date as the answer names it: the date at the start of the name is
+/// `filename` in both places.
+fn basis_of(profile_source: &str) -> String {
+    match profile_source {
+        "filename_prefix" => "filename".to_string(),
+        other => other.to_string(),
+    }
+}
 
 /// The words of the rank sentence for one language.
 #[derive(Debug, Clone, Deserialize)]
@@ -67,6 +96,8 @@ pub struct RankQuestion {
     pub noun: Option<String>,
     /// The folded singular word the file path must hold (or that word with an `s`), `None` for every document.
     stem: Option<String>,
+    /// The business type the noun stands for, read from the profile.
+    kind: Option<String>,
 }
 
 fn last_noun_at<'a>(
@@ -144,6 +175,7 @@ impl RankQuestionVocabulary {
             latest,
             noun: (!noun.generic).then(|| written.to_string()),
             stem: if noun.generic { None } else { stem },
+            kind: noun.kind.clone(),
         })
     }
 }
@@ -155,7 +187,9 @@ pub struct RankedEntry {
     pub relative_path: String,
     /// `YYYY-MM-DD`.
     pub date: String,
-    /// `filename` (the date at the start of the name) or `modified` (the modification date).
+    /// What the date comes from: `filename` (the start of the name), `modified` (the modification date),
+    /// or the source the profile recorded (`header_label`, `header_dated`, `header_title`,
+    /// `header_text`, `metadata_created`).
     pub basis: String,
 }
 
@@ -163,7 +197,14 @@ fn date_of_modification(seconds: i64) -> Option<String> {
     chrono::DateTime::from_timestamp(seconds, 0).map(|moment| moment.format("%Y-%m-%d").to_string())
 }
 
-fn ranked_entry(file: &FileRecord) -> Option<RankedEntry> {
+fn ranked_entry(file: &FileRecord, fact: Option<&ProfileFact>) -> Option<RankedEntry> {
+    if let Some((date, source)) = fact.and_then(|fact| fact.date.as_ref()) {
+        return Some(RankedEntry {
+            relative_path: file.relative_path.clone(),
+            date: date.clone(),
+            basis: basis_of(source),
+        });
+    }
     if let (Some(date), _) = split_date_prefix(&file.stem) {
         return Some(RankedEntry {
             relative_path: file.relative_path.clone(),
@@ -187,23 +228,43 @@ fn holds_word(file: &FileRecord, stem: &str) -> bool {
         .any(|found| found == stem || *found == *plural)
 }
 
-/// Rank the readable documents of `inventory` for `question`.
-pub fn answer(inventory: &WorkFolderInventory, question: &RankQuestion) -> FolderAnswer {
+/// Rank the readable documents of `inventory` for `question`. `profiles` are the documents' profiles when
+/// the caller has an index; without them the ranking reads names and modification dates only.
+pub fn answer(
+    inventory: &WorkFolderInventory,
+    question: &RankQuestion,
+    profiles: Option<&dyn ProfileFacts>,
+) -> FolderAnswer {
+    let facts = profiles.map(ProfileFacts::documents).unwrap_or_default();
+    // A profile of other content than the file's is not the file's.
+    let fact_of = |file: &FileRecord| {
+        facts
+            .get(&file.relative_path)
+            .filter(|fact| fact.content_id == file.id)
+    };
     let readable: Vec<&FileRecord> = inventory
         .all_files()
         .iter()
         .filter(|file| file.kind.is_document() && file.readability == Readability::Readable)
         .filter(|file| {
-            question
-                .stem
-                .as_deref()
-                .is_none_or(|stem| holds_word(file, stem))
+            let by_path = || {
+                question
+                    .stem
+                    .as_deref()
+                    .is_none_or(|stem| holds_word(file, stem))
+            };
+            match (&question.kind, fact_of(file)) {
+                // The noun is a type and the file has a profile: the profile decides.
+                (Some(kind), Some(fact)) => fact.business_type.as_deref() == Some(kind.as_str()),
+                // The file has no profile yet, or the noun is no type: the words of its path decide.
+                _ => by_path(),
+            }
         })
         .collect();
     let candidates = readable.len();
     let mut ranked: Vec<RankedEntry> = readable
         .iter()
-        .filter_map(|file| ranked_entry(file))
+        .filter_map(|file| ranked_entry(file, fact_of(file)))
         .collect();
     let unranked = candidates - ranked.len();
     if question.latest {
@@ -219,12 +280,17 @@ pub fn answer(inventory: &WorkFolderInventory, question: &RankQuestion) -> Folde
                 .then_with(|| a.relative_path.cmp(&b.relative_path))
         });
     }
-    let mixed: BTreeSet<&str> = ranked.iter().map(|entry| entry.basis.as_str()).collect();
-    let mixed_basis = mixed.len() > 1;
+    // A modification date is the date of a copy: the answer warns when one stands among dates of documents.
+    let copies = ranked
+        .iter()
+        .filter(|entry| entry.basis == "modified")
+        .count();
+    let mixed_basis = copies > 0 && copies < ranked.len();
     ranked.truncate(RANKING_SHOWN);
     FolderAnswer::RankedFile {
         latest: question.latest,
         noun: question.noun.clone(),
+        by_type: question.kind.is_some(),
         candidates,
         unranked,
         mixed_basis,

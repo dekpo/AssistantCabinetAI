@@ -8,7 +8,8 @@ mod common;
 
 use assistant_cabinet_ai_lib::discovery::discover_all;
 use assistant_cabinet_ai_lib::file_profile::vocabulary::ProfileVocabulary;
-use assistant_cabinet_ai_lib::finder::set_search::{answer, identifier_forms};
+use assistant_cabinet_ai_lib::finder::names::KnowledgeNames;
+use assistant_cabinet_ai_lib::finder::set_search::{answer, answer_with_names, identifier_forms};
 use assistant_cabinet_ai_lib::finder::InventoryFile;
 use assistant_cabinet_ai_lib::folder_questions::{
     route, set_question, FolderAnswer, NoCorpus, QuestionRoute,
@@ -303,6 +304,12 @@ async fn the_six_set_sentences_of_the_final_test_find_their_files_and_nothing_el
     let files = inventory(library.lab.work_path());
     let connection = library.lab.side();
     let requests_before = library.lab.gateway.requests().len();
+    // The path of the application: a name that is one entity also finds the files linked to it.
+    let vocabulary = library.lab.vocabulary();
+    let names = KnowledgeNames {
+        connection: &connection,
+        vocabulary: &vocabulary,
+    };
 
     let mut expected_total = 0;
     let mut found_total = 0;
@@ -331,7 +338,8 @@ async fn the_six_set_sentences_of_the_final_test_find_their_files_and_nothing_el
             .collect();
         let set =
             set_question(question, LOCALE).unwrap_or_else(|| panic!("{id} is a set question"));
-        let found = answer(&connection, &files, &set, Vec::new()).expect("answers");
+        let found =
+            answer_with_names(&connection, &files, &set, Vec::new(), &names).expect("answers");
         let (total, _, _) = listing(&found);
         let FolderAnswer::DocumentSearch { listed, others, .. } = &found else {
             unreachable!()

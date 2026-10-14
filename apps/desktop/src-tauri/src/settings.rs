@@ -147,6 +147,10 @@ pub struct Settings {
     /// The copy buttons of the conversation (one answer, or the whole conversation) also copy the
     /// lists of sources shown under each answer. Read by the client only. Off by default.
     pub copy_sources: bool,
+    /// The user's own names (hers and the practice's): a word processor stamps the licence holder on every
+    /// document, so a property that holds one of these says nothing about who wrote the file. Edited in
+    /// `settings.json` until the settings dialog gets its "Advanced" group; kept clean by `save`.
+    pub own_names: Vec<String>,
 }
 
 impl Default for Settings {
@@ -173,6 +177,7 @@ impl Default for Settings {
             knowledge_widen_below_score: DEFAULT_KNOWLEDGE_WIDEN_BELOW_SCORE,
             knowledge_hide_names_in_suggestions: true,
             copy_sources: false,
+            own_names: Vec::new(),
         }
     }
 }
@@ -290,6 +295,7 @@ pub fn save(
     );
     checked.generated_folder_name = clean_folder_name(&checked.generated_folder_name);
     checked.knowledge_packs = checked.knowledge_pack_ids();
+    checked.own_names = clean_own_names(&checked.own_names);
     let targeting = checked.targeting_policy();
     checked.knowledge_min_scope_files = targeting.min_scope_files;
     checked.knowledge_max_selectivity = targeting.max_selectivity;
@@ -319,6 +325,21 @@ pub fn save(
 /// One clean folder name from whatever was typed: the clean-name alphabet, no separator, at most 60
 /// characters, and the default when nothing usable is left. A name made only of dots is not a name
 /// (`.` and `..` mean "here" and "above").
+/// The user's own names as they are kept: trimmed, none empty, none twice, each of a sensible length, and not
+/// more than a handful (hers, the practice's, a partner's).
+fn clean_own_names(typed: &[String]) -> Vec<String> {
+    const MAX_NAMES: usize = 20;
+    const MAX_CHARS: usize = 100;
+    let mut kept: Vec<String> = Vec::new();
+    for name in typed {
+        let name: String = name.trim().chars().take(MAX_CHARS).collect();
+        if !name.is_empty() && !kept.contains(&name) && kept.len() < MAX_NAMES {
+            kept.push(name);
+        }
+    }
+    kept
+}
+
 fn clean_folder_name(typed: &str) -> String {
     use unicode_normalization::char::is_combining_mark;
     use unicode_normalization::UnicodeNormalization;
@@ -412,6 +433,7 @@ mod tests {
             knowledge_widen_below_score: 0.35,
             knowledge_hide_names_in_suggestions: false,
             copy_sources: true,
+            own_names: vec!["Zorglub Metadatus".into()],
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
@@ -424,6 +446,7 @@ mod tests {
         assert_eq!(json["knowledgeMaxCandidates"], 20);
         assert_eq!(json["knowledgeHideNamesInSuggestions"], false);
         assert_eq!(json["copySources"], true);
+        assert_eq!(json["ownNames"][0], "Zorglub Metadatus");
         assert!((json["knowledgeMaxSelectivity"].as_f64().unwrap() - 0.5).abs() < 1e-6);
 
         assert_eq!(json["locale"], "fr-FR");
@@ -436,6 +459,24 @@ mod tests {
             json["answerIdleTimeoutSeconds"],
             DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
         );
+    }
+
+    #[test]
+    fn the_users_own_names_are_kept_clean_and_default_to_none() {
+        assert!(Settings::default().own_names.is_empty());
+        let typed = vec![
+            "  Zorglub Metadatus ".to_string(),
+            "".to_string(),
+            "Zorglub Metadatus".to_string(),
+            "Voirons Practice".to_string(),
+        ];
+        assert_eq!(
+            clean_own_names(&typed),
+            vec!["Zorglub Metadatus", "Voirons Practice"]
+        );
+        let older: Settings =
+            serde_json::from_str(r#"{ "knowledgeMode": "auto" }"#).expect("reads");
+        assert!(older.own_names.is_empty());
     }
 
     #[test]

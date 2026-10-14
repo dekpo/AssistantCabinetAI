@@ -1223,6 +1223,46 @@ impl crate::folder_questions::CorpusWords for IndexStore {
             .map(|hits| hits.is_empty())
             .unwrap_or(true)
     }
+
+    fn profiles(&self) -> Option<&dyn crate::finder::rank::ProfileFacts> {
+        Some(self)
+    }
+}
+
+/// The rank sentence reads the chosen document date and the business type of every document profile:
+/// one query, no file.
+impl crate::finder::rank::ProfileFacts for IndexStore {
+    fn documents(&self) -> std::collections::HashMap<String, crate::finder::rank::ProfileFact> {
+        let mut facts = std::collections::HashMap::new();
+        let Ok(mut statement) = self.connection().prepare(
+            "SELECT relative_path, content_id, business_type, document_date, document_date_source
+             FROM file_profiles WHERE domain = 'documents'",
+        ) else {
+            return facts;
+        };
+        let Ok(rows) = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        }) else {
+            return facts;
+        };
+        for (path, content_id, business_type, date, source) in rows.flatten() {
+            facts.insert(
+                path,
+                crate::finder::rank::ProfileFact {
+                    content_id,
+                    business_type,
+                    date: date.zip(source),
+                },
+            );
+        }
+        facts
+    }
 }
 
 fn encode_vector(vector: &[f32]) -> Vec<u8> {

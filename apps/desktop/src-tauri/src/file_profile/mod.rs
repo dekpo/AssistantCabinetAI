@@ -16,4 +16,5 @@ pub mod metadata;
 pub mod name;
 pub mod store;
 pub mod types;
+pub mod user_types;
 pub mod vocabulary;

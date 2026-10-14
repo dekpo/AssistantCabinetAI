@@ -6,10 +6,16 @@
 //! word is not matched. The first [`LISTED`] files carry their excerpt, the others only their path, and the
 //! total is always stated; the candidate limit of retrieval never truncates a listing.
 
+use std::collections::HashMap;
+
 use rusqlite::Connection;
 
-use super::contracts::{DocumentListing, FinderQuery, FinderScope, InventoryFile, MAX_LIMIT};
+use super::contracts::{
+    DocumentListing, EntityFilter, FileHit, FinderQuery, FinderResult, FinderScope, InventoryFile,
+    MAX_LIMIT,
+};
 use super::engine::find;
+use super::names::{NameResolver, NoNames};
 use super::question_frame::SetQuestion;
 use crate::error::AppError;
 use crate::file_profile::build::Domain;
@@ -38,18 +44,79 @@ pub fn identifier_forms(
     forms
 }
 
-/// Answer `set` over the selected files `scoped`, which are also the only ones searched.
+/// Answer `set` over the selected files `scoped`, which are also the only ones searched. X stays a phrase.
 pub fn answer(
     connection: &Connection,
     scoped: &[InventoryFile],
     set: &SetQuestion,
     identifiers: Vec<String>,
 ) -> Result<FolderAnswer, AppError> {
-    let identifier = !identifiers.is_empty();
-    let query = FinderQuery {
-        text: Some(set.text.clone()),
-        whole_words: true,
+    answer_with_names(connection, scoped, set, identifiers, &NoNames)
+}
+
+/// `answer`, where X may be the name of exactly one entity: the answer is then the files linked to that
+/// entity (the knowledge base's mentions and the profile's entity rows) together with the files that write
+/// one of its surfaces as a phrase. Two entities, a possible match or none leave X a phrase.
+pub fn answer_with_names(
+    connection: &Connection,
+    scoped: &[InventoryFile],
+    set: &SetQuestion,
+    identifiers: Vec<String>,
+    names: &dyn NameResolver,
+) -> Result<FolderAnswer, AppError> {
+    answer_in(
+        Domain::Documents,
+        connection,
+        scoped,
+        set,
         identifiers,
+        names,
+    )
+}
+
+/// The set sentence with documents and workbooks both selected: one search per folder, each answer stating
+/// its own folder. No model, no embedding: the same index, the same engine.
+pub fn answer_both(
+    connection: &Connection,
+    documents: &[InventoryFile],
+    workbooks: &[InventoryFile],
+    set: &SetQuestion,
+    identifiers: Vec<String>,
+    names: &dyn NameResolver,
+) -> Result<FolderAnswer, AppError> {
+    let in_documents = answer_in(
+        Domain::Documents,
+        connection,
+        documents,
+        set,
+        identifiers.clone(),
+        names,
+    )?;
+    let in_workbooks = answer_in(Domain::Data, connection, workbooks, set, identifiers, names)?;
+    Ok(FolderAnswer::DocumentSearchBoth {
+        documents: Box::new(in_documents),
+        workbooks: Box::new(in_workbooks),
+    })
+}
+
+/// `answer_with_names` over the files of one folder: the documents, or the workbooks (their cell words,
+/// headers and names are in the profile). The answer states which folder it searched.
+pub fn answer_in(
+    domain: Domain,
+    connection: &Connection,
+    scoped: &[InventoryFile],
+    set: &SetQuestion,
+    identifiers: Vec<String>,
+    names: &dyn NameResolver,
+) -> Result<FolderAnswer, AppError> {
+    let identifier = !identifiers.is_empty();
+    let named = if identifier || set.quoted {
+        None
+    } else {
+        names.resolve_one(&set.text)
+    };
+    let base = FinderQuery {
+        whole_words: true,
         kinds: set.kind.iter().cloned().collect(),
         limit: Some(MAX_LIMIT),
         ..FinderQuery::default()
@@ -60,7 +127,34 @@ pub fn answer(
             .map(|file| file.relative_path.clone())
             .collect(),
     );
-    let result = find(connection, Domain::Documents, scoped, &query, &scope)?;
+    let run = |query: FinderQuery| find(connection, domain, scoped, &query, &scope);
+
+    let mut result = run(FinderQuery {
+        text: Some(set.text.clone()),
+        identifiers,
+        ..base.clone()
+    })?;
+    let mut entity = None;
+    if let Some(named) = named {
+        // The files linked to the entity, then the files that write another of its surfaces.
+        let linked = run(FinderQuery {
+            entities: vec![EntityFilter {
+                entity_id: named.entity_id,
+                role: None,
+            }],
+            ..base.clone()
+        })?;
+        let mut merged = Merged::new(result);
+        merged.add(linked);
+        for surface in &named.surfaces {
+            merged.add(run(FinderQuery {
+                text: Some(surface.clone()),
+                ..base.clone()
+            })?);
+        }
+        result = merged.finish();
+        entity = Some(named.display);
+    }
 
     let mut listed = Vec::new();
     let mut others = Vec::new();
@@ -82,15 +176,69 @@ pub fn answer(
         .map(|search| (search.terms, search.last_is_prefix))
         .unwrap_or_default();
     Ok(FolderAnswer::DocumentSearch {
+        domain,
         query: set.text.clone(),
         terms,
         prefix,
         quoted: set.quoted,
         business_type: set.kind.clone(),
         identifier,
+        entity,
         total: result.total,
         listed,
         others,
         coverage: result.coverage,
     })
+}
+
+/// The union of several runs of the finder over the same scope: a file once, the first run's order, the
+/// passage of the first run that has one.
+struct Merged {
+    result: FinderResult,
+    position: HashMap<String, usize>,
+}
+
+impl Merged {
+    fn new(result: FinderResult) -> Self {
+        let position = result
+            .files
+            .iter()
+            .enumerate()
+            .map(|(at, hit)| (hit.relative_path.clone(), at))
+            .collect();
+        Self { result, position }
+    }
+
+    fn add(&mut self, other: FinderResult) {
+        for hit in other.files {
+            self.push(hit);
+        }
+    }
+
+    fn push(&mut self, hit: FileHit) {
+        match self.position.get(&hit.relative_path) {
+            Some(&at) => {
+                let held = &mut self.result.files[at];
+                if held.excerpt.is_none() {
+                    held.excerpt = hit.excerpt;
+                    held.locator = hit.locator;
+                }
+                for reason in hit.reasons {
+                    if !held.reasons.contains(&reason) {
+                        held.reasons.push(reason);
+                    }
+                }
+            }
+            None => {
+                self.position
+                    .insert(hit.relative_path.clone(), self.result.files.len());
+                self.result.files.push(hit);
+            }
+        }
+    }
+
+    fn finish(mut self) -> FinderResult {
+        self.result.total = self.result.files.len();
+        self.result
+    }
 }

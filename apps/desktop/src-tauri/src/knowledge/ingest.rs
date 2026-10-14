@@ -140,6 +140,8 @@ pub struct KnowledgeContext {
     /// The pack ids the user switched on, whatever the mode: the file profile reads its business types
     /// and header labels with them even when the knowledge base reads nothing.
     profile_packs: Vec<String>,
+    /// The user's own names (the settings): a property that holds one of them says nothing about a file.
+    own_names: Vec<String>,
     titles: TitleSet,
     encoder: Box<dyn PhoneticEncoder>,
     extractor: Box<dyn EntityExtractor>,
@@ -227,6 +229,17 @@ impl KnowledgeContext {
         self
     }
 
+    /// The same context, told the user's own names: the file profile never takes one of them from a
+    /// property as the author or the issuer of a file.
+    pub fn with_own_names(mut self, names: &[String]) -> Self {
+        self.own_names = names.to_vec();
+        self
+    }
+
+    pub fn own_names(&self) -> &[String] {
+        &self.own_names
+    }
+
     /// The pack ids the user switched on (`with_profile_packs` or the ones the context was built with).
     pub fn profile_pack_ids(&self) -> Vec<&str> {
         self.profile_packs.iter().map(String::as_str).collect()
@@ -263,6 +276,7 @@ impl KnowledgeContext {
             titles,
             packs,
             profile_packs: active_packs.iter().map(|id| id.to_string()).collect(),
+            own_names: Vec::new(),
             encoder: encoder_for_locale(locale),
             extractor: Box::new(DeterministicTextExtractor),
             tables: if mode.reads_files() {

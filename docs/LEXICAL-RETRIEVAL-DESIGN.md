@@ -333,3 +333,34 @@ Still deferred, as before: French stemming, `bm25()` weights, `NEAR`, the thesau
 4. **The set sentence works on the documents of the conversation only**; with documents and tables both selected it falls through to the mixed tier as before.
 5. **The folder cards' field replaces nothing**: it sits above the « Documents utilisés » line, which keeps its count and warnings, as the least risky layout; the owner decides whether the line should go.
 
+### 11.7 Stabilising the finder (tab 1 of the long-documents chain): result (14 October 2026)
+
+**Elapsed time**: not logged to the minute; the whole tab, from the three decisions to the final pass, was one working session. The human test of `docs/test-reports/file-finder/human-test.md` was **set aside by the owner** and has not been played: **tab 2 must not start before it is** (handoff rule), or the owner lifts that rule herself.
+
+| Item | Built | Where |
+| --- | --- | --- |
+| 1. Decisions | Confirmed: the field above « Documents utilisés », `courrier` a path word, the rank sentence read from the profile | `docs/DECISIONS.md`, « Settled while stabilising the file finder » |
+| 3. Entities as X | `finder::names::NameResolver` (port) and `KnowledgeNames`; `set_search::answer_with_names`; `DocumentSearch.entity`; the answer names the entity | `tests/finder_names.rs` (3) |
+| 4. Rank from the profile | `ProfileFacts` through `CorpusWords::profiles()`; date with its source, business-type filter, path-word fallback, `RankedFile.by_type` | `tests/finder_rank_profile.rs` (4) |
+| 5. Set sentence, documents and tables | `set_search::answer_in`, `answer_both`, `FolderAnswer::DocumentSearchBoth`, `DocumentSearch.domain`; the mixed tier answers before the model; `tabular_answer::selected_workbook_paths` (read only, added) | `tests/set_search_mixed.rs` (1) |
+| 6. User-defined types | `file_profile/user_types.rs`, table `file_profile_user_types`, `ProfileVocabulary::with_user_types`, `types::classify_among` and `combine`, `reevaluate` (stored profile only) | `tests/file_profile_user_types.rs` (5), `types.rs` unit test |
+| 7. Own names | `Settings.own_names`, `KnowledgeContext::with_own_names`, the names enter the vocabulary hash | `tests/file_profile_own_names.rs` (1), settings unit test |
+| 8. Unstable test | Immediate replies no longer run under the 250 ms deadline | `tests/embedding_failures.rs` |
+
+**Honest notes.**
+
+- The tests of items 3, 4 and 6 were written beside the code and run when both existed; the one that would have failed on the old behaviour is the one that asserts the old behaviour first (`another_name_of_the_entity_finds_the_files_that_write_the_first_one` asserts the plain word search finds one file, then three with the name). The rank test that first failed was wrong about the product (an unanalysed file is `not_assessed`, not ranked): the product was right and the test changed.
+- The profile's FTS `entities` column already holds the **canonical name** of every linked entity, so a typed canonical name already finds its files by words. The port adds the case the words cannot reach: **another name of the entity** (a manual alias) and the entity's files whatever they write.
+- Re-evaluating the user types cannot see the body of the text (the profile does not keep it): the following Analyse, which builds every profile again because the vocabulary hash changed, completes the reading. A test pins that the quick pass settles no type the full pass then changes.
+- The rank sentence over **workbooks** is not part of this tab; the set sentence over workbooks is.
+
+**Measured (final pass, after the last edit).**
+
+- `cargo test --no-fail-fast`: **1 454 passed, 0 failed, 48 ignored**, including `tabular_snapshot` byte-identical around the finder, `tabular_reference`, and the unstable test.
+- The six set sentences, through the application's path (names port on): **111 of 111, 0 wrong file, 0 gateway call**; the 37 AVS numbers in all 48 files, 0 wrong file; 767 of 767 name queries (`tests/file_finder.rs`).
+- Finder latency (`tests/file_finder_bench.rs`, release, once): 500 files 1 to 6 ms, **5 000 files up to 31 ms (target 50)**, **20 000 files up to 128 ms (target 200)**; the run that passed is the second, because the first was cut by a pipe (it showed the same order of figures). The names port adds one resolver call and at most seven finder runs to a set sentence whose X is one entity; no change for an ordinary X.
+- `clippy --all-targets`: no warning in the new or changed code (the existing warnings of other files are untouched); `rustfmt --edition 2021 --check`: the new files are clean and no file already unclean has a new difference; `pnpm run build`; `pnpm run test` **678 passed**; the Python script tests **41 passed**.
+
+**Own names, to keep.** `Settings.own_names` is kept for the multi-workstation use with an authentication on the server (owner, 14 October 2026): the authenticated user's name will feed it, and the next step is to also keep that name out of the entities and out of the search (`docs/DECISIONS.md`, « Settled while stabilising the file finder »).
+
+**Left for later tabs.** The editing screen and the Tauri commands for the user types, a settings field in the dialog for the own names, the labels of `user_*` codes in the facets (tab 3); the finder on long documents (tab 2); the pinned-first identifier on the ordinary chat road (tab 3).

@@ -303,3 +303,33 @@ Still deferred, as before: French stemming, `bm25()` weights, `NEAR`, the thesau
 4. **A workbook's cells are read again from the file** when its profile is built or its links are recomputed, because `tabular_workbooks` is emptied by every Analyse of the Data Folder by design and is not rebuilt. The reader is the Analyse's own; nothing is written to the spreadsheet tables.
 5. A `cells` column was added to the full-text row (the words of workbook cells), and a `file_profile_sections` table exists, empty, for the table of contents of long documents.
 6. The old-index detection (`profile_index_status`, a registered command, and `index_status`) is tested on the backend; **the French message and its wiring in the interface are not written** (not part of this branch's scope).
+
+### 11.6 Steps 6 to 10, the file finder: result (14 October 2026)
+
+**Real elapsed time** (wall clock, about 11:50 to 13:15; approximate, the log was not kept to the minute): step 6 the engine about 35 min (of which three release builds for the latency), step 7 the set sentence and identifiers about 25 min, step 8 about 10 min, step 9 the two search fields about 20 min, step 10 the one final pass and the human test about 30 min, of which the whole `cargo test` took 10 min 41 s. The estimates of the table in 11.3 were a human's pace.
+
+| Module | Does |
+| --- | --- |
+| `finder/contracts.rs`, `finder/engine.rs` | `find(connection, domain, inventory, query, scope)`: name and folder through the one name function (files never analysed included), the profile's full-text row one column at a time (so each hit says which column answered), the passages as a phrase, identifiers in their stored compact form; entity filter (knowledge base and profile) and role filter (profile only, a link without an entity never filters); type, date (workbooks by the span of their date columns), folder, format and state filters; facets and coverage; excerpts and cards for the page only |
+| `finder/question_frame.rs`, `finder/set_search.rs` | the set sentence `[opener] [determiners] noun [linker] verb X`, vocabulary as data (`set_question` in `work-folder-questions/*.json`), `QuestionRoute::SetSearch`, `FolderAnswer::DocumentSearch`, `RetrievalPath::DocumentSearch`; the identifier forms of what was typed |
+| `finder/rank.rs` | the rank sentence (`rank_question` in the same files), `FolderAnswer::RankedFile` |
+| client | `findFiles` and the finder types in `ipc.ts`, `folderAnswer.ts` (both new answers), `FinderControls` and `useFinderSearch` (the field in both folder cards), `scopeFromSearch`, `useProfileStatus` and the line « L'index doit être refait : appuyez sur Analyser. », `businessType.*` labels in both catalogues |
+
+**Measured.**
+
+- **Name queries**: 767 of 767 through the finder's own entry (`find`), over the sandbox inventory with an empty index (`tests/file_finder.rs`).
+- **The six set sentences of the final test**, 200-document sandbox, through the router and the finder: **111 of 111 files, 0 wrong file, 0 gateway call**. The first run lost 17 files because the noun « courriers » was a filter on the type `letter`; the word is no longer a type (`docs/DECISIONS.md`).
+- **Identifiers**: the 37 distinct AVS numbers of the sandbox, typed without separators, found in all 48 files that write them, 0 wrong file; the lab's question about `7561234567897` finds `patients/2026-03-09_dossier-administratif-praz.docx` and the absent number finds nothing. (The 1 of 17 of the lab was an application-path figure; the pinned-first rule on the ordinary chat road is not built, see the decisions.)
+- **Rank**: the latest courrier of the sandbox is `2026-10-07_courrier-harmonie.pdf` (13 and 77 readable courriers in the 30- and 200-document libraries), checked against the truth's own dates; `2026-10-01_courrier-dermatologie.pdf`, named in the handoff, is one of the later ones, not the last.
+- **Latency**, synthetic index with three passages and two entity links per document, release build, median of 15, warm connection (a fresh connection per call, as the command opens it, costs 141 ms at 20 000 files for the same listing): 500 files 1 to 6 ms; **5 000 files 8 to 35 ms (target 50)**; **20 000 files 37 to 148 ms (target 200)**, the worst being a word present in 69 % of the passages. Before the 64 MiB page cache the same 20 000 files cost 250 to 420 ms.
+- **Spreadsheets**: `tabular_snapshot` byte-identical around the finder; `src/tabular/*` and the three tables untouched (the only edit in the neighbourhood is the temperature of the query-plan call in `tabular_answer.rs`); `tabular_reference` passes.
+- **Final pass**: `cargo test --no-fail-fast` 1 436 passed, 1 failed, 48 ignored; the failure was a test written for the previous routing (`Quels documents concernent HUG ?` is now a word search), changed on purpose and re-run green with the three files that exercise the router; one other test (`a_refusal_of_the_request_itself_is_never_retried`) failed once under load in the first run and passed three times alone and in the second full run. `clippy` with no warning in the new code (test files carry one `allow` for building a query field by field); `rustfmt --check` clean on the new files and no new difference in the files already unclean; `pnpm run build` and `pnpm run test` (673 passed); Python script tests (41 passed).
+
+**Where the implementation differs from the handoff, and why** (to confirm):
+
+1. **The pinned-first exact identifier on the ordinary chat road (`LexicalOptions`) is not built.** It is judged on the `identifier` family of the real stack, which needs the AI machine's embeddings; the finder already answers « Quels documents contiennent <numéro> ? » and the search field finds a number in any spelling.
+2. **The rank sentence reads the inventory, not the profile**: the date of the clean name, else the modification date, with the basis said in the answer. The profile's chosen document date is not used yet.
+3. **Entities as X are not resolved**: an unresolved name stays a phrase (the design's small port over the KB resolver is left for a later lot); a person's name is found by the passages and the profile's entity column.
+4. **The set sentence works on the documents of the conversation only**; with documents and tables both selected it falls through to the mixed tier as before.
+5. **The folder cards' field replaces nothing**: it sits above the « Documents utilisés » line, which keeps its count and warnings, as the least risky layout; the owner decides whether the line should go.
+

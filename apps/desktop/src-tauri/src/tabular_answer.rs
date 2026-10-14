@@ -802,12 +802,13 @@ async fn ask_model_for_plan(
     }];
     let raw = assist
         .gateway
-        .chat(
+        .chat_at(
             assist.server_url,
             assist.model_alias,
             None,
             &turns,
             assist.idle_timeout,
+            Some(crate::gateway::GROUNDED_TEMPERATURE),
             |_delta| {},
         )
         .await

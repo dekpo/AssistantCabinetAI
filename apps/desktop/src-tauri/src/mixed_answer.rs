@@ -253,12 +253,13 @@ pub async fn answer(
 
     let generated = context
         .gateway
-        .chat(
+        .chat_at(
             context.server_url,
             context.model_alias,
             Some(context.locale),
             &turns,
             context.idle_timeout,
+            Some(crate::gateway::GROUNDED_TEMPERATURE),
             |delta| on_delta(delta),
         )
         .await;

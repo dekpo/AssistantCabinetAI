@@ -187,9 +187,51 @@ pub fn unsupported_numbers(answer: &str, sources: &[&str], min_digits: usize) ->
     unsupported
 }
 
+/// [`unsupported_numbers`] for a document answer: the page numbers of the excerpts are known figures too.
+///
+/// A correct citation such as "(page 12)" states a number no excerpt contains, and a model that cites its
+/// pages draws a false alarm on every one of two digits or more (KBD-49, P-7). A page number excuses only the
+/// bare integer written as the page itself: a decimal amount that happens to share its digits ("200.00" on
+/// page 200) is still checked, which is the case that caught `200.00` and `286.63`.
+pub fn unsupported_numbers_with_pages(
+    answer: &str,
+    sources: &[&str],
+    pages: &[u32],
+    min_digits: usize,
+) -> Vec<String> {
+    let pages: Vec<String> = pages.iter().map(u32::to_string).collect();
+    unsupported_numbers(answer, sources, min_digits)
+        .into_iter()
+        .filter(|number| !pages.contains(number))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cited_page_number_is_known_and_a_decimal_that_shares_its_digits_is_not() {
+        let excerpts = ["Total HT : 326.30 CHF"];
+        let answer =
+            "The total is 326.30 CHF (page 12). A deposit of 200.00 was also paid (page 200).";
+
+        // Without the pages both page numbers draw a false alarm.
+        assert_eq!(
+            unsupported_numbers(answer, &excerpts, 2),
+            vec!["12", "200.00", "200"]
+        );
+        // With them, only the figure no excerpt contains is reported.
+        assert_eq!(
+            unsupported_numbers_with_pages(answer, &excerpts, &[12, 200], 2),
+            vec!["200.00"]
+        );
+        // A page the excerpts did not come from excuses nothing.
+        assert_eq!(
+            unsupported_numbers_with_pages("See page 14.", &excerpts, &[12], 2),
+            vec!["14"]
+        );
+    }
 
     fn texts(found: &[Number]) -> Vec<&str> {
         found.iter().map(|number| number.text.as_str()).collect()

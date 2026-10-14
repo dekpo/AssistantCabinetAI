@@ -112,6 +112,10 @@ struct HealthProviderBody {
     reachable: bool,
 }
 
+/// The temperature of an answer written from supplied material (excerpts, a table's result, a query plan).
+/// Low, not zero: a model held at exactly zero can loop on a small machine, and 0.1 keeps it on the material.
+pub const GROUNDED_TEMPERATURE: f32 = 0.1;
+
 pub struct GatewayClient {
     http: reqwest::Client,
     embedding_deadlines: EmbeddingDeadlines,
@@ -189,6 +193,33 @@ impl GatewayClient {
         output_locale: Option<&str>,
         turns: &[ChatTurn],
         idle_timeout: Duration,
+        on_delta: impl FnMut(&str),
+    ) -> Result<String, AppError> {
+        self.chat_at(
+            server_url,
+            model_alias,
+            output_locale,
+            turns,
+            idle_timeout,
+            None,
+            on_delta,
+        )
+        .await
+    }
+
+    /// [`GatewayClient::chat`] with a sampling temperature. An answer written from supplied material
+    /// (excerpts, a table's result) is asked at [`GROUNDED_TEMPERATURE`]: the model is there to put the
+    /// material into words, and a lower temperature keeps it from inventing around the edges. `None`
+    /// leaves the gateway's own default, as an open conversation wants.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn chat_at(
+        &self,
+        server_url: &str,
+        model_alias: &str,
+        output_locale: Option<&str>,
+        turns: &[ChatTurn],
+        idle_timeout: Duration,
+        temperature: Option<f32>,
         mut on_delta: impl FnMut(&str),
     ) -> Result<String, AppError> {
         let size: usize = turns.iter().map(|turn| turn.content.chars().count()).sum();
@@ -208,6 +239,9 @@ impl GatewayClient {
         // answering in whatever language the model prefers.
         if let Some(locale) = output_locale {
             payload["output_locale"] = json!(locale);
+        }
+        if let Some(temperature) = temperature {
+            payload["temperature"] = json!(temperature);
         }
 
         let url = endpoint(server_url, "/v1/chat/completions");

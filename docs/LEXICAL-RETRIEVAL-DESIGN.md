@@ -268,3 +268,38 @@ Still deferred, as before: French stemming, `bm25()` weights, `NEAR`, the thesau
 - **Spreadsheet reference:** `tabular_snapshot` (tests/common) dumps `tabular_inventories`, `tabular_workbooks`, `kb_column_semantics`; two passes over unchanged files leave them identical. *Fact found:* `tabular_workbooks` (the cells at rest) is **cleared by every Analyse pass by design**, so the byte-identity proof compares the inventory and the column readings across a step, and the cell table is compared after the same pass rebuilds it. The reference for the deterministic engine is the 106 cases above.
 - **Truth and scoring:** `scripts/file_profile_score.py` derives the profile truth from the sandbox's own `documents.json` and `workbooks.json` (kind, date, subjects, file-name mentions, sheet names), so no generator was extended, and produces **767 name queries over the 208 files** (full name 208, stem 206, without date prefix 132, two words reversed 64, word prefix 25, capitals 132) with the files each must return; it scores a profile dump on precision and fill rate per field. Nine script tests pass.
 - **Not done in step 1, by design:** no product code. Format check (`rustfmt --check` on the two test files only) and the full suite wait for the end of the branch.
+
+### 11.5 Steps 2 to 5 and the checkpoint: result (14 October 2026)
+
+**Real elapsed time** (wall clock, 10:21 to 11:34, against the estimates of 11.3): step 2 metadata readers 9 min (est. 1 h 30); step 3 name, header, type, date, roles 20 min (est. 3 h 00); step 4 tables, full-text row, Analyse pass 12 min (est. 3 h 00); step 5 identifier forms, workbook words 11 min (est. 2 h 00); checkpoint measure and scorer 3 min (est. 0 h 30); the one final pass 18 min, of which 9 min 40 s for the whole `cargo test` (6 min 19 s of it compiling). The estimates were a human's pace; the figures above are measured.
+
+**What exists** (all in `apps/desktop/src-tauri/src/file_profile/`, data in `resources/profile/`):
+
+| Module | Does |
+| --- | --- |
+| `vocabulary.rs` | the profile's words as data per pack and language: generic property values, months, header labels and roles, business types, identifier layouts |
+| `metadata.rs` | PDF Info and XMP (`lopdf`), DOCX and XLSX core and app properties (`zip`), Markdown and text front matter, JPEG capture date; generic values, file-name titles and impossible dates are dropped and counted, never filled |
+| `name.rs` | the file name and folder as one function: words, exact keys, original name, date prefix, folder period, identifiers, links of every run of words to known entities |
+| `header.rs`, `dates.rs`, `types.rs` | title, labelled lines, references, roles from labels, dates classified by where they stand, the chosen date only when the evidence agrees, the business type only with enough evidence |
+| `identifiers.rs`, `cells.rs` | compact and grouped forms of every identifier; the words of a workbook's cells with the cap and `truncated`; the date range of date columns |
+| `build.rs`, `store.rs` | layer 1 as a pure function; the tables, the full-text row and the pass that runs at the end of each Analyse |
+
+**Measured on the sandbox** (`dump_the_stored_profiles_of_a_real_pass_for_the_scorer`, through the real Analyse, knowledge base on, no text recognition engine, scored by `scripts/file_profile_score.py` against the sandbox's own truth; the vocabulary was **calibrated on this same truth**, so these figures are an upper bound until she tries real documents):
+
+- **Name queries**: 767 of 767 through `NameProfile::matches`; 171 files beyond the expected ones across all queries (the finder lists, it does not pick).
+- **Business type**, 157 analysed documents: 156 filled, 156 right (precision 1.00, fill 0.994); first measure before calibration 0.73. By format: pdf 107 of 108, docx 24 of 24, jpg 10 of 10, png 5 of 5, txt 7 of 7, md 3 of 3. Formats the product does not read yet (odt, rtf, eml, vtt, pptx, odp, ppt) are not analysed and have no profile.
+- **Document date**, 176 analysed documents: 172 filled, 172 right (precision 1.00, fill 0.977): pdf 109 of 110, docx 27 of 28, txt 15 of 17, jpg 11 of 11, png 5 of 5, md 5 of 5.
+- **Subject role** from `Patient :`-type labels: 24 documents filled of 124 that are about someone (fill 0.19), 24 right. The other letters name the person without a label and are left empty on purpose.
+- **Identifier family** (AVS in four spellings): the passages' index finds 1 of 4 documents for the dotless form; the profile finds 4 of 4 by the compact form and 4 of 4 by the grouped form.
+- **Cost of the profile pass** (debug build): 1 897 ms for 176 documents (about 11 ms a file, 19 % of a 10 s pass whose embeddings are faked); 151 ms for 7 workbooks. A second Analyse over unchanged files builds and writes nothing and reads no workbook. The count `elapsedMs` is in the Analyse summary (`IndexSummary.profile`).
+- **Spreadsheets**: `tabular_reference` 104 + 2 passing, 0 failing; `tabular_inventories`, `tabular_workbooks` and `kb_column_semantics` byte-identical across the profile pass, a cleared and rebuilt profile and a second Analyse; the `kb_*` tables identical with and without the profile pass.
+- **Final pass**: `cargo test` 1 414 passed, 0 failed, 46 ignored; `clippy` with no warning in the new code; `rustfmt --check` clean on the new files and no new difference in the files already not clean on `main`; `pnpm run build` and `pnpm run test` (645 passed); Python script tests (41 passed).
+
+**Where the implementation differs from the note above, and why** (to confirm):
+
+1. **The profile's vocabulary is its own set of files**, not new fields of the knowledge packs: a new field would change the packs' fingerprint and make the next Analyse read every document again for names. Same pack ids, so a country is still its own pack. The `layouts` of the identifier schemes (4.5, 7) live there for the same reason.
+2. **The language is not chosen by the interface locale**: a French practice with an English interface still files `facture`, so every shipped language is read; what a pack selects is its business types and header labels (only when the pack is active).
+3. **PDF properties are read with `lopdf`** (already in the tree through `pdf-extract`), not `pdfium-render`: `pdfium` needs its dynamic library at run time and a laboratory has none. **Workbook properties** are read from the XLSX package (`zip`), not `calamine`, which does not expose them; the old binary `.xls` and `.csv` have none to read.
+4. **A workbook's cells are read again from the file** when its profile is built or its links are recomputed, because `tabular_workbooks` is emptied by every Analyse of the Data Folder by design and is not rebuilt. The reader is the Analyse's own; nothing is written to the spreadsheet tables.
+5. A `cells` column was added to the full-text row (the words of workbook cells), and a `file_profile_sections` table exists, empty, for the table of contents of long documents.
+6. The old-index detection (`profile_index_status`, a registered command, and `index_status`) is tested on the backend; **the French message and its wiring in the interface are not written** (not part of this branch's scope).

@@ -76,6 +76,12 @@ def name_words(path: str) -> list[str]:
 def truth_from_sandbox(sandbox: Path) -> dict:
     documents = json.loads((sandbox / "documents.json").read_text(encoding="utf-8"))
     workbooks = json.loads((sandbox / "workbooks.json").read_text(encoding="utf-8"))
+    entities = json.loads((sandbox / "entities.json").read_text(encoding="utf-8"))
+    # Every way the sandbox writes each entity, folded: a role's surface or linked name is right when it is one.
+    forms = {
+        entity["id"]: {fold(entity["canonical"]), *(fold(form) for form in entity.get("forms", {}).values())}
+        for entity in entities
+    }
     files = {}
     for doc in documents:
         files[doc["path"]] = {
@@ -84,6 +90,7 @@ def truth_from_sandbox(sandbox: Path) -> dict:
             "business_type": KIND_TO_TYPE.get(doc["kind"], "other"),
             "document_date": doc.get("date") or None,
             "subjects": doc.get("about", []),
+            "about_forms": [sorted(forms[entity]) for entity in doc.get("about", []) if entity in forms],
             "name_entities": [m["entity"] for m in doc["mentions"] if m["where"] == "filename"],
         }
     for book in workbooks:
@@ -126,34 +133,77 @@ def name_queries(truth: dict) -> list[dict]:
     return list(queries.values())
 
 
+def _stats(filled: int, correct: int, known: int) -> dict:
+    return {
+        "known": known,
+        "filled": filled,
+        "correct": correct,
+        "precision": correct / filled if filled else None,
+        "fill_rate": filled / known if known else None,
+    }
+
+
 def score(profiles: list[dict], truth: dict) -> dict:
     """Per field: ``filled`` (the product gave a value), ``correct``, ``known`` (the truth has one),
     ``precision`` = correct / filled and ``fill_rate`` = filled / known. A truth of ``other`` is right
-    for an unfilled field and for ``other``; it counts as known only when a value was given."""
-    by_path = {profile["path"]: profile for profile in profiles}
+    for an unfilled field and for ``other``; it counts as known only when a value was given.
+    ``by_format`` repeats the figures per file format, and ``analysed`` restricts them to the files the
+    dump holds (a format the product does not read yet is then not counted against the fill rate).
+    A dump entry of the data folder is ignored: these fields describe documents."""
+    by_path = {
+        profile["path"]: profile for profile in profiles if profile.get("domain", "documents") == "documents"
+    }
     report = {}
     for field in ("business_type", "document_date"):
-        filled = correct = known = 0
+        counts = defaultdict(lambda: [0, 0, 0])
         for path, expected in truth.items():
             if expected.get("domain") != "documents":
                 continue
             wanted = expected.get(field)
             given = by_path.get(path, {}).get(field)
-            if wanted is not None and wanted != "other":
-                known += 1
-            if given is None:
-                continue
-            filled += 1
-            if given == wanted:
-                correct += 1
+            groups = [("all", True), (expected.get("format", "?"), True), ("analysed", path in by_path)]
+            for name, counted in groups:
+                if not counted:
+                    continue
+                if wanted is not None and wanted != "other":
+                    counts[name][2] += 1
+                if given is None:
+                    continue
+                counts[name][0] += 1
+                if given == wanted:
+                    counts[name][1] += 1
         report[field] = {
-            "known": known,
-            "filled": filled,
-            "correct": correct,
-            "precision": correct / filled if filled else None,
-            "fill_rate": filled / known if known else None,
+            **_stats(*counts["all"]),
+            "analysed": _stats(*counts["analysed"]),
+            "by_format": {name: _stats(*value) for name, value in sorted(counts.items()) if name not in ("all", "analysed")},
         }
     return report
+
+
+def score_roles(profiles: list[dict], truth: dict) -> dict:
+    """The ``subject`` role against the sandbox's ``about`` list. ``known``: documents that are about
+    someone and were analysed; ``filled``: those given a subject; ``correct``: those whose subject (the
+    linked name, or the surface when nothing was linked) is one of the ways the sandbox writes that person."""
+    by_path = {
+        profile["path"]: profile for profile in profiles if profile.get("domain", "documents") == "documents"
+    }
+    known = filled = correct = 0
+    for path, expected in truth.items():
+        if expected.get("domain") != "documents" or not expected.get("about_forms") or path not in by_path:
+            continue
+        known += 1
+        subjects = [role for role in by_path[path].get("roles", []) if role.get("role") == "subject"]
+        if not subjects:
+            continue
+        filled += 1
+        accepted = {form for forms in expected["about_forms"] for form in forms}
+        if any(
+            (role.get("canonical") and fold(role["canonical"]) in accepted)
+            or any(form in fold(role.get("surface", "")) for form in accepted)
+            for role in subjects
+        ):
+            correct += 1
+    return _stats(filled, correct, known)
 
 
 def main(argv: list[str]) -> int:
@@ -172,7 +222,9 @@ def main(argv: list[str]) -> int:
         print(f"{len(queries)} name queries over {len(truth)} files: {dict(by_kind)}")
     if args.profiles:
         profiles = json.loads(args.profiles.read_text(encoding="utf-8"))
-        print(json.dumps(score(profiles, truth), indent=1))
+        report = score(profiles, truth)
+        report["subject_role"] = score_roles(profiles, truth)
+        print(json.dumps(report, indent=1))
     return 0
 
 

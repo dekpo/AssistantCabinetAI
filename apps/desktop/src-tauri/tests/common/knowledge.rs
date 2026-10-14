@@ -118,6 +118,49 @@ pub fn tabular_snapshot(connection: &Connection) -> BTreeMap<String, Vec<String>
     out
 }
 
+/// The tables of the file profile.
+pub const PROFILE_TABLES: [&str; 8] = [
+    "file_profile_meta",
+    "file_profiles",
+    "file_profile_fields",
+    "file_profile_entities",
+    "file_profile_sections",
+    "file_profile_original_names",
+    "file_profile_fts",
+    "file_profile_fts_docsize",
+];
+
+/// Every row of the profile tables as text, sorted, so two snapshots compare with `==`.
+pub fn profile_snapshot(connection: &Connection) -> BTreeMap<String, Vec<String>> {
+    let mut out = BTreeMap::new();
+    for table in PROFILE_TABLES {
+        let mut statement = connection
+            .prepare(&format!("SELECT * FROM {table}"))
+            .expect("prepares");
+        let width = statement.column_count();
+        let mut rows: Vec<String> = statement
+            .query_map([], |row| {
+                let mut cells = Vec::with_capacity(width);
+                for index in 0..width {
+                    cells.push(match row.get_ref(index)? {
+                        ValueRef::Null => "NULL".to_string(),
+                        ValueRef::Integer(value) => value.to_string(),
+                        ValueRef::Real(value) => format!("{value:.6}"),
+                        ValueRef::Text(bytes) => String::from_utf8_lossy(bytes).to_string(),
+                        ValueRef::Blob(bytes) => format!("blob:{}", bytes.len()),
+                    });
+                }
+                Ok(cells.join("|"))
+            })
+            .expect("queries")
+            .collect::<Result<_, _>>()
+            .expect("reads");
+        rows.sort();
+        out.insert(table.to_string(), rows);
+    }
+    out
+}
+
 /// The number of rows a pass could have written, over every knowledge table but the seeds.
 pub fn knowledge_rows(connection: &Connection) -> usize {
     [

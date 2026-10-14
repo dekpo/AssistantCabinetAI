@@ -13,7 +13,13 @@ mod common;
 
 use std::io::Write;
 
-use common::knowledge::{entities, mentions_of, snapshot, tabular_snapshot, Lab};
+use assistant_cabinet_ai_lib::file_profile::metadata::{
+    read_metadata, MetadataKind, MetadataSource,
+};
+use assistant_cabinet_ai_lib::file_profile::name::{link_name_words, words_of, NameProfile};
+use assistant_cabinet_ai_lib::file_profile::vocabulary::ProfileVocabulary;
+use assistant_cabinet_ai_lib::knowledge::gazetteer::Gazetteer;
+use common::knowledge::{entities, snapshot, tabular_snapshot, Lab};
 
 /// A minimal DOCX that carries a creator and a title in `docProps/core.xml`, the way a word
 /// processor writes them. The text of the document says neither.
@@ -40,82 +46,145 @@ fn docx_with_properties(creator: &str, title: &str) -> Vec<u8> {
     zip.finish().expect("finishes the archive").into_inner()
 }
 
-/// G9a: the words of a file name are not in the full-text index, so a word that only the name
-/// carries finds nothing.
+/// G9a closed (step 3): the words of a file name are searchable through the name profile, the one
+/// function the Analyse and the left panel share, for a file that was just analysed and for one that
+/// never was. The passages' own index (`chunks_fts`) is unchanged on purpose (design 8): the name's
+/// words get their own columns in the profile's full-text table (step 4).
 #[tokio::test]
-async fn today_the_words_of_a_file_name_are_not_searchable() {
+async fn the_words_of_a_file_name_are_searchable_through_the_name_profile() {
     let mut lab = Lab::new();
     lab.write(
         "2026-10-01_courrier-dermatologie.txt",
-        "Le patient a ete recu hier pour un controle annuel de routine.\n",
+        "Le patient a ete recu hier pour un controle annuel de routine.
+",
     );
     lab.write(
         "note-interne.txt",
-        "Note sur le materiel de bureau et les fournitures.\n",
+        "Note sur le materiel de bureau et les fournitures.
+",
     );
     lab.analyse().await;
 
+    let letter = NameProfile::build("2026-10-01_courrier-dermatologie.txt", None);
+    let note = NameProfile::build("note-interne.txt", None);
+    for query in [
+        "dermatologie",
+        "derma",
+        "dermatologie courrier",
+        "2026-10-01_courrier-dermatologie.txt",
+    ] {
+        assert!(
+            letter.matches(query),
+            "{query:?} must find the letter by its name"
+        );
+        assert!(!note.matches(query), "{query:?} must not find the note");
+    }
     assert!(
         lab.index
             .search_lexical("dermatologie", 10)
             .expect("searches")
             .is_empty(),
-        "G9a is closed: the file name is now searchable. Rewrite this test as the new behaviour."
+        "the passages' index is left as it was: names get their own columns"
     );
     assert!(
-        !lab.index.search_lexical("controle", 10).expect("searches").is_empty(),
+        !lab.index
+            .search_lexical("controle", 10)
+            .expect("searches")
+            .is_empty(),
         "the control word that is in the text must be found"
     );
 }
 
-/// G9b: a name of the base found inside a file name is linked only when the whole run of name-like
-/// words is one entity. `martin-marie` is linked; `hug-martin-marie` (an organisation and a person in
-/// one run) links neither.
+/// G9b closed (step 3): a name of the base found **anywhere** in a file name is linked, not only when
+/// the whole stem is one entity. `hug-martin-marie` holds an organisation and a person; both are known
+/// from the first document, both are linked, and nothing is created.
 #[tokio::test]
-async fn today_a_file_name_that_mixes_an_organisation_and_a_person_links_nothing() {
+async fn a_file_name_that_mixes_an_organisation_and_a_person_links_both() {
     let mut lab = Lab::new();
     lab.packs = vec!["health-fr", "health-ch"];
     lab.write(
         "dossier-initial.txt",
-        "Madame Marie Martin a ete recue aux HUG pour un controle de routine.\n",
+        "Madame Marie Martin a ete recue aux HUG pour un controle de routine.
+",
     );
-    lab.analyse().await;
-
-    lab.write("martin-marie.txt", "Note sur le materiel de bureau.\n");
-    lab.write("hug-martin-marie.txt", "Autre note sur les fournitures.\n");
     lab.analyse().await;
 
     let connection = lab.side();
-    let person = entities(&connection)
-        .into_iter()
+    let known = entities(&connection);
+    let person = known
+        .iter()
         .find(|row| row.type_id == "person" && row.canonical.contains("Martin"))
         .expect("the base knows Marie Martin from the first document");
-    let by_name: Vec<String> = mentions_of(&connection, person.entity_id)
-        .into_iter()
-        .filter(|mention| mention.locator_kind == "filename")
-        .map(|mention| mention.path)
-        .collect();
+    let organisation = known
+        .iter()
+        .find(|row| row.type_id == "organization")
+        .expect("the base knows the HUG from the first document");
+    let entities_before = known.len();
 
+    let gazetteer = Gazetteer::rebuild_from_store(&connection).expect("builds the gazetteer");
+    let linked = |stem: &str| -> Vec<i64> {
+        link_name_words(&words_of(stem), &gazetteer)
+            .into_iter()
+            .map(|link| link.entity_id)
+            .collect()
+    };
+
+    let control = linked("martin-marie");
     assert!(
-        by_name.iter().any(|path| path == "martin-marie.txt"),
-        "control: a name that is exactly the person is linked; found {by_name:?}"
+        control.contains(&person.entity_id),
+        "control: the person alone is linked: {control:?}"
+    );
+    let mixed = linked("hug-martin-marie");
+    assert!(
+        mixed.contains(&organisation.entity_id),
+        "the organisation is linked: {mixed:?}"
     );
     assert!(
-        !by_name.iter().any(|path| path == "hug-martin-marie.txt"),
-        "G9b is closed: sub-runs of a file name are now linked. Rewrite this test."
+        mixed.contains(&person.entity_id),
+        "the person is linked: {mixed:?}"
+    );
+    assert!(
+        linked("decompte-note-interne").is_empty(),
+        "words nobody knows link nothing"
+    );
+    assert_eq!(
+        entities(&connection).len(),
+        entities_before,
+        "a name never creates an entity"
     );
 }
 
-/// G1 and G2: the properties of a document (author, title) are not read at all, and no mention has
-/// the `metadata` locator, although the schema allows it.
+/// G1 closed at the reader level (step 2): the properties of a document are read, with their source and
+/// a confidence. G2 stays as designed (design 4.8): they are **not** written as `kb_mentions`, because
+/// a metadata mention would change which files targeting keeps; the profile's own tables (step 4) will
+/// hold them. The index text is unchanged too: a property is never mixed into the passages.
 #[tokio::test]
-async fn today_no_document_property_is_read_and_no_mention_is_a_metadata_mention() {
+async fn a_document_property_is_read_by_the_profile_and_reaches_neither_the_knowledge_base_nor_the_passages(
+) {
     let mut lab = Lab::new();
     lab.write_bytes(
         "compte-rendu.docx",
         &docx_with_properties("Zorglub Metadatus", "Titre de metadonnee"),
     );
     lab.analyse().await;
+
+    let vocabulary = ProfileVocabulary::load(&[]).expect("loads the profile vocabulary");
+    let reading = read_metadata(
+        &lab.work_path().join("compte-rendu.docx"),
+        "docx",
+        &vocabulary,
+    );
+    let author = reading
+        .first(MetadataKind::Author)
+        .expect("G1 is closed: the author is read");
+    assert_eq!(author.value, "Zorglub Metadatus");
+    assert_eq!(author.source, MetadataSource::DocxCore);
+    assert_eq!(
+        reading
+            .first(MetadataKind::Title)
+            .map(|field| field.value.as_str()),
+        Some("Titre de metadonnee")
+    );
 
     let connection = lab.side();
     let metadata_mentions: i64 = connection
@@ -125,7 +194,10 @@ async fn today_no_document_property_is_read_and_no_mention_is_a_metadata_mention
             |row| row.get(0),
         )
         .expect("counts");
-    assert_eq!(metadata_mentions, 0, "G2 is closed: something writes metadata mentions");
+    assert_eq!(
+        metadata_mentions, 0,
+        "design 4.8: metadata evidence stays out of kb_mentions"
+    );
 
     let everywhere = lab
         .index
@@ -135,10 +207,13 @@ async fn today_no_document_property_is_read_and_no_mention_is_a_metadata_mention
         .map(|chunk| chunk.text)
         .chain(common::knowledge::every_text_value(&connection))
         .collect::<Vec<_>>()
-        .join("\n");
+        .join(
+            "
+",
+        );
     assert!(
         !everywhere.contains("Zorglub") && !everywhere.contains("Titre de metadonnee"),
-        "G1 is closed: the properties of a document now reach the index. Rewrite this test."
+        "a property is never mixed into the passages or the knowledge base"
     );
 }
 
@@ -160,11 +235,22 @@ async fn the_tabular_snapshot_sees_a_workbook_and_is_stable_across_two_passes() 
     assert!(
         !first["tabular_inventories"].is_empty(),
         "the workbook must be in the inventory table: {:?}",
-        first.iter().map(|(table, rows)| (table.as_str(), rows.len())).collect::<Vec<_>>()
+        first
+            .iter()
+            .map(|(table, rows)| (table.as_str(), rows.len()))
+            .collect::<Vec<_>>()
     );
     let knowledge_before = snapshot(&lab.side());
 
     lab.analyse_data();
-    assert_eq!(first, tabular_snapshot(&lab.side()), "tabular tables changed on a second pass");
-    assert_eq!(knowledge_before, snapshot(&lab.side()), "knowledge tables changed on a second pass");
+    assert_eq!(
+        first,
+        tabular_snapshot(&lab.side()),
+        "tabular tables changed on a second pass"
+    );
+    assert_eq!(
+        knowledge_before,
+        snapshot(&lab.side()),
+        "knowledge tables changed on a second pass"
+    );
 }

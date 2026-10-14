@@ -66,6 +66,43 @@ class Score(unittest.TestCase):
         self.assertEqual(report["filled"], 0)
 
 
+class ByFormatAndRoles(unittest.TestCase):
+    TRUTH = {
+        "a.pdf": {"domain": "documents", "format": "pdf", "business_type": "letter", "document_date": "2026-01-01",
+                  "about_forms": [["marie martin", "martin marie"]]},
+        "b.docx": {"domain": "documents", "format": "docx", "business_type": "invoice", "document_date": "2026-01-02",
+                   "about_forms": [["jean dupont"]]},
+        "c.odt": {"domain": "documents", "format": "odt", "business_type": "letter", "document_date": "2026-01-03",
+                  "about_forms": []},
+    }
+
+    def test_the_figures_are_given_per_format_and_for_the_analysed_files_only(self):
+        profiles = [
+            {"domain": "documents", "path": "a.pdf", "business_type": "letter", "document_date": "2026-01-01"},
+            {"domain": "documents", "path": "b.docx", "business_type": "letter", "document_date": None},
+            {"domain": "data", "path": "c.odt", "business_type": "letter", "document_date": "2026-01-03"},
+        ]
+        report = fp.score(profiles, self.TRUTH)["business_type"]
+        self.assertEqual((report["known"], report["filled"], report["correct"]), (3, 2, 1))
+        self.assertEqual((report["analysed"]["known"], report["analysed"]["fill_rate"]), (2, 1.0))
+        self.assertEqual(report["by_format"]["odt"]["filled"], 0, "a data-folder entry is not a document")
+        self.assertEqual(report["by_format"]["pdf"]["precision"], 1.0)
+        self.assertEqual(report["by_format"]["docx"]["precision"], 0.0)
+
+    def test_a_subject_is_right_when_it_is_one_of_the_ways_the_person_is_written(self):
+        profiles = [
+            {"domain": "documents", "path": "a.pdf", "roles": [
+                {"role": "subject", "surface": "Marie Martin, nee en 1990", "canonical": None}]},
+            {"domain": "documents", "path": "b.docx", "roles": [
+                {"role": "subject", "surface": "Someone Else", "canonical": "Paul Roy"},
+                {"role": "author", "surface": "Jean Dupont", "canonical": None}]},
+        ]
+        report = fp.score_roles(profiles, self.TRUTH)
+        self.assertEqual((report["known"], report["filled"], report["correct"]), (2, 2, 1))
+        self.assertEqual(report["precision"], 0.5)
+        self.assertIsNone(fp.score_roles([], self.TRUTH)["fill_rate"], "nothing analysed, nothing known")
+
+
 class RealSandbox(unittest.TestCase):
     def test_the_sandbox_truth_loads_and_every_file_has_a_name_query(self):
         sandbox = Path(__file__).resolve().parent.parent / "fixtures" / "knowledge-sandbox"

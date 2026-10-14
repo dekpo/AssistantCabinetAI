@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
-import { scopedPaths, selectionOf } from "../lib/analysisScope";
+import { scopedPaths, scopeFromSearch, selectionOf } from "../lib/analysisScope";
+import { shownFiles } from "../lib/finderField";
 import { normaliseError, type AppError } from "../lib/errors";
 import { abbreviateFolderPath } from "../lib/folderPath";
 import { knowledgeLines } from "../lib/knowledgeSummary";
@@ -17,7 +18,9 @@ import {
   type FileRecord,
 } from "../lib/ipc";
 import { counted } from "../lib/plural";
+import { useFinderSearch } from "../state/useFinderSearch";
 import type { IndexingState } from "../state/useIndexing";
+import { useProfileStatus } from "../state/useProfileStatus";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorBanner } from "./ErrorBanner";
 import {
@@ -29,6 +32,7 @@ import {
   SelectAll,
   StatusDot,
 } from "./FolderCardParts";
+import { FinderControls } from "./FinderControls";
 import { TableGlyph } from "./TableGlyph";
 import { WarningGlyph } from "./WarningGlyph";
 
@@ -95,6 +99,23 @@ export function DataFolderCard({
   const chosen = scope === undefined ? [] : scopedPaths(scope);
   const selection = scope === undefined ? "none" : selectionOf(scope);
   const usableCount = inventory === null ? 0 : inventory.files.filter(isSelectable).length;
+
+  /* The search field: typing a search selects the analysed files it finds. It is shown only where the
+     listing doubles as the selection, and not while a question is being answered. */
+  const selectable = scope !== undefined && onScopeChange !== undefined;
+  const analysedFiles = inventory === null ? [] : inventory.files.filter(isSelectable);
+  const finder = useFinderSearch({
+    domain: "data",
+    analysed: analysedFiles,
+    enabled: selectable && !scopeLocked && dataFolder !== null,
+    onSelect: (paths, analysed) => {
+      if (scope !== undefined && onScopeChange !== undefined) {
+        onScopeChange(scopeFromSearch(scope, paths, analysed, Date.now()));
+      }
+    },
+  });
+  /* An index written before the profile existed is said, never rebuilt: only Analyse fills it. */
+  const profileStatus = useProfileStatus("data", dataFolder, finishedPasses);
 
   const refreshInventory = useCallback(() => {
     if (dataFolder === null) {
@@ -353,9 +374,23 @@ export function DataFolderCard({
             )}{" "}
             <StatusDot tone="fail" label={t("dataFolder.status.failed")} />.
           </p>
+          {profileStatus === "needsAnalyse" ? (
+            <p className="card__description finder__notice" role="status">
+              {t("finder.needsAnalyse")}
+            </p>
+          ) : null}
           {inventory.summary.totalFiles === 0 ? (
             passSummary
           ) : detail === "collapsible" ? (
+            <>
+              {selectable ? (
+                <FinderControls
+                  search={finder}
+                  analysed={analysedFiles}
+                  placeholder={t("finder.placeholderData")}
+                  disabled={scopeLocked}
+                />
+              ) : null}
             <details className="inventory-detail scope-picker">
               <summary className="disclosure">
                 {selection === "some" ? (
@@ -387,7 +422,8 @@ export function DataFolderCard({
                 />
               )}
               <FileList
-                files={inventory.files}
+                files={shownFiles(inventory.files, finder.found, finder.showAll)}
+                selectionBase={inventory.files}
                 statusLabel={statusLabel}
                 scope={scope}
                 onScopeChange={onScopeChange}
@@ -395,6 +431,7 @@ export function DataFolderCard({
               />
               {passSummary}
             </details>
+            </>
           ) : (
             <>
               {passSummary}

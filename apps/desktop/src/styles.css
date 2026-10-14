@@ -432,6 +432,37 @@ body {
   margin-top: 6px;
 }
 
+/* The search field of a folder card, above the line that says how many files are used. It takes the
+   place the title line had; that line stays under it, with its warnings. */
+.finder {
+  margin-top: 4px;
+}
+
+.finder__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  background: var(--surface);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.finder__status,
+.finder__notice {
+  margin: 4px 0 0;
+  color: var(--text-quiet);
+  font-size: 12px;
+}
+
+.finder__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
 .chat {
   display: flex;
   flex-direction: column;

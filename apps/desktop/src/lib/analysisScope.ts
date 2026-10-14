@@ -116,6 +116,25 @@ function scopeOfEntries(
   return { mode: { kind: "explicit", entries: next }, createdAt: scope.createdAt, updatedAt: now };
 }
 
+/**
+ * The selection a search makes: the analysed files it found, and only those. The result replaces the
+ * selection, as typing a search is her own action; a file that is not analysed cannot be selected, so
+ * it is left out (the field says how many were found and not analysed). Nothing found is "aucun".
+ * Every analysed file found is "tous", as everywhere else in this file.
+ */
+export function scopeFromSearch(
+  scope: AnalysisScope,
+  foundPaths: string[],
+  analysed: FileRecord[],
+  now: number,
+): AnalysisScope {
+  const wanted = new Set(foundPaths);
+  const entries = analysed
+    .filter((file) => wanted.has(file.relativePath))
+    .map((file) => ({ relativePath: file.relativePath, pinnedId: file.id, addedAt: now }));
+  return scopeOfEntries(scope, entries, analysed, now);
+}
+
 /** The header checkbox: from "tous" to "aucun", and from anything else to "tous". */
 export function toggleAll(scope: AnalysisScope, now: number): AnalysisScope {
   return selectionOf(scope) === "all"

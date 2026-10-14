@@ -66,6 +66,30 @@ describe("catalogue parity", () => {
   });
 });
 
+describe("business types", () => {
+  const vocabularies = import.meta.glob("../../src-tauri/resources/profile/*/*.json", {
+    eager: true,
+    import: "default",
+  }) as Record<string, { document_types?: { code: string }[] }>;
+  const codes = new Set(
+    Object.values(vocabularies).flatMap((vocabulary) =>
+      (vocabulary.document_types ?? []).map((type) => type.code),
+    ),
+  );
+
+  it("reads the business types of the profile vocabulary", () => {
+    expect(codes.size).toBeGreaterThanOrEqual(14);
+  });
+
+  it.each(SUPPORTED_LOCALES)("%s labels every business type the profile can assign", (locale) => {
+    const catalogue = CATALOGUES[locale] as Catalogue;
+
+    for (const code of codes) {
+      expect(lookupKey(catalogue, `businessType.${code}`), code).toBeTruthy();
+    }
+  });
+});
+
 describe("resolveLocale", () => {
   it("prefers what the user chose", () => {
     expect(resolveLocale("en-US", "fr-FR")).toBe("en-US");

@@ -96,7 +96,105 @@ export function formatFolderAnswer(t: Translator, answer: FolderAnswer): string 
       return t("folderAnswer.notSelected", { query: answer.query });
     case "nothing_selected":
       return t("folderAnswer.nothingSelected");
+    case "document_search":
+      return documentSearch(t, answer);
+    case "ranked_file":
+      return rankedFile(t, answer);
   }
+}
+
+type RankedFile = Extract<FolderAnswer, { kind: "ranked_file" }>;
+
+/**
+ * The latest or earliest file, with the ranking it comes from and where each date comes from: the
+ * date written at the start of the name, else the modification date, which is the date of a copy.
+ */
+function rankedFile(t: Translator, answer: RankedFile): string {
+  if (answer.ranking.length === 0) {
+    return answer.noun === null
+      ? t("folderAnswer.rank.none")
+      : t("folderAnswer.rank.noneNoun", { noun: answer.noun });
+  }
+  const order = answer.latest ? "Latest" : "Earliest";
+  const count = counted(
+    answer.candidates,
+    t("folderAnswer.rank.readableOne"),
+    t("folderAnswer.rank.readableMany"),
+  );
+  const lines = [
+    answer.noun === null
+      ? t(`folderAnswer.rank.intro${order}`, { count })
+      : t(`folderAnswer.rank.intro${order}Noun`, { count, noun: answer.noun }),
+    "",
+    ...answer.ranking.map(
+      (entry) =>
+        `- ${entry.relativePath} — ${entry.date} (${t(`folderAnswer.rank.basis.${entry.basis}`)})`,
+    ),
+  ];
+  if (answer.mixedBasis) {
+    lines.push("", t("folderAnswer.rank.mixed"));
+  }
+  if (answer.unranked > 0) {
+    lines.push("", t("folderAnswer.rank.unranked", { count: files(t, answer.unranked) }));
+  }
+  return lines.join("\n");
+}
+
+type DocumentSearch = Extract<FolderAnswer, { kind: "document_search" }>;
+
+/**
+ * A set answer: what was searched, how many files hold it, the first ones with their passage, the
+ * rest as paths, and what could not be searched. It always says it is a search of the word itself.
+ */
+function documentSearch(t: Translator, answer: DocumentSearch): string {
+  const count = files(t, answer.total);
+  const intro = answer.identifier
+    ? "folderAnswer.search.introIdentifier"
+    : answer.quoted
+      ? "folderAnswer.search.introPhrase"
+      : "folderAnswer.search.intro";
+  const lines = [t(intro, { query: answer.query, count })];
+  if (answer.businessType !== null) {
+    lines.push(
+      "",
+      t("folderAnswer.search.kind", { kind: t(`businessType.${answer.businessType}`) }),
+    );
+  }
+  if (!answer.identifier) {
+    lines.push("", t("folderAnswer.search.wordOnly"));
+  }
+  if (answer.listed.length > 0) {
+    lines.push("");
+    for (const file of answer.listed) {
+      const place =
+        file.page === null ? "" : ` (${t("folderAnswer.search.page", { page: file.page })})`;
+      lines.push(`- ${file.relativePath}${place}`);
+      if (file.excerpt !== null && file.excerpt !== "") {
+        lines.push(`  ${t("folderAnswer.search.excerpt", { text: plain(file.excerpt) })}`);
+      }
+    }
+  }
+  if (answer.others.length > 0) {
+    lines.push(
+      "",
+      t("folderAnswer.search.others", { count: files(t, answer.others.length) }),
+      "",
+      ...answer.others.map((path) => `- ${path}`),
+    );
+  }
+  const { unanalysed, unreadable } = answer.coverage;
+  if (unanalysed > 0) {
+    lines.push("", t("folderAnswer.search.unanalysed", { count: files(t, unanalysed) }));
+  }
+  if (unreadable > 0) {
+    lines.push("", t("folderAnswer.search.unreadable", { count: files(t, unreadable) }));
+  }
+  return lines.join("\n");
+}
+
+/** A passage of a document is shown as text, never read as Markdown. */
+function plain(text: string): string {
+  return text.replace(/[\\`*_{}[\]<>#|~]/g, (mark) => `\\${mark}`);
 }
 
 function files(t: Translator, count: number): string {

@@ -345,6 +345,34 @@
       "native_text": "texte pris dans le fichier lui-même",
       "recognised_ocr": "texte reconnu sur une image",
       "none": "rien n'a été lu"
+    },
+    "search": {
+      "intro": "Recherche du mot « {query} » : {count} dans les documents sélectionnés.",
+      "introPhrase": "Recherche de l'expression « {query} » : {count} dans les documents sélectionnés.",
+      "introIdentifier": "Recherche du numéro « {query} », quelle que soit sa présentation : {count} dans les documents sélectionnés.",
+      "kind": "Type de document recherché : {kind}.",
+      "wordOnly": "Seul le mot lui-même est cherché : un synonyme ou une autre forme du mot ne serait pas trouvé.",
+      "page": "page {page}",
+      "excerpt": "Extrait : {text}",
+      "others": "{count} de plus, sans extrait :",
+      "unanalysed": "Pas encore analysés, donc cherchés par leur nom seulement : {count}.",
+      "unreadable": "Sans texte lisible, donc non cherchés : {count}."
+    },
+    "rank": {
+      "introLatest": "Parmi {count}, le plus récent est le premier de cette liste :",
+      "introLatestNoun": "Parmi {count} dont le nom contient « {noun} », le plus récent est le premier de cette liste :",
+      "introEarliest": "Parmi {count}, le plus ancien est le premier de cette liste :",
+      "introEarliestNoun": "Parmi {count} dont le nom contient « {noun} », le plus ancien est le premier de cette liste :",
+      "none": "Aucun fichier lisible dans les documents sélectionnés.",
+      "noneNoun": "Aucun fichier lisible dont le nom contient « {noun} » dans les documents sélectionnés.",
+      "basis": {
+        "filename": "date au début du nom du fichier",
+        "modified": "date de modification du fichier"
+      },
+      "mixed": "Les dates ne sont pas toutes de même nature : une date de modification est celle d'une copie du fichier, pas forcément celle du document.",
+      "unranked": "{count} sans date connue, non classés.",
+      "readableOne": "fichier lisible",
+      "readableMany": "fichiers lisibles"
     }
   },
   "settings": {
@@ -649,7 +677,8 @@
       "tabular": "tableaux",
       "mixed": "mixte",
       "folder_answer": "réponse du dossier",
-      "without_documents": "sans documents"
+      "without_documents": "sans documents",
+      "document_search": "recherche de mots"
     },
     "planName": {
       "one_file": "un fichier",
@@ -1085,5 +1114,35 @@
     "roleLine": "{role} ({mentions})",
     "kindWithSubtype": "{type} ({subtype})",
     "detailLine": "{key} : {value}"
+  },
+  "businessType": {
+    "letter": "Courrier",
+    "invoice": "Facture",
+    "quote": "Devis",
+    "certificate": "Certificat",
+    "meeting_minutes": "Compte rendu de réunion",
+    "appointment_letter": "Convocation",
+    "lab_result": "Résultat d'analyses",
+    "prescription": "Ordonnance",
+    "insurer_statement": "Décompte d'assurance",
+    "patient_list": "Liste de patients",
+    "invoicing": "Facturation",
+    "accounting": "Comptabilité",
+    "schedule": "Planning",
+    "stock": "Stock"
+  },
+  "finder": {
+    "placeholderDocuments": "Rechercher dans les documents",
+    "placeholderData": "Rechercher dans les tableurs",
+    "selected": "Sélection par la recherche « {query} » : {files}.",
+    "none": "Aucun fichier trouvé pour « {query} ». Seuls les mots eux-mêmes sont cherchés.",
+    "notAnalysed": "Trouvés mais non sélectionnables : {count}.",
+    "showAll": "Tous les fichiers",
+    "showFound": "Résultats seulement",
+    "reset": "Réinitialiser",
+    "failed": "La recherche n'a pas pu aboutir.",
+    "needsAnalyse": "L'index doit être refait : appuyez sur Analyser.",
+    "notAnalysedOne": "fichier non analysé",
+    "notAnalysedMany": "fichiers non analysés"
   }
 }

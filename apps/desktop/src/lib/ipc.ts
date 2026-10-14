@@ -210,7 +210,59 @@ export type FolderAnswer =
   /** A file the folder holds but this conversation's selection does not. */
   | { kind: "file_not_selected"; query: string }
   /** No document is selected, and the question was about the documents themselves. */
-  | { kind: "nothing_selected" };
+  | { kind: "nothing_selected" }
+  /** "Which documents talk about X": a word search of the selected files, answered from the index
+   * with no model. The first files carry their excerpt, the others only their path, and the total
+   * is always stated. */
+  | {
+      kind: "document_search";
+      query: string;
+      /** The folded words that were read: the answer says it is a word search. */
+      terms: string[];
+      prefix: boolean;
+      quoted: boolean;
+      /** The business type the collection noun stood for (`invoice`), applied as a filter. */
+      businessType: string | null;
+      /** X was an identifier, searched in every spelling. */
+      identifier: boolean;
+      total: number;
+      listed: DocumentListing[];
+      others: string[];
+      coverage: FinderCoverage;
+    }
+  /** "What is the latest letter received": the readable documents ranked by date. The first of
+   * `ranking` is the answer. */
+  | {
+      kind: "ranked_file";
+      latest: boolean;
+      /** The collection noun as written, null when it names no kind of document. */
+      noun: string | null;
+      /** The readable documents that were ranked or could not be. */
+      candidates: number;
+      /** Of those, the ones with no date at all. */
+      unranked: number;
+      /** The dates are not all of one kind. */
+      mixedBasis: boolean;
+      ranking: RankedEntry[];
+    };
+
+/** One file of a ranking: its date, and where the date comes from. */
+export interface RankedEntry {
+  relativePath: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** `filename` (the date at the start of the name) or `modified` (the modification date). */
+  basis: "filename" | "modified";
+}
+
+/** One file of a set answer, with the passage that matched. */
+export interface DocumentListing {
+  relativePath: string;
+  title: string | null;
+  businessType: string | null;
+  excerpt: string | null;
+  page: number | null;
+}
 
 /**
  * How much of the work folder an answer really rests on. Computed in Rust from the evidence it
@@ -866,6 +918,7 @@ export type RetrievalPath =
   | "tabular"
   | "mixed"
   | "folder_answer"
+  | "document_search"
   | "without_documents";
 
 export type RetrievalPlan = "one_file" | "every_document" | "whole_folder";
@@ -1045,6 +1098,160 @@ export function dataFolderInventory(): Promise<DataFolderReport> {
  * Confirm before calling it. */
 export function resetDataIndex(): Promise<void> {
   return invoke<void>("reset_data_index");
+}
+
+/**
+ * Whether each folder's analysis has its file profile (`profile_index_status`): `needsAnalyse` means
+ * the folder holds analysed files and no profile of the current layout, so the interface says the
+ * index must be redone. One cheap lookup at launch; only an Analyse the user starts fills it.
+ */
+export type FolderProfileStatus = "empty" | "current" | "needsAnalyse";
+
+export interface ProfileIndexStatus {
+  documents: FolderProfileStatus;
+  data: FolderProfileStatus;
+}
+
+export function profileIndexStatus(): Promise<ProfileIndexStatus> {
+  return invoke<ProfileIndexStatus>("profile_index_status");
+}
+
+/** Which of the two folders a finder call searches. */
+export type FinderDomain = "documents" | "data";
+
+/** What the finder knows about a file's state: the profile's own, or why there is none. */
+export type FinderFileState =
+  | "analysed"
+  | "empty"
+  | "no_text"
+  | "cells_missing"
+  | "unanalysed"
+  | "unsupported";
+
+export interface FinderEntityFilter {
+  entityId: number;
+  /** With a role only the profile is read; without one the knowledge base counts too. */
+  role?: string | null;
+}
+
+/** An end is `YYYY`, `YYYY-MM` or `YYYY-MM-DD`; a month or a year covers all of it. */
+export interface FinderDateRange {
+  from?: string | null;
+  to?: string | null;
+}
+
+export interface FinderQuery {
+  /** Words typed by the user: matched as words, the last one may be a start. Never meaning. */
+  text?: string | null;
+  entities?: FinderEntityFilter[];
+  /** Business type codes. */
+  kinds?: string[];
+  date?: FinderDateRange | null;
+  /** Folders relative to the work folder: every file under one of them. */
+  folders?: string[];
+  /** Extensions, lower case, without the dot. */
+  formats?: string[];
+  states?: FinderFileState[];
+  limit?: number | null;
+  offset?: number;
+  /** The files and their state are wanted, not their cards or excerpts: the left panel selects the
+   * files found. */
+  pathsOnly?: boolean;
+}
+
+/** The finder never changes the selection: a result is a list, and selecting is the user's action. */
+export type FinderScope = { kind: "wholeFolder" } | { kind: "selection"; paths: string[] };
+
+/**
+ * Why a file was found. `word` means a typed word met a text of the file and `detail` says which:
+ * `name`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile`
+ * (the words are spread over several texts) or `passage`. `entity` means a filter linked it, and
+ * `detail` is the role or `mention`.
+ */
+export interface FinderReason {
+  kind: "word" | "entity";
+  detail: string | null;
+}
+
+/** `entityId` is null for a surface the knowledge base does not know: shown as possible, never a filter. */
+export interface FinderCardEntity {
+  entityId: number | null;
+  surface: string;
+  role: string;
+  confidence: number;
+}
+
+export interface FinderCard {
+  title: string | null;
+  businessType: string | null;
+  documentDate: string | null;
+  format: string;
+  state: FinderFileState;
+  entities: FinderCardEntity[];
+}
+
+export interface FinderHit {
+  domain: FinderDomain;
+  relativePath: string;
+  card: FinderCard;
+  reasons: FinderReason[];
+  /** The passage that matched, for the files of the page only. */
+  excerpt: string | null;
+  locator: { page: number | null; section: number | null } | null;
+}
+
+/** `label` is the entity's canonical name in the entity facet, null elsewhere. */
+export interface FinderFacet {
+  value: string;
+  count: number;
+  label: string | null;
+}
+
+/** Counted over the whole result, not over the page. */
+export interface FinderFacets {
+  byType: FinderFacet[];
+  byYear: FinderFacet[];
+  byEntity: FinderFacet[];
+  byFolder: FinderFacet[];
+  byFormat: FinderFacet[];
+  byState: FinderFacet[];
+}
+
+/**
+ * What the search could not look into, over the files of the scope before the filters:
+ * `searched` were analysed, `unreadable` hold no text or are a format the product does not read,
+ * `unanalysed` are findable by name only, `partial` is the part of `searched` whose words were cut.
+ */
+export interface FinderCoverage {
+  searched: number;
+  unreadable: number;
+  unanalysed: number;
+  partial: number;
+}
+
+export interface FinderResult {
+  domain: FinderDomain;
+  /** Every file that answers, whatever the page. */
+  total: number;
+  offset: number;
+  limit: number;
+  files: FinderHit[];
+  facets: FinderFacets;
+  coverage: FinderCoverage;
+  /** Present when words were typed: the interface says it is a word search. */
+  textSearch: { terms: string[]; lastIsPrefix: boolean } | null;
+}
+
+/**
+ * Find files of one folder with no model, no embedding and no file read; cheap enough to run
+ * while the user types.
+ */
+export function findFiles(
+  domain: FinderDomain,
+  query: FinderQuery,
+  scope: FinderScope = { kind: "wholeFolder" },
+): Promise<FinderResult> {
+  return invoke<FinderResult>("find_files", { domain, query, scope });
 }
 
 /** The preview of a mail merge for the choices made on the plan card. */

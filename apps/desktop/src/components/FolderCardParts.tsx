@@ -157,8 +157,12 @@ export function FileList({
   onScopeChange,
   scopeLocked = false,
   onReveal,
+  selectionBase,
 }: {
   files: FileRecord[];
+  /** Every file of the folder, when `files` is only the part a search shows. The selection is always
+   * worked out over the whole folder: ticking the last file shown is not "tous". */
+  selectionBase?: FileRecord[];
   statusLabel: (file: FileRecord) => string;
   /** When given, each row ends with a "See" button that shows the file in the file manager. */
   onReveal?: (relativePath: string) => void;
@@ -169,7 +173,7 @@ export function FileList({
   scopeLocked?: boolean;
 }) {
   const { t } = useTranslation();
-  const analysed = files.filter(isSelectable);
+  const analysed = (selectionBase ?? files).filter(isSelectable);
   const ticked = scope === undefined ? [] : tickedPaths(scope, analysed);
   const selectable = scope !== undefined && onScopeChange !== undefined;
 

@@ -5,7 +5,8 @@ import {
   analysisPendingDocuments,
   countPendingDocuments,
 } from "../lib/analysis";
-import { scopedPaths, selectionOf } from "../lib/analysisScope";
+import { scopedPaths, scopeFromSearch, selectionOf } from "../lib/analysisScope";
+import { shownFiles } from "../lib/finderField";
 import { errorMessage, normaliseError, type AppError } from "../lib/errors";
 import { knowledgeLines } from "../lib/knowledgeSummary";
 import { unreadFormatsLines } from "../lib/unreadFormats";
@@ -22,7 +23,9 @@ import {
 } from "../lib/ipc";
 import { abbreviateFolderPath } from "../lib/folderPath";
 import { counted } from "../lib/plural";
+import { useFinderSearch } from "../state/useFinderSearch";
 import type { IndexingState } from "../state/useIndexing";
+import { useProfileStatus } from "../state/useProfileStatus";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
 import { ErrorBanner } from "./ErrorBanner";
@@ -35,6 +38,7 @@ import {
   SelectAll,
   StatusDot,
 } from "./FolderCardParts";
+import { FinderControls } from "./FinderControls";
 import { WarningGlyph } from "./WarningGlyph";
 
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
@@ -119,6 +123,23 @@ export function WorkFolderCard({
   const selection = scope === undefined ? "none" : selectionOf(scope);
   const analysedCount =
     inventory === null ? 0 : inventory.files.filter(isSelectable).length;
+
+  /* The search field: typing a search selects the analysed files it finds. It is shown only where the
+     listing doubles as the selection, and not while a question is being answered. */
+  const selectable = scope !== undefined && onScopeChange !== undefined;
+  const analysedFiles = inventory === null ? [] : inventory.files.filter(isSelectable);
+  const finder = useFinderSearch({
+    domain: "documents",
+    analysed: analysedFiles,
+    enabled: selectable && !scopeLocked && workFolder !== null,
+    onSelect: (paths, analysed) => {
+      if (scope !== undefined && onScopeChange !== undefined) {
+        onScopeChange(scopeFromSearch(scope, paths, analysed, Date.now()));
+      }
+    },
+  });
+  /* An index written before the profile existed is said, never rebuilt: only Analyse fills it. */
+  const profileStatus = useProfileStatus("documents", workFolder, finishedPasses);
 
   const refreshInventory = useCallback(() => {
     if (workFolder === null) {
@@ -463,6 +484,11 @@ export function WorkFolderCard({
             )}{" "}
             <StatusDot tone="fail" label={t("folderAnswer.processing.failed")} />.
           </p>
+          {profileStatus === "needsAnalyse" ? (
+            <p className="card__description finder__notice" role="status">
+              {t("finder.needsAnalyse")}
+            </p>
+          ) : null}
           {inventory.summary.totalFiles === 0 ? (
             passSummary
           ) : detail === "collapsible" ? (
@@ -471,6 +497,15 @@ export function WorkFolderCard({
                selection comes first - the line that says what is selected, the box that selects
                every document or none, then the files - and what the last pass did comes after
                the listing, as a note about it (`docs/SELECTION-AND-MEMORY.md`). */
+            <>
+              {selectable ? (
+                <FinderControls
+                  search={finder}
+                  analysed={analysedFiles}
+                  placeholder={t("finder.placeholderDocuments")}
+                  disabled={scopeLocked}
+                />
+              ) : null}
             <details className="inventory-detail scope-picker">
               <summary className="disclosure">
                 {selection === "some" ? (
@@ -503,7 +538,8 @@ export function WorkFolderCard({
                 />
               )}
               <FileList
-                files={inventory.files}
+                files={shownFiles(inventory.files, finder.found, finder.showAll)}
+                selectionBase={inventory.files}
                 statusLabel={statusLabel}
                 scope={scope}
                 onScopeChange={onScopeChange}
@@ -511,6 +547,7 @@ export function WorkFolderCard({
               />
               {passSummary}
             </details>
+            </>
           ) : (
             <>
               {passSummary}

@@ -345,6 +345,34 @@
       "native_text": "text taken from the file itself",
       "recognised_ocr": "text recognized from an image",
       "none": "nothing was read"
+    },
+    "search": {
+      "intro": "Search for the word “{query}”: {count} in the selected documents.",
+      "introPhrase": "Search for the phrase “{query}”: {count} in the selected documents.",
+      "introIdentifier": "Search for the number “{query}”, in any spelling: {count} in the selected documents.",
+      "kind": "Type of document searched: {kind}.",
+      "wordOnly": "Only the word itself is searched: a synonym or another form of the word would not be found.",
+      "page": "page {page}",
+      "excerpt": "Excerpt: {text}",
+      "others": "{count} more, without an excerpt:",
+      "unanalysed": "Not analysed yet, so searched by name only: {count}.",
+      "unreadable": "No readable text, so not searched: {count}."
+    },
+    "rank": {
+      "introLatest": "Among {count}, the latest is the first of this list:",
+      "introLatestNoun": "Among {count} whose name contains “{noun}”, the latest is the first of this list:",
+      "introEarliest": "Among {count}, the earliest is the first of this list:",
+      "introEarliestNoun": "Among {count} whose name contains “{noun}”, the earliest is the first of this list:",
+      "none": "No readable file in the selected documents.",
+      "noneNoun": "No readable file whose name contains “{noun}” in the selected documents.",
+      "basis": {
+        "filename": "date at the start of the file name",
+        "modified": "file modification date"
+      },
+      "mixed": "The dates are not all of one kind: a modification date is the date of a copy of the file, not always the date of the document.",
+      "unranked": "{count} with no known date, not ranked.",
+      "readableOne": "readable file",
+      "readableMany": "readable files"
     }
   },
   "settings": {
@@ -649,7 +677,8 @@
       "tabular": "tables",
       "mixed": "mixed",
       "folder_answer": "folder answer",
-      "without_documents": "without documents"
+      "without_documents": "without documents",
+      "document_search": "word search"
     },
     "planName": {
       "one_file": "one file",
@@ -1085,5 +1114,35 @@
     "roleLine": "{role} ({mentions})",
     "kindWithSubtype": "{type} ({subtype})",
     "detailLine": "{key}: {value}"
+  },
+  "businessType": {
+    "letter": "Letter",
+    "invoice": "Invoice",
+    "quote": "Quote",
+    "certificate": "Certificate",
+    "meeting_minutes": "Meeting minutes",
+    "appointment_letter": "Appointment letter",
+    "lab_result": "Lab result",
+    "prescription": "Prescription",
+    "insurer_statement": "Insurer statement",
+    "patient_list": "Patient list",
+    "invoicing": "Invoicing",
+    "accounting": "Accounting",
+    "schedule": "Schedule",
+    "stock": "Stock"
+  },
+  "finder": {
+    "placeholderDocuments": "Search the documents",
+    "placeholderData": "Search the spreadsheets",
+    "selected": "Selection by the search “{query}”: {files}.",
+    "none": "No file found for “{query}”. Only the words themselves are searched.",
+    "notAnalysed": "Found but not selectable: {count}.",
+    "showAll": "All files",
+    "showFound": "Results only",
+    "reset": "Reset",
+    "failed": "The search could not complete.",
+    "needsAnalyse": "The index must be rebuilt: press Analyse.",
+    "notAnalysedOne": "file not analysed",
+    "notAnalysedMany": "files not analysed"
   }
 }

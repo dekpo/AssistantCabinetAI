@@ -218,6 +218,7 @@ describe("a machine code as a label", () => {
           "tabular",
           "mixed",
           "folder_answer",
+          "document_search",
           "without_documents",
         ],
         "diagnostics.planName": ["one_file", "every_document", "whole_folder"],

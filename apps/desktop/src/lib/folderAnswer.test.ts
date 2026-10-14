@@ -216,3 +216,140 @@ describe("every answer has a sentence", () => {
     }
   });
 });
+
+describe("a word search of the selected files", () => {
+  const listed = [
+    {
+      relativePath: "caisses/2026-03-26_decompte-helsana.pdf",
+      title: null,
+      businessType: null,
+      excerpt: "Votre *franchise* annuelle de 300 francs est _atteinte_.",
+      page: 2,
+    },
+    {
+      relativePath: "2026-04-02_courrier-css.txt",
+      title: null,
+      businessType: null,
+      excerpt: null,
+      page: null,
+    },
+  ];
+  const search: FolderAnswer = {
+    kind: "document_search",
+    query: "franchise annuelle",
+    terms: ["franchise", "annuelle"],
+    prefix: false,
+    quoted: false,
+    businessType: null,
+    identifier: false,
+    total: 3,
+    listed,
+    others: ["autres/2026-05-01_note.txt"],
+    coverage: { searched: 40, unreadable: 1, unanalysed: 2, partial: 0 },
+  };
+
+  it("says what was searched, how many files hold it, and that it is the word itself", () => {
+    const text = formatFolderAnswer(french, search);
+
+    expect(text).toContain("Recherche du mot « franchise annuelle » : 3 fichiers");
+    expect(text).toContain("Seul le mot lui-même est cherché");
+    expect(text).toContain("- caisses/2026-03-26_decompte-helsana.pdf (page 2)");
+    expect(text).toContain("- 2026-04-02_courrier-css.txt");
+    expect(text).toContain("1 fichier de plus, sans extrait");
+  });
+
+  it("states the files it could not search, and never reads a passage as Markdown", () => {
+    const text = formatFolderAnswer(french, search);
+
+    expect(text).toContain("cherchés par leur nom seulement : 2 fichiers");
+    expect(text).toContain("Sans texte lisible, donc non cherchés : 1 fichier");
+    expect(text).toContain("Votre \\*franchise\\* annuelle");
+    expect(text).toContain("\\_atteinte\\_");
+    expect(text).not.toContain("Votre *franchise*");
+  });
+
+  it("names the type of document it was asked for, and says it is a number for an identifier", () => {
+    const withType = formatFolderAnswer(french, {
+      ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
+      businessType: "invoice",
+    });
+    expect(withType).toContain("Type de document recherché : Facture.");
+
+    const identifier = formatFolderAnswer(english, {
+      ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
+      query: "756.3052.5778.43",
+      identifier: true,
+    });
+    expect(identifier).toContain("Search for the number “756.3052.5778.43”, in any spelling");
+    expect(identifier).not.toContain("Only the word itself is searched");
+  });
+
+  it("says that nothing was found without inventing a file", () => {
+    const text = formatFolderAnswer(english, {
+      ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
+      total: 0,
+      listed: [],
+      others: [],
+      coverage: { searched: 5, unreadable: 0, unanalysed: 0, partial: 0 },
+    });
+    expect(text).toContain("0 file in the selected documents");
+    expect(text).not.toContain("- ");
+  });
+});
+
+describe("a ranking by date", () => {
+  const ranked: FolderAnswer = {
+    kind: "ranked_file",
+    latest: true,
+    noun: "courrier",
+    candidates: 3,
+    unranked: 1,
+    mixedBasis: true,
+    ranking: [
+      { relativePath: "2026-10-01_courrier-dermatologie.pdf", date: "2026-10-01", basis: "filename" },
+      { relativePath: "courrier-sans-date.txt", date: "2026-06-01", basis: "modified" },
+    ],
+  };
+
+  it("names the file, the ranking it comes from and where each date comes from", () => {
+    const text = formatFolderAnswer(french, ranked);
+
+    expect(text).toContain("Parmi 3 fichiers lisibles dont le nom contient « courrier »");
+    expect(text).toContain("le plus récent est le premier de cette liste");
+    expect(text).toContain(
+      "- 2026-10-01_courrier-dermatologie.pdf — 2026-10-01 (date au début du nom du fichier)",
+    );
+    expect(text).toContain("- courrier-sans-date.txt — 2026-06-01 (date de modification du fichier)");
+    expect(text).toContain("Les dates ne sont pas toutes de même nature");
+    expect(text).toContain("1 fichier sans date connue, non classés.");
+  });
+
+  it("says earliest, and does not name a noun that names no kind of document", () => {
+    const text = formatFolderAnswer(english, {
+      ...(ranked as Extract<FolderAnswer, { kind: "ranked_file" }>),
+      latest: false,
+      noun: null,
+      mixedBasis: false,
+      unranked: 0,
+    });
+
+    expect(text).toContain("Among 3 readable files, the earliest is the first of this list:");
+    expect(text).not.toContain("whose name contains");
+    expect(text).not.toContain("not always the date of the document");
+  });
+
+  it("says when no readable file answers", () => {
+    const none = {
+      ...(ranked as Extract<FolderAnswer, { kind: "ranked_file" }>),
+      candidates: 0,
+      ranking: [],
+    };
+
+    expect(formatFolderAnswer(english, none)).toBe(
+      "No readable file whose name contains “courrier” in the selected documents.",
+    );
+    expect(formatFolderAnswer(english, { ...none, noun: null })).toBe(
+      "No readable file in the selected documents.",
+    );
+  });
+});

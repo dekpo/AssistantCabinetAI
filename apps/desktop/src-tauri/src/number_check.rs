@@ -155,8 +155,7 @@ fn without_citations(text: &str) -> String {
 fn scan_source(source: &str) -> Vec<Number> {
     let mut numbers = scan(source, 1);
     if source.contains(['\n', '\r']) {
-        let joined = source.replace("\r\n", " ").replace(['\n', '\r'], " ");
-        numbers.extend(scan(&joined, 1));
+        numbers.extend(scan(&crate::quotation::join_lines(source), 1));
     }
     numbers
 }

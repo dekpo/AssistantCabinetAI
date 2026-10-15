@@ -102,6 +102,13 @@ export function annotationLines(t: Translator, locale: string, entry: ChatEntry)
   for (const number of entry.unverifiedNumbers ?? []) {
     lines.push(t("chat.unverifiedNumber", { number }));
   }
+  // What the answer puts between quotation marks must be in an excerpt; a cited passage must exist.
+  for (const quote of entry.unverifiedQuotes ?? []) {
+    lines.push(t("chat.unverifiedQuote", { quote }));
+  }
+  for (const number of entry.unknownCitations ?? []) {
+    lines.push(t("chat.unknownCitation", { number: String(number) }));
+  }
   return lines;
 }
 

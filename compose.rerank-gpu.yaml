@@ -1,0 +1,13 @@
+# Optional: give the reranker service the NVIDIA GPU. Add it after compose.rerank.yaml in COMPOSE_FILE, on a
+# machine that has a GPU and uses compose.gpu.yaml for Ollama (docs/INSTALL-SERVER.md, "The reranker").
+# The card is shared with the chat and embedding models: the reranker (bge-reranker-v2-m3) takes about 1.2 GB.
+
+services:
+  reranker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

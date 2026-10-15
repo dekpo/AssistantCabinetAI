@@ -126,6 +126,15 @@ pub struct VectorCounts {
     pub total: usize,
 }
 
+/// One file whose passages are not all searchable by meaning yet.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileVectorShare {
+    pub relative_path: String,
+    pub chunks: usize,
+    pub vectors: usize,
+}
+
 /// A passage that has no vector yet, with the text the model is given for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingChunk {
@@ -235,6 +244,10 @@ impl IndexStore {
         connection
             .execute_batch(crate::ocr_resume::SCHEMA)
             .map_err(|_| AppError::IndexUnavailable)?;
+        // The summaries the user asked the model for, by hand (`summaries`).
+        connection
+            .execute_batch(crate::summaries::SCHEMA)
+            .map_err(|_| AppError::IndexUnavailable)?;
         // The structure of the documents (`structure`): purely additive tables, beside the chunks. A
         // document with no `doc_structure` row, or an older version, is read again by the next Analyse
         // (its vectors are reused); until then the search works as before, with no section label.
@@ -281,6 +294,20 @@ impl IndexStore {
                 );
                 CREATE INDEX IF NOT EXISTS chunk_pages_by_document
                     ON chunk_pages (relative_path);
+                -- The word search made precise (`lexical`): the stems of a passage with the words of its
+                -- title and section path, and the passage as characters. Both are written by the Analyse
+                -- only when the matching switch is on, and a search whose table is empty falls back to the
+                -- plain words.
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_lex USING fts5(
+                    chunk_id UNINDEXED,
+                    section,
+                    stems
+                );
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_tri USING fts5(
+                    chunk_id UNINDEXED,
+                    body,
+                    tokenize = 'trigram'
+                );
                 ",
             )
             .map_err(|_| AppError::IndexUnavailable)?;
@@ -542,6 +569,31 @@ impl IndexStore {
             "SELECT COUNT(*), COALESCE(SUM(embedding IS NOT NULL), 0) FROM chunks WHERE relative_path = ?1",
             Some(relative_path),
         )
+    }
+
+    /// The files with at least one passage that has no vector, with their counts: one grouped query, cheap
+    /// enough for the file listing. A file with all its vectors is not listed.
+    pub fn incomplete_vector_shares(&self) -> Result<Vec<FileVectorShare>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT relative_path, COUNT(*), COALESCE(SUM(embedding IS NOT NULL), 0) FROM chunks
+                 GROUP BY relative_path
+                 HAVING COALESCE(SUM(embedding IS NOT NULL), 0) < COUNT(*)
+                 ORDER BY relative_path",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(FileVectorShare {
+                    relative_path: row.get(0)?,
+                    chunks: row.get::<_, i64>(1)?.max(0) as usize,
+                    vectors: row.get::<_, i64>(2)?.max(0) as usize,
+                })
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
     }
 
     fn counts(&self, sql: &str, path: Option<&str>) -> Result<VectorCounts, AppError> {
@@ -919,6 +971,197 @@ impl IndexStore {
         Ok(())
     }
 
+    /// Drop the lexical rows (stems and trigrams) of the passages stored for `relative_path`.
+    fn forget_lexical_rows(
+        tx: &rusqlite::Transaction<'_>,
+        relative_path: &str,
+    ) -> Result<(), AppError> {
+        for table in ["chunks_lex", "chunks_tri"] {
+            tx.execute(
+                &format!(
+                    "DELETE FROM {table} WHERE chunk_id IN
+                         (SELECT chunk_id FROM chunks WHERE relative_path = ?1)"
+                ),
+                [relative_path],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        Ok(())
+    }
+
+    /// Write the stems and the trigrams of a document's passages, for the switches that are on. `sections`
+    /// are (position, parent, title) and `owners` the section each passage starts in: the words of the
+    /// titles above a passage, and of the file name, are its section path.
+    fn write_lexical_rows(
+        tx: &rusqlite::Transaction<'_>,
+        relative_path: &str,
+        sections: &[(usize, Option<usize>, String)],
+        owners: &std::collections::HashMap<String, usize>,
+    ) -> Result<(), AppError> {
+        let options = crate::lexical::lexical_options();
+        let stems = options.wants_stems_table();
+        if !(stems || options.trigram) {
+            return Ok(());
+        }
+        Self::forget_lexical_rows(tx, relative_path)?;
+        let by_position: std::collections::HashMap<usize, (Option<usize>, &str)> = sections
+            .iter()
+            .map(|(position, parent, title)| (*position, (*parent, title.as_str())))
+            .collect();
+        let file_words = crate::lexical::stem_text(
+            std::path::Path::new(relative_path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or(""),
+        );
+        let mut statement = tx
+            .prepare("SELECT chunk_id, text FROM chunks WHERE relative_path = ?1")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows: Vec<(String, String)> = statement
+            .query_map([relative_path], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|_| AppError::IndexUnavailable)?
+            .collect::<Result<_, _>>()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        for (chunk_id, text) in rows {
+            if stems {
+                // The titles from the section the passage starts in up to the top, then the file name.
+                let mut path_words = file_words.clone();
+                let mut position = owners.get(&chunk_id).copied();
+                let mut guard = 0;
+                while let Some(current) = position {
+                    let Some((parent, title)) = by_position.get(&current) else {
+                        break;
+                    };
+                    path_words.push(' ');
+                    path_words.push_str(&crate::lexical::stem_text(title));
+                    position = *parent;
+                    guard += 1;
+                    if guard > 16 {
+                        break;
+                    }
+                }
+                tx.execute(
+                    "INSERT INTO chunks_lex (chunk_id, section, stems) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![chunk_id, path_words, crate::lexical::stem_text(&text)],
+                )
+                .map_err(|_| AppError::IndexUnavailable)?;
+            }
+            if options.trigram {
+                tx.execute(
+                    "INSERT INTO chunks_tri (chunk_id, body) VALUES (?1, ?2)",
+                    rusqlite::params![chunk_id, text],
+                )
+                .map_err(|_| AppError::IndexUnavailable)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// What the lexical tables hold, as the Analyse that wrote them wanted it: `stems=1,trigram=0`.
+    fn wanted_lexical_layout() -> String {
+        let options = crate::lexical::lexical_options();
+        format!(
+            "stems={},trigram={}",
+            u8::from(options.wants_stems_table()),
+            u8::from(options.trigram)
+        )
+    }
+
+    /// Make the stems and trigram tables match the switches that are on, from the text already stored: no
+    /// file is read and no vector computed, so it costs seconds, and only an Analyse the user started calls
+    /// it. Returns how many passages were written, or `None` when the tables were already right.
+    pub fn ensure_lexical_layout(&mut self) -> Result<Option<usize>, AppError> {
+        let wanted = Self::wanted_lexical_layout();
+        let recorded: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT value FROM file_profile_meta WHERE key = 'lexical_layout'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let nothing_wanted = wanted == "stems=0,trigram=0";
+        if recorded.as_deref() == Some(wanted.as_str()) || (recorded.is_none() && nothing_wanted) {
+            return Ok(None);
+        }
+        let tx = self.transaction()?;
+        tx.execute_batch("DELETE FROM chunks_lex; DELETE FROM chunks_tri;")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let paths: Vec<String> = {
+            let mut statement = tx
+                .prepare("SELECT DISTINCT relative_path FROM chunks ORDER BY relative_path")
+                .map_err(|_| AppError::IndexUnavailable)?;
+            let found: Vec<String> = statement
+                .query_map([], |row| row.get(0))
+                .map_err(|_| AppError::IndexUnavailable)?
+                .collect::<Result<_, _>>()
+                .map_err(|_| AppError::IndexUnavailable)?;
+            found
+        };
+        let mut written = 0usize;
+        for path in &paths {
+            let sections: Vec<(usize, Option<usize>, String)> = {
+                let mut statement = tx
+                    .prepare(
+                        "SELECT position, parent, title FROM doc_sections WHERE relative_path = ?1",
+                    )
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                let found: Vec<(usize, Option<usize>, String)> = statement
+                    .query_map([path], |row| {
+                        Ok((
+                            row.get::<_, i64>(0)? as usize,
+                            row.get::<_, Option<i64>>(1)?.map(|p| p as usize),
+                            row.get::<_, String>(2)?,
+                        ))
+                    })
+                    .map_err(|_| AppError::IndexUnavailable)?
+                    .collect::<Result<_, _>>()
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                found
+            };
+            let owners: std::collections::HashMap<String, usize> = {
+                let mut statement = tx
+                    .prepare("SELECT chunk_id, position FROM chunk_sections WHERE relative_path = ?1")
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                let found: std::collections::HashMap<String, usize> = statement
+                    .query_map([path], |row| {
+                        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+                    })
+                    .map_err(|_| AppError::IndexUnavailable)?
+                    .collect::<Result<_, _>>()
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                found
+            };
+            Self::write_lexical_rows(&tx, path, &sections, &owners)?;
+        }
+        if !nothing_wanted {
+            written = tx
+                .query_row("SELECT COUNT(*) FROM chunks_lex", [], |row| row.get::<_, i64>(0))
+                .map_err(|_| AppError::IndexUnavailable)? as usize;
+            written += tx
+                .query_row("SELECT COUNT(*) FROM chunks_tri", [], |row| row.get::<_, i64>(0))
+                .map_err(|_| AppError::IndexUnavailable)? as usize;
+        }
+        tx.execute(
+            "INSERT OR REPLACE INTO file_profile_meta (key, value) VALUES ('lexical_layout', ?1)",
+            [wanted],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(Some(written))
+    }
+
+    /// Whether a lexical table holds anything: a search that wants stems or trigrams uses them only if the
+    /// Analyse wrote them.
+    fn lexical_table_has_rows(&self, table: &str) -> bool {
+        self.connection
+            .query_row(&format!("SELECT 1 FROM {table} LIMIT 1"), [], |_| Ok(()))
+            .optional()
+            .map(|found| found.is_some())
+            .unwrap_or(false)
+    }
+
     /// Store the structure of one document and mark it as read under `version`. Replaces whatever was
     /// stored for the path. An empty `Structure` is a valid answer ("no sections"): it records that the
     /// document was looked at, so it is not read again for that reason.
@@ -956,6 +1199,17 @@ impl IndexStore {
             )
             .map_err(|_| AppError::IndexUnavailable)?;
         }
+        let owners: std::collections::HashMap<String, usize> = structure
+            .chunk_sections
+            .iter()
+            .map(|(chunk_id, position)| (chunk_id.clone(), *position))
+            .collect();
+        let titles: Vec<(usize, Option<usize>, String)> = structure
+            .sections
+            .iter()
+            .map(|section| (section.position, section.parent, section.title.clone()))
+            .collect();
+        Self::write_lexical_rows(&tx, relative_path, &titles, &owners)?;
         for (chunk_id, last_page) in &structure.chunk_ends {
             tx.execute(
                 "INSERT OR REPLACE INTO chunk_pages (chunk_id, relative_path, last_page) VALUES (?1, ?2, ?3)",
@@ -1118,6 +1372,7 @@ impl IndexStore {
             [relative_path],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
+        Self::forget_lexical_rows(tx, relative_path)?;
         tx.execute(
             "DELETE FROM chunks_fts WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE relative_path = ?1)",
             [relative_path],
@@ -1508,6 +1763,37 @@ impl IndexStore {
         Ok(())
     }
 
+    /// The section a passage starts in, as (document, section position), when its document has a
+    /// structure. What a cap per section counts by.
+    pub fn section_key_of(&self, chunk_id: &str) -> Result<Option<(String, i64)>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT relative_path, position FROM chunk_sections WHERE chunk_id = ?1",
+                [chunk_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The passage that follows this one in its document, with the size of its text in bytes. `None` for the
+    /// last passage of a document.
+    pub fn following_passage(&self, chunk_id: &str) -> Result<Option<(String, usize)>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT n.chunk_id, LENGTH(CAST(n.text AS BLOB))
+                 FROM chunks c JOIN chunks n ON n.relative_path = c.relative_path
+                   AND (n.page_number > c.page_number
+                        OR (n.page_number = c.page_number AND n.section > c.section))
+                 WHERE c.chunk_id = ?1
+                 ORDER BY n.page_number, n.section LIMIT 1",
+                [chunk_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize)),
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
     /// The passages with these ids (text and place, no vector), by id.
     pub fn passages_by_id(
         &self,
@@ -1560,8 +1846,8 @@ impl IndexStore {
         let tx = self.transaction()?;
         tx.execute_batch(
             "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;
-             DELETE FROM chunk_sections; DELETE FROM chunk_pages; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
-             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts;",
+             DELETE FROM chunks_lex; DELETE FROM chunks_tri; DELETE FROM chunk_sections; DELETE FROM chunk_pages; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
+             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts; DELETE FROM document_summaries;",
         )
         .map_err(|_| AppError::IndexUnavailable)?;
         knowledge::store::clear_domain(&tx, Domain::Documents)?;
@@ -1615,6 +1901,7 @@ impl IndexStore {
         for path in &gone {
             // The FTS table mirrors `chunks` by `chunk_id`, so it is cleared from the same list
             // rather than from a second query that could disagree with it.
+            Self::forget_lexical_rows(&tx, path)?;
             tx.execute(
                 "DELETE FROM chunks_fts WHERE chunk_id IN
                      (SELECT chunk_id FROM chunks WHERE relative_path = ?1)",
@@ -1643,31 +1930,11 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
-    /// FTS5 lexical search, escaping the query to a simple `AND`-of-terms match so punctuation
-    /// in a question cannot break the FTS syntax.
+    /// FTS5 lexical search, escaping the query to a simple `OR`-of-terms match so punctuation
+    /// in a question cannot break the FTS syntax. The expressions come from `lexical::plan`: with every
+    /// switch of `lexical_options()` off that is the one it always was.
     pub fn search_lexical(&self, query: &str, limit: usize) -> Result<Vec<LexicalHit>, AppError> {
-        let match_expression = fts_match_expression(query);
-        if match_expression.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT chunk_id, bm25(chunks_fts) FROM chunks_fts
-                 WHERE chunks_fts MATCH ?1 ORDER BY bm25(chunks_fts) LIMIT ?2",
-            )
-            .map_err(|_| AppError::IndexUnavailable)?;
-        let rows = statement
-            .query_map(rusqlite::params![match_expression, limit as i64], |row| {
-                Ok(LexicalHit {
-                    chunk_id: row.get(0)?,
-                    // bm25() in SQLite FTS5 is lower-is-better; keep as-is and let the caller sort.
-                    rank: row.get(1)?,
-                })
-            })
-            .map_err(|_| AppError::IndexUnavailable)?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|_| AppError::IndexUnavailable)
+        self.search_lexical_planned(query, limit, None)
     }
 
     /// The same full-text search, held to the chunks of `relative_paths`.
@@ -1685,34 +1952,187 @@ impl IndexStore {
         limit: usize,
         relative_paths: &[String],
     ) -> Result<Vec<LexicalHit>, AppError> {
-        let match_expression = fts_match_expression(query);
-        if match_expression.is_empty() || relative_paths.is_empty() {
+        if relative_paths.is_empty() {
             return Ok(Vec::new());
         }
-        let paths = serde_json::to_string(relative_paths).map_err(|_| AppError::Internal)?;
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT chunks_fts.chunk_id, bm25(chunks_fts) FROM chunks_fts
-                 JOIN chunks ON chunks.chunk_id = chunks_fts.chunk_id
-                 WHERE chunks_fts MATCH ?1
-                   AND chunks.relative_path IN (SELECT value FROM json_each(?2))
-                 ORDER BY bm25(chunks_fts) LIMIT ?3",
-            )
-            .map_err(|_| AppError::IndexUnavailable)?;
-        let rows = statement
-            .query_map(
-                rusqlite::params![match_expression, paths, limit as i64],
-                |row| {
-                    Ok(LexicalHit {
-                        chunk_id: row.get(0)?,
-                        rank: row.get(1)?,
+        self.search_lexical_planned(query, limit, Some(relative_paths))
+    }
+
+    /// Run the tiers of the plan in turn and keep the first `limit` distinct passages: the passages of a
+    /// stronger tier come first, in the order the full-text ranking gives them.
+    fn search_lexical_planned(
+        &self,
+        query: &str,
+        limit: usize,
+        relative_paths: Option<&[String]>,
+    ) -> Result<Vec<LexicalHit>, AppError> {
+        let mut options = crate::lexical::lexical_options();
+        // A switch whose table the Analyse did not write is as if it were off.
+        if options.wants_stems_table() && !self.lexical_table_has_rows("chunks_lex") {
+            options.french_stems = false;
+            options.field_weights = false;
+        }
+        if options.trigram && !self.lexical_table_has_rows("chunks_tri") {
+            options.trigram = false;
+        }
+        let plan = if options.is_off() {
+            let expression = fts_match_expression(query);
+            crate::lexical::LexicalPlan {
+                tiers: (!expression.is_empty())
+                    .then_some(crate::lexical::Tier {
+                        source: crate::lexical::Source::Plain,
+                        expression,
                     })
-                },
-            )
-            .map_err(|_| AppError::IndexUnavailable)?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|_| AppError::IndexUnavailable)
+                    .into_iter()
+                    .collect(),
+            }
+        } else {
+            crate::lexical::plan(query, &options, crate::lexical::Lexicon::shipped())
+        };
+        let mut hits: Vec<LexicalHit> = Vec::new();
+        for (position, tier) in plan.tiers.iter().enumerate() {
+            if position > 0 && hits.len() >= limit {
+                break;
+            }
+            let found = match self.run_tier(tier, limit, relative_paths) {
+                Ok(found) => found,
+                // A later tier is a refinement: one the full-text index cannot read is skipped, the
+                // first one (the words) is the search itself.
+                Err(_) if position > 0 => continue,
+                Err(error) => return Err(error),
+            };
+            for hit in found {
+                if hits.len() >= limit {
+                    break;
+                }
+                if !hits.iter().any(|known| known.chunk_id == hit.chunk_id) {
+                    hits.push(hit);
+                }
+            }
+        }
+        Ok(hits)
+    }
+
+    /// Whether the documents hold these words one after the other (a code is the phrase of its parts) in any
+    /// passage, or in the names, entities and headers the file profiles keep. Reads the full-text indexes only.
+    pub fn phrase_in_index(&self, parts: &[String]) -> Result<bool, AppError> {
+        if parts.is_empty() {
+            return Ok(false);
+        }
+        let expression = format!("\"{}\"", parts.join(" "));
+        for sql in [
+            "SELECT 1 FROM chunks_fts WHERE chunks_fts MATCH ?1 LIMIT 1",
+            "SELECT 1 FROM file_profile_fts WHERE file_profile_fts MATCH ?1 LIMIT 1",
+        ] {
+            let found = self
+                .connection
+                .query_row(sql, [&expression], |_| Ok(()))
+                .optional()
+                .map_err(|_| AppError::IndexUnavailable)?;
+            if found.is_some() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// The passages that hold an identifier written in the question (`FAC-2026-014`), found as the phrase of
+    /// its parts in the full-text index. Empty when the question holds none.
+    pub fn search_identifier(
+        &self,
+        question: &str,
+        limit: usize,
+        relative_paths: Option<&[String]>,
+    ) -> Result<Vec<LexicalHit>, AppError> {
+        let Some(expression) = crate::lexical::identifier_expression(question) else {
+            return Ok(Vec::new());
+        };
+        if relative_paths.is_some_and(|paths| paths.is_empty()) {
+            return Ok(Vec::new());
+        }
+        self.run_tier(
+            &crate::lexical::Tier {
+                source: crate::lexical::Source::Plain,
+                expression,
+            },
+            limit,
+            relative_paths,
+        )
+    }
+
+    /// One full-text expression against the table of its source, best match first.
+    fn run_tier(
+        &self,
+        tier: &crate::lexical::Tier,
+        limit: usize,
+        relative_paths: Option<&[String]>,
+    ) -> Result<Vec<LexicalHit>, AppError> {
+        use crate::lexical::Source;
+        let (table, rank) = match tier.source {
+            Source::Plain => ("chunks_fts", "bm25(chunks_fts)".to_string()),
+            // The columns are (chunk_id, section, stems): the section counts more only when asked.
+            Source::Stems { weighted: false } => {
+                ("chunks_lex", "bm25(chunks_lex, 0.0, 1.0, 1.0)".to_string())
+            }
+            Source::Stems { weighted: true } => (
+                "chunks_lex",
+                format!(
+                    "bm25(chunks_lex, 0.0, {:.1}, 1.0)",
+                    crate::lexical::SECTION_WEIGHT
+                ),
+            ),
+            Source::Trigram => ("chunks_tri", "bm25(chunks_tri)".to_string()),
+        };
+        match relative_paths {
+            None => {
+                let sql = format!(
+                    "SELECT chunk_id, {rank} FROM {table}
+                     WHERE {table} MATCH ?1 ORDER BY {rank} LIMIT ?2"
+                );
+                let mut statement = self
+                    .connection
+                    .prepare(&sql)
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                let rows = statement
+                    .query_map(rusqlite::params![tier.expression, limit as i64], |row| {
+                        Ok(LexicalHit {
+                            chunk_id: row.get(0)?,
+                            // bm25() in SQLite FTS5 is lower-is-better; keep as-is and let the caller sort.
+                            rank: row.get(1)?,
+                        })
+                    })
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| AppError::IndexUnavailable)
+            }
+            Some(paths) => {
+                let paths = serde_json::to_string(paths).map_err(|_| AppError::Internal)?;
+                let sql = format!(
+                    "SELECT {table}.chunk_id, {rank} FROM {table}
+                     JOIN chunks ON chunks.chunk_id = {table}.chunk_id
+                     WHERE {table} MATCH ?1
+                       AND chunks.relative_path IN (SELECT value FROM json_each(?2))
+                     ORDER BY {rank} LIMIT ?3"
+                );
+                let mut statement = self
+                    .connection
+                    .prepare(&sql)
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                let rows = statement
+                    .query_map(
+                        rusqlite::params![tier.expression, paths, limit as i64],
+                        |row| {
+                            Ok(LexicalHit {
+                                chunk_id: row.get(0)?,
+                                rank: row.get(1)?,
+                            })
+                        },
+                    )
+                    .map_err(|_| AppError::IndexUnavailable)?;
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| AppError::IndexUnavailable)
+            }
+        }
     }
 
     /// The full-text search for the surface forms of entities (`entity_terms_expression`), held to

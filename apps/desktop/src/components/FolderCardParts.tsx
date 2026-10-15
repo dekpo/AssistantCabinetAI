@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { selectionOf, tickedPaths, toggleAll, toggleScopeFile } from "../lib/analysisScope";
+import { vectorShareLabel } from "../lib/finderFilters";
 import type { AnalysisScope, FileRecord } from "../lib/ipc";
 import type { IndexingState } from "../state/useIndexing";
 
@@ -158,12 +159,15 @@ export function FileList({
   scopeLocked = false,
   onReveal,
   selectionBase,
+  vectorShares,
 }: {
   files: FileRecord[];
   /** Every file of the folder, when `files` is only the part a search shows. The selection is always
    * worked out over the whole folder: ticking the last file shown is not "tous". */
   selectionBase?: FileRecord[];
   statusLabel: (file: FileRecord) => string;
+  /** The files whose passages are not all searchable by meaning yet: each is marked with its share. */
+  vectorShares?: Map<string, { chunks: number; vectors: number }>;
   /** When given, each row ends with a "See" button that shows the file in the file manager. */
   onReveal?: (relativePath: string) => void;
   /** When given, each usable file gets a checkbox: the listing doubles as the choice of the files
@@ -184,10 +188,16 @@ export function FileList({
         /* One line, whatever the path costs: a name broken across two lines is harder to scan
            than one that ends in an ellipsis, and the full path is on hover for the rare name long
            enough to need it. */
+        const share = vectorShares?.get(file.relativePath);
         const name = (
-          <span className="inventory__path" title={file.relativePath}>
-            {file.relativePath}
-          </span>
+          <>
+            <span className="inventory__path" title={file.relativePath}>
+              {file.relativePath}
+            </span>
+            {share === undefined ? null : (
+              <span className="inventory__meaning">{vectorShareLabel(t, share)}</span>
+            )}
+          </>
         );
         return (
           <li key={file.id + file.relativePath} className="inventory__file">

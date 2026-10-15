@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "health-ch",
+  "_comment": "Words that name the same thing in Swiss health papers. Each group is a set of equivalents; a question that holds any entry also looks for the others. Entries are compared without case or accents. Cumulative with the other packs. First seed of 15 October 2026, to be grown from the misses of the exam.",
+  "groups": [
+    ["lamal", "assurance maladie obligatoire", "assurance obligatoire des soins", "kvg"],
+    ["franchise", "participation aux couts", "quote part"],
+    ["caisse maladie", "assureur maladie", "assurance maladie"],
+    ["avs", "ahv", "assurance vieillesse et survivants"],
+    ["lpp", "prevoyance professionnelle", "deuxieme pilier"],
+    ["decompte", "decompte de prestations", "abrechnung"]
+  ]
+}

@@ -105,6 +105,27 @@ class EmbeddingsResponse(BaseModel):
     usage: EmbeddingUsage
 
 
+class RerankPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    query: str
+    documents: list[str]
+    #: Keep only the best `top_n`; absent keeps them all, best first.
+    top_n: int | None = Field(default=None, ge=1)
+
+
+class RerankResultItem(BaseModel):
+    #: The position of the document in the request.
+    index: int
+    relevance_score: float
+
+
+class RerankResponse(BaseModel):
+    object: Literal["list"] = "list"
+    model: str
+    results: list[RerankResultItem]
+
+
 class ModelCard(BaseModel):
     id: str
     object: Literal["model"] = "model"
@@ -147,5 +168,9 @@ class HealthResponse(BaseModel):
     #: The most characters one request may carry (`MAX_CONTEXT_CHARS`). The client holds its prompt
     #: under it, so a window larger than this cap can use is never asked for.
     max_context_chars: int
+    #: A reranker service is configured: the client may ask `/v1/rerank` to order its candidates.
+    rerank_available: bool = False
+    #: The most documents one rerank request may carry.
+    max_rerank_documents: int = 0
     #: Machine codes describing why the status is degraded. Empty when everything answers.
     issues: list[str] = Field(default_factory=list)

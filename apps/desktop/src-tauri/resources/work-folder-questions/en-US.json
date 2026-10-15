@@ -448,6 +448,30 @@
           "statements"
         ],
         "kind": "insurer_statement"
+      },
+      {
+        "words": [
+          "section"
+        ],
+        "kind": "section"
+      },
+      {
+        "words": [
+          "sections"
+        ],
+        "kind": "section"
+      },
+      {
+        "words": [
+          "chapter"
+        ],
+        "kind": "section"
+      },
+      {
+        "words": [
+          "chapters"
+        ],
+        "kind": "section"
       }
     ],
     "linkers": [

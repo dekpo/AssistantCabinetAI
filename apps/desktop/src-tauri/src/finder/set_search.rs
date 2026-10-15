@@ -12,7 +12,7 @@ use rusqlite::Connection;
 
 use super::contracts::{
     DocumentListing, EntityFilter, FileHit, FinderQuery, FinderResult, FinderScope, InventoryFile,
-    MAX_LIMIT,
+    Locator, SectionListing, MAX_LIMIT, SECTION_KIND,
 };
 use super::engine::find;
 use super::names::{NameResolver, NoNames};
@@ -110,6 +110,9 @@ pub fn answer_in(
     names: &dyn NameResolver,
 ) -> Result<FolderAnswer, AppError> {
     let identifier = !identifiers.is_empty();
+    // "Which sections talk about X" is the same search, listed by section; the noun is no business type.
+    let by_section = set.kind.as_deref() == Some(SECTION_KIND);
+    let business_type = set.kind.clone().filter(|_| !by_section);
     let named = if identifier || set.quoted {
         None
     } else {
@@ -117,7 +120,7 @@ pub fn answer_in(
     };
     let base = FinderQuery {
         whole_words: true,
-        kinds: set.kind.iter().cloned().collect(),
+        kinds: business_type.iter().cloned().collect(),
         limit: Some(MAX_LIMIT),
         ..FinderQuery::default()
     };
@@ -160,6 +163,7 @@ pub fn answer_in(
     let mut others = Vec::new();
     for (position, hit) in result.files.into_iter().enumerate() {
         if position < LISTED {
+            let sections = sections_of(&hit.locators);
             listed.push(DocumentListing {
                 relative_path: hit.relative_path,
                 title: hit.card.title,
@@ -177,6 +181,7 @@ pub fn answer_in(
                     pages
                 },
                 matches_total: hit.locators_total,
+                sections,
             });
         } else {
             others.push(hit.relative_path);
@@ -192,14 +197,42 @@ pub fn answer_in(
         terms,
         prefix,
         quoted: set.quoted,
-        business_type: set.kind.clone(),
+        business_type,
         identifier,
         entity,
+        by_section,
         total: result.total,
         listed,
         others,
         coverage: result.coverage,
     })
+}
+
+/// The sections where a file's words matched, in reading order, each with the pages of its places.
+fn sections_of(locators: &[Locator]) -> Vec<SectionListing> {
+    let mut sections: Vec<SectionListing> = Vec::new();
+    for locator in locators {
+        let Some(label) = locator.section_label.clone() else {
+            continue;
+        };
+        match sections.iter_mut().find(|known| known.label == label) {
+            Some(known) => {
+                if let Some(page) = locator.page {
+                    if !known.pages.contains(&page) {
+                        known.pages.push(page);
+                    }
+                }
+            }
+            None => sections.push(SectionListing {
+                label,
+                pages: locator.page.into_iter().collect(),
+            }),
+        }
+    }
+    for section in &mut sections {
+        section.pages.sort_unstable();
+    }
+    sections
 }
 
 /// The union of several runs of the finder over the same scope: a file once, the first run's order, the

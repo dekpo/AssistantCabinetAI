@@ -20,6 +20,7 @@ from .base import (
     GenerationChunk,
     GenerationRequest,
     ProviderHealth,
+    RerankBackend,
     RerankRequest,
     RerankResult,
 )
@@ -35,6 +36,7 @@ class OllamaProvider:
         request_timeout_seconds: float = 180.0,
         health_timeout_seconds: float = 3.0,
         think: Literal["default", "off"] = "default",
+        reranker: RerankBackend | None = None,
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
@@ -42,6 +44,8 @@ class OllamaProvider:
         )
         self._health_timeout_seconds = health_timeout_seconds
         self._think = think
+        #: A reranker service, when one is configured: this runtime has no rerank endpoint.
+        self._reranker = reranker
         #: The largest context each model supports, read once from `/api/show`. Only answers are
         #: kept: a model not pulled yet is asked again next time rather than remembered as
         #: unlimited.
@@ -110,12 +114,18 @@ class OllamaProvider:
             prompt_tokens=body.get("prompt_eval_count"),
         )
 
-    async def rerank(self, request: RerankRequest) -> RerankResult:
-        """Not offered by this runtime.
+    @property
+    def supports_rerank(self) -> bool:
+        return self._reranker is not None
 
-        Refusing with a code is the honest answer: a fabricated ranking would silently degrade
-        retrieval. Retrieval ranks locally until a provider supports it.
+    async def rerank(self, request: RerankRequest) -> RerankResult:
+        """Passed to the reranker service when there is one; this runtime has no rerank endpoint.
+
+        Refusing with a code is the honest answer without a service: a fabricated ranking would
+        silently degrade retrieval. Retrieval ranks locally until a provider supports it.
         """
+        if self._reranker is not None:
+            return await self._reranker.rerank(request)
         raise GatewayError(
             ErrorCode.provider_capability_unsupported,
             status_code=501,
@@ -173,6 +183,8 @@ class OllamaProvider:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+        if self._reranker is not None:
+            await self._reranker.aclose()
 
     @staticmethod
     def _parse_stream_line(line: str) -> GenerationChunk | None:

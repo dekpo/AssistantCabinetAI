@@ -15,6 +15,8 @@ Local AI for professional practices. Pilot: French GP **admin** (not clinical ca
 - **No extra deliverable** (extra measures, extra prints, extra documents, extra variants) without an explicit request from the owner.
 - **Over 1 h 00 of expected work:** open with a task list of at most eight lines, one time estimate each, then one-line status updates.
 
+**No PowerShell (owner instruction, 15 October 2026, binding for every agent).** Avoid PowerShell; use it only when there is absolutely no other way, and then say so in one line. The owner works in `cmd` (the tower over SSH opens in `cmd`) and dislikes PowerShell. Every command given to her for Windows is a `cmd` command (`del`, `copy`, `type`, `cd /d`, `set`, `git`, `docker`), never `Remove-Item`, `Set-Content`, `$HOME` or backtick escapes; a command for macOS or Git Bash is a shell command. In your own work prefer the Bash tool (Git Bash); use PowerShell only for what Bash cannot do. A script saved in the repository for her to run is a `.cmd` or `.sh` file, not `.ps1`, unless nothing else can do it (an existing `.ps1` stays).
+
 **Everything written for a developer, an agent or a model is English:** code, tests, commits, `prompts/`, and all of `docs/`. **Everything a user reads is in their own language**, French for the pilot. That split is the product's language contract, not a preference — see `docs/LANGUAGE-AND-LOCALE.md`. Never write Franglais, and never mix two languages in one file.
 
 ## Current objective — v0 prototype

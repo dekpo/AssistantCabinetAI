@@ -3,6 +3,7 @@ import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
+import { FoundPassagesBlock } from "./FoundPassagesBlock";
 import { localiseInternalNames } from "../lib/displayNames";
 import { annotationLines, answerForCopy, sourceGroupLine } from "../lib/annotations";
 import { groupSources } from "../lib/sourceGroups";
@@ -260,6 +261,11 @@ export function MessageList({
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
+              {/* What the search found, before the answer: complete as soon as the retrieval is, so it
+                  stays useful when the model is slow, fails or is stopped. */}
+              {entry.sources !== undefined && entry.sources.length > 0 ? (
+                <FoundPassagesBlock sources={entry.sources} />
+              ) : null}
               {/* A div, not a paragraph: markdown emits lists and headings, which cannot legally
                   nest inside a `<p>` and make the browser restructure the DOM silently. */}
               <div className="message__body message__body--markdown">

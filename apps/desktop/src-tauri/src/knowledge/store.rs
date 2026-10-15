@@ -2508,6 +2508,41 @@ pub fn source_ids_for_scope(
 
 /// For each entity, the sources (among `source_ids`) that mention it or anything merged into it,
 /// and the union of them. An empty set of sources allows nothing. Tombstones have no mentions.
+/// Of these passages, the ones where the base found a mention of one of these entities (merges followed):
+/// what a reduction by passage would have kept. Read only, counts and ids of passages, no text.
+pub fn chunk_ids_mentioning(
+    connection: &Connection,
+    entity_ids: &[i64],
+    chunk_ids: &[String],
+) -> Result<BTreeSet<String>, AppError> {
+    let mut found = BTreeSet::new();
+    if entity_ids.is_empty() || chunk_ids.is_empty() {
+        return Ok(found);
+    }
+    let chunks = serde_json::to_string(chunk_ids).map_err(|_| AppError::Internal)?;
+    let mut statement = db(connection.prepare(
+        "SELECT DISTINCT m.chunk_id
+         FROM kb_effective_mentions m
+         JOIN kb_entities e ON e.entity_id = m.effective_entity_id
+         WHERE m.effective_entity_id = ?1
+           AND e.status IN ('candidate', 'active')
+           AND m.locator_kind = 'chunk'
+           AND m.chunk_id IN (SELECT value FROM json_each(?2))",
+    ))?;
+    for entity_id in entity_ids {
+        let Some(effective) = effective_entity(connection, *entity_id)? else {
+            continue;
+        };
+        let rows = db(statement.query_map(params![effective.entity_id, chunks], |row| {
+            row.get::<_, String>(0)
+        }))?;
+        for row in rows {
+            found.insert(db(row)?);
+        }
+    }
+    Ok(found)
+}
+
 pub fn files_for_entities(
     connection: &Connection,
     entity_ids: &[i64],

@@ -29,6 +29,7 @@ import { counted } from "../lib/plural";
 import { useFinderSearch } from "../state/useFinderSearch";
 import type { IndexingState } from "../state/useIndexing";
 import { useProfileStatus } from "../state/useProfileStatus";
+import { useFileVectorShares } from "../state/useFileVectorShares";
 import { useVectorShare } from "../state/useVectorShare";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
@@ -145,6 +146,7 @@ export function WorkFolderCard({
   /* An index written before the profile existed is said, never rebuilt: only Analyse fills it. */
   const profileStatus = useProfileStatus("documents", workFolder, finishedPasses);
   const vectors = useVectorShare(workFolder, finishedPasses);
+  const fileShares = useFileVectorShares(workFolder, finishedPasses);
   /* Shown only while the meaning search is incomplete: nothing at 100 %. */
   const meaningPercent = unfinishedPercent(vectors);
 
@@ -577,6 +579,7 @@ export function WorkFolderCard({
               <FileList
                 files={shownFiles(inventory.files, finder.found, finder.showAll)}
                 selectionBase={inventory.files}
+                vectorShares={fileShares}
                 statusLabel={statusLabel}
                 scope={scope}
                 onScopeChange={onScopeChange}

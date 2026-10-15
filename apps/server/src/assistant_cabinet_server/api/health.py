@@ -53,5 +53,7 @@ async def read_health(
         context_windows=context_windows,
         max_output_tokens=settings.max_output_tokens,
         max_context_chars=settings.max_context_chars,
+        rerank_available=bool(getattr(provider, "supports_rerank", False)),
+        max_rerank_documents=settings.max_rerank_documents,
         issues=issues,
     )

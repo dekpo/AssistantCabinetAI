@@ -21,6 +21,7 @@ from assistant_cabinet_server.providers import (
     GenerationChunk,
     GenerationRequest,
     ProviderHealth,
+    RankedDocument,
     RerankRequest,
     RerankResult,
 )
@@ -63,6 +64,9 @@ class FakeProvider:
         self.embed_requests: list[EmbeddingRequest] = []
         #: Set to return fewer vectors than inputs, which is the misalignment the route refuses.
         self.embed_vectors_returned: int | None = None
+        #: One score per document: the fake then reranks. `None` is a runtime that cannot.
+        self.rerank_scores: list[float] | None = None
+        self.rerank_requests: list[RerankRequest] = []
         self.closed = False
 
     async def generate(self, request: GenerationRequest) -> AsyncIterator[GenerationChunk]:
@@ -87,12 +91,23 @@ class FakeProvider:
             prompt_tokens=3 * len(request.inputs),
         )
 
+    @property
+    def supports_rerank(self) -> bool:
+        return self.rerank_scores is not None
+
     async def rerank(self, request: RerankRequest) -> RerankResult:
-        raise GatewayError(
-            ErrorCode.provider_capability_unsupported,
-            status_code=501,
-            data={"provider": self.name, "capability": "rerank"},
+        if self.rerank_scores is None:
+            raise GatewayError(
+                ErrorCode.provider_capability_unsupported,
+                status_code=501,
+                data={"provider": self.name, "capability": "rerank"},
+            )
+        self.rerank_requests.append(request)
+        ranked = sorted(
+            (RankedDocument(index=i, score=s) for i, s in enumerate(self.rerank_scores)),
+            key=lambda item: -item.score,
         )
+        return RerankResult(ranking=ranked[: request.top_n] if request.top_n else ranked)
 
     async def check_health(self) -> ProviderHealth:
         if not self.reachable:

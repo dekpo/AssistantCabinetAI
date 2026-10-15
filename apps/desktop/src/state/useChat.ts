@@ -119,6 +119,10 @@ export interface ChatEntry extends ChatTurn {
   /** Figures the model stated that appear in none of the excerpts it was given and not in the question
    * (`number_check`): said under the answer, never edited into it. */
   unverifiedNumbers?: string[];
+  /** Quotations of the answer found in no excerpt, and cited passage numbers that do not exist
+   * (`quotation`): said under the answer, never edited into it. */
+  unverifiedQuotes?: string[];
+  unknownCitations?: number[];
   /** A letter was asked for: the plan to approve, shown as a card under this answer. */
   fillPlan?: FillPlan;
   /** A "which file?" answer, as data: one button per candidate, each one resending her question with
@@ -521,6 +525,12 @@ export function useChat(
                   ...(result.withoutDocuments ? { withoutDocuments: true as const } : {}),
                   ...(result.unverifiedNumbers.length > 0
                     ? { unverifiedNumbers: result.unverifiedNumbers }
+                    : {}),
+                  ...(result.unverifiedQuotes.length > 0
+                    ? { unverifiedQuotes: result.unverifiedQuotes }
+                    : {}),
+                  ...(result.unknownCitations.length > 0
+                    ? { unknownCitations: result.unknownCitations }
                     : {}),
                 }
               : entry,

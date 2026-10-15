@@ -28,6 +28,62 @@
     "offline": "IA Indisponible",
     "recheck": "Vérifier l'IA"
   },
+  "found": {
+    "title": "Passages trouvés : {passages} passages dans {documents} documents",
+    "titleOne": "Passages trouvés : {passages} dans 1 document",
+    "page": "page {page}",
+    "pages": "pages {from} à {to}",
+    "byMeaning": "trouvé par le sens",
+    "show": "Afficher le fichier",
+    "others": "Autres documents ({documents}) : trouvés par le sens, aucun mot de la question"
+  },
+  "summary": {
+    "button": "Résumer",
+    "title": "Résumés de ce document",
+    "chaptersName": "Par chapitre",
+    "chaptersHelp": "Un résumé par chapitre, d'après le début de chacun. Rapide ; ce n'est pas une lecture complète.",
+    "fullName": "Lecture complète",
+    "fullHelp": "Tout le texte est lu par l'IA, partie par partie.",
+    "estimate": "Parties à résumer : {total}, environ {duration} sur cet ordinateur.",
+    "estimateRest": "Parties faites : {done} sur {total}. Reste environ {duration}.",
+    "doneChapters": "Tous les chapitres sont résumés ({total}), d'après le début de chacun.",
+    "doneFull": "Parties lues : {total} sur {total}, le document a été lu en entier.",
+    "stale": "Le fichier ou la consigne a été modifié depuis : les anciens résumés ne sont pas utilisés.",
+    "start": "Lancer",
+    "resume": "Reprendre",
+    "stop": "Arrêter",
+    "copy": "Copier",
+    "running": "En cours : {done} sur {total}. Lecture de : {where}",
+    "stopped": "Arrêté : {done} parties sur {total} faites et conservées.",
+    "failed": "Parties en échec : {failed}. La lecture n'est pas complète ; relancez pour reprendre.",
+    "page": "page {page}",
+    "pages": "pages {from} à {to}",
+    "none": "Aucun résumé pour l'instant."
+  },
+  "businessTypes": {
+    "open": "Mes types de documents",
+    "title": "Mes types de documents",
+    "intro": "Donnez un nom à un genre de document et les mots qui le reconnaissent : dans le nom du fichier, le titre, les lignes d'en-tête, le début du texte ou les feuilles d'un classeur. Un seul mot ne suffit pas toujours : plus il y a d'indices, plus le type est sûr.",
+    "none": "Aucun type à vous pour l'instant.",
+    "name": "Nom du type",
+    "scope": "Où le chercher",
+    "scopeDocuments": "Documents",
+    "scopeData": "Tableurs",
+    "place": {
+      "name": "Dans le nom du fichier (un mot par ligne)",
+      "title": "Dans le titre",
+      "header": "Dans les lignes d'en-tête",
+      "body": "Dans les premiers mots du texte",
+      "sheet": "Dans les feuilles et les colonnes d'un classeur"
+    },
+    "problem": "Ce type ne peut pas être enregistré : donnez-lui un nom et au moins un mot qui le reconnaît.",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "save": "Enregistrer",
+    "apply": "Appliquer maintenant",
+    "applied": "{examined} fiches relues, {changed} changées. La prochaine analyse complète la lecture du texte.",
+    "close": "Fermer"
+  },
   "chat": {
     "emptyTitle": "Posez une question",
     "emptyBody": "Ce que vous écrivez reste sur votre ordinateur.",
@@ -88,6 +144,8 @@
     "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
     "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",
+    "unverifiedQuote": "La citation « {quote} » ne figure dans aucun des extraits utilisés : vérifiez-la dans vos documents.",
+    "unknownCitation": "La réponse renvoie à l'extrait [{number}], qui n'existe pas : ne vous y fiez pas.",
     "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
     "mixedTableUnavailable": {
       "not_asked_about": "Cette question ne portait sur aucune de vos tables.",
@@ -359,7 +417,9 @@
     "search": {
       "intro": "Recherche du mot « {query} » : {count} dans les documents sélectionnés.",
       "introPhrase": "Recherche de l'expression « {query} » : {count} dans les documents sélectionnés.",
-      "introIdentifier": "Recherche du numéro « {query} », quelle que soit sa présentation : {count} dans les documents sélectionnés.",
+      "introSection": "Sections qui contiennent le mot « {query} » : {count} dans les documents sélectionnés.",
+    "introSectionData": "Sections qui contiennent le mot « {query} » : {count} dans les documents sélectionnés.",
+    "introIdentifier": "Recherche du numéro « {query} », quelle que soit sa présentation : {count} dans les documents sélectionnés.",
       "introData": "Recherche du mot « {query} » : {count} dans les tableurs sélectionnés.",
       "introPhraseData": "Recherche de l'expression « {query} » : {count} dans les tableurs sélectionnés.",
       "introIdentifierData": "Recherche du numéro « {query} », quelle que soit sa présentation : {count} dans les tableurs sélectionnés.",
@@ -1170,6 +1230,19 @@
     "failed": "La recherche n'a pas pu aboutir.",
     "needsAnalyse": "L'index doit être refait : appuyez sur Analyser.",
     "notAnalysedOne": "fichier non analysé",
-    "notAnalysedMany": "fichiers non analysés"
+    "notAnalysedMany": "fichiers non analysés",
+    "filters": "Affiner",
+    "filterType": "Type",
+    "filterYear": "Année",
+    "filterFormat": "Format",
+    "filterState": "État",
+    "state": {
+      "analysed": "Analysé",
+      "empty": "Vide",
+      "no_text": "Sans texte lisible",
+      "cells_missing": "Cellules non lues",
+      "unanalysed": "Non analysé",
+      "unsupported": "Format non pris en charge"
+    }
   }
 }

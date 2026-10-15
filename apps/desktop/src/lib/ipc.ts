@@ -1,5 +1,12 @@
 import type { FillPlan, FillPreview, FillReport, FillRequest } from "./fill";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import type {
+  StoredSummary,
+  SummaryPlan,
+  SummaryProgress,
+  SummaryRun,
+  SummaryStage,
+} from "./summaries";
 
 /**
  * The only bridge to the outside. The webview never calls the gateway itself: the address, the
@@ -97,6 +104,8 @@ export interface HealthSnapshot {
    * the view has no use for it beyond display. */
   contextWindows: Record<string, number>;
   maxOutputTokens: number | null;
+  /** The gateway has a reranker service: the application can ask it to put candidate passages in order. */
+  rerankAvailable: boolean;
 }
 
 export interface ChatTurn {
@@ -279,6 +288,9 @@ export interface DocumentSearchAnswer {
       /** X is the name of exactly one entity of the knowledge base: its canonical name. The files linked
        * to it are listed with the files that write its names. */
       entity: string | null;
+      /** The question asked for sections (« quelles sections parlent de X ») : each file is listed with the
+       * sections where the word is, from the index, with no model. */
+      bySection: boolean;
       total: number;
       listed: DocumentListing[];
       others: string[];
@@ -302,6 +314,12 @@ export interface RankedEntry {
     | "metadata_created";
 }
 
+/** A section of a document where the words of a set question matched. */
+export interface SectionListing {
+  label: string;
+  pages: number[];
+}
+
 /** One file of a set answer, with the passage that matched. */
 export interface DocumentListing {
   relativePath: string;
@@ -313,6 +331,9 @@ export interface DocumentListing {
   pages?: number[];
   /** How many passages of the file matched, counting those beyond the pages listed. */
   matchesTotal?: number;
+  /** The sections of the document where the words matched, in reading order, each with its pages. Empty
+   * for a document with no structure. */
+  sections?: SectionListing[];
 }
 
 /**
@@ -960,6 +981,10 @@ export interface AskAnswer {
   withoutDocuments: boolean;
   /** Figures the answer states that appear in none of its excerpts and not in the question. */
   unverifiedNumbers: string[];
+  /** Quotations (between guillemets) of the answer that are in none of its excerpts, as written. */
+  unverifiedQuotes: string[];
+  /** Passage numbers (`[7]`) the answer cites that name no excerpt it was given. */
+  unknownCitations: number[];
   /** A letter was asked for and the template and the rows it needs were found: a plan to approve.
    * `answer` is then empty. */
   fillPlan: FillPlan | null;
@@ -1813,4 +1838,70 @@ export function undoLastOperation(): Promise<ManageOutcome> {
  * the user wrote stays; with it, everything goes. Files, chunks and inventories are never touched. */
 export function resetKnowledge(includeManual: boolean): Promise<ManageOutcome> {
   return invoke<ManageOutcome>("knowledge_reset", { includeManual });
+}
+
+/** What a stage of summaries would do for one document: parts, parts already written, expected time. No model is called. */
+export function summaryPlan(relativePath: string, stage: SummaryStage): Promise<SummaryPlan> {
+  return invoke<SummaryPlan>("summary_plan", { relativePath, stage });
+}
+
+/** Write the summaries a stage still lacks. Started by hand, stoppable with `cancelSummary`; what it wrote is kept. */
+export function runSummary(
+  relativePath: string,
+  stage: SummaryStage,
+  onProgress?: (progress: SummaryProgress) => void,
+): Promise<SummaryRun> {
+  const channel = new Channel<SummaryProgress>();
+  channel.onmessage = (message) => onProgress?.(message);
+  return invoke<SummaryRun>("run_summary", { relativePath, stage, onProgress: channel });
+}
+
+/** The summaries stored for a document as it is now. */
+export function readSummaries(relativePath: string): Promise<StoredSummary[]> {
+  return invoke<StoredSummary[]>("read_summaries", { relativePath });
+}
+
+export function cancelSummary(): Promise<void> {
+  return invoke<void>("cancel_summary");
+}
+
+/** One file whose passages are not all searchable by meaning yet. Only those files are listed. */
+export interface FileVectorShare {
+  relativePath: string;
+  chunks: number;
+  vectors: number;
+}
+
+export function vectorShareByFile(): Promise<FileVectorShare[]> {
+  return invoke<FileVectorShare[]>("vector_share_by_file");
+}
+
+/** A business type of the user's own: a name and the phrases that are evidence for it in each place. */
+export interface UserType {
+  /** `user_` and lower case letters, digits and `_`. */
+  code: string;
+  scope: "documents" | "data";
+  label: string;
+  name: string[];
+  title: string[];
+  header: string[];
+  body: string[];
+  sheet: string[];
+}
+
+export function userTypesList(): Promise<UserType[]> {
+  return invoke<UserType[]>("user_types_list");
+}
+
+export function userTypeSave(userType: UserType): Promise<void> {
+  return invoke<void>("user_type_save", { userType });
+}
+
+export function userTypeDelete(code: string): Promise<boolean> {
+  return invoke<boolean>("user_type_delete", { code });
+}
+
+/** Weigh the types against the stored profiles, with no file read. */
+export function userTypesReevaluate(): Promise<{ examined: number; changed: number }> {
+  return invoke<{ examined: number; changed: number }>("user_types_reevaluate");
 }

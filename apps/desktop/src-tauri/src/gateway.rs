@@ -85,6 +85,11 @@ pub struct HealthSnapshot {
     /// The most characters the gateway accepts in one request (`MAX_CONTEXT_CHARS` on the server
     /// device). `None` from a gateway that predates it.
     pub max_context_chars: Option<usize>,
+    /// The gateway has a reranker service: candidates can be put in order by `POST /v1/rerank`. False from a
+    /// gateway that predates it.
+    pub rerank_available: bool,
+    /// The most candidates one rerank request may carry. `None` from a gateway that predates it.
+    pub max_rerank_documents: Option<usize>,
 }
 
 /// The gateway body, in its own snake_case vocabulary.
@@ -105,6 +110,10 @@ struct HealthBody {
     max_output_tokens: Option<usize>,
     #[serde(default)]
     max_context_chars: Option<usize>,
+    #[serde(default)]
+    rerank_available: bool,
+    #[serde(default)]
+    max_rerank_documents: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -175,7 +184,61 @@ impl GatewayClient {
             context_windows: body.context_windows,
             max_output_tokens: body.max_output_tokens,
             max_context_chars: body.max_context_chars,
+            rerank_available: body.rerank_available,
+            max_rerank_documents: body.max_rerank_documents,
         })
+    }
+
+    /// Put candidate passages in order by asking the gateway's reranker how well each answers `query`.
+    /// Best first, by the position of the candidate in `documents`. The caller degrades when this fails: a
+    /// gateway without a reranker answers 501, and the order the search gave stays.
+    pub async fn rerank(
+        &self,
+        server_url: &str,
+        query: &str,
+        documents: &[String],
+    ) -> Result<Vec<Reranked>, AppError> {
+        if documents.is_empty() {
+            return Ok(Vec::new());
+        }
+        if documents.len() > MAX_RERANK_DOCUMENTS {
+            return Err(AppError::ContextTooLarge {
+                chars: documents.len(),
+                limit: MAX_RERANK_DOCUMENTS,
+            });
+        }
+        let url = endpoint(server_url, "/v1/rerank");
+        let payload = json!({ "query": query, "documents": documents });
+        let response = self
+            .http
+            .post(&url)
+            .timeout(RERANK_TIMEOUT)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|error| transport_error(error, server_url))?;
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let body = response.text().await.unwrap_or_default();
+            let parsed: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+            return Err(gateway_error(&parsed).unwrap_or(AppError::ServerError { status }));
+        }
+        let body: RerankBody = response
+            .json()
+            .await
+            .map_err(|_| AppError::ServerResponseInvalid)?;
+        let ranking: Vec<Reranked> = body
+            .results
+            .into_iter()
+            .map(|item| Reranked {
+                index: item.index,
+                score: item.relevance_score,
+            })
+            .collect();
+        if ranking.is_empty() || ranking.iter().any(|item| item.index >= documents.len()) {
+            return Err(AppError::ServerResponseInvalid);
+        }
+        Ok(ranking)
     }
 
     /// Stream one answer, handing each piece of text to `on_delta`. Returns the whole answer.
@@ -421,6 +484,29 @@ impl Attempt {
             retryable: false,
         }
     }
+}
+
+/// The most candidates one rerank request carries; the gateway caps too (`MAX_RERANK_DOCUMENTS`).
+pub const MAX_RERANK_DOCUMENTS: usize = 64;
+/// How long a rerank may take: the cross-encoder reads every candidate with the question.
+const RERANK_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// One candidate's place in the order a reranker gave: its position in the request and its score.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reranked {
+    pub index: usize,
+    pub score: f32,
+}
+
+#[derive(Debug, Deserialize)]
+struct RerankBody {
+    results: Vec<RerankItemBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RerankItemBody {
+    index: usize,
+    relevance_score: f32,
 }
 
 #[derive(Debug, Deserialize)]

@@ -175,6 +175,63 @@ fn line(
     .to_string()
 }
 
+/// The assembly switches of one replay: `cap1`, `cap2`, `neighbours`, `edges` (any of them).
+fn assembly_options_from(flags: &str) -> assistant_cabinet_ai_lib::assembly::AssemblyOptions {
+    let mut options = assistant_cabinet_ai_lib::assembly::AssemblyOptions::OFF;
+    for flag in flags.split(',').map(str::trim) {
+        match flag {
+            "cap1" => options.per_section_cap = Some(1),
+            "cap2" => options.per_section_cap = Some(2),
+            "neighbours" => options.neighbours = true,
+            "edges" => options.edges_first = true,
+            "rrf" => options.fusion = assistant_cabinet_ai_lib::assembly::Fusion::Rrf,
+            "pin" => options.pin_identifier = true,
+            _ => {}
+        }
+    }
+    options
+}
+
+/// The lexical switches of one replay: `phrases,near,content,thesaurus` (any of them), or `off`.
+fn lexical_options_from(flags: &str) -> assistant_cabinet_ai_lib::lexical::LexicalOptions {
+    use assistant_cabinet_ai_lib::lexical::{ContentTerms, LexicalOptions};
+    let mut options = LexicalOptions::OFF;
+    for flag in flags.split(',').map(str::trim) {
+        match flag {
+            "phrases" => options.phrases = true,
+            "near" => options.near = true,
+            "content" => options.content_terms = ContentTerms::On,
+            "thesaurus" => options.thesaurus = true,
+            "stems" => options.french_stems = true,
+            "weights" => options.field_weights = true,
+            "trigram" => options.trigram = true,
+            "" | "off" | "cap1" | "cap2" | "neighbours" | "edges" | "rrf" | "pin" => {}
+            other => panic!("unknown lexical switch {other}"),
+        }
+    }
+    options
+}
+
+/// `ACAI_LEXICAL_SETS="off;phrases;near;phrases,near"` replays the questions once per set over the same
+/// analysed index and writes each to `<label>-<set>`; without it one replay runs with `ACAI_LEXICAL`.
+fn lexical_sets() -> Vec<(String, assistant_cabinet_ai_lib::lexical::LexicalOptions)> {
+    match std::env::var("ACAI_LEXICAL_SETS") {
+        Ok(sets) if !sets.trim().is_empty() => sets
+            .split(';')
+            .map(|set| (set.trim().replace(',', "+"), lexical_options_from(set)))
+            .collect(),
+        _ => vec![(String::new(), lexical_options_from(&env("ACAI_LEXICAL", "off")))],
+    }
+}
+
+/// The same sets read for the assembly (`cap1`, `cap2`, `neighbours`, `edges`), in the same order.
+fn assembly_sets() -> Vec<assistant_cabinet_ai_lib::assembly::AssemblyOptions> {
+    match std::env::var("ACAI_LEXICAL_SETS") {
+        Ok(sets) if !sets.trim().is_empty() => sets.split(';').map(assembly_options_from).collect(),
+        _ => vec![assembly_options_from(&env("ACAI_LEXICAL", "off"))],
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn replay_the_exam_without_the_model() {
@@ -230,7 +287,21 @@ async fn replay_the_exam_without_the_model() {
         ocr: Some(&ocr),
         rasterizer: Some(&rasterizer),
     };
+    // The Analyse writes the stems and trigram tables when a switch asks for them: every set that is replayed
+    // below reads the same index, so it is built with the union of what the sets need.
+    let union = lexical_sets()
+        .iter()
+        .fold(assistant_cabinet_ai_lib::lexical::LexicalOptions::OFF, |all, (_, set)| {
+            assistant_cabinet_ai_lib::lexical::LexicalOptions {
+                french_stems: all.french_stems || set.french_stems,
+                field_weights: all.field_weights || set.field_weights,
+                trigram: all.trigram || set.trigram,
+                ..all
+            }
+        });
+    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(Some(union));
     let library = library_on(&truth, tier, &PACKS, &stack).await;
+    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(None);
     let index = &library.lab.index;
     let chunks = index.all_chunks().expect("reads the chunks");
     let by_id: HashMap<&str, &StoredChunk> =
@@ -327,9 +398,24 @@ async fn replay_the_exam_without_the_model() {
         max_chars: usize::MAX / 4,
         max_per_document_chars: MAX_PER_DOCUMENT_CHARS,
     };
+    let connection = library.lab.side();
+    let mut embeddings: HashMap<String, Vec<f32>> = HashMap::new();
+    let rerank_wanted = env("ACAI_RERANK", "0") == "1";
+
+    let assemblies = assembly_sets();
+    for ((set_name, set_options), assembly) in lexical_sets().into_iter().zip(assemblies) {
+    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(Some(set_options));
+    assistant_cabinet_ai_lib::assembly::set_assembly_options_for_measurement(Some(assembly));
+    let out = if set_name.is_empty() {
+        out.clone()
+    } else {
+        let folder = output_folder(&format!("{label}-{set_name}"));
+        std::fs::create_dir_all(&folder).expect("creates the output folder");
+        std::fs::copy(out.join("analyse.json"), folder.join("analyse.json")).ok();
+        folder
+    };
     let mut lines: Vec<String> = Vec::new();
     let mut skipped: BTreeMap<String, usize> = BTreeMap::new();
-    let connection = library.lab.side();
 
     for q in truth
         .questions
@@ -366,12 +452,18 @@ async fn replay_the_exam_without_the_model() {
         let embed_started = Instant::now();
         let embedding = if fake {
             vector_for(&q.text)
+        } else if let Some(known) = embeddings.get(&q.id) {
+            known.clone()
         } else {
             match client
                 .embed(&url, &alias, std::slice::from_ref(&q.text))
                 .await
             {
-                Ok(vectors) => vectors.into_iter().next().unwrap_or_default(),
+                Ok(vectors) => {
+                    let vector = vectors.into_iter().next().unwrap_or_default();
+                    embeddings.insert(q.id.clone(), vector.clone());
+                    vector
+                }
                 Err(error) => {
                     println!("embedding failed for {}: {error:?}", q.id);
                     continue;
@@ -423,6 +515,63 @@ async fn replay_the_exam_without_the_model() {
             ms,
             &from_evidence(&outcome.evidence, facts),
         ));
+
+        // refusal: would the application refuse this question before any embedding or model?
+        {
+            let started = Instant::now();
+            let verdict = assistant_cabinet_ai_lib::refusal::check(index, &q.text);
+            let ms = started.elapsed().as_secs_f64() * 1000.0;
+            let (refused, terms) = match verdict {
+                Ok(assistant_cabinet_ai_lib::refusal::Verdict::Unknown(words)) => (true, words),
+                _ => (false, Vec::new()),
+            };
+            lines.push(
+                json!({"id": q.id, "channel": "refusal", "route": route, "ms": ms,
+                       "results": [], "refused": refused, "terms": terms})
+                .to_string(),
+            );
+        }
+
+        // rerank6 / rerank30: the first thirty candidates put in order by the gateway's reranker
+        // (`ACAI_RERANK=1`). `rerank6` is what the model would read; `rerank30` the whole new order.
+        if rerank_wanted && !fake {
+            let candidates = retrieval::search_scoped_counted_with_terms(
+                index,
+                &q.text,
+                &[],
+                &embedding,
+                scope,
+                retrieval::limits_for_rerank(RetrievalLimits::BASELINE),
+            )
+            .expect("searches")
+            .evidence;
+            let texts: Vec<String> = candidates.iter().map(|c| c.text.clone()).collect();
+            let started = Instant::now();
+            match client.rerank(&url, &q.text, &texts).await {
+                Ok(ranking) => {
+                    let ms = started.elapsed().as_secs_f64() * 1000.0;
+                    let order: Vec<(usize, f32)> =
+                        ranking.iter().map(|r| (r.index, r.score)).collect();
+                    let six = retrieval::cut_after_rerank(
+                        candidates.clone(),
+                        &order,
+                        RetrievalLimits::BASELINE,
+                    );
+                    lines.push(line(index, &q.id, "rerank6", route, ms, &from_evidence(&six, facts)));
+                    let all = retrieval::cut_after_rerank(
+                        candidates,
+                        &order,
+                        RetrievalLimits {
+                            max_chunks: DEPTH,
+                            max_chars: usize::MAX / 4,
+                            max_per_document_chars: MAX_PER_DOCUMENT_CHARS,
+                        },
+                    );
+                    lines.push(line(index, &q.id, "rerank30", route, ms, &from_evidence(&all, facts)));
+                }
+                Err(error) => println!("rerank failed for {}: {error:?}", q.id),
+            }
+        }
 
         // vector30: cosine alone
         let started = Instant::now();
@@ -508,4 +657,7 @@ async fn replay_the_exam_without_the_model() {
         out.display(),
         skipped
     );
+    }
+    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(None);
+    assistant_cabinet_ai_lib::assembly::set_assembly_options_for_measurement(None);
 }

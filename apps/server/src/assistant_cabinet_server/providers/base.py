@@ -94,6 +94,15 @@ class ProviderHealth(BaseModel):
 
 
 @runtime_checkable
+class RerankBackend(Protocol):
+    """What a reranker service offers: one score per document for a query, nothing kept."""
+
+    async def rerank(self, request: RerankRequest) -> RerankResult: ...
+
+    async def aclose(self) -> None: ...
+
+
+@runtime_checkable
 class AIProvider(Protocol):
     """Chat, embeddings and reranking, without retention."""
 

@@ -129,6 +129,13 @@ pub struct RetrievalDiagnostics {
     pub embedding_ms: u64,
     /// Lexical and vector search, the cut to the caps.
     pub search_ms: u64,
+    /// Putting the candidates in order by the gateway's reranker; 0 when it was not asked.
+    pub rerank_ms: u64,
+    /// `reranked`, or `failed` when the reranker could not answer and the order of the search stayed.
+    pub rerank: Option<&'static str>,
+    /// `unknown_terms` when the question was refused because every name and code it holds is unknown to the
+    /// documents (`refusal`): no embedding and no model were spent.
+    pub refusal: Option<&'static str>,
     /// Reading the selected workbooks: from the typed cache, or from the file on a miss.
     pub workbook_load_ms: u64,
     /// Every workbook this question read came from the typed cache. `false` when none was read.
@@ -165,6 +172,11 @@ pub struct ShadowDiagnostics {
     pub miss_no_mention: usize,
     pub miss_capped: usize,
     pub miss_entity_not_resolved: usize,
+    /// Passages the answer cited, when the question named an entity (0 otherwise).
+    pub passages_cited: usize,
+    /// Of those, the passages where the base found a mention of an entity of the question: what a reduction
+    /// by passage would have kept. Measured only, never applied (`docs/RETRIEVAL-QUALITY.md`, lot C).
+    pub passages_with_mention: usize,
 }
 
 /// The knowledge base's part in one question: how long the lookup took, what it found, what it

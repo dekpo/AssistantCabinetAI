@@ -165,11 +165,13 @@ type DocumentSearch = DocumentSearchAnswer;
  */
 function documentSearch(t: Translator, answer: DocumentSearch): string {
   const count = files(t, answer.total);
-  const base = answer.identifier
-    ? "folderAnswer.search.introIdentifier"
-    : answer.quoted
-      ? "folderAnswer.search.introPhrase"
-      : "folderAnswer.search.intro";
+  const base = answer.bySection
+    ? "folderAnswer.search.introSection"
+    : answer.identifier
+      ? "folderAnswer.search.introIdentifier"
+      : answer.quoted
+        ? "folderAnswer.search.introPhrase"
+        : "folderAnswer.search.intro";
   const intro = answer.domain === "data" ? `${base}Data` : base;
   const lines = [t(intro, { query: answer.query, count })];
   if (answer.entity !== null) {
@@ -187,6 +189,17 @@ function documentSearch(t: Translator, answer: DocumentSearch): string {
   if (answer.listed.length > 0) {
     lines.push("");
     for (const file of answer.listed) {
+      const sections = answer.bySection ? (file.sections ?? []) : [];
+      if (sections.length > 0) {
+        lines.push(`- ${file.relativePath}`);
+        for (const section of sections) {
+          const label = section.pages.length > 1
+            ? t("folderAnswer.search.pages", { pages: section.pages.join(", ") })
+            : t("folderAnswer.search.page", { page: section.pages[0] ?? 0 });
+          lines.push(`  - ${section.label} (${label})`);
+        }
+        continue;
+      }
       const pages = file.pages ?? [];
       const shown = pages.length > 1;
       const more = (file.matchesTotal ?? 0) > pages.length;

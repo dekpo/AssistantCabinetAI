@@ -228,6 +228,18 @@ pub struct FinderResult {
     pub text_search: Option<TextSearch>,
 }
 
+/// A section of a document where the words of a set question matched, with the pages of those places.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SectionListing {
+    pub label: String,
+    pub pages: Vec<i64>,
+}
+
+/// The collection noun that asks for sections (`sections`, `chapitres`): the set sentence is then answered
+/// by sections, not by files.
+pub const SECTION_KIND: &str = "section";
+
 /// One file of a set answer, with the passage that matched.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -241,4 +253,7 @@ pub struct DocumentListing {
     pub pages: Vec<i64>,
     /// How many passages of the file matched.
     pub matches_total: usize,
+    /// The sections of the document where the words matched, in reading order, each with its pages. Empty for
+    /// a document with no structure.
+    pub sections: Vec<SectionListing>,
 }

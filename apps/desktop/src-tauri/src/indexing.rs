@@ -381,6 +381,9 @@ pub async fn run_cancellable(
     // The Analyse is the moment an index from before is brought to the layout where a vector may be
     // absent: passages and vectors are copied as they are.
     index.upgrade_layout()?;
+    // The tables of the word search (stems, trigrams) are made to match the switches that are on, from the
+    // text already stored: seconds, no file read and no vector computed. Nothing is done while they match.
+    index.ensure_lexical_layout()?;
     // Vectors of two models cannot be compared. An index made with another model than the one asked for
     // now has its vectors computed again, here, in the pass the user started (nothing at launch).
     if let Some((model, _)) = index.embedding_info()? {

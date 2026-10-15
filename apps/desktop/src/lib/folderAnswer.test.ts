@@ -244,6 +244,7 @@ describe("a word search of the selected files", () => {
     businessType: null,
     identifier: false,
     entity: null,
+    bySection: false,
     total: 3,
     listed,
     others: ["autres/2026-05-01_note.txt"],
@@ -325,6 +326,62 @@ describe("a word search of the selected files", () => {
     expect(text).toContain("Recherche du mot « dermatologie » : 1 fichier dans les tableurs sélectionnés.");
     expect(text).toContain("- rendez-vous.csv");
     expect(text).toContain("cherchés par leur nom seulement : 1 fichier");
+  });
+
+  it("lists the sections where the word is, file by file, when the question asked for sections", () => {
+    const text = formatFolderAnswer(french, {
+      ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
+      bySection: true,
+      total: 1,
+      listed: [
+        {
+          relativePath: "manuel.pdf",
+          title: null,
+          businessType: null,
+          excerpt: "La franchise annuelle est de 300 francs.",
+          page: 41,
+          pages: [41, 42, 57],
+          matchesTotal: 3,
+          sections: [
+            { label: "3.2 Franchise", pages: [41, 42] },
+            { label: "4 Tarifs", pages: [57] },
+          ],
+        },
+      ],
+      others: [],
+    });
+
+    expect(text).toContain("Sections qui contiennent le mot « franchise annuelle » : 1 fichier");
+    expect(text).toContain("- manuel.pdf");
+    expect(text).toContain("  - 3.2 Franchise (pages 41, 42)");
+    expect(text).toContain("  - 4 Tarifs (page 57)");
+    expect(text).toContain("Seul le mot lui-même est cherché");
+  });
+
+  it("does not list sections for an ordinary word search, and falls back to the pages without any", () => {
+    const withSections = {
+      ...(search as Extract<FolderAnswer, { kind: "document_search" }>),
+      listed: [
+        {
+          relativePath: "manuel.pdf",
+          title: null,
+          businessType: null,
+          excerpt: null,
+          page: 41,
+          pages: [41, 42],
+          matchesTotal: 2,
+          sections: [{ label: "3.2 Franchise", pages: [41, 42] }],
+        },
+      ],
+    };
+    expect(formatFolderAnswer(french, withSections)).not.toContain("3.2 Franchise");
+    const bare = { ...withSections.listed[0]!, sections: [] };
+    const none = formatFolderAnswer(french, {
+      ...withSections,
+      bySection: true,
+      listed: [bare],
+    });
+    expect(none).toContain("- manuel.pdf (pages 41, 42)");
   });
 
   it("says that nothing was found without inventing a file", () => {
@@ -429,6 +486,7 @@ describe("a long document in a word search", () => {
     businessType: null,
     identifier: false,
     entity: null,
+    bySection: false,
     total: 1,
     listed: [
       {

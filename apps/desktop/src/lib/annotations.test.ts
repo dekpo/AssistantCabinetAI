@@ -59,6 +59,15 @@ describe("what is written under an answer", () => {
     expect(annotationLines(english, "en-US", entry({ unverifiedNumbers: ["80"] }))[0]).toContain("“80”");
   });
 
+  it("says a quotation found in no excerpt and a citation of a passage that does not exist", () => {
+    const e = entry({ unverifiedQuotes: ["la franchise est de 500 francs"], unknownCitations: [9] });
+    const lines = annotationLines(french, "fr-FR", e);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("« la franchise est de 500 francs »");
+    expect(lines[1]).toContain("[9]");
+    expect(annotationLines(english, "en-US", e)[0]).toContain("“la franchise est de 500 francs”");
+  });
+
   it("has nothing to say about an answer that rests on nothing special", () => {
     expect(annotationLines(english, "en-US", entry({}))).toEqual([]);
   });

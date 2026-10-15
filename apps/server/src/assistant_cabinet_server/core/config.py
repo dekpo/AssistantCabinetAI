@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     max_embedding_chars: int = Field(default=200_000, alias="MAX_EMBEDDING_CHARS")
     max_embedding_inputs: int = Field(default=256, alias="MAX_EMBEDDING_INPUTS")
 
+    # The reranker service (Text Embeddings Inference serving a cross-encoder), reachable from the
+    # gateway only. Empty means there is none: `/v1/rerank` then answers with a capability code and
+    # the client ranks locally. The caps stop a client sending a whole folder; the working number is
+    # the client's.
+    rerank_base_url: str = Field(default="", alias="RERANK_BASE_URL")
+    rerank_timeout_seconds: float = Field(default=60.0, alias="RERANK_TIMEOUT_SECONDS")
+    max_rerank_documents: int = Field(default=64, alias="MAX_RERANK_DOCUMENTS")
+    max_rerank_chars: int = Field(default=200_000, alias="MAX_RERANK_CHARS")
+
     register_capacity: int = Field(default=500, alias="REGISTER_CAPACITY")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 

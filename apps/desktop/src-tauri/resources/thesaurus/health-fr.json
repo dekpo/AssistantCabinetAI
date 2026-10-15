@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "health-fr",
+  "_comment": "Words that name the same thing in French health papers. Each group is a set of equivalents; a question that holds any entry also looks for the others. Entries are compared without case or accents. Cumulative with the other packs. First seed of 15 October 2026, to be grown from the misses of the exam.",
+  "groups": [
+    ["cpam", "caisse primaire d assurance maladie", "caisse primaire", "assurance maladie"],
+    ["mutuelle", "complementaire sante", "assurance complementaire"],
+    ["ordonnance", "prescription"],
+    ["arret de travail", "arret maladie"],
+    ["ald", "affection de longue duree"],
+    ["secu", "securite sociale"]
+  ]
+}

@@ -5,6 +5,7 @@
 use serde::Serialize;
 use unicode_normalization::char::is_combining_mark;
 
+use crate::assembly::{assembly_options, Fusion, SectionCap, RRF_DEPTH, RRF_K};
 use crate::conversation::ContextBudget;
 use crate::extraction::PageOrigin;
 use crate::index_store::{
@@ -320,9 +321,17 @@ pub fn search_scoped_counted_with_terms(
     scope: RetrievalScope<'_>,
     limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    let mut lexical_hits = lexical_hits_in(index, query_text, scope, limits)?;
+    let mut lexical_hits = lexical_hits_in(index, query_text, scope, lexical_depth(limits))?;
     lexical_hits.extend(term_hits_in(index, extra_terms, scope, limits)?);
-    let mut found = search_scoped_with_hits(index, query_embedding, scope, &lexical_hits, limits)?;
+    let pinned = pinned_in(index, query_text, scope, limits)?;
+    let mut found = search_scoped_with_hits(
+        index,
+        query_embedding,
+        scope,
+        &lexical_hits,
+        &pinned,
+        limits,
+    )?;
     attach_matches(&mut found.evidence, query_text, extra_terms);
     Ok(found)
 }
@@ -330,6 +339,42 @@ pub fn search_scoped_counted_with_terms(
 /// The lexical bonus candidates for `scope`: the best full-text matches **among the scope's own
 /// files**, so a file the user did not select can never use up the places that decide who gets
 /// the bonus. `WholeFolder` has no restriction to apply and keeps the unrestricted search.
+/// How deep the word search is read: the places that earn the bonus, or, when the two searches are fused
+/// by rank, deep enough for its ranks to mean something.
+fn lexical_depth(limits: RetrievalLimits) -> RetrievalLimits {
+    match assembly_options().fusion {
+        Fusion::FlatBonus => limits,
+        Fusion::Rrf => RetrievalLimits {
+            max_chunks: RRF_DEPTH.max(limits.max_chunks),
+            ..limits
+        },
+    }
+}
+
+/// The passages of the scope that hold an identifier written in the question, when that switch is on.
+fn pinned_in(
+    index: &IndexStore,
+    query_text: &str,
+    scope: RetrievalScope<'_>,
+    limits: RetrievalLimits,
+) -> Result<std::collections::HashSet<String>, crate::error::AppError> {
+    if !assembly_options().pin_identifier {
+        return Ok(std::collections::HashSet::new());
+    }
+    let found = match scope {
+        RetrievalScope::WholeFolder => index.search_identifier(query_text, limits.max_chunks, None)?,
+        RetrievalScope::File(relative_path) => index.search_identifier(
+            query_text,
+            limits.max_chunks,
+            Some(&[relative_path.to_string()]),
+        )?,
+        RetrievalScope::Files(paths) | RetrievalScope::CurrentFolder(paths) => {
+            index.search_identifier(query_text, limits.max_chunks, Some(paths))?
+        }
+    };
+    Ok(found.into_iter().map(|hit| hit.chunk_id).collect())
+}
+
 fn lexical_hits_in(
     index: &IndexStore,
     query_text: &str,
@@ -378,8 +423,10 @@ fn search_scoped_with_hits(
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
     lexical_hits: &[LexicalHit],
+    pinned: &std::collections::HashSet<String>,
     limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
+    let fusion = assembly_options().fusion;
     // The ranking reads the vectors of the scope one row at a time and keeps, for each passage that
     // counts, its id, its score and its size: the text of a passage is read only for the few that are
     // kept. Same scores, same order, same caps as when every passage was loaded with its text
@@ -418,13 +465,22 @@ fn search_scoped_with_hits(
             }
             let vector_score = cosine_similarity_with_norm(&buffer, query_embedding, norm);
             best_vector_score = best_vector_score.max(vector_score);
-            let lexical_bonus = if lexical.contains(chunk_id) { 0.2 } else { 0.0 };
-            if vector_score < MIN_VECTOR_SCORE && lexical_bonus == 0.0 {
+            let in_lexical = lexical.contains(chunk_id);
+            let is_pinned = pinned.contains(chunk_id);
+            // Fused by rank, the lexical list adds its own weight below; the flat bonus is today's.
+            let lexical_bonus = if in_lexical && fusion == Fusion::FlatBonus {
+                0.2
+            } else {
+                0.0
+            };
+            if vector_score < MIN_VECTOR_SCORE && !in_lexical && !is_pinned {
                 return;
             }
+            // A passage that holds the identifier of the question comes before any other.
+            let pin_bonus = if is_pinned { 1.0 } else { 0.0 };
             scored.push((
                 chunk_id.to_string(),
-                vector_score + lexical_bonus,
+                vector_score + lexical_bonus + pin_bonus,
                 text_bytes,
             ));
         };
@@ -443,9 +499,45 @@ fn search_scoped_with_hits(
         }
     }
 
+    if fusion == Fusion::Rrf {
+        // Each list counts by the rank of the passage in it. The vector list is every scored passage by
+        // cosine (the pin bonus is taken out again: it is not part of the cosine), the word list is the order
+        // the full-text search gave.
+        let mut by_vector: Vec<usize> = (0..scored.len()).collect();
+        let cosine = |entry: &(String, f32, usize)| {
+            entry.1 - if pinned.contains(&entry.0) { 1.0 } else { 0.0 }
+        };
+        by_vector.sort_by(|&a, &b| {
+            cosine(&scored[b])
+                .partial_cmp(&cosine(&scored[a]))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut word_rank: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for (position, hit) in lexical_hits.iter().enumerate() {
+            word_rank.entry(hit.chunk_id.as_str()).or_insert(position + 1);
+        }
+        let mut fused: Vec<f32> = vec![0.0; scored.len()];
+        for (position, &index_in_scored) in by_vector.iter().enumerate() {
+            fused[index_in_scored] += 1.0 / (RRF_K + position as f32 + 1.0);
+        }
+        for (index_in_scored, entry) in scored.iter().enumerate() {
+            if let Some(rank) = word_rank.get(entry.0.as_str()) {
+                fused[index_in_scored] += 1.0 / (RRF_K + *rank as f32);
+            }
+            if pinned.contains(&entry.0) {
+                fused[index_in_scored] += 1.0;
+            }
+        }
+        for (entry, score) in scored.iter_mut().zip(fused) {
+            entry.1 = score;
+        }
+    }
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut chosen: Vec<(String, f32)> = Vec::new();
+    let assembly = assembly_options();
+    let mut section_cap = SectionCap::new(assembly.per_section_cap);
+    let mut chosen: Vec<(String, f32, usize)> = Vec::new();
+    let mut deferred: Vec<(String, f32, usize)> = Vec::new();
     let mut total_chars = 0usize;
     for (chunk_id, score, text_bytes) in scored {
         if chosen.len() >= limits.max_chunks {
@@ -454,13 +546,36 @@ fn search_scoped_with_hits(
         if total_chars + text_bytes > limits.max_chars {
             continue;
         }
+        // A section that already gives its places gives no more: they go to the next section.
+        if section_cap.is_on() && !section_cap.admit(index.section_key_of(&chunk_id)?) {
+            deferred.push((chunk_id, score, text_bytes));
+            continue;
+        }
         total_chars += text_bytes;
-        chosen.push((chunk_id, score));
+        chosen.push((chunk_id, score, text_bytes));
     }
-    let ids: Vec<String> = chosen.iter().map(|(id, _)| id.clone()).collect();
+    // The cap spreads the places over the sections; it never leaves a place empty. What it set aside fills
+    // the places no other section wanted, best first.
+    if !deferred.is_empty() && chosen.len() < limits.max_chunks {
+        for (chunk_id, score, text_bytes) in deferred {
+            if chosen.len() >= limits.max_chunks {
+                break;
+            }
+            if total_chars + text_bytes > limits.max_chars {
+                continue;
+            }
+            total_chars += text_bytes;
+            chosen.push((chunk_id, score, text_bytes));
+        }
+        chosen.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    }
+    if assembly.neighbours {
+        add_neighbour(index, &mut chosen, &mut total_chars, limits)?;
+    }
+    let ids: Vec<String> = chosen.iter().map(|(id, _, _)| id.clone()).collect();
     let mut passages = index.passages_by_id(&ids)?;
     let mut selected: Vec<Evidence> = Vec::with_capacity(chosen.len());
-    for (chunk_id, score) in chosen {
+    for (chunk_id, score, _) in chosen {
         let Some(chunk) = passages.remove(&chunk_id) else {
             continue;
         };
@@ -490,6 +605,93 @@ fn search_scoped_with_hits(
         unvectorised_chunks,
         mismatched_chunks,
     })
+}
+
+/// The passage that follows the best one is read with it, in the place of the weakest passage: the total
+/// number of passages and of characters does not grow.
+fn add_neighbour(
+    index: &IndexStore,
+    chosen: &mut Vec<(String, f32, usize)>,
+    total_chars: &mut usize,
+    limits: RetrievalLimits,
+) -> Result<(), crate::error::AppError> {
+    if chosen.len() < 2 {
+        return Ok(());
+    }
+    let (best_id, best_score, _) = chosen[0].clone();
+    let Some((next_id, next_bytes)) = index.following_passage(&best_id)? else {
+        return Ok(());
+    };
+    if chosen.iter().any(|(id, _, _)| *id == next_id) {
+        return Ok(());
+    }
+    let weakest_bytes = chosen[chosen.len() - 1].2;
+    if *total_chars - weakest_bytes + next_bytes > limits.max_chars {
+        return Ok(());
+    }
+    *total_chars = *total_chars - weakest_bytes + next_bytes;
+    chosen.pop();
+    chosen.insert(1, (next_id, best_score, next_bytes));
+    Ok(())
+}
+
+/// How many candidates the search hands to the reranker: wide enough to hold the answer, narrow enough for
+/// a cross-encoder to read each one with the question in a few seconds.
+pub const RERANK_CANDIDATES: usize = 30;
+
+/// The limits of the search that feeds the reranker: more passages, no more characters than they need.
+pub fn limits_for_rerank(limits: RetrievalLimits) -> RetrievalLimits {
+    RetrievalLimits {
+        max_chunks: RERANK_CANDIDATES.max(limits.max_chunks),
+        max_chars: usize::MAX / 4,
+        ..limits
+    }
+}
+
+/// The candidates in the order a reranker gave, cut to the budget a model can read: the best first, a
+/// passage that would overrun the characters is skipped for the next, and the candidates the ranking leaves
+/// out follow in the order the search gave. A position the candidates do not have is ignored. The score is
+/// the reranker's.
+pub fn cut_after_rerank(
+    candidates: Vec<Evidence>,
+    ranking: &[(usize, f32)],
+    limits: RetrievalLimits,
+) -> Vec<Evidence> {
+    let mut ordered: Vec<(usize, f32)> = ranking.to_vec();
+    ordered.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let mut slots: Vec<Option<Evidence>> = candidates.into_iter().map(Some).collect();
+    let mut sequence: Vec<Evidence> = Vec::with_capacity(slots.len());
+    for (index, score) in ordered {
+        if let Some(mut candidate) = slots.get_mut(index).and_then(Option::take) {
+            candidate.score = score;
+            sequence.push(candidate);
+        }
+    }
+    sequence.extend(slots.into_iter().flatten());
+    let mut kept = Vec::new();
+    let mut total_chars = 0usize;
+    for candidate in sequence {
+        if kept.len() >= limits.max_chunks {
+            break;
+        }
+        let bytes = candidate.text.len();
+        if total_chars + bytes > limits.max_chars {
+            continue;
+        }
+        total_chars += bytes;
+        kept.push(candidate);
+    }
+    kept
+}
+
+/// The passages in the order the model reads them: the ranking, or with `edges_first` the best at the two
+/// ends of a list of three or more. The interface keeps the ranking.
+pub fn ordered_for_model(evidence: &[Evidence]) -> Vec<Evidence> {
+    if assembly_options().edges_first && evidence.len() >= 3 {
+        crate::assembly::edges_first(evidence.to_vec())
+    } else {
+        evidence.to_vec()
+    }
 }
 
 /// One excerpt from **each** of `relative_paths`, in the order given.
@@ -552,7 +754,8 @@ pub fn search_per_document_counted_with_terms(
     // The full-text query is the same for every file, so it runs once, over all of them. Run per
     // file it repeated one query as many times as there were documents.
     let mut lexical_hits =
-        index.search_lexical_in(query_text, limits.max_chunks, relative_paths)?;
+        index.search_lexical_in(query_text, lexical_depth(limits).max_chunks, relative_paths)?;
+    let pinned = pinned_in(index, query_text, RetrievalScope::Files(relative_paths), limits)?;
     if !extra_terms.is_empty() {
         lexical_hits.extend(index.search_lexical_terms_in(
             extra_terms,
@@ -567,6 +770,7 @@ pub fn search_per_document_counted_with_terms(
             query_embedding,
             RetrievalScope::File(relative_path),
             &lexical_hits,
+            &pinned,
             limits,
         )?;
         chunks_considered += found.chunks_considered;

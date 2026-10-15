@@ -50,7 +50,9 @@ use crate::mixed_answer;
 use crate::number_check;
 use crate::ocr::tesseract::TesseractProvider;
 use crate::ocr::OcrProvider;
+use crate::quotation;
 use crate::raster::{self, PageRasterizer, Rasterizer};
+use crate::summaries;
 use crate::retrieval::{self, Evidence, EvidenceCoverage};
 use crate::reveal;
 use crate::settings::{self, Settings};
@@ -77,6 +79,9 @@ pub struct AppState {
     pub data_file_hashes: FileHashCache,
     /// Each model's context budget, as the gateway last published it (`conversation`).
     pub model_budgets: Mutex<ModelBudgets>,
+    /// How many candidates the gateway's reranker takes in one request, as the last health check said; 0
+    /// when the gateway has none (`retrieval::limits_for_rerank`).
+    pub rerank_documents: std::sync::atomic::AtomicUsize,
     /// The words a question is read with, loaded once for a locale and a set of packs and kept
     /// until either changes (`knowledge::targeting::QueryVocabulary`): loading costs tens of
     /// milliseconds, which is nothing once and far too much per question.
@@ -102,6 +107,7 @@ impl AppState {
             file_hashes: FileHashCache::new(),
             data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
+            rerank_documents: std::sync::atomic::AtomicUsize::new(0),
             vocabulary: Mutex::new(None),
             suggestions: SuggestionCache::default(),
         })
@@ -377,6 +383,15 @@ pub async fn check_server_health(state: State<'_, AppState>) -> Result<HealthSna
             snapshot.max_output_tokens,
             snapshot.max_context_chars,
         );
+    state.rerank_documents.store(
+        match snapshot.rerank_available {
+            true => snapshot
+                .max_rerank_documents
+                .unwrap_or(crate::gateway::MAX_RERANK_DOCUMENTS),
+            false => 0,
+        },
+        std::sync::atomic::Ordering::Relaxed,
+    );
     Ok(snapshot)
 }
 
@@ -487,6 +502,164 @@ pub fn cancel_analysis(state: State<'_, AppState>) {
     state
         .analysis_stop
         .store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// The files whose passages are not all searchable by meaning yet, with their counts: one grouped query. The
+/// listing marks exactly these. Nothing is computed.
+#[tauri::command]
+pub fn vector_share_by_file(
+    app: AppHandle,
+) -> Result<Vec<crate::index_store::FileVectorShare>, AppError> {
+    open_index(&app)?.incomplete_vector_shares()
+}
+
+/// The user's own business types (`file_profile::user_types`): the list, one saved, one forgotten, and the cheap
+/// re-evaluation of the stored profiles that follows a change. None of them reads a file.
+#[tauri::command]
+pub fn user_types_list(
+    app: AppHandle,
+) -> Result<Vec<file_profile::user_types::UserType>, AppError> {
+    let index = open_index(&app)?;
+    file_profile::user_types::list(index.connection())
+}
+
+#[tauri::command]
+pub fn user_type_save(
+    app: AppHandle,
+    user_type: file_profile::user_types::UserType,
+) -> Result<(), AppError> {
+    let index = open_index(&app)?;
+    file_profile::user_types::save(index.connection(), &user_type)
+}
+
+#[tauri::command]
+pub fn user_type_delete(app: AppHandle, code: String) -> Result<bool, AppError> {
+    let index = open_index(&app)?;
+    file_profile::user_types::delete(index.connection(), &code)
+}
+
+#[tauri::command]
+pub fn user_types_reevaluate(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<file_profile::user_types::Reevaluation, AppError> {
+    let pack_ids = state.read(|settings| settings.knowledge_pack_ids())?;
+    let ids: Vec<&str> = pack_ids.iter().map(String::as_str).collect();
+    let index = open_index(&app)?;
+    let vocabulary = file_profile::user_types::with_stored_types(
+        file_profile::vocabulary::ProfileVocabulary::load(&ids)?,
+        index.connection(),
+    );
+    file_profile::user_types::reevaluate(index.connection(), &vocabulary)
+}
+
+/// What a stage of summaries would do for one document, read before anything is started: how many units, how
+/// many are already written, and how long the rest is expected to take on this machine.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SummaryPlan {
+    pub total: usize,
+    pub done: usize,
+    pub remaining: usize,
+    pub estimated_seconds: f64,
+    pub stale: bool,
+    pub reads_everything: bool,
+    pub complete: bool,
+}
+
+/// One cheap look at the index; no model is called. The interface shows this before the user starts a stage.
+#[tauri::command]
+pub fn summary_plan(
+    app: AppHandle,
+    relative_path: String,
+    stage: summaries::Stage,
+) -> Result<SummaryPlan, AppError> {
+    let index = open_index(&app)?;
+    let status = summaries::status(&index, &relative_path, stage)?;
+    let remaining = status.total.saturating_sub(status.done);
+    Ok(SummaryPlan {
+        total: status.total,
+        done: status.done,
+        remaining,
+        estimated_seconds: summaries::estimate_seconds(remaining, summaries::stored_speed(&index)?),
+        stale: status.stale,
+        reads_everything: status.reads_everything,
+        complete: status.complete,
+    })
+}
+
+/// Write the summaries a stage still lacks, started by hand. Each unit is one model call; the run can be
+/// stopped at once (`cancel_summary`) and goes on from what it kept the next time.
+#[tauri::command]
+pub async fn run_summary(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    relative_path: String,
+    stage: summaries::Stage,
+    on_progress: Channel<summaries::SummaryProgress>,
+) -> Result<summaries::SummaryRun, AppError> {
+    let stop_signal = state.cancellation.begin();
+    let (server_url, model_alias, locale, idle_timeout) = state.read(|settings| {
+        (
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.locale.clone(),
+            settings.answer_idle_timeout(),
+        )
+    })?;
+    let mut index = open_index(&app)?;
+    let gateway = &state.gateway;
+    summaries::run(
+        &mut index,
+        &relative_path,
+        stage,
+        |prompt: String| {
+            let mut signal = stop_signal.clone();
+            let server_url = server_url.clone();
+            let model_alias = model_alias.clone();
+            let locale = locale.clone();
+            async move {
+                let turns = [ChatTurn {
+                    role: "user".to_string(),
+                    content: prompt,
+                }];
+                until_stopped(
+                    &mut signal,
+                    gateway.chat_at(
+                        &server_url,
+                        &model_alias,
+                        locale.as_deref(),
+                        &turns,
+                        idle_timeout,
+                        Some(GROUNDED_TEMPERATURE),
+                        |_| {},
+                    ),
+                )
+                .await
+            }
+        },
+        || *stop_signal.borrow(),
+        |progress| {
+            let _ = on_progress.send(progress);
+        },
+    )
+    .await
+}
+
+/// The summaries stored for a document as it is now.
+#[tauri::command]
+pub fn read_summaries(
+    app: AppHandle,
+    relative_path: String,
+) -> Result<Vec<summaries::StoredSummary>, AppError> {
+    let index = open_index(&app)?;
+    summaries::read_all(&index, &relative_path)
+}
+
+/// Stop the summaries being written. What was finished is kept.
+#[tauri::command]
+pub fn cancel_summary(state: State<'_, AppState>) {
+    state.cancellation.cancel();
 }
 
 /// How many passages have their meaning vector, out of all of them: one cheap count, so the card can
@@ -832,6 +1005,11 @@ pub struct AskAnswer {
     /// supported. Reported beside the answer, never edited into it (`number_check`; approved by the
     /// owner on 5 October 2026 after a small model invented a printer price).
     pub unverified_numbers: Vec<String>,
+    /// What the answer quotes between guillemets that is in none of the excerpts, as written (`quotation`,
+    /// retrieval-quality lot E). Reported beside the answer, never edited into it.
+    pub unverified_quotes: Vec<String>,
+    /// The passage numbers the answer cites (`[7]`) that name no excerpt it was given.
+    pub unknown_citations: Vec<u32>,
     /// A letter was asked for and everything it needs was found: the plan the user approves before
     /// anything is written (`fill_plan`). `answer` is then empty; nothing was generated by a model.
     pub fill_plan: Option<fill_plan::FillPlan>,
@@ -1837,6 +2015,8 @@ async fn sourced_answer(
                 documents_not_needed: false,
                 mixed_answer: None,
                 unverified_numbers: Vec::new(),
+                unverified_quotes: Vec::new(),
+                unknown_citations: Vec::new(),
                 fill_plan: None,
                 diagnostics: None,
                 targeting: None,
@@ -1894,6 +2074,8 @@ async fn sourced_answer(
                 documents_not_needed: false,
                 mixed_answer: None,
                 unverified_numbers: Vec::new(),
+                unverified_quotes: Vec::new(),
+                unknown_citations: Vec::new(),
                 fill_plan: None,
                 diagnostics: None,
                 targeting: None,
@@ -1942,6 +2124,8 @@ async fn sourced_answer(
             documents_not_needed: false,
             mixed_answer: None,
             unverified_numbers: Vec::new(),
+            unverified_quotes: Vec::new(),
+            unknown_citations: Vec::new(),
             fill_plan: None,
             diagnostics: None,
             targeting: None,
@@ -1999,6 +2183,15 @@ async fn sourced_answer(
     // model below read the question as she wrote it.
     let search_text = conversation::retrieval_query(&question, &history);
     stage.lap_ms();
+    // A question about a name or a code that no document holds has nothing to be answered from: say so now,
+    // with no embedding and no model. Only for a search of the whole selection (a named file is the user's
+    // own choice).
+    if crate::assembly::assembly_options().refusal && matches!(plan, Plan::WholeFolder) {
+        if let crate::refusal::Verdict::Unknown(_) = crate::refusal::check(&index, &question)? {
+            measured.refusal = Some("unknown_terms");
+            return Err(AppError::InsufficientEvidence);
+        }
+    }
     let query_vectors = state
         .gateway
         .embed(
@@ -2017,7 +2210,25 @@ async fn sourced_answer(
         .iter()
         .map(|file| file.relative_path.clone())
         .collect();
-    let searched = targeting::search_documents_within(
+    // How much of the folder this model can read: the excerpts follow its window.
+    let limits = retrieval::RetrievalLimits::for_budget(&writer.budget);
+    // A reranker reads the first candidates with the question and keeps the best: the search then hands it
+    // more than the model can read. Not for a question about every document (one passage each).
+    let reranker_takes = state
+        .rerank_documents
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let rerank = crate::assembly::assembly_options().rerank
+        && reranker_takes > 0
+        && !matches!(plan, Plan::EveryDocument(_));
+    let search_limits = match rerank {
+        true => {
+            let mut wide = retrieval::limits_for_rerank(limits);
+            wide.max_chunks = wide.max_chunks.min(reranker_takes);
+            wide
+        }
+        false => limits,
+    };
+    let mut searched = targeting::search_documents_within(
         &index,
         &targeting_plan,
         match &plan {
@@ -2033,10 +2244,31 @@ async fn sourced_answer(
         },
         &search_text,
         &query_embedding,
-        // How much of the folder this model can read: the excerpts follow its window.
-        retrieval::RetrievalLimits::for_budget(&writer.budget),
+        search_limits,
     )?;
     measured.search_ms = stage.lap_ms();
+    if rerank && !searched.outcome.evidence.is_empty() {
+        let candidates = std::mem::take(&mut searched.outcome.evidence);
+        let texts: Vec<String> = candidates.iter().map(|item| item.text.clone()).collect();
+        let ranking: Vec<(usize, f32)> = match state
+            .gateway
+            .rerank(&server_url, &search_text, &texts)
+            .await
+        {
+            Ok(ranking) => {
+                measured.rerank = Some("reranked");
+                ranking.iter().map(|item| (item.index, item.score)).collect()
+            }
+            // The service is down, or the gateway has none after all: the order of the search stays,
+            // cut to the budget. The answer is never blocked by a missing refinement.
+            Err(_) => {
+                measured.rerank = Some("failed");
+                Vec::new()
+            }
+        };
+        searched.outcome.evidence = retrieval::cut_after_rerank(candidates, &ranking, limits);
+        measured.rerank_ms = stage.lap_ms();
+    }
     targeting::note_documents(&index, &targeting_plan, &searched, measured);
     let targeting_report = targeting_plan.report(searched.widened);
     let found = searched.outcome;
@@ -2094,7 +2326,7 @@ async fn sourced_answer(
     let grounding = format!(
         "{}\n{}",
         work_folder_context::build_system_turn(retrieval::RETRIEVAL_INSTRUCTION, &folder_context),
-        retrieval::format_evidence(&evidence)
+        retrieval::format_evidence(&retrieval::ordered_for_model(&evidence))
     );
     // Sources outrank memory (BUG-09): beside excerpts, a small window remembers fewer and shorter
     // earlier exchanges (`conversation::history_beside_sources`).
@@ -2123,6 +2355,9 @@ async fn sourced_answer(
     let pages: Vec<u32> = retrieval::cited_pages(&evidence);
     let unverified_numbers =
         number_check::unsupported_numbers_with_pages(&answer, &known, &pages, 2);
+    // What is quoted must be in an excerpt, and a cited passage number must exist (lot E).
+    let unverified_quotes = quotation::unverified_quotations(&answer, &known, 4);
+    let unknown_citations = quotation::unknown_passage_numbers(&answer, evidence.len());
 
     Ok(AskAnswer {
         answer,
@@ -2136,6 +2371,8 @@ async fn sourced_answer(
         documents_not_needed: false,
         mixed_answer: None,
         unverified_numbers,
+        unverified_quotes,
+        unknown_citations,
         fill_plan: None,
         diagnostics: None,
         targeting: targeting_report,
@@ -2241,6 +2478,8 @@ async fn tabular_tier(
         documents_not_needed: false,
         mixed_answer: None,
         unverified_numbers: Vec::new(),
+        unverified_quotes: Vec::new(),
+        unknown_citations: Vec::new(),
         fill_plan: None,
         diagnostics: None,
         targeting: targeting_plan.report(false),
@@ -2355,6 +2594,8 @@ async fn mixed_data_only_tier(
         documents_not_needed: true,
         mixed_answer: None,
         unverified_numbers: Vec::new(),
+        unverified_quotes: Vec::new(),
+        unknown_citations: Vec::new(),
         fill_plan: None,
         diagnostics: None,
         targeting: targeting_plan.report(false),
@@ -2504,6 +2745,8 @@ fn mixed_folder_tier(
         documents_not_needed: false,
         mixed_answer: None,
         unverified_numbers: Vec::new(),
+        unverified_quotes: Vec::new(),
+        unknown_citations: Vec::new(),
         fill_plan: None,
         diagnostics: None,
         targeting: None,
@@ -2582,6 +2825,8 @@ fn fill_tier(
         documents_not_needed: false,
         mixed_answer: None,
         unverified_numbers: Vec::new(),
+        unverified_quotes: Vec::new(),
+        unknown_citations: Vec::new(),
         fill_plan: Some(plan),
         diagnostics: None,
         targeting: None,
@@ -2930,6 +3175,8 @@ async fn mixed_tier(
         documents_not_needed: false,
         mixed_answer: Some(result),
         unverified_numbers: Vec::new(),
+        unverified_quotes: Vec::new(),
+        unknown_citations: Vec::new(),
         fill_plan: None,
         diagnostics: None,
         targeting: targeting_report,
@@ -3068,6 +3315,8 @@ mod answer_shape_tests {
             documents_not_needed: false,
             mixed_answer: None,
             unverified_numbers: Vec::new(),
+            unverified_quotes: Vec::new(),
+            unknown_citations: Vec::new(),
             fill_plan: None,
             diagnostics: None,
             targeting: None,

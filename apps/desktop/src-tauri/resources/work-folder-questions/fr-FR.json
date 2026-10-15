@@ -583,6 +583,30 @@
           "analyses"
         ],
         "kind": "lab_result"
+      },
+      {
+        "words": [
+          "section"
+        ],
+        "kind": "section"
+      },
+      {
+        "words": [
+          "sections"
+        ],
+        "kind": "section"
+      },
+      {
+        "words": [
+          "chapitre"
+        ],
+        "kind": "section"
+      },
+      {
+        "words": [
+          "chapitres"
+        ],
+        "kind": "section"
       }
     ],
     "linkers": [

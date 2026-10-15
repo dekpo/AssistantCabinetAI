@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from .api import chat, embeddings, health, models
+from .api import chat, embeddings, health, models, rerank
 from .core.config import Settings, get_settings
 from .core.errors import ErrorCode, GatewayError
 from .core.locales import LocaleCatalogue
@@ -21,6 +21,7 @@ from .core.no_store import NoStoreMiddleware, configure_logging
 from .core.register import RequestRegister
 from .providers import AIProvider
 from .providers.ollama import OllamaProvider
+from .providers.tei import TeiReranker
 
 
 def create_app(*, settings: Settings | None = None, provider: AIProvider | None = None) -> FastAPI:
@@ -37,6 +38,14 @@ def create_app(*, settings: Settings | None = None, provider: AIProvider | None 
             request_timeout_seconds=settings.llm_request_timeout_seconds,
             health_timeout_seconds=settings.llm_health_timeout_seconds,
             think=settings.llm_think,
+            reranker=(
+                TeiReranker(
+                    settings.rerank_base_url,
+                    request_timeout_seconds=settings.rerank_timeout_seconds,
+                )
+                if settings.rerank_base_url
+                else None
+            ),
         )
         try:
             yield
@@ -56,6 +65,7 @@ def create_app(*, settings: Settings | None = None, provider: AIProvider | None 
     app.include_router(models.router)
     app.include_router(chat.router)
     app.include_router(embeddings.router)
+    app.include_router(rerank.router)
 
     @app.exception_handler(GatewayError)
     async def handle_gateway_error(_: Request, error: GatewayError) -> JSONResponse:

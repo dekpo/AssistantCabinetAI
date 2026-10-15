@@ -256,6 +256,9 @@ pub enum FolderAnswer {
         /// X is the name of exactly one entity of the knowledge base: its canonical name. The files linked
         /// to it are listed with the files that write its surfaces.
         entity: Option<String>,
+        /// The question asked for sections ("which sections talk about X"): each file is listed with the
+        /// sections where the word is, from the index, with no model.
+        by_section: bool,
         total: usize,
         listed: Vec<DocumentListing>,
         others: Vec<String>,
@@ -386,7 +389,15 @@ pub fn route(
         }
         // "What is the latest letter" is a ranking of the inventory, not a question about content.
         if let (Some(rank), Some(set)) = (pack.rank_question.as_ref(), pack.set_question.as_ref()) {
-            if let Some(asked) = rank.parse(question, &set.nouns) {
+            // "the last chapter" is not a ranking of the inventory: the nouns that ask for sections are
+            // for the set sentence only.
+            let kinds_of_paper: Vec<_> = set
+                .nouns
+                .iter()
+                .filter(|noun| noun.kind.as_deref() != Some(crate::finder::contracts::SECTION_KIND))
+                .cloned()
+                .collect();
+            if let Some(asked) = rank.parse(question, &kinds_of_paper) {
                 return QuestionRoute::Deterministic(crate::finder::rank::answer(
                     inventory,
                     &asked,

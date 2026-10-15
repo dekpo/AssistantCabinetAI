@@ -1906,3 +1906,204 @@ body {
 .picker__item .picker__name {
   flex: 1 1 auto;
 }
+
+/* « Passages trouvés »: above the answer, the words of the question marked. */
+.found {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  font-size: 0.85em;
+}
+
+.found__title {
+  font-weight: 600;
+}
+
+.found__documents,
+.found__passages {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.found__document + .found__document {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #ddd);
+}
+
+.found__file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.found__path {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.found__passage {
+  margin: 4px 0 0 10px;
+}
+
+.found__where {
+  display: block;
+  color: var(--text-quiet);
+}
+
+.found__snippet {
+  display: block;
+  quotes: none;
+  overflow-wrap: anywhere;
+}
+
+.found__snippet mark {
+  background: var(--mark, #fff1a8);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.found__others {
+  margin-top: 8px;
+}
+
+/* Summaries of one document, opened from the passages found. */
+.found__buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.summary {
+  margin: 8px 0 0 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--border, #ddd);
+}
+
+.summary__title,
+.summary__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.summary__help,
+.summary__state,
+.summary__result {
+  margin: 2px 0;
+  color: var(--text-quiet);
+}
+
+.summary__stage {
+  margin-top: 8px;
+}
+
+.summary__running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary__list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary__item {
+  margin: 4px 0;
+}
+
+.summary__where {
+  display: block;
+  color: var(--text-quiet);
+}
+
+/* The chips over the facets of a search, and the dialog of the user's own document types. */
+.finder__filters {
+  margin: 6px 0 0;
+}
+
+.finder__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0;
+  font-size: 0.85em;
+}
+
+.finder__group-name {
+  color: var(--text-quiet);
+  margin-right: 2px;
+}
+
+.finder__chip {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.finder__chip--active {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: #fff;
+}
+
+.business-types {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+}
+
+.business-types__list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.business-types__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.business-types__label {
+  flex: 1;
+  font-weight: 600;
+}
+
+.business-types__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.business-types__problem {
+  margin: 0;
+  color: var(--danger, #b91c1c);
+}
+
+.business-types__result,
+.business-types__none {
+  color: var(--text-quiet);
+}
+
+.inventory__meaning {
+  margin-left: 6px;
+  color: var(--text-quiet);
+  font-size: 0.85em;
+  white-space: nowrap;
+}

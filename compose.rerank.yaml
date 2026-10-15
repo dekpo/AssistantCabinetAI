@@ -1,0 +1,38 @@
+# Optional: a reranker service. A cross-encoder reads each candidate passage together with the question and says
+# how well it answers it; the gateway offers it to the desktop as POST /v1/rerank (docs/RETRIEVAL-QUALITY.md,
+# lot D). Not part of the default stack: a machine without it simply does not add this file.
+#
+# Enable it with COMPOSE_FILE in `.env` (docs/INSTALL-SERVER.md, "The reranker"):
+#   Windows: COMPOSE_FILE=compose.yaml;compose.gpu.yaml;compose.rerank.yaml;compose.rerank-gpu.yaml
+#   (macOS / Linux: the same with : as the separator; drop the two gpu files on a machine without a GPU)
+# and choose the image for the machine:
+#   RERANK_IMAGE_TAG=cpu-1.9    any machine (slower)
+#   RERANK_IMAGE_TAG=120-1.9    an NVIDIA RTX 50 card (Blackwell, "experimental" upstream)
+#   RERANK_IMAGE_TAG=89-1.9     an RTX 40 card;  86-1.9 an RTX 30 card
+#
+# The model is downloaded from the model hub the first time the service starts (about 2.3 GB) and kept in
+# a Docker volume (not a folder of the machine: the download of the 2.3 GB weights failed with "Cannot allocate memory"
+# on a Windows bind mount, 15 October 2026); nothing is sent to it but the passages, on the internal network, and it is not published.
+# Weights: BAAI/bge-reranker-v2-m3 (Apache 2.0, models/LICENSES.md). Service: Text Embeddings Inference
+# (Apache 2.0).
+
+services:
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:${RERANK_IMAGE_TAG:-cpu-1.9}
+    container_name: assistant-cabinet-reranker
+    restart: unless-stopped
+    command: ["--model-id", "${RERANK_MODEL_ID:-BAAI/bge-reranker-v2-m3}"]
+    volumes:
+      - reranker-data:/data
+    networks:
+      - cabinet
+
+  server:
+    environment:
+      RERANK_BASE_URL: http://reranker:80
+    depends_on:
+      reranker:
+        condition: service_started
+
+volumes:
+  reranker-data:

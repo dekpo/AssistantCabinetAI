@@ -5,6 +5,7 @@
 //! commands registered below.
 
 pub mod analysis_scope;
+pub mod assembly;
 pub mod cancellation;
 pub mod cards;
 pub mod chunking;
@@ -28,15 +29,19 @@ pub mod index_store;
 pub mod indexing;
 pub mod inventory;
 pub mod knowledge;
+pub mod lexical;
 pub mod mixed_answer;
 pub mod number_check;
 pub mod ocr;
 pub mod ocr_resume;
 pub mod raster;
+pub mod quotation;
+pub mod refusal;
 pub mod retrieval;
 pub mod reveal;
 mod settings;
 pub mod structure;
+pub mod summaries;
 pub mod tabular;
 pub mod tabular_answer;
 pub mod template_fill;
@@ -98,6 +103,15 @@ pub fn run() {
             commands::has_indexed_documents,
             commands::profile_index_status,
             commands::cancel_analysis,
+            commands::summary_plan,
+            commands::run_summary,
+            commands::read_summaries,
+            commands::cancel_summary,
+            commands::vector_share_by_file,
+            commands::user_types_list,
+            commands::user_type_save,
+            commands::user_type_delete,
+            commands::user_types_reevaluate,
             commands::vector_share,
             commands::find_files,
             commands::work_folder_inventory,

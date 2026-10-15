@@ -622,7 +622,25 @@ pub fn note_documents(
         ),
         None => Default::default(),
     };
-    set_targeting(plan, searched.widened, shadow.into(), cited.len(), measured);
+    let mut shadow: ShadowDiagnostics = shadow.into();
+    // What a reduction by passage would have kept of the passages that were cited: measured, never applied.
+    if let Some(analysis) = &plan.analysis {
+        let entities: Vec<i64> = analysis.every_entity_id().into_iter().collect();
+        if !entities.is_empty() {
+            let passages: Vec<String> = searched
+                .outcome
+                .evidence
+                .iter()
+                .map(|item| item.chunk_id.clone())
+                .collect();
+            shadow.passages_cited = passages.len();
+            shadow.passages_with_mention =
+                super::store::chunk_ids_mentioning(index.connection(), &entities, &passages)
+                    .map(|found| found.len())
+                    .unwrap_or(0);
+        }
+    }
+    set_targeting(plan, searched.widened, shadow, cited.len(), measured);
 }
 
 /// The same for the workbook side: the workbook that answered is the one cited.
@@ -712,6 +730,8 @@ impl From<super::reduce::ShadowComparison> for ShadowDiagnostics {
             miss_no_mention: comparison.miss_no_mention,
             miss_capped: comparison.miss_capped,
             miss_entity_not_resolved: comparison.miss_entity_not_resolved,
+            passages_cited: 0,
+            passages_with_mention: 0,
         }
     }
 }

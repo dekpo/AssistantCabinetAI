@@ -72,7 +72,27 @@ class EmbeddingRegisterEntry(BaseModel):
     outcome: str
 
 
-Entry = RegisterEntry | EmbeddingRegisterEntry
+class RerankRegisterEntry(BaseModel):
+    """What was put in order, never what it said: counts and one hash of the texts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    event: ClassVar[str] = "rerank"
+
+    request_id: str
+    actor: str
+    started_at: datetime
+    duration_ms: int
+    query_chars: int
+    document_count: int
+    input_chars: int
+    inputs_sha256: str
+    result_count: int
+    #: `completed`, or the machine error code that ended the request.
+    outcome: str
+
+
+Entry = RegisterEntry | EmbeddingRegisterEntry | RerankRegisterEntry
 
 
 class RequestRegister:
@@ -122,6 +142,32 @@ def build_entry(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         thinking_chars=thinking_chars,
+        outcome=outcome,
+    )
+
+
+def build_rerank_entry(
+    *,
+    request_id: str,
+    actor: str,
+    started_at: datetime,
+    query: str,
+    documents: Sequence[str],
+    result_count: int,
+    outcome: str,
+) -> RerankRegisterEntry:
+    """Turn a finished rerank request into metadata. The texts leave as counts and one hash."""
+    duration_ms = int((datetime.now(tz=UTC) - started_at).total_seconds() * 1000)
+    return RerankRegisterEntry(
+        request_id=request_id,
+        actor=actor,
+        started_at=started_at,
+        duration_ms=duration_ms,
+        query_chars=len(query),
+        document_count=len(documents),
+        input_chars=sum(len(text) for text in documents),
+        inputs_sha256=sha256_text("\n".join([query, *documents])),
+        result_count=result_count,
         outcome=outcome,
     )
 

@@ -1223,3 +1223,34 @@ Built, to confirm:
 | User-defined business types | Manual rows in `file_profile_user_types`, written by no Analyse and kept by a folder's Reset; every code starts with `user_` and the label is the row's. A user type is specific, weighed by the rules of `types.rs`. The vocabulary hash includes them, so the next Analyse builds the profiles again. **Re-evaluating** reads the stored profile only (name, title, header words, sheet and column names; not the body, which the profile does not keep) and never a file: a shipped type changes only when a user type beats it under the same rules. The editing screen and the commands are built in tab 3 |
 | The user's own names | A settings key `ownNames` (a list), edited in `settings.json` until the dialog gets its « Avancé » group, cleaned on save. They enter `ProfileVocabulary::with_user_names` at every Analyse, and the vocabulary hash, so a property that holds one of them never makes the user the author of a file and the profiles are built again when the list changes. **Kept on purpose, to be used soon (owner, 14 October 2026):** the product will have several client workstations on one network and an authentication on the server, so that conversations can be saved per user. The authenticated user's name is then the natural source of this list, per workstation, so that **the user's own name is taken out of the entities and out of the search** (today the list only stops a property from making her the author of a file; it does not yet remove her from the knowledge base's entities nor from the search, which is the step to build with the authentication). Do not remove this setting |
 | Test `a_refusal_of_the_request_itself_is_never_retried` | Its replies were immediate yet it ran under the 250 ms embedding deadline: on a loaded machine the deadline passed before the reply was read, the refusal became a timeout and was retried. It, and the sibling that retries an unavailable server, now run under the 10 s deadline; a deadline is only short in the tests that test it |
+
+## Settled for long documents and the two-speed Analyse (14 October 2026)
+
+Owner answers, in the work of `docs/SESSION-LD-2-INGESTION.md` (figures and reasoning: `docs/LONG-DOCUMENTS.md`):
+
+| Subject | Decision |
+| --- | --- |
+| The "long" threshold | More than **60 000 characters** of extracted text, whatever the format (owner, decision 1). Below it the chunker is today's, byte for byte (golden test of 146 documents) |
+| An index from before | Detected by one lookup, left untouched until « Analyser »; the Analyse upgrades the layout **inside the pass**, copying passages and vectors as they are, and reads again a document only if its structure or chunker version is older, reusing the vectors of unchanged passages (owner, decision 2) |
+| Progress display | Two lines during the pass, « Lecture des documents » then « Recherche par sens : x % »; on the card only while below 100 % (owner, decision 3) |
+| Chunk size | **1200 characters, no overlap, no context prefix** for documents above the threshold, chosen on the real-model grid (owner, decision 4). The overlap did not raise any channel and cost Analyse time; 800 and 1600 were not better; the prefix lowered the meaning-based channels |
+| PDF outline | `lopdf` with our own walk of the tree (owner, decision 5); `Document::get_toc` loses repeated titles and garbles accents |
+| Readers postponed on 13 October (ODT, RTF, EML, VTT, ODP, PPTX, ODS) | Stay postponed (owner, decision 6) |
+| Cleaning of short documents (headers and footers, cut words) | **Not done** for now, so that they stay byte-identical (owner) |
+
+Built, to confirm:
+
+| Subject | Decision |
+| --- | --- |
+| Where a vector may be absent | `chunks.embedding` is nullable in an index made by this version (NULL, never an empty blob); a document's structure, prefixes and cards live in additive tables (`doc_structure`, `doc_sections`, `chunk_sections`, `chunk_index_text`, `document_cards`, `ocr_page_cache`, `kb_source_truncated`, two profile tables) |
+| Order of the pass | Phase 1 for every file (text, word index, structure, names), then the knowledge-base backfill and the profiles, then the cards, then phase 2 (the cards' vectors first, then the passages', 16 at a time and 20 000 characters, one transaction a batch). A stop is honoured between files, batches and scanned pages; the next pass reads nothing again |
+| A file the server refuses | Its text stays in the index (searchable by words, its names kept); only its vectors wait. A failing batch is replayed file by file to find the file; three refused files in a row, or a server that is gone, stop the pass with the gateway's own error, everything kept. This replaces "a failed file leaves no trace" (9 tests rewritten) |
+| An extraction error | Names the file (`extraction_failed`) and the pass goes on; it used to abort the whole pass |
+| A scan | Each recognised page is kept in `ocr_page_cache` (ten pages a write) and used by the next pass; dropped when the document is stored or the file changes |
+| Document cards | One per document, built with no model after the profiles; fixed English labels; **not a passage** (own table, own word index, own vector); embedded first. Their type, date and roles come from the profile |
+| Locator | `Evidence.ordinal` (rank inside the page) and `Evidence.section` (title and pages); the finder's `Locator { page, ordinal, sectionLabel }`; a passage belongs to the section in effect where it starts. A hit also carries its places (at most 20) and the number of matching passages; the set answer lists the pages |
+| Ranking | Reads the vectors of the scope one row at a time and the text of the few kept; same scores and order as before (parity test, 360 comparisons). The restriction of vector scoring to other channels' candidates and int8 vectors were **not** applied: not needed at 100 000 passages (755 ms, 9 MB) |
+| Embedding model | Recorded with its dimension; a pass with another model, or vectors of another length under the same name, recomputes every vector in the pass; a search whose question has another length than the stored vectors returns `mismatched_chunks` instead of comparing silently |
+| Knowledge-base caps | Half as many names and five times as many mentions as passages, floors 500 and 5 000, ceilings 20 000 and 100 000; a source over its cap is marked and the entity sheet says so |
+| Extraction and the executor | `block_in_place` on the multi-threaded runtime (borrowed ports cannot move into `spawn_blocking`), inline on a current-thread runtime |
+

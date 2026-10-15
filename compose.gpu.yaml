@@ -1,0 +1,16 @@
+# Optional: give Ollama the NVIDIA GPU. Not part of the default stack, so a machine without a GPU (or a
+# Mac) is not affected. Enable it with COMPOSE_FILE in `.env` (docs/INSTALL-SERVER.md, "The GPU"):
+#   Windows: COMPOSE_FILE=compose.yaml;compose.gpu.yaml
+#   macOS / Linux: COMPOSE_FILE=compose.yaml:compose.gpu.yaml
+# Needs a recent NVIDIA driver on the host and Docker Desktop with the WSL 2 backend (Windows), or the
+# NVIDIA Container Toolkit (Linux). Check with: docker exec assistant-cabinet-ollama nvidia-smi
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

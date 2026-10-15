@@ -119,3 +119,42 @@ async fn the_places_are_capped_and_the_total_still_counts_them_all() {
     );
     assert!(hit.locators_total > 20, "{}", hit.locators_total);
 }
+
+#[tokio::test]
+async fn a_place_over_a_page_break_says_where_it_ends_and_the_others_end_where_they_start() {
+    let mut lab = Lab::new();
+    lab.write("book.md", &book(4, 40));
+    lab.write("note.txt", "A note about the kingfisher and nothing else.");
+    lab.analyse().await;
+    let id = lab
+        .index
+        .chunks_for_document("note.txt")
+        .unwrap()
+        .remove(0)
+        .chunk_id;
+    lab.side()
+        .execute(
+            "INSERT INTO chunk_pages (chunk_id, relative_path, last_page) VALUES (?1, 'note.txt', 7)",
+            [&id],
+        )
+        .unwrap();
+
+    let result = ask(&lab, "kingfisher");
+    let note = result
+        .files
+        .iter()
+        .find(|h| h.relative_path == "note.txt")
+        .unwrap();
+    assert_eq!(note.locators[0].page, Some(1));
+    assert_eq!(note.locators[0].last_page, Some(7));
+    assert_eq!(note.locator.as_ref().unwrap().last_page, Some(7));
+
+    let book = result
+        .files
+        .iter()
+        .find(|h| h.relative_path == "book.md")
+        .unwrap();
+    for place in &book.locators {
+        assert_eq!(place.last_page, place.page, "no break, no range");
+    }
+}

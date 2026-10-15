@@ -79,7 +79,13 @@ def score_question(results: list[dict], relevant: set[str], facts_expected: bool
             figures[f"fact@{k}"] = 1.0 if any(p.get("fact") and p["path"] in relevant for p in results[:k]) else 0.0
         if fact_pages:
             # the passage carries the fact AND sits on the page the ground truth gives (PDF; a DOCX is one page)
-            figures["page@10"] = 1.0 if any(p.get("fact") and p["path"] in relevant and p["page"] in fact_pages for p in results[:10]) else 0.0
+            # A passage that runs over a page break covers every page from where it starts to where it ends
+            # (`last_page`; absent in older runs, then the page where it starts is the only one).
+            figures["page@10"] = 1.0 if any(
+                p.get("fact") and p["path"] in relevant
+                and any(p["page"] <= fact_page <= p.get("last_page", p["page"]) for fact_page in fact_pages)
+                for p in results[:10]
+            ) else 0.0
         if fact_sections and any("section_label" in p for p in results):
             # the passage carries the fact AND names the document section the ground truth gives; scored only
             # when the retrieval reports section labels (the product does not before the structure work)

@@ -26,10 +26,13 @@ export function groupSources(sources: Evidence[]): SourceGroup[] {
       sections: [],
       ocr: false,
     };
-    if (!group.pages.includes(source.pageNumber)) {
-      group.pages.push(source.pageNumber);
-      group.pages.sort((a, b) => a - b);
+    // Every page the passage covers: one that runs over a page break is cited on both.
+    for (let page = source.pageNumber; page <= (source.lastPage ?? source.pageNumber); page += 1) {
+      if (!group.pages.includes(page)) {
+        group.pages.push(page);
+      }
     }
+    group.pages.sort((a, b) => a - b);
     const title = source.section?.title;
     if (title !== undefined && title !== "" && !group.sections.includes(title)) {
       group.sections.push(title);

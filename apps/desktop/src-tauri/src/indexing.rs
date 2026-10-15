@@ -582,6 +582,7 @@ pub async fn run_cancellable(
                             structure::Structure {
                                 sections,
                                 chunk_sections: cut.owners,
+                                chunk_ends: cut.ends,
                             },
                         )
                     } else {
@@ -592,6 +593,7 @@ pub async fn run_cancellable(
                             structure::Structure {
                                 sections,
                                 chunk_sections,
+                                chunk_ends: Vec::new(),
                             },
                         )
                     }

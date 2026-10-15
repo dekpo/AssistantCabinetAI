@@ -137,6 +137,9 @@ pub struct FileCard {
 #[serde(rename_all = "camelCase")]
 pub struct Locator {
     pub page: Option<i64>,
+    /// The page where the passage ends: past `page` when a table, a list or a sentence runs over a page
+    /// break, the same as `page` otherwise.
+    pub last_page: Option<i64>,
     /// The passage's rank inside its page (what this field used to be called "section").
     pub ordinal: Option<i64>,
     /// The title of the section of the document the passage starts in, when the document has a

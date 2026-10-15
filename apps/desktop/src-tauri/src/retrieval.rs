@@ -3,10 +3,14 @@
 //! (`docs/RETRIEVAL.md`).
 
 use serde::Serialize;
+use unicode_normalization::char::is_combining_mark;
 
 use crate::conversation::ContextBudget;
 use crate::extraction::PageOrigin;
-use crate::index_store::{cosine_similarity_with_norm, query_norm, IndexStore, LexicalHit};
+use crate::index_store::{
+    cosine_similarity_with_norm, lexical_words, query_norm, IndexStore, LexicalHit,
+};
+use crate::knowledge::normalize::fold_word;
 
 /// How many excerpts an answer may cite at most, for a model whose window is the baseline
 /// (`ContextBudget::DEFAULT`) or smaller. A larger window raises it (`RetrievalLimits`).
@@ -67,12 +71,117 @@ pub struct Evidence {
     /// The passage's rank inside its page (1, 2, ...): what tells two passages of one page apart. Not a
     /// section of the document; that is `section`.
     pub ordinal: u32,
+    /// The page where the passage ends. Equal to `page_number` for nearly every passage; larger when a
+    /// table, a list or a sentence runs over a page break, so a fact after the break is cited on the
+    /// page it is on.
+    pub last_page: u32,
     /// The section of the document the passage starts in, when the document has a structure.
     pub section: Option<EvidenceSection>,
+    /// Where the words of the question stand in `text`. Empty for a passage found by meaning alone.
+    pub matches: Vec<MatchSpan>,
     pub text: String,
     pub score: f32,
     pub origin: PageOrigin,
     pub confidence: Option<f32>,
+}
+
+/// A word of the question found in a passage: character offsets (Unicode scalar values, not bytes),
+/// `end` exclusive.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// The words of `text`: maximal runs of letters and digits (a combining accent belongs to its letter),
+/// each with its character offsets and its folded form (case, accents and ligatures removed, the form
+/// the full-text index compares).
+fn word_runs(text: &str) -> Vec<(usize, usize, String)> {
+    let mut words = Vec::new();
+    let mut run = String::new();
+    let mut start = 0usize;
+    let mut position = 0usize;
+    for c in text.chars() {
+        if c.is_alphanumeric() || is_combining_mark(c) {
+            if run.is_empty() {
+                start = position;
+            }
+            run.push(c);
+        } else if !run.is_empty() {
+            words.push((start, position, fold_word(&run)));
+            run.clear();
+        }
+        position += 1;
+    }
+    if !run.is_empty() {
+        words.push((start, position, fold_word(&run)));
+    }
+    words
+}
+
+/// The question's words as phrases to look for in a passage: every word the word search uses (four
+/// letters or more, `index_store::lexical_words`), each alone, and every surface form of an entity the
+/// question resolved to as a phrase, whatever its length. Folded; a form that holds no word is dropped.
+pub fn query_phrases(query: &str, extra_terms: &[String]) -> Vec<Vec<String>> {
+    let mut phrases: Vec<Vec<String>> = lexical_words(query)
+        .map(|word| vec![fold_word(word)])
+        .collect();
+    for term in extra_terms {
+        let phrase: Vec<String> = word_runs(term).into_iter().map(|(_, _, w)| w).collect();
+        if !phrase.is_empty() {
+            phrases.push(phrase);
+        }
+    }
+    phrases.retain(|phrase| phrase.iter().all(|word| !word.is_empty()));
+    phrases.sort();
+    phrases.dedup();
+    phrases
+}
+
+/// The spans of `text` that hold one of the question's words (`terms`, each a phrase of one or more
+/// folded words), compared without case or accents. The longest phrase wins where two start at the
+/// same word; spans never overlap.
+pub fn match_spans(text: &str, terms: &[Vec<String>]) -> Vec<MatchSpan> {
+    if terms.is_empty() {
+        return Vec::new();
+    }
+    let words = word_runs(text);
+    let mut spans = Vec::new();
+    let mut index = 0usize;
+    while index < words.len() {
+        let longest = terms
+            .iter()
+            .filter(|phrase| {
+                !phrase.is_empty()
+                    && index + phrase.len() <= words.len()
+                    && phrase
+                        .iter()
+                        .zip(&words[index..])
+                        .all(|(wanted, (_, _, folded))| wanted == folded)
+            })
+            .map(Vec::len)
+            .max();
+        match longest {
+            Some(length) => {
+                spans.push(MatchSpan {
+                    start: words[index].0,
+                    end: words[index + length - 1].1,
+                });
+                index += length;
+            }
+            None => index += 1,
+        }
+    }
+    spans
+}
+
+/// Mark the question's words in each passage.
+fn attach_matches(evidence: &mut [Evidence], query: &str, extra_terms: &[String]) {
+    let phrases = query_phrases(query, extra_terms);
+    for item in evidence.iter_mut() {
+        item.matches = match_spans(&item.text, &phrases);
+    }
 }
 
 /// The section a passage belongs to, as the citation shows it. `title` is empty for a slice of pages
@@ -86,20 +195,29 @@ pub struct EvidenceSection {
     pub last_page: u32,
 }
 
-/// Name the section of each passage, from the structure the Analyse stored. A passage of a document
-/// with no structure keeps `None`; so does any passage if the lookup fails (a citation never depends on it).
-pub fn attach_sections(index: &IndexStore, evidence: &mut [Evidence]) {
+/// Say where each passage stands, from what the Analyse stored: the section it starts in and the page
+/// it ends on. A passage of a document with no structure keeps no section and ends on the page it
+/// starts; so does any passage if a lookup fails (a citation never depends on it).
+pub fn attach_places(index: &IndexStore, evidence: &mut [Evidence]) {
     let ids: Vec<String> = evidence.iter().map(|e| e.chunk_id.clone()).collect();
-    let Ok(found) = index.sections_of_chunks(&ids) else {
-        return;
-    };
-    for item in evidence.iter_mut() {
-        item.section = found.get(&item.chunk_id).map(|section| EvidenceSection {
-            title: section.title.clone(),
-            level: section.level,
-            first_page: section.first_page,
-            last_page: section.last_page,
-        });
+    if let Ok(found) = index.sections_of_chunks(&ids) {
+        for item in evidence.iter_mut() {
+            item.section = found.get(&item.chunk_id).map(|section| EvidenceSection {
+                title: section.title.clone(),
+                level: section.level,
+                first_page: section.first_page,
+                last_page: section.last_page,
+            });
+        }
+    }
+    if let Ok(ends) = index.last_pages_of_chunks(&ids) {
+        for item in evidence.iter_mut() {
+            item.last_page = ends
+                .get(&item.chunk_id)
+                .copied()
+                .filter(|last| *last > item.page_number)
+                .unwrap_or(item.page_number);
+        }
     }
 }
 
@@ -204,7 +322,9 @@ pub fn search_scoped_counted_with_terms(
 ) -> Result<SearchOutcome, crate::error::AppError> {
     let mut lexical_hits = lexical_hits_in(index, query_text, scope, limits)?;
     lexical_hits.extend(term_hits_in(index, extra_terms, scope, limits)?);
-    search_scoped_with_hits(index, query_embedding, scope, &lexical_hits, limits)
+    let mut found = search_scoped_with_hits(index, query_embedding, scope, &lexical_hits, limits)?;
+    attach_matches(&mut found.evidence, query_text, extra_terms);
+    Ok(found)
 }
 
 /// The lexical bonus candidates for `scope`: the best full-text matches **among the scope's own
@@ -349,14 +469,16 @@ fn search_scoped_with_hits(
             relative_path: chunk.relative_path,
             page_number: chunk.page_number,
             ordinal: chunk.section,
+            last_page: chunk.page_number,
             section: None,
+            matches: Vec::new(),
             text: chunk.text,
             score,
             origin: chunk.origin,
             confidence: chunk.confidence,
         });
     }
-    attach_sections(index, &mut selected);
+    attach_places(index, &mut selected);
     Ok(SearchOutcome {
         evidence: selected,
         chunks_considered,
@@ -471,6 +593,7 @@ pub fn search_per_document_counted_with_terms(
         selected.push(evidence);
     }
 
+    attach_matches(&mut selected, query_text, extra_terms);
     Ok(SearchOutcome {
         evidence: selected,
         chunks_considered,
@@ -496,14 +619,16 @@ fn first_chunk_of(
             relative_path: chunk.relative_path,
             page_number: chunk.page_number,
             ordinal: chunk.section,
+            last_page: chunk.page_number,
             section: None,
+            matches: Vec::new(),
             text: chunk.text,
             score: 0.0,
             origin: chunk.origin,
             confidence: chunk.confidence,
         })
         .collect();
-    attach_sections(index, &mut first);
+    attach_places(index, &mut first);
     Ok(first.pop())
 }
 
@@ -521,6 +646,15 @@ pub struct EvidenceCoverage {
     pub indexed_files: usize,
     /// Files in the folder nothing could be read from.
     pub unreadable_files: usize,
+    /// Passages of the searched documents that have no vector yet: the search by meaning did not see
+    /// them. The machine code is `partial_vectors`.
+    pub unvectorised_chunks: usize,
+    /// Passages whose vector was made by another embedding model: the search by meaning left them out.
+    /// The machine code is `embedding_mismatch`.
+    pub mismatched_chunks: usize,
+    /// The answer rests on less than the question asked for: a search by meaning that did not see every
+    /// passage, or a question about every document that the budget did not let reach every file.
+    pub partial: bool,
 }
 
 impl EvidenceCoverage {
@@ -533,8 +667,72 @@ impl EvidenceCoverage {
             files_covered: distinct.len(),
             indexed_files,
             unreadable_files,
+            unvectorised_chunks: 0,
+            mismatched_chunks: 0,
+            partial: false,
         }
     }
+
+    /// Record the state of the vectors the search met. Passages without a vector, or with the vector of
+    /// another model, were left out of the search by meaning: the answer is partial.
+    pub fn with_index_state(
+        mut self,
+        unvectorised_chunks: usize,
+        mismatched_chunks: usize,
+    ) -> Self {
+        self.unvectorised_chunks = unvectorised_chunks;
+        self.mismatched_chunks = mismatched_chunks;
+        self.partial |= unvectorised_chunks > 0 || mismatched_chunks > 0;
+        self
+    }
+
+    /// The question asked about every document: falling short of every one is a gap, not the normal
+    /// shape of a search.
+    pub fn asked_about_every_document(mut self) -> Self {
+        self.partial |= self.files_covered < self.indexed_files;
+        self
+    }
+}
+
+/// The pages the passages come from, every page of a passage that runs over a break: a correct citation
+/// of any of them is no false alarm for the check on figures in an answer.
+pub fn cited_pages(evidence: &[Evidence]) -> Vec<u32> {
+    evidence
+        .iter()
+        .flat_map(|item| item.page_number..=item.last_page.max(item.page_number))
+        .collect()
+}
+
+/// What kind of search an answer rests on, for its coverage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchShape {
+    /// A document the user named: nothing to disclose.
+    OneFile,
+    /// One passage from each document.
+    EveryDocument,
+    /// The best passages of the whole library (or of the user's selection).
+    Library,
+}
+
+/// The coverage an answer carries, or `None` when it has nothing to disclose (a document the user
+/// named). `searched_files` is the number of analysed documents the search was allowed to look at, so
+/// "3 of 885" always has a real denominator. Computed from the evidence and the index, never by the
+/// model, which only knows what it was sent.
+pub fn search_coverage(
+    shape: SearchShape,
+    outcome: &SearchOutcome,
+    searched_files: usize,
+    unreadable_files: usize,
+) -> Option<EvidenceCoverage> {
+    if shape == SearchShape::OneFile {
+        return None;
+    }
+    let coverage = EvidenceCoverage::of(&outcome.evidence, searched_files, unreadable_files)
+        .with_index_state(outcome.unvectorised_chunks, outcome.mismatched_chunks);
+    Some(match shape {
+        SearchShape::EveryDocument => coverage.asked_about_every_document(),
+        _ => coverage,
+    })
 }
 
 /// The English instruction plus the excerpts, ready to send as one turn to the gateway. The
@@ -563,13 +761,17 @@ pub fn format_evidence(evidence: &[Evidence]) -> String {
     for (index, item) in evidence.iter().enumerate() {
         // The section is named when the document has one with a title: the model can then say "in the
         // section on X" and the reader can find it. A slice of pages has no title and adds nothing.
+        let pages = match item.last_page > item.page_number {
+            true => format!("pages {}-{}", item.page_number, item.last_page),
+            false => format!("page {}", item.page_number),
+        };
         let place = match item
             .section
             .as_ref()
             .filter(|section| !section.title.is_empty())
         {
-            Some(section) => format!("page {}, section \"{}\"", item.page_number, section.title),
-            None => format!("page {}", item.page_number),
+            Some(section) => format!("{pages}, section \"{}\"", section.title),
+            None => pages,
         };
         text.push_str(&format!(
             "[{}] {} ({}):\n{}\n\n",
@@ -1109,7 +1311,9 @@ mod tests {
             relative_path: "inbox/letter.pdf".into(),
             page_number: 2,
             ordinal: 1,
+            last_page: 2,
             section: None,
+            matches: Vec::new(),
             text: "HbA1c a 6.8 pourcent".into(),
             score: 0.9,
             origin: PageOrigin::TextLayer,
@@ -1121,5 +1325,218 @@ mod tests {
         assert!(turn.contains("inbox/letter.pdf"));
         assert!(turn.contains("page 2"));
         assert!(turn.contains("HbA1c a 6.8 pourcent"));
+    }
+
+    // Lot A of the retrieval-quality programme: the words of the question in the passage, the page
+    // range in the citation, and the coverage an answer carries.
+
+    fn found(store: &IndexStore, query: &str, extra: &[String], vector: &[f32]) -> Vec<Evidence> {
+        search_scoped_counted_with_terms(
+            store,
+            query,
+            extra,
+            vector,
+            RetrievalScope::WholeFolder,
+            RetrievalLimits::BASELINE,
+        )
+        .unwrap()
+        .evidence
+    }
+
+    /// The text each span covers, counted in characters.
+    fn marked(item: &Evidence) -> Vec<String> {
+        item.matches
+            .iter()
+            .map(|span| {
+                item.text
+                    .chars()
+                    .skip(span.start)
+                    .take(span.end - span.start)
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_words_of_the_question_are_marked_in_the_passage_without_case_or_accents() {
+        let store = store_with_chunks(vec![(
+            "a#p1#s1",
+            "a.pdf",
+            "The annual Franchise is set in Gen\u{e8}ve.",
+            vec![1.0, 0.0],
+        )]);
+        let items = found(&store, "franchise geneve", &[], &[1.0, 0.0]);
+        assert_eq!(marked(&items[0]), vec!["Franchise", "Gen\u{e8}ve"]);
+    }
+
+    #[test]
+    fn a_passage_found_by_meaning_alone_has_no_marked_word() {
+        let store = store_with_chunks(vec![(
+            "a#p1#s1",
+            "a.pdf",
+            "The amount left to pay after the refund.",
+            vec![1.0, 0.0],
+        )]);
+        let items = found(&store, "franchise", &[], &[1.0, 0.0]);
+        assert_eq!(items.len(), 1, "found by its vector");
+        assert!(items[0].matches.is_empty(), "no word of the question in it");
+    }
+
+    #[test]
+    fn a_word_of_fewer_than_four_letters_is_not_marked_as_in_the_word_search() {
+        let store = store_with_chunks(vec![(
+            "a#p1#s1",
+            "a.pdf",
+            "A franchise of 300 francs is due, of course.",
+            vec![1.0, 0.0],
+        )]);
+        let items = found(&store, "of franchise", &[], &[1.0, 0.0]);
+        assert_eq!(marked(&items[0]), vec!["franchise"]);
+    }
+
+    #[test]
+    fn a_name_the_question_resolved_to_is_marked_whole_whatever_its_length() {
+        let store = store_with_chunks(vec![(
+            "a#p1#s1",
+            "a.pdf",
+            "Courrier from Marie Roy dated March.",
+            vec![1.0, 0.0],
+        )]);
+        let extra = vec!["Marie Roy".to_string()];
+        let items = found(&store, "courrier", &extra, &[1.0, 0.0]);
+        assert_eq!(marked(&items[0]), vec!["Courrier", "Marie Roy"]);
+    }
+
+    #[test]
+    fn marked_offsets_count_characters_not_bytes() {
+        let store = store_with_chunks(vec![(
+            "a#p1#s1",
+            "a.pdf",
+            "\u{e9}t\u{e9} : franchise",
+            vec![1.0, 0.0],
+        )]);
+        let items = found(&store, "franchise", &[], &[1.0, 0.0]);
+        assert_eq!(items[0].matches, vec![MatchSpan { start: 6, end: 15 }]);
+    }
+
+    #[test]
+    fn the_citation_gives_both_pages_of_a_passage_over_a_break() {
+        let one = |first: u32, last: u32| Evidence {
+            chunk_id: "a#p1#s1".into(),
+            relative_path: "a.pdf".into(),
+            page_number: first,
+            ordinal: 1,
+            last_page: last,
+            section: None,
+            matches: Vec::new(),
+            text: "Site | Delay".into(),
+            score: 0.9,
+            origin: PageOrigin::TextLayer,
+            confidence: None,
+        };
+        assert!(format_evidence(&[one(10, 11)]).contains("pages 10-11"));
+        let plain = format_evidence(&[one(10, 10)]);
+        assert!(
+            plain.contains("page 10") && !plain.contains("pages"),
+            "{plain}"
+        );
+    }
+
+    #[test]
+    fn every_page_of_a_passage_over_a_break_is_a_known_page_for_the_figure_check() {
+        let mut items = evidence_from(&["a.pdf", "b.pdf"]);
+        items[0].page_number = 10;
+        items[0].last_page = 12;
+        items[1].page_number = 4;
+        items[1].last_page = 4;
+        assert_eq!(cited_pages(&items), vec![10, 11, 12, 4]);
+    }
+
+    fn evidence_from(paths: &[&str]) -> Vec<Evidence> {
+        paths
+            .iter()
+            .map(|path| Evidence {
+                chunk_id: format!("{path}#p1#s1"),
+                relative_path: (*path).into(),
+                page_number: 1,
+                ordinal: 1,
+                last_page: 1,
+                section: None,
+                matches: Vec::new(),
+                text: "text".into(),
+                score: 0.5,
+                origin: PageOrigin::TextLayer,
+                confidence: None,
+            })
+            .collect()
+    }
+
+    fn outcome(evidence: Vec<Evidence>, unvectorised: usize, mismatched: usize) -> SearchOutcome {
+        SearchOutcome {
+            evidence,
+            chunks_considered: 0,
+            best_vector_score: 0.0,
+            unvectorised_chunks: unvectorised,
+            mismatched_chunks: mismatched,
+        }
+    }
+
+    #[test]
+    fn a_named_file_has_no_coverage_to_disclose() {
+        let evidence = evidence_from(&["a.pdf"]);
+        let found = outcome(evidence.clone(), 0, 0);
+        assert_eq!(search_coverage(SearchShape::OneFile, &found, 1, 0), None);
+    }
+
+    #[test]
+    fn a_search_over_a_library_counts_the_documents_it_drew_from_and_is_not_partial_for_that() {
+        let evidence = evidence_from(&["a.pdf", "b.pdf", "c.pdf"]);
+        let found = outcome(evidence.clone(), 0, 0);
+        let coverage = search_coverage(SearchShape::Library, &found, 885, 2)
+            .expect("a search over several documents says what it rests on");
+        assert_eq!(
+            (
+                coverage.files_covered,
+                coverage.indexed_files,
+                coverage.unreadable_files,
+                coverage.partial
+            ),
+            (3, 885, 2, false)
+        );
+    }
+
+    #[test]
+    fn passages_without_a_vector_or_with_another_models_make_the_answer_partial() {
+        let evidence = evidence_from(&["a.pdf", "b.pdf"]);
+        let missing = outcome(evidence.clone(), 40, 0);
+        let coverage = search_coverage(SearchShape::Library, &missing, 30, 0).unwrap();
+        assert!(coverage.partial);
+        assert_eq!(coverage.unvectorised_chunks, 40);
+        let other_model = outcome(evidence.clone(), 0, 5);
+        let coverage = search_coverage(SearchShape::Library, &other_model, 30, 0).unwrap();
+        assert!(coverage.partial);
+        assert_eq!(coverage.mismatched_chunks, 5);
+    }
+
+    #[test]
+    fn a_question_about_every_document_that_missed_some_is_partial() {
+        let evidence = evidence_from(&["a.pdf", "b.pdf", "c.pdf"]);
+        let found = outcome(evidence.clone(), 0, 0);
+        let cut = search_coverage(SearchShape::EveryDocument, &found, 5, 0).unwrap();
+        assert!(cut.partial, "3 of 5 documents is a gap");
+        let whole = search_coverage(SearchShape::EveryDocument, &found, 3, 0).unwrap();
+        assert!(!whole.partial, "3 of 3 is not");
+    }
+
+    #[test]
+    fn the_coverage_reaches_the_client_with_its_machine_fields() {
+        let evidence = evidence_from(&["a.pdf"]);
+        let found = outcome(evidence.clone(), 7, 0);
+        let coverage = search_coverage(SearchShape::Library, &found, 10, 0).unwrap();
+        let value = serde_json::to_value(coverage).unwrap();
+        assert_eq!(value["partial"], true);
+        assert_eq!(value["unvectorisedChunks"], 7);
+        assert_eq!(value["mismatchedChunks"], 0);
+        assert_eq!(value["filesCovered"], 1);
     }
 }

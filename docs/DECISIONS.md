@@ -1254,3 +1254,20 @@ Built, to confirm:
 | Knowledge-base caps | Half as many names and five times as many mentions as passages, floors 500 and 5 000, ceilings 20 000 and 100 000; a source over its cap is marked and the entity sheet says so |
 | Extraction and the executor | `block_in_place` on the multi-threaded runtime (borrowed ports cannot move into `spawn_blocking`), inline on a current-thread runtime |
 
+
+## Settled for search quality: the owner's answers of 15 October 2026 (tab 3)
+
+All recommendations of `docs/RETRIEVAL-QUALITY.md` section 8 were accepted.
+
+| Subject | Decision |
+| --- | --- |
+| Where the end page of a passage lives | A new table `chunk_pages (chunk_id, relative_path, last_page)`, one row only for a passage that runs over a page break; `chunks` is not touched. An index from before has no rows and reads every passage as one page; the exact ranges appear when a document is read again. The table follows the structure tables (dropped with the document, rewritten with it) |
+| When the line « Réponse fondée sur n des N documents » shows | Under every answer whose search covered more than one document, always with the count, plus a sentence when the search by meaning did not see every passage (`partial_vectors`, `embedding_mismatch`); nothing for a document the user named; the line never says « complet » |
+| Where the rerank runs | On the AI machine, behind `AIProvider.rerank` (the practice PC is the 2019 machine; the reranker is large; an ONNX runtime would have to ship for Windows and macOS). The workstation variant is measured only if this one does not fit |
+| Layout of « Passages trouvés » | A block above the answer, built from the retrieval alone, matching files first, the others folded; a passage found by meaning alone is labelled as such and never highlighted |
+| Per-passage reduction (`kb_mentions.chunk_id`) | Stays in shadow mode in this tab; the diagnostics record what it would have kept and the owner decides from the figures at the end of lot C |
+| Thesaurus | A seed of about ten groups per pack, listed in the lot B report for validation before it is switched on; data per pack, cumulative, never a French assumption in code |
+| Summaries | Stored in the workstation's index in their own table, keyed by the file hash and a prompt version; the estimated duration is shown before the optional stages T1 and T2 start |
+| Unified field in the left panel | Not now; explained to the owner (`docs/RETRIEVAL-QUALITY.md` section 10) |
+
+Built (lot A), to confirm: `Evidence.last_page` and `Evidence.matches` (character offsets of the question's words, empty for a passage found by meaning), the same on the finder's `Locator` (`lastPage`); the figure check knows every page of a range; `EvidenceCoverage` carries `partial`, `unvectorisedChunks`, `mismatchedChunks` and is sent for every search that is not a named file, with the number of documents the search was allowed to look at as its denominator.

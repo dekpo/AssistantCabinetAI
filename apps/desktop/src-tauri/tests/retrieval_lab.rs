@@ -150,10 +150,15 @@ fn line(
     // `section@10` by `scripts/retrieval_lab_score.py`.
     let ids: Vec<String> = passages.iter().map(|p| p.chunk_id.clone()).collect();
     let labels = index.sections_of_chunks(&ids).unwrap_or_default();
+    // The page where each passage ends: past its first page when it runs over a page break, scored as
+    // `page@10` on the whole range.
+    let ends = index.last_pages_of_chunks(&ids).unwrap_or_default();
     let results: Vec<Value> = passages
         .iter()
         .map(|p| {
             let mut value = passage_json(p);
+            value["last_page"] =
+                json!(ends.get(&p.chunk_id).copied().unwrap_or(p.page).max(p.page));
             if let Some(section) = labels.get(&p.chunk_id).filter(|s| !s.title.is_empty()) {
                 value["section_label"] = json!(section.title);
             }

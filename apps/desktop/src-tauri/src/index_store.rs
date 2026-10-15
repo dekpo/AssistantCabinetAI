@@ -271,6 +271,16 @@ impl IndexStore {
                 );
                 CREATE INDEX IF NOT EXISTS chunk_sections_by_document
                     ON chunk_sections (relative_path);
+                -- The page where a passage ends, only for a passage that runs over a page break: a
+                -- passage with no row ends on the page it starts. A new table, so an index from before it
+                -- is opened and extended, never rewritten, and reads every passage as one page.
+                CREATE TABLE IF NOT EXISTS chunk_pages (
+                    chunk_id TEXT PRIMARY KEY,
+                    relative_path TEXT NOT NULL,
+                    last_page INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS chunk_pages_by_document
+                    ON chunk_pages (relative_path);
                 ",
             )
             .map_err(|_| AppError::IndexUnavailable)?;
@@ -894,7 +904,12 @@ impl IndexStore {
         tx: &rusqlite::Transaction<'_>,
         relative_path: &str,
     ) -> Result<(), AppError> {
-        for table in ["chunk_sections", "doc_sections", "doc_structure"] {
+        for table in [
+            "chunk_sections",
+            "chunk_pages",
+            "doc_sections",
+            "doc_structure",
+        ] {
             tx.execute(
                 &format!("DELETE FROM {table} WHERE relative_path = ?1"),
                 [relative_path],
@@ -938,6 +953,13 @@ impl IndexStore {
             tx.execute(
                 "INSERT OR REPLACE INTO chunk_sections (chunk_id, relative_path, position) VALUES (?1, ?2, ?3)",
                 rusqlite::params![chunk_id, relative_path, *position as i64],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        for (chunk_id, last_page) in &structure.chunk_ends {
+            tx.execute(
+                "INSERT OR REPLACE INTO chunk_pages (chunk_id, relative_path, last_page) VALUES (?1, ?2, ?3)",
+                rusqlite::params![chunk_id, relative_path, last_page],
             )
             .map_err(|_| AppError::IndexUnavailable)?;
         }
@@ -1044,6 +1066,29 @@ impl IndexStore {
                 .map_err(|_| AppError::IndexUnavailable)?
             {
                 out.insert(id.clone(), section);
+            }
+        }
+        Ok(out)
+    }
+
+    /// The last page of each of these passages that runs over a page break, by chunk id. A passage
+    /// that ends on the page it starts has no entry.
+    pub fn last_pages_of_chunks(
+        &self,
+        chunk_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, u32>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT last_page FROM chunk_pages WHERE chunk_id = ?1")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let mut out = std::collections::HashMap::new();
+        for id in chunk_ids {
+            if let Some(last) = statement
+                .query_row([id], |row| row.get::<_, i64>(0))
+                .optional()
+                .map_err(|_| AppError::IndexUnavailable)?
+            {
+                out.insert(id.clone(), last as u32);
             }
         }
         Ok(out)
@@ -1515,7 +1560,7 @@ impl IndexStore {
         let tx = self.transaction()?;
         tx.execute_batch(
             "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;
-             DELETE FROM chunk_sections; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
+             DELETE FROM chunk_sections; DELETE FROM chunk_pages; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
              DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts;",
         )
         .map_err(|_| AppError::IndexUnavailable)?;
@@ -2185,12 +2230,19 @@ fn decode_vector(bytes: &[u8]) -> Vec<f32> {
 /// a lexical hit means a real content word matched rather than an article or a preposition
 /// that recurs in every document in the folder.
 fn fts_match_expression(query: &str) -> String {
-    query
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|term| term.chars().count() >= 4)
+    lexical_words(query)
         .map(|term| format!("\"{term}\""))
         .collect::<Vec<_>>()
         .join(" OR ")
+}
+
+/// The words of a question the word search uses: letters and digits runs of four characters or more.
+/// One rule for the search itself and for marking those words in the passages it returns, so the two
+/// cannot drift apart.
+pub fn lexical_words(query: &str) -> impl Iterator<Item = &str> {
+    query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|term| term.chars().count() >= 4)
 }
 
 /// The most surface forms one expression carries: an entity has a handful of aliases, and a

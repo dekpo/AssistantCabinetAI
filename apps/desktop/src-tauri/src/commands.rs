@@ -2040,6 +2040,24 @@ async fn sourced_answer(
     targeting::note_documents(&index, &targeting_plan, &searched, measured);
     let targeting_report = targeting_plan.report(searched.widened);
     let found = searched.outcome;
+    // How much of the corpus this answer really rests on: the documents it drew from out of the ones
+    // the search was allowed to look at (the user's selection, `inventory` is already held to it), and
+    // whether the search by meaning saw every passage. Reported for every search over several
+    // documents, not only for a question about every one: "3 of 885" is what keeps a handful of
+    // passages from reading like the whole library. A document the user named has nothing to
+    // disclose. Computed from the evidence and the index, never from the model.
+    let shape = match &plan {
+        Plan::OneFile(_) => retrieval::SearchShape::OneFile,
+        Plan::EveryDocument(_) => retrieval::SearchShape::EveryDocument,
+        _ => retrieval::SearchShape::Library,
+    };
+    let coverage = retrieval::search_coverage(
+        shape,
+        &found,
+        inventory.indexed_files().len(),
+        inventory.unreadable_files().len(),
+    );
+
     measured.chunks_considered = found.chunks_considered;
     let evidence = found.evidence;
     measured.chunks_selected = evidence.len();
@@ -2052,19 +2070,6 @@ async fn sourced_answer(
             false => AppError::InsufficientEvidence,
         });
     }
-
-    // How much of the corpus this answer really rests on. Reported only when the question asked
-    // about every document, because that is the only shape that claims completeness: a question
-    // about one fact is properly answered from one passage, and saying "1 of 10" there would be
-    // noise. Computed from the evidence and the inventory, never from the model.
-    let coverage = match &plan {
-        Plan::EveryDocument(_) => Some(retrieval::EvidenceCoverage::of(
-            &evidence,
-            inventory.indexed_files().len(),
-            inventory.unreadable_files().len(),
-        )),
-        _ => None,
-    };
 
     // Sent before the answer rather than after it. Retrieval has already finished at this point, so
     // there is nothing to wait for - and an answer she stops halfway still shows which documents it
@@ -2115,7 +2120,7 @@ async fn sourced_answer(
     known.extend(evidence.iter().map(|item| item.relative_path.as_str()));
     known.push(&asked);
     // The pages the excerpts come from are known figures too: a correct citation is no false alarm.
-    let pages: Vec<u32> = evidence.iter().map(|item| item.page_number).collect();
+    let pages: Vec<u32> = retrieval::cited_pages(&evidence);
     let unverified_numbers =
         number_check::unsupported_numbers_with_pages(&answer, &known, &pages, 2);
 

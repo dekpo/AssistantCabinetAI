@@ -78,6 +78,9 @@ pub struct Chunked {
     pub chunks: Vec<Chunk>,
     /// (chunk id, section position) for the passages that start inside a section.
     pub owners: Vec<(String, usize)>,
+    /// (chunk id, last page) for the passages that run over a page break; the others end on the page
+    /// they start.
+    pub ends: Vec<(String, u32)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -486,6 +489,13 @@ impl<'a> Cutter<'a> {
             (origin_page.origin, origin_page.confidence);
         if let Some(position) = owner {
             self.out.owners.push((chunk_id.clone(), position));
+        }
+        // The page of the passage's last line: past the page it starts on when a table, a list or a
+        // sentence runs over a break.
+        if let Some(last) = cur.own.last().map(|i| self.lines[*i].page) {
+            if last > page {
+                self.out.ends.push((chunk_id.clone(), last));
+            }
         }
         self.out.chunks.push(Chunk {
             chunk_id,

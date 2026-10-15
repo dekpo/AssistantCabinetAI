@@ -886,6 +886,20 @@ fn section_label_of(connection: &Connection, chunk_id: &str) -> Option<String> {
         .filter(|title| !title.is_empty())
 }
 
+/// The page a passage ends on, when it runs over a page break and the Analyse recorded it; the page it
+/// starts on otherwise (an index from before the end pages has no row, and reads one page).
+fn last_page_of(connection: &Connection, chunk_id: &str, page: i64) -> i64 {
+    connection
+        .query_row(
+            "SELECT last_page FROM chunk_pages WHERE chunk_id = ?1",
+            [chunk_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .ok()
+        .filter(|last| *last > page)
+        .unwrap_or(page)
+}
+
 fn build_hits(
     connection: &Connection,
     domain: Domain,
@@ -909,6 +923,7 @@ fn build_hits(
                 excerpt_of(connection, chunk_id, terms, last_is_prefix),
                 Some(Locator {
                     page: Some(*page_number),
+                    last_page: Some(last_page_of(connection, chunk_id, *page_number)),
                     ordinal: Some(*section),
                     section_label: section_label_of(connection, chunk_id),
                 }),
@@ -937,6 +952,7 @@ fn build_hits(
                     .iter()
                     .map(|(chunk_id, page_number, ordinal)| Locator {
                         page: Some(*page_number),
+                        last_page: Some(last_page_of(connection, chunk_id, *page_number)),
                         ordinal: Some(*ordinal),
                         section_label: section_label_of(connection, chunk_id),
                     })

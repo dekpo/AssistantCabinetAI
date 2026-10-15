@@ -961,6 +961,9 @@ async fn f2_coverage_is_computed_from_the_evidence_and_the_inventory() {
             files_covered: 10,
             indexed_files: 10,
             unreadable_files: 5,
+            unvectorised_chunks: 0,
+            mismatched_chunks: 0,
+            partial: false,
         }
     );
 

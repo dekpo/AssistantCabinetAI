@@ -113,15 +113,26 @@ export interface EvidenceSection {
   lastPage: number;
 }
 
+export interface MatchSpan {
+  start: number;
+  end: number;
+}
+
 export interface Evidence {
   chunkId: string;
   relativePath: string;
   pageNumber: number;
   /** The passage's rank inside its page: what tells two passages of one page apart. */
   ordinal: number;
+  /** The page where the passage ends: past `pageNumber` when a table, a list or a sentence runs over
+   * a page break. */
+  lastPage: number;
   /** The section of the document the passage starts in, when the document has a structure. `title`
    * is empty for a slice of pages ("pages 21 to 40" is said from the range). */
   section: EvidenceSection | null;
+  /** Where the words of the question stand in `text`, as character offsets (code points, end
+   * exclusive). Empty for a passage found by meaning alone. */
+  matches: MatchSpan[];
   text: string;
   score: number;
   origin: PageOrigin;
@@ -312,8 +323,16 @@ export interface DocumentListing {
  */
 export interface EvidenceCoverage {
   filesCovered: number;
+  /** The analysed documents the search was allowed to look at: the denominator of "n of N". */
   indexedFiles: number;
   unreadableFiles: number;
+  /** Passages without a vector yet: the search by meaning did not see them (`partial_vectors`). */
+  unvectorisedChunks: number;
+  /** Passages whose vector comes from another model, left out of the search by meaning
+   * (`embedding_mismatch`). */
+  mismatchedChunks: number;
+  /** The answer rests on less than the question asked for. */
+  partial: boolean;
 }
 
 export type ChatStreamEvent =
@@ -1261,10 +1280,20 @@ export interface FinderHit {
   excerpt: string | null;
   /** `ordinal` is the passage's rank inside its page; `sectionLabel` the title of the section of the
    * document it starts in, when the document has a structure. */
-  locator: { page: number | null; ordinal: number | null; sectionLabel: string | null } | null;
+  locator: {
+    page: number | null;
+    lastPage: number | null;
+    ordinal: number | null;
+    sectionLabel: string | null;
+  } | null;
   /** Every place where the words matched in this file, in reading order (at most 20), and how many
    * passages matched in all. A long document is one hit with all its places. */
-  locators?: { page: number | null; ordinal: number | null; sectionLabel: string | null }[];
+  locators?: {
+    page: number | null;
+    lastPage: number | null;
+    ordinal: number | null;
+    sectionLabel: string | null;
+  }[];
   locatorsTotal?: number;
 }
 

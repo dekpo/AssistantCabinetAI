@@ -27,6 +27,13 @@ describe("groupSources", () => {
     expect(group?.pages).toStrictEqual([1, 3]);
   });
 
+  it("lists every page a passage over a page break covers", () => {
+    const over = { relativePath: "a.pdf", pageNumber: 10, lastPage: 11, origin: "textLayer" };
+    const [group] = groupSources([over as Evidence, excerpt("a.pdf", 12)]);
+
+    expect(group?.pages).toStrictEqual([10, 11, 12]);
+  });
+
   it("keeps the order in which files first appear", () => {
     const groups = groupSources([excerpt("b.pdf", 1), excerpt("a.pdf", 1), excerpt("b.pdf", 2)]);
 

@@ -86,6 +86,8 @@ pub struct Structure {
     pub sections: Vec<Section>,
     /// (chunk id, section position), for the passages that sit inside a section.
     pub chunk_sections: Vec<(String, usize)>,
+    /// (chunk id, last page), only for the passages that run over a page break.
+    pub chunk_ends: Vec<(String, u32)>,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -726,5 +728,6 @@ pub fn build(
     Structure {
         sections,
         chunk_sections,
+        chunk_ends: Vec::new(),
     }
 }

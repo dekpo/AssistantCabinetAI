@@ -357,3 +357,89 @@ fn a_section_boundary_whose_heading_line_was_not_found_never_cuts_a_table() {
         holder.text
     );
 }
+
+// Lot A of the retrieval-quality programme: a passage that runs over a page break says where it ends,
+// so a fact after the break is cited on its own page.
+
+#[test]
+fn a_table_split_over_a_page_break_reports_the_page_where_it_ends() {
+    let header = "Site | Delai (jours) | Tarif (CHF)";
+    let rows: Vec<String> = (1..=7)
+        .map(|n| format!("Site{n} | {} | {}", n * 3, n * 40))
+        .collect();
+    let page_one = format!("# Tables\n{}\n{header}", body("a", 9));
+    let page_two = format!("{}\n{}", rows.join("\n"), body("b", 9));
+    let doc = document(vec![page(1, &page_one), page(2, &page_two)]);
+    let out = cut(&doc, &OPTIONS);
+    let holder = out
+        .chunks
+        .iter()
+        .find(|c| c.text.contains(header))
+        .expect("the header is somewhere");
+    assert_eq!(holder.page_number, 1);
+    assert!(
+        out.ends.contains(&(holder.chunk_id.clone(), 2)),
+        "the passage ends on page 2: {:?}",
+        out.ends
+    );
+}
+
+#[test]
+fn every_passage_reports_the_last_page_it_reaches_and_only_the_crossing_ones_are_listed() {
+    // Three pages of plain sentences, each tagged with its page. A sentence is left open at the end of
+    // a page and finished on the next, so a passage holds both: a passage that holds a sentence of
+    // page 2 reaches page 2, whatever page it starts on.
+    let pages: Vec<ExtractedPage> = ["uno", "dos", "tres"]
+        .iter()
+        .enumerate()
+        .map(|(n, tag)| {
+            let mut text = String::new();
+            if n > 0 {
+                text.push_str(&format!(
+                    "and the sentence goes on in the part {tag} until it ends here.
+"
+                ));
+            }
+            text.push_str(&body(tag, 8));
+            if n < 2 {
+                text.push_str(&format!(
+                    "
+the sentence of the part {tag} runs on without a stop at the end of the page"
+                ));
+            }
+            page(n as u32 + 1, &text)
+        })
+        .collect();
+    let doc = document(pages);
+    let out = cut(&doc, &OPTIONS);
+    let mut crossing = 0;
+    for chunk in &out.chunks {
+        let reached = [("part uno ", 1u32), ("part dos ", 2), ("part tres ", 3)]
+            .iter()
+            .filter(|(tag, _)| chunk.text.contains(tag))
+            .map(|(_, page)| *page)
+            .max()
+            .expect("every passage holds a sentence");
+        let listed = out
+            .ends
+            .iter()
+            .find(|(id, _)| *id == chunk.chunk_id)
+            .map(|(_, last)| *last);
+        assert_eq!(
+            listed.unwrap_or(chunk.page_number),
+            reached,
+            "the last page of {}",
+            chunk.chunk_id
+        );
+        if reached != chunk.page_number {
+            crossing += 1;
+            assert!(listed.is_some(), "a crossing passage is listed");
+        } else {
+            assert!(listed.is_none(), "a passage on one page is not listed");
+        }
+    }
+    assert!(
+        crossing >= 1,
+        "the fixture must have a passage over a break"
+    );
+}

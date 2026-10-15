@@ -52,6 +52,28 @@ class ScoreQuestion(unittest.TestCase):
         self.assertEqual(figures["fact@5"], 0.0)
 
 
+class PageRange(unittest.TestCase):
+    """A passage that runs over a page break is right on every page it covers (lot A of tab 3)."""
+
+    def ranged(self, first: int, last: int | None) -> dict:
+        found = {**passage("a", fact=True), "page": first}
+        if last is not None:
+            found["last_page"] = last
+        return found
+
+    def test_a_fact_on_the_second_page_of_a_passage_over_a_break_is_on_the_right_page(self):
+        figures = score.score_question([self.ranged(10, 11)], {"a"}, True, fact_pages=[11])
+        self.assertEqual(figures["page@10"], 1.0)
+
+    def test_without_a_range_the_page_where_the_passage_starts_is_the_only_one(self):
+        figures = score.score_question([self.ranged(10, None)], {"a"}, True, fact_pages=[11])
+        self.assertEqual(figures["page@10"], 0.0)
+
+    def test_a_range_that_does_not_reach_the_fact_page_does_not_count(self):
+        figures = score.score_question([self.ranged(10, 11)], {"a"}, True, fact_pages=[12])
+        self.assertEqual(figures["page@10"], 0.0)
+
+
 class PlantedFacts(unittest.TestCase):
     def labelled(self, path: str, label: str, fact: bool = True) -> dict:
         return {**passage(path, fact=fact), "section_label": label}

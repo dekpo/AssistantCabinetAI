@@ -1,7 +1,11 @@
 //! Lot C of the retrieval-quality programme, the assembly: a cap per section spreads the places over the
 //! sections of a long document, the passage after the best one is read with it, and the best passages take
 //! the two ends of the list the model reads. Each only when its own switch is on; the number of passages and
-//! of characters never grows. The options are process-wide, so the tests of this file take turns.
+//! of characters never grows. The identifier of the question comes first. The options are process-wide, so the
+//! tests of this file take turns.
+//!
+//! The passages are ranked by their meaning alone, so every fixture gives each passage the similarity to the
+//! question it should have (`vector_for`).
 
 use std::sync::Mutex;
 
@@ -14,12 +18,19 @@ use assistant_cabinet_ai_lib::structure::{Section, SectionSource, Structure};
 
 static TURN: Mutex<()> = Mutex::new(());
 
-/// A document made of passages; every passage starts in the one section « Part » when `sectioned`.
-fn write(store: &mut IndexStore, path: &str, passages: &[&str], sectioned: bool) {
+/// The question points along the first axis, so a passage whose vector is `vector_for(c)` has the cosine
+/// similarity `c` to it.
+fn vector_for(cosine: f32) -> Vec<f32> {
+    vec![cosine, (1.0 - cosine * cosine).sqrt()]
+}
+
+/// A document made of passages, each with the similarity to the question given; every passage starts in the one
+/// section « Part » when `sectioned`.
+fn write(store: &mut IndexStore, path: &str, passages: &[(&str, f32)], sectioned: bool) {
     let chunks: Vec<Chunk> = passages
         .iter()
         .enumerate()
-        .map(|(n, text)| Chunk {
+        .map(|(n, (text, _))| Chunk {
             chunk_id: format!("{path}#p1#s{}", n + 1),
             relative_path: path.to_string(),
             page_number: 1,
@@ -30,7 +41,10 @@ fn write(store: &mut IndexStore, path: &str, passages: &[&str], sectioned: bool)
             confidence: None,
         })
         .collect();
-    let vectors: Vec<Vec<f32>> = chunks.iter().map(|_| vec![1.0, 0.0]).collect();
+    let vectors: Vec<Vec<f32>> = passages
+        .iter()
+        .map(|(_, cosine)| vector_for(*cosine))
+        .collect();
     store
         .replace_document(path, "hash", false, &chunks, &vectors, None, None)
         .unwrap();
@@ -60,23 +74,23 @@ fn write(store: &mut IndexStore, path: &str, passages: &[&str], sectioned: bool)
 fn library() -> (IndexStore, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
-    // The long document: four passages that say the word again and again, all in one section.
+    // The long document: four passages close in meaning to the question, all in one section.
     write(
         &mut store,
         "long.md",
         &[
-            "warranty warranty warranty warranty one",
-            "warranty warranty warranty warranty two",
-            "warranty warranty warranty warranty three",
-            "warranty warranty four",
+            ("warranty one", 0.99),
+            ("warranty two", 0.98),
+            ("warranty three", 0.97),
+            ("warranty four", 0.96),
         ],
         true,
     );
-    // Another document that says it once.
+    // Another document, a little less close.
     write(
         &mut store,
         "short.md",
-        &["a note that mentions the warranty once"],
+        &[("a note that mentions the warranty once", 0.95)],
         true,
     );
     (store, dir)
@@ -144,10 +158,10 @@ fn the_cap_never_leaves_a_place_empty() {
         &mut store,
         "only.md",
         &[
-            "warranty one",
-            "warranty two",
-            "warranty three",
-            "warranty four",
+            ("warranty one", 0.9),
+            ("warranty two", 0.8),
+            ("warranty three", 0.7),
+            ("warranty four", 0.6),
         ],
         true,
     );
@@ -173,10 +187,19 @@ fn a_passage_with_no_section_is_never_capped() {
     write(
         &mut store,
         "plain.md",
-        &["warranty one", "warranty two", "warranty three"],
+        &[
+            ("warranty one", 0.9),
+            ("warranty two", 0.8),
+            ("warranty three", 0.7),
+        ],
         false,
     );
-    write(&mut store, "other.md", &["warranty elsewhere"], false);
+    write(
+        &mut store,
+        "other.md",
+        &[("warranty elsewhere", 0.6)],
+        false,
+    );
     let capped = search(
         &store,
         AssemblyOptions {
@@ -200,14 +223,14 @@ fn the_passage_after_the_best_one_takes_the_place_of_the_weakest() {
         &mut store,
         "book.md",
         &[
-            "warranty and a first word",
-            "warranty warranty warranty warranty warranty best",
-            "a passage that says nothing of the subject",
-            "warranty warranty warranty fourth",
+            ("warranty and a first word", 0.8),
+            ("warranty warranty warranty warranty warranty best", 0.99),
+            ("a passage that says nothing of the subject", 0.05),
+            ("warranty warranty warranty fourth", 0.7),
         ],
         false,
     );
-    write(&mut store, "note.md", &["warranty in a note"], false);
+    write(&mut store, "note.md", &[("warranty in a note", 0.6)], false);
     let off = search(&store, AssemblyOptions::OFF, 3);
     let best = off[0].chunk_id.clone();
     assert_eq!(best, "book.md#p1#s2");
@@ -259,36 +282,11 @@ fn the_best_passages_take_the_two_ends_of_what_the_model_reads_and_the_interface
     assert_eq!(ids(&retrieval::ordered_for_model(&ranked)), ranking);
 }
 
-// ---- lot D: the two searches put together by rank, and the identifier of the question first
+// ---- lot D: the identifier of the question first
 
-use assistant_cabinet_ai_lib::assembly::Fusion;
-use assistant_cabinet_ai_lib::lexical::{set_lexical_options_for_measurement, LexicalOptions};
-
-fn write_vector(store: &mut IndexStore, path: &str, text: &str, vector: Vec<f32>) {
-    let chunk = Chunk {
-        chunk_id: format!("{path}#p1#s1"),
-        relative_path: path.to_string(),
-        page_number: 1,
-        section: 1,
-        text: text.to_string(),
-        index_text: None,
-        origin: PageOrigin::TextLayer,
-        confidence: None,
-    };
-    store
-        .replace_document(path, "hash", false, &[chunk], &[vector], None, None)
-        .unwrap();
-}
-
-fn first_paths(
-    store: &IndexStore,
-    question: &str,
-    options: AssemblyOptions,
-    lexical: LexicalOptions,
-) -> Vec<String> {
+fn first_paths(store: &IndexStore, question: &str, options: AssemblyOptions) -> Vec<String> {
     let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
     set_assembly_options_for_measurement(Some(options));
-    set_lexical_options_for_measurement(Some(lexical));
     let found = retrieval::search_scoped_counted_with_terms(
         store,
         question,
@@ -300,72 +298,27 @@ fn first_paths(
     .unwrap()
     .evidence;
     set_assembly_options_for_measurement(None);
-    set_lexical_options_for_measurement(None);
     found.into_iter().map(|e| e.relative_path).collect()
-}
-
-#[test]
-fn fused_by_rank_a_passage_the_word_search_ranks_first_can_beat_a_closer_one() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
-    // A is closer in meaning (cosine 0.9) and says nothing of the word; B is farther (0.5) and holds it.
-    write_vector(
-        &mut store,
-        "close.md",
-        "unrelated words only",
-        vec![0.9, 0.435_889_9],
-    );
-    write_vector(
-        &mut store,
-        "word.md",
-        "the warranty is stated here",
-        vec![0.5, 0.866_025_4],
-    );
-    let flat = first_paths(
-        &store,
-        "warranty",
-        AssemblyOptions::OFF,
-        LexicalOptions::OFF,
-    );
-    assert_eq!(
-        flat,
-        vec!["close.md", "word.md"],
-        "today: 0.9 against 0.5 + 0.2"
-    );
-    let rrf = first_paths(
-        &store,
-        "warranty",
-        AssemblyOptions {
-            fusion: Fusion::Rrf,
-            ..AssemblyOptions::OFF
-        },
-        LexicalOptions::OFF,
-    );
-    assert_eq!(
-        rrf,
-        vec!["word.md", "close.md"],
-        "ranks 2 and 1 add up to more than rank 1 alone"
-    );
 }
 
 #[test]
 fn the_passage_that_holds_the_identifier_of_the_question_comes_first_even_when_it_is_farther() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
-    write_vector(
+    write(
         &mut store,
         "near.md",
-        "the invoice total of the month, FAC-2026-114",
-        vec![1.0, 0.0],
+        &[("the invoice total of the month, FAC-2026-114", 1.0)],
+        false,
     );
-    write_vector(
+    write(
         &mut store,
         "code.md",
-        "invoice FAC-2026-014 is due",
-        vec![0.3, 0.953_939_2],
+        &[("invoice FAC-2026-014 is due", 0.3)],
+        false,
     );
     let question = "what is the total of invoice FAC-2026-014";
-    let off = first_paths(&store, question, AssemblyOptions::OFF, LexicalOptions::OFF);
+    let off = first_paths(&store, question, AssemblyOptions::OFF);
     assert_eq!(off.first().map(String::as_str), Some("near.md"));
     let pinned = first_paths(
         &store,
@@ -374,7 +327,6 @@ fn the_passage_that_holds_the_identifier_of_the_question_comes_first_even_when_i
             pin_identifier: true,
             ..AssemblyOptions::OFF
         },
-        LexicalOptions::OFF,
     );
     assert_eq!(pinned.first().map(String::as_str), Some("code.md"));
     // a question with no identifier is not changed by the switch
@@ -385,13 +337,11 @@ fn the_passage_that_holds_the_identifier_of_the_question_comes_first_even_when_i
             pin_identifier: true,
             ..AssemblyOptions::OFF
         },
-        LexicalOptions::OFF,
     );
     let plain_off = first_paths(
         &store,
         "what is the total of the month",
         AssemblyOptions::OFF,
-        LexicalOptions::OFF,
     );
     assert_eq!(plain, plain_off);
 }

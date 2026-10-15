@@ -767,7 +767,6 @@ mod tests {
             ordinal: 1,
             last_page: 1,
             section: None,
-            matches: Vec::new(),
             text: text.to_string(),
             score: 1.0,
             origin: PageOrigin::TextLayer,

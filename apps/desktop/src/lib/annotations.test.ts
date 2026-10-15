@@ -191,7 +191,6 @@ describe("Copy the conversation", () => {
             ordinal: 1,
             lastPage: 1,
             section: null,
-            matches: [],
             text: "Montant total du devis : 1 200,00 euros HT.",
             score: 1,
             origin: "textLayer",

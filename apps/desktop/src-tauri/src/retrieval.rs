@@ -1,17 +1,14 @@
-//! Retrieval: lexical plus vector search over the local index, merged into a capped set of
-//! excerpts. Never the whole folder - only what is selected here leaves the machine
+//! Retrieval: the search by meaning over the local index, plus the passages of the entities, identifiers and
+//! facts the question names, merged into a capped set of excerpts. The words of the question choose nothing
+//! by themselves. Never the whole folder - only what is selected here leaves the machine
 //! (`docs/RETRIEVAL.md`).
 
 use serde::Serialize;
-use unicode_normalization::char::is_combining_mark;
 
-use crate::assembly::{assembly_options, Fusion, SectionCap, RRF_DEPTH, RRF_K};
+use crate::assembly::{assembly_options, SectionCap};
 use crate::conversation::ContextBudget;
 use crate::extraction::PageOrigin;
-use crate::index_store::{
-    cosine_similarity_with_norm, lexical_words, query_norm, IndexStore, LexicalHit,
-};
-use crate::knowledge::normalize::fold_word;
+use crate::index_store::{cosine_similarity_with_norm, query_norm, IndexStore, LexicalHit};
 
 /// How many excerpts an answer may cite at most, for a model whose window is the baseline
 /// (`ContextBudget::DEFAULT`) or smaller. A larger window raises it (`RetrievalLimits`).
@@ -20,6 +17,9 @@ pub const MAX_EVIDENCE_CHUNKS: usize = 6;
 pub const MAX_EVIDENCE_CHARS: usize = 6_000;
 /// Below this similarity a vector hit is noise rather than evidence.
 const MIN_VECTOR_SCORE: f32 = 0.15;
+/// What a passage that writes a form of a name the question resolved to adds to its similarity: the question
+/// named that person or organisation, so its passages come before those that only resemble it in meaning.
+const ENTITY_BONUS: f32 = 0.2;
 
 /// The ceiling for an answer that must cover every document rather than the most relevant few, at
 /// the baseline window.
@@ -78,111 +78,10 @@ pub struct Evidence {
     pub last_page: u32,
     /// The section of the document the passage starts in, when the document has a structure.
     pub section: Option<EvidenceSection>,
-    /// Where the words of the question stand in `text`. Empty for a passage found by meaning alone.
-    pub matches: Vec<MatchSpan>,
     pub text: String,
     pub score: f32,
     pub origin: PageOrigin,
     pub confidence: Option<f32>,
-}
-
-/// A word of the question found in a passage: character offsets (Unicode scalar values, not bytes),
-/// `end` exclusive.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct MatchSpan {
-    pub start: usize,
-    pub end: usize,
-}
-
-/// The words of `text`: maximal runs of letters and digits (a combining accent belongs to its letter),
-/// each with its character offsets and its folded form (case, accents and ligatures removed, the form
-/// the full-text index compares).
-fn word_runs(text: &str) -> Vec<(usize, usize, String)> {
-    let mut words = Vec::new();
-    let mut run = String::new();
-    let mut start = 0usize;
-    let mut position = 0usize;
-    for c in text.chars() {
-        if c.is_alphanumeric() || is_combining_mark(c) {
-            if run.is_empty() {
-                start = position;
-            }
-            run.push(c);
-        } else if !run.is_empty() {
-            words.push((start, position, fold_word(&run)));
-            run.clear();
-        }
-        position += 1;
-    }
-    if !run.is_empty() {
-        words.push((start, position, fold_word(&run)));
-    }
-    words
-}
-
-/// The question's words as phrases to look for in a passage: every word the word search uses (four
-/// letters or more, `index_store::lexical_words`), each alone, and every surface form of an entity the
-/// question resolved to as a phrase, whatever its length. Folded; a form that holds no word is dropped.
-pub fn query_phrases(query: &str, extra_terms: &[String]) -> Vec<Vec<String>> {
-    let mut phrases: Vec<Vec<String>> = lexical_words(query)
-        .map(|word| vec![fold_word(word)])
-        .collect();
-    for term in extra_terms {
-        let phrase: Vec<String> = word_runs(term).into_iter().map(|(_, _, w)| w).collect();
-        if !phrase.is_empty() {
-            phrases.push(phrase);
-        }
-    }
-    phrases.retain(|phrase| phrase.iter().all(|word| !word.is_empty()));
-    phrases.sort();
-    phrases.dedup();
-    phrases
-}
-
-/// The spans of `text` that hold one of the question's words (`terms`, each a phrase of one or more
-/// folded words), compared without case or accents. The longest phrase wins where two start at the
-/// same word; spans never overlap.
-pub fn match_spans(text: &str, terms: &[Vec<String>]) -> Vec<MatchSpan> {
-    if terms.is_empty() {
-        return Vec::new();
-    }
-    let words = word_runs(text);
-    let mut spans = Vec::new();
-    let mut index = 0usize;
-    while index < words.len() {
-        let longest = terms
-            .iter()
-            .filter(|phrase| {
-                !phrase.is_empty()
-                    && index + phrase.len() <= words.len()
-                    && phrase
-                        .iter()
-                        .zip(&words[index..])
-                        .all(|(wanted, (_, _, folded))| wanted == folded)
-            })
-            .map(Vec::len)
-            .max();
-        match longest {
-            Some(length) => {
-                spans.push(MatchSpan {
-                    start: words[index].0,
-                    end: words[index + length - 1].1,
-                });
-                index += length;
-            }
-            None => index += 1,
-        }
-    }
-    spans
-}
-
-/// Mark the question's words in each passage.
-fn attach_matches(evidence: &mut [Evidence], query: &str, extra_terms: &[String]) {
-    let phrases = query_phrases(query, extra_terms);
-    for item in evidence.iter_mut() {
-        item.matches = match_spans(&item.text, &phrases);
-    }
 }
 
 /// The section a passage belongs to, as the citation shows it. `title` is empty for a slice of pages
@@ -242,8 +141,9 @@ pub enum RetrievalScope<'a> {
     CurrentFolder(&'a [String]),
 }
 
-/// Rank stored chunks against a query embedding plus its lexical text, merge the two rankings,
-/// and cap the result on count and total characters. Searches the whole folder.
+/// Rank stored chunks against a query embedding (their meaning), add the passages of the entities the
+/// question named and those that hold its identifiers and facts, and cap the result on count and total
+/// characters. Searches the whole folder.
 pub fn search(
     index: &IndexStore,
     query_text: &str,
@@ -276,13 +176,13 @@ pub struct SearchOutcome {
     pub evidence: Vec<Evidence>,
     /// Stored chunks of the scope that were scored, before the cut to the caps.
     pub chunks_considered: usize,
-    /// The best cosine similarity any chunk of the scope reached, **without** the lexical bonus
-    /// (0 for an empty scope). The bonus says a word of the question was found; this says how close
+    /// The best cosine similarity any chunk of the scope reached, **without** the entity bonus
+    /// (0 for an empty scope). The bonus says a named entity was found; this says how close
     /// the best passage is in meaning. The knowledge base reads it to decide that a reduced search was
     /// too narrow (`knowledge::targeting::search_documents`).
     pub best_vector_score: f32,
     /// Passages of the scope that have no vector yet (the Analyse stopped before computing it, or is
-    /// still running). They are found by their words only. Non-zero is the machine code `partial_vectors`:
+    /// still running). Only a name, an identifier or a fact of the question can bring them in. Non-zero is the machine code `partial_vectors`:
     /// the answer layer says so in its own words.
     pub unvectorised_chunks: usize,
     /// Passages whose stored vector has another length than the question's: they were made by another
@@ -309,9 +209,9 @@ pub fn search_scoped_counted(
     )
 }
 
-/// `search_scoped_counted`, with extra surface forms for the **lexical** part only: the other
+/// `search_scoped_counted`, with extra surface forms for the **entity** part only: the other
 /// spellings of a name the question resolved to (`knowledge::targeting`). The embedding text is the
-/// question and nothing else, so what the vector half looks for is exactly what it was. With no
+/// question and nothing else, so what the search by meaning looks for is exactly what it was. With no
 /// extra term and the baseline limits this is `search_scoped_counted`, byte for byte.
 pub fn search_scoped_counted_with_terms(
     index: &IndexStore,
@@ -321,35 +221,17 @@ pub fn search_scoped_counted_with_terms(
     scope: RetrievalScope<'_>,
     limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    let mut lexical_hits = lexical_hits_in(index, query_text, scope, lexical_depth(limits))?;
-    lexical_hits.extend(term_hits_in(index, extra_terms, scope, limits)?);
+    let entity_hits = term_hits_in(index, extra_terms, scope, limits)?;
     let mut pinned = pinned_in(index, query_text, scope, limits)?;
     pinned.extend(fact_pins_in(index, query_text, scope)?);
-    let mut found = search_scoped_with_hits(
+    search_scoped_with_hits(
         index,
         query_embedding,
         scope,
-        &lexical_hits,
+        &entity_hits,
         &pinned,
         limits,
-    )?;
-    attach_matches(&mut found.evidence, query_text, extra_terms);
-    Ok(found)
-}
-
-/// The lexical bonus candidates for `scope`: the best full-text matches **among the scope's own
-/// files**, so a file the user did not select can never use up the places that decide who gets
-/// the bonus. `WholeFolder` has no restriction to apply and keeps the unrestricted search.
-/// How deep the word search is read: the places that earn the bonus, or, when the two searches are fused
-/// by rank, deep enough for its ranks to mean something.
-fn lexical_depth(limits: RetrievalLimits) -> RetrievalLimits {
-    match assembly_options().fusion {
-        Fusion::FlatBonus => limits,
-        Fusion::Rrf => RetrievalLimits {
-            max_chunks: RRF_DEPTH.max(limits.max_chunks),
-            ..limits
-        },
-    }
+    )
 }
 
 /// The passages of the scope that hold an identifier written in the question, when that switch is on.
@@ -374,23 +256,6 @@ fn pinned_in(
         }
     };
     Ok(found.into_iter().map(|hit| hit.chunk_id).collect())
-}
-
-fn lexical_hits_in(
-    index: &IndexStore,
-    query_text: &str,
-    scope: RetrievalScope<'_>,
-    limits: RetrievalLimits,
-) -> Result<Vec<LexicalHit>, crate::error::AppError> {
-    match scope {
-        RetrievalScope::WholeFolder => index.search_lexical(query_text, limits.max_chunks),
-        RetrievalScope::File(relative_path) => {
-            index.search_lexical_in(query_text, limits.max_chunks, &[relative_path.to_string()])
-        }
-        RetrievalScope::Files(relative_paths) | RetrievalScope::CurrentFolder(relative_paths) => {
-            index.search_lexical_in(query_text, limits.max_chunks, relative_paths)
-        }
-    }
 }
 
 /// Most passages a date or an amount of the question may pin. A date that many passages state tells nothing
@@ -430,8 +295,9 @@ fn fact_pins_in(
     Ok(found.into_iter().collect())
 }
 
-/// The same, for the surface forms of resolved entities. Always held to the scope's own files: the
-/// whole index is never searched for a name (`WholeFolder` has no use for this and gets nothing).
+/// The passages that write a surface form of an entity the question resolved to. Always held to the
+/// scope's own files: the whole index is never searched for a name (`WholeFolder` has no use for this and
+/// gets nothing).
 fn term_hits_in(
     index: &IndexStore,
     extra_terms: &[String],
@@ -454,24 +320,23 @@ fn term_hits_in(
     }
 }
 
-/// The ranking itself, given the lexical hits already computed: so `search_per_document` can run
-/// the full-text query once for all its files instead of once per file.
+/// The ranking itself, given the entity hits and the pinned passages already computed: so
+/// `search_per_document` can run those lookups once for all its files instead of once per file.
 fn search_scoped_with_hits(
     index: &IndexStore,
     query_embedding: &[f32],
     scope: RetrievalScope<'_>,
-    lexical_hits: &[LexicalHit],
+    entity_hits: &[LexicalHit],
     pinned: &std::collections::HashSet<String>,
     limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    let fusion = assembly_options().fusion;
     // The ranking reads the vectors of the scope one row at a time and keeps, for each passage that
     // counts, its id, its score and its size: the text of a passage is read only for the few that are
     // kept. Same scores, same order, same caps as when every passage was loaded with its text
     // (`tests/ranking_parity.rs`).
     let query_length = query_embedding.len();
     let norm = query_norm(query_embedding);
-    let lexical: std::collections::HashSet<&str> = lexical_hits
+    let of_entity: std::collections::HashSet<&str> = entity_hits
         .iter()
         .map(|hit| hit.chunk_id.as_str())
         .collect();
@@ -503,22 +368,17 @@ fn search_scoped_with_hits(
             }
             let vector_score = cosine_similarity_with_norm(&buffer, query_embedding, norm);
             best_vector_score = best_vector_score.max(vector_score);
-            let in_lexical = lexical.contains(chunk_id);
+            let of_a_named_entity = of_entity.contains(chunk_id);
             let is_pinned = pinned.contains(chunk_id);
-            // Fused by rank, the lexical list adds its own weight below; the flat bonus is today's.
-            let lexical_bonus = if in_lexical && fusion == Fusion::FlatBonus {
-                0.2
-            } else {
-                0.0
-            };
-            if vector_score < MIN_VECTOR_SCORE && !in_lexical && !is_pinned {
+            if vector_score < MIN_VECTOR_SCORE && !of_a_named_entity && !is_pinned {
                 return;
             }
+            let entity_bonus = if of_a_named_entity { ENTITY_BONUS } else { 0.0 };
             // A passage that holds the identifier of the question comes before any other.
             let pin_bonus = if is_pinned { 1.0 } else { 0.0 };
             scored.push((
                 chunk_id.to_string(),
-                vector_score + lexical_bonus + pin_bonus,
+                vector_score + entity_bonus + pin_bonus,
                 text_bytes,
             ));
         };
@@ -537,39 +397,6 @@ fn search_scoped_with_hits(
         }
     }
 
-    if fusion == Fusion::Rrf {
-        // Each list counts by the rank of the passage in it. The vector list is every scored passage by
-        // cosine (the pin bonus is taken out again: it is not part of the cosine), the word list is the order
-        // the full-text search gave.
-        let mut by_vector: Vec<usize> = (0..scored.len()).collect();
-        let cosine = |entry: &(String, f32, usize)| {
-            entry.1 - if pinned.contains(&entry.0) { 1.0 } else { 0.0 }
-        };
-        by_vector.sort_by(|&a, &b| {
-            cosine(&scored[b])
-                .partial_cmp(&cosine(&scored[a]))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let mut word_rank: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-        for (position, hit) in lexical_hits.iter().enumerate() {
-            word_rank.entry(hit.chunk_id.as_str()).or_insert(position + 1);
-        }
-        let mut fused: Vec<f32> = vec![0.0; scored.len()];
-        for (position, &index_in_scored) in by_vector.iter().enumerate() {
-            fused[index_in_scored] += 1.0 / (RRF_K + position as f32 + 1.0);
-        }
-        for (index_in_scored, entry) in scored.iter().enumerate() {
-            if let Some(rank) = word_rank.get(entry.0.as_str()) {
-                fused[index_in_scored] += 1.0 / (RRF_K + *rank as f32);
-            }
-            if pinned.contains(&entry.0) {
-                fused[index_in_scored] += 1.0;
-            }
-        }
-        for (entry, score) in scored.iter_mut().zip(fused) {
-            entry.1 = score;
-        }
-    }
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let assembly = assembly_options();
@@ -624,7 +451,6 @@ fn search_scoped_with_hits(
             ordinal: chunk.section,
             last_page: chunk.page_number,
             section: None,
-            matches: Vec::new(),
             text: chunk.text,
             score,
             origin: chunk.origin,
@@ -772,7 +598,7 @@ pub fn search_per_document_counted(
     )
 }
 
-/// `search_per_document_counted`, with extra surface forms for the lexical part only (see
+/// `search_per_document_counted`, with extra surface forms for the entity part only (see
 /// `search_scoped_counted_with_terms`). The files are taken in the order given.
 pub fn search_per_document_counted_with_terms(
     index: &IndexStore,
@@ -789,25 +615,21 @@ pub fn search_per_document_counted_with_terms(
     let mut mismatched_chunks = 0usize;
     let mut best_vector_score = 0.0f32;
 
-    // The full-text query is the same for every file, so it runs once, over all of them. Run per
-    // file it repeated one query as many times as there were documents.
-    let mut lexical_hits =
-        index.search_lexical_in(query_text, lexical_depth(limits).max_chunks, relative_paths)?;
+    // The lookups of the entities and of the identifiers are the same for every file, so they run once, over
+    // all of them. Run per file they repeated one query as many times as there were documents.
     let pinned = pinned_in(index, query_text, RetrievalScope::Files(relative_paths), limits)?;
-    if !extra_terms.is_empty() {
-        lexical_hits.extend(index.search_lexical_terms_in(
-            extra_terms,
-            limits.max_chunks,
-            relative_paths,
-        )?);
-    }
+    let entity_hits = if extra_terms.is_empty() {
+        Vec::new()
+    } else {
+        index.search_lexical_terms_in(extra_terms, limits.max_chunks, relative_paths)?
+    };
 
     for relative_path in relative_paths {
         let found = search_scoped_with_hits(
             index,
             query_embedding,
             RetrievalScope::File(relative_path),
-            &lexical_hits,
+            &entity_hits,
             &pinned,
             limits,
         )?;
@@ -835,7 +657,6 @@ pub fn search_per_document_counted_with_terms(
         selected.push(evidence);
     }
 
-    attach_matches(&mut selected, query_text, extra_terms);
     Ok(SearchOutcome {
         evidence: selected,
         chunks_considered,
@@ -863,7 +684,6 @@ fn first_chunk_of(
             ordinal: chunk.section,
             last_page: chunk.page_number,
             section: None,
-            matches: Vec::new(),
             text: chunk.text,
             score: 0.0,
             origin: chunk.origin,
@@ -1169,19 +989,22 @@ mod tests {
     }
 
     /// The knowledge base widens a reduced search on this number: it must be the closest passage by
-    /// meaning, and the lexical bonus must not be in it.
+    /// meaning, and the bonus of a named entity must not be in it.
     #[test]
-    fn the_best_vector_score_is_the_closest_passage_without_the_lexical_bonus() {
+    fn the_best_vector_score_is_the_closest_passage_without_the_entity_bonus() {
         let store = store_with_chunks(vec![
             ("a#p1#s1", "a.pdf", "Dupont Dupont Dupont", vec![0.0, 1.0]),
             ("b#p1#s1", "b.pdf", "autre chose", vec![1.0, 0.0]),
         ]);
-        // The question is close to b by meaning and says Dupont, which only a.pdf holds.
-        let found = search_scoped_counted(
+        // The question is close to b by meaning and names Dupont, which only a.pdf holds.
+        let a_only = ["a.pdf".to_string()];
+        let found = search_scoped_counted_with_terms(
             &store,
             "Dupont",
+            &["Dupont".to_string()],
             &[1.0, 0.0],
-            RetrievalScope::Files(&["a.pdf".to_string()]),
+            RetrievalScope::Files(&a_only),
+            RetrievalLimits::BASELINE,
         )
         .unwrap();
 
@@ -1202,11 +1025,11 @@ mod tests {
         assert_eq!(nothing.best_vector_score, 0.0);
     }
 
-    /// The defect `search_lexical_in` exists for. Eight files outside the selection are stuffed
-    /// with the query's words; the one match inside the selection says each word once and its
-    /// vector is orthogonal to the question's, so only the lexical bonus can bring it back.
+    /// The defect `search_lexical_terms_in` exists for. Eight files outside the selection are stuffed with the
+    /// name the question resolved to; the one passage inside the selection says it once and its vector is
+    /// orthogonal to the question's, so only the entity lookup can bring it back.
     #[test]
-    fn a_scoped_search_gets_lexical_bonus_only_from_its_own_files() {
+    fn a_scoped_search_takes_entity_passages_only_from_its_own_files() {
         let mut documents = vec![(
             "inside.pdf",
             vec![(
@@ -1229,77 +1052,47 @@ mod tests {
         }
         let store = store_with_documents(documents);
         let query = "cephalees episodiques";
-
-        // The trap is real: the unrestricted full-text search spends all six places on the
-        // stuffed files, so the in-scope chunk gets no bonus from it.
-        let unrestricted = store.search_lexical(query, MAX_EVIDENCE_CHUNKS).unwrap();
-        assert_eq!(unrestricted.len(), MAX_EVIDENCE_CHUNKS);
-        assert!(
-            unrestricted
-                .iter()
-                .all(|hit| hit.chunk_id.starts_with("stuffed")),
-            "the fixture must reproduce the crowding: {unrestricted:?}"
-        );
+        let forms = ["cephalees".to_string()];
+        let found = |scope: RetrievalScope<'_>| {
+            search_scoped_counted_with_terms(
+                &store,
+                query,
+                &forms,
+                &[1.0, 0.0],
+                scope,
+                RetrievalLimits::BASELINE,
+            )
+            .unwrap()
+            .evidence
+        };
 
         let allowed = vec!["inside.pdf".to_string()];
-        let hits =
-            search_scoped(&store, query, &[1.0, 0.0], RetrievalScope::Files(&allowed)).unwrap();
-        assert_eq!(hits.len(), 1, "the in-scope match keeps its lexical bonus");
+        let hits = found(RetrievalScope::Files(&allowed));
+        assert_eq!(hits.len(), 1, "the in-scope passage keeps its bonus");
         assert_eq!(hits[0].chunk_id, "inside#p1#s1");
 
-        let named = search_scoped(
-            &store,
-            query,
-            &[1.0, 0.0],
-            RetrievalScope::File("inside.pdf"),
-        )
-        .unwrap();
-        assert_eq!(
-            named.len(),
-            1,
-            "a named file is held to its own lexical hits too"
-        );
+        let named = found(RetrievalScope::File("inside.pdf"));
+        assert_eq!(named.len(), 1, "a named file is held to its own hits too");
 
         let mut present = allowed.clone();
         present.extend(stuffed_paths.iter().take(1).cloned());
-        let current = search_scoped(
-            &store,
-            query,
-            &[1.0, 0.0],
-            RetrievalScope::CurrentFolder(&present),
-        )
-        .unwrap();
+        let current = found(RetrievalScope::CurrentFolder(&present));
         assert!(
             current.iter().any(|hit| hit.chunk_id == "inside#p1#s1"),
             "the current folder is held to its own files as well: {current:?}"
         );
+
+        assert!(
+            found(RetrievalScope::WholeFolder).is_empty(),
+            "the whole folder is never searched for a name, and a word alone brings nothing"
+        );
     }
 
-    /// `WholeFolder` keeps the unrestricted search: with nothing to restrict, nothing changes.
+    /// "Each document" evidence is what it was when every file ran its own lookups. The fixture puts the name
+    /// the question resolved to in the weaker-looking chunk of one file, so the answer depends on the entity
+    /// bonus reaching the per-file ranking.
     #[test]
-    fn the_whole_folder_keeps_the_unrestricted_lexical_search() {
-        let store = store_with_documents(vec![
-            (
-                "a.pdf",
-                vec![("a#p1#s1", "Cephalees episodiques", vec![0.0, 1.0])],
-            ),
-            (
-                "b.pdf",
-                vec![("b#p1#s1", "Sujet sans rapport", vec![0.0, 1.0])],
-            ),
-        ]);
-
-        let hits = search(&store, "cephalees", &[1.0, 0.0]).unwrap();
-
-        assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].chunk_id, "a#p1#s1");
-    }
-
-    /// "Each document" evidence must be what it was when every file ran its own query. The
-    /// fixture puts the query word in the weaker-looking chunk of one file, so the answer depends
-    /// on the lexical bonus reaching the per-file ranking.
-    #[test]
-    fn each_document_search_returns_the_same_evidence_with_one_lexical_query() {
+    fn each_document_search_returns_the_same_evidence_with_one_entity_query() {
         let store = store_with_documents(vec![
             (
                 "a.pdf",
@@ -1322,8 +1115,17 @@ mod tests {
             "b.pdf".to_string(),
             "c.pdf".to_string(),
         ];
+        let forms = ["Cephalees".to_string()];
 
-        let found = search_per_document_counted(&store, "cephalees", &[1.0, 0.0], &files).unwrap();
+        let found = search_per_document_counted_with_terms(
+            &store,
+            "cephalees",
+            &forms,
+            &[1.0, 0.0],
+            &files,
+            RetrievalLimits::BASELINE,
+        )
+        .unwrap();
 
         let ids: Vec<&str> = found
             .evidence
@@ -1333,14 +1135,15 @@ mod tests {
         assert_eq!(
             ids,
             vec!["a#p1#s1", "b#p1#s2", "c#p1#s1"],
-            "a's best chunk, b's lexical match over its closer vector, c's opening chunk as a \
+            "a's best chunk, b's entity match over its closer vector, c's opening chunk as a \
              fallback with score 0"
         );
         assert_eq!(found.evidence[2].score, 0.0);
         assert_eq!(found.chunks_considered, 4);
         assert_eq!(
-            search_per_document(&store, "cephalees", &[1.0, 0.0], &files).unwrap(),
-            found.evidence
+            search_per_document(&store, "cephalees", &[1.0, 0.0], &files).unwrap()[1].chunk_id,
+            "b#p1#s1",
+            "without a name, the closer vector wins"
         );
     }
 
@@ -1555,7 +1358,6 @@ mod tests {
             ordinal: 1,
             last_page: 2,
             section: None,
-            matches: Vec::new(),
             text: "HbA1c a 6.8 pourcent".into(),
             score: 0.9,
             origin: PageOrigin::TextLayer,
@@ -1569,97 +1371,7 @@ mod tests {
         assert!(turn.contains("HbA1c a 6.8 pourcent"));
     }
 
-    // Lot A of the retrieval-quality programme: the words of the question in the passage, the page
-    // range in the citation, and the coverage an answer carries.
-
-    fn found(store: &IndexStore, query: &str, extra: &[String], vector: &[f32]) -> Vec<Evidence> {
-        search_scoped_counted_with_terms(
-            store,
-            query,
-            extra,
-            vector,
-            RetrievalScope::WholeFolder,
-            RetrievalLimits::BASELINE,
-        )
-        .unwrap()
-        .evidence
-    }
-
-    /// The text each span covers, counted in characters.
-    fn marked(item: &Evidence) -> Vec<String> {
-        item.matches
-            .iter()
-            .map(|span| {
-                item.text
-                    .chars()
-                    .skip(span.start)
-                    .take(span.end - span.start)
-                    .collect()
-            })
-            .collect()
-    }
-
-    #[test]
-    fn the_words_of_the_question_are_marked_in_the_passage_without_case_or_accents() {
-        let store = store_with_chunks(vec![(
-            "a#p1#s1",
-            "a.pdf",
-            "The annual Franchise is set in Gen\u{e8}ve.",
-            vec![1.0, 0.0],
-        )]);
-        let items = found(&store, "franchise geneve", &[], &[1.0, 0.0]);
-        assert_eq!(marked(&items[0]), vec!["Franchise", "Gen\u{e8}ve"]);
-    }
-
-    #[test]
-    fn a_passage_found_by_meaning_alone_has_no_marked_word() {
-        let store = store_with_chunks(vec![(
-            "a#p1#s1",
-            "a.pdf",
-            "The amount left to pay after the refund.",
-            vec![1.0, 0.0],
-        )]);
-        let items = found(&store, "franchise", &[], &[1.0, 0.0]);
-        assert_eq!(items.len(), 1, "found by its vector");
-        assert!(items[0].matches.is_empty(), "no word of the question in it");
-    }
-
-    #[test]
-    fn a_word_of_fewer_than_four_letters_is_not_marked_as_in_the_word_search() {
-        let store = store_with_chunks(vec![(
-            "a#p1#s1",
-            "a.pdf",
-            "A franchise of 300 francs is due, of course.",
-            vec![1.0, 0.0],
-        )]);
-        let items = found(&store, "of franchise", &[], &[1.0, 0.0]);
-        assert_eq!(marked(&items[0]), vec!["franchise"]);
-    }
-
-    #[test]
-    fn a_name_the_question_resolved_to_is_marked_whole_whatever_its_length() {
-        let store = store_with_chunks(vec![(
-            "a#p1#s1",
-            "a.pdf",
-            "Courrier from Marie Roy dated March.",
-            vec![1.0, 0.0],
-        )]);
-        let extra = vec!["Marie Roy".to_string()];
-        let items = found(&store, "courrier", &extra, &[1.0, 0.0]);
-        assert_eq!(marked(&items[0]), vec!["Courrier", "Marie Roy"]);
-    }
-
-    #[test]
-    fn marked_offsets_count_characters_not_bytes() {
-        let store = store_with_chunks(vec![(
-            "a#p1#s1",
-            "a.pdf",
-            "\u{e9}t\u{e9} : franchise",
-            vec![1.0, 0.0],
-        )]);
-        let items = found(&store, "franchise", &[], &[1.0, 0.0]);
-        assert_eq!(items[0].matches, vec![MatchSpan { start: 6, end: 15 }]);
-    }
+    // The page range in the citation, and the coverage an answer carries.
 
     #[test]
     fn the_citation_gives_both_pages_of_a_passage_over_a_break() {
@@ -1670,7 +1382,6 @@ mod tests {
             ordinal: 1,
             last_page: last,
             section: None,
-            matches: Vec::new(),
             text: "Site | Delay".into(),
             score: 0.9,
             origin: PageOrigin::TextLayer,
@@ -1704,8 +1415,7 @@ mod tests {
                 ordinal: 1,
                 last_page: 1,
                 section: None,
-                matches: Vec::new(),
-                text: "text".into(),
+                    text: "text".into(),
                 score: 0.5,
                 origin: PageOrigin::TextLayer,
                 confidence: None,

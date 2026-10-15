@@ -116,26 +116,15 @@ fn the_cost_of_one_question_at_scale() {
         let embedding: Vec<f32> = (0..DIMENSION).map(|_| random.unit()).collect();
         let started = Instant::now();
         if mode == "old" {
-            let lexical: Vec<String> = store
-                .search_lexical(&text, 6)
-                .unwrap()
-                .into_iter()
-                .map(|h| h.chunk_id)
-                .collect();
             let all = store.all_chunks().unwrap();
             considered = all.len();
             let mut scored: Vec<(usize, f32)> = Vec::new();
             for (position, chunk) in all.iter().enumerate() {
                 let vector = cosine_similarity(&chunk.embedding, &embedding);
-                let bonus = if lexical.contains(&chunk.chunk_id) {
-                    0.2
-                } else {
-                    0.0
-                };
-                if vector < 0.15 && bonus == 0.0 {
+                if vector < 0.15 {
                     continue;
                 }
-                scored.push((position, vector + bonus));
+                scored.push((position, vector));
             }
             scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             let _kept: Vec<&str> = scored

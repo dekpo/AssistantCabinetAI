@@ -100,9 +100,16 @@ async fn a_stopped_scan_keeps_its_recognised_pages_and_the_next_pass_recognises_
     assert_eq!(pages, vec![1, 2, 3, 4, 5, 6], "each page once, in order");
     assert_eq!(second.indexed_files, 1);
     assert_eq!(lab.index.chunk_count().unwrap(), 6);
+    let paths: Vec<String> = lab
+        .index
+        .all_documents()
+        .unwrap()
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
     assert!(
         !lab.index
-            .search_lexical("registry 333", 5)
+            .search_lexical_terms_in(&["registry".to_string()], 5, &paths)
             .unwrap()
             .is_empty(),
         "a page recognised before the stop is in the document"

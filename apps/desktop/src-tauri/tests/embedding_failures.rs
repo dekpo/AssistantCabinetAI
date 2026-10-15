@@ -282,9 +282,19 @@ async fn a_file_that_cannot_be_embedded_does_not_stop_the_others() {
         stalled.done < stalled.total,
         "the failing file keeps its text and lacks some vectors"
     );
+    let paths: Vec<String> = run
+        .index
+        .all_documents()
+        .unwrap()
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
     assert!(
-        !run.index.search_lexical("para-0003", 5).unwrap().is_empty(),
-        "and it is still searchable by words"
+        !run.index
+            .search_lexical_terms_in(&["para-0003".to_string()], 5, &paths)
+            .unwrap()
+            .is_empty(),
+        "and its text is still in the full-text index"
     );
     assert_eq!(summary.vectors_pending, stalled.total - stalled.done);
 }

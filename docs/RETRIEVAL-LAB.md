@@ -11,7 +11,7 @@ The replay builds a temporary analysed copy of the knowledge sandbox, embeds it 
 | `pipeline` | What the product sends today for an ordinary question: the folder router, the knowledge step with the base off, the search with the baseline limits. Six passages at most. |
 | `hybrid30` | The same ranking (cosine plus the flat +0.2 lexical bonus) read to a depth of 30, with no routing. |
 | `vector30` | Cosine alone, depth 30. |
-| `lexical30` | The application's own full-text query (an OR of every word of four letters or more), depth 30. |
+| `lexical30` | **Removed on 15 October 2026** with the word search it measured (`docs/RETRIEVAL-QUALITY.md`, 12.7): the application's own full-text query (an OR of every word of four letters or more), depth 30. The figures below are what it gave. |
 | `term_all` | A plain phrase search of `chunks_fts`, every matching passage, for the six set sentences only (the offline check of `07-record-study-fixes-and-freeze.md`, section 5). |
 
 **Metric definitions.** *Recall@k* is the share of the question's relevant files (`relevant_readable`) that appear among the first k **passages**. *MRR* is the reciprocal rank of the first passage of a relevant file. *nDCG@10* uses one binary gain per relevant file, at its first passage. *fact@k* is 1 when one of the first k passages carries every string of the question's `expect.contains` (accents, case and punctuation ignored), which measures the **passage**, not only the file. *Wrong files* counts the distinct files returned that are not relevant: it is meaningful for the pipeline (six passages) and for the set sentences; at depth 30 it only says that 30 passages come from many files, so it is not a quality figure there.

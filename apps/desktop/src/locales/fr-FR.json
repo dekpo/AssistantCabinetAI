@@ -28,14 +28,8 @@
     "offline": "IA Indisponible",
     "recheck": "Vérifier l'IA"
   },
-  "found": {
-    "title": "Passages trouvés : {passages} passages dans {documents} documents",
-    "titleOne": "Passages trouvés : {passages} dans 1 document",
-    "page": "page {page}",
-    "pages": "pages {from} à {to}",
-    "byMeaning": "trouvé par le sens",
-    "show": "Afficher le fichier",
-    "others": "Autres documents ({documents}) : trouvés par le sens, aucun mot de la question"
+  "sources": {
+    "show": "Afficher le fichier"
   },
   "summary": {
     "button": "Résumer",

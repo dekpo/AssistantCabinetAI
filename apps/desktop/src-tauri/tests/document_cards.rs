@@ -122,7 +122,7 @@ async fn a_card_is_never_a_passage() {
 }
 
 #[tokio::test]
-async fn the_card_is_searchable_by_words_and_embedded_with_the_rest() {
+async fn the_card_is_embedded_with_the_rest() {
     let mut lab = Lab::new();
     lab.write("book.md", &book());
     lab.write(
@@ -130,9 +130,6 @@ async fn the_card_is_searchable_by_words_and_embedded_with_the_rest() {
         "# Quiet\nNothing special in this one.\n# Second\nStill nothing.\n",
     );
     lab.analyse().await;
-
-    let found = lab.index.search_cards("Zebrafishgamma", 5).unwrap();
-    assert_eq!(found, vec!["book.md".to_string()]);
 
     let counts = lab.index.vector_counts().unwrap();
     assert_eq!(
@@ -183,9 +180,4 @@ async fn a_card_follows_its_document_and_is_not_rebuilt_for_nothing() {
     let card = card_of(&lab, "book.md");
     assert!(card.contains("Zebrafishdelta") && !card.contains("Zebrafishbeta"));
     assert!(lab.index.card_of("gone.md").unwrap().is_none());
-    assert!(lab
-        .index
-        .search_cards("Zebrafishbeta", 5)
-        .unwrap()
-        .is_empty());
 }

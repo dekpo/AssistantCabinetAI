@@ -110,8 +110,18 @@ async fn a_stopped_pass_keeps_every_batch_it_finished_and_the_words_of_every_fil
     );
     assert_eq!(summary.vectors_pending, 134);
     // The last file's words are searchable although none of its vectors exists.
-    let hits = lab.index.search_lexical("file04 sentence 029", 5).unwrap();
-    assert!(!hits.is_empty(), "the word search works on everything");
+    let paths: Vec<String> = lab
+        .index
+        .all_documents()
+        .unwrap()
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
+    let hits = lab
+        .index
+        .search_lexical_terms_in(&["file04".to_string()], 5, &paths)
+        .unwrap();
+    assert!(!hits.is_empty(), "the text of every file is in the full-text index");
     // The profile of the files was built before the vectors: the finder works.
     let profiles = count(&lab.index_path(), "SELECT COUNT(*) FROM file_profiles");
     assert_eq!(profiles, 5);

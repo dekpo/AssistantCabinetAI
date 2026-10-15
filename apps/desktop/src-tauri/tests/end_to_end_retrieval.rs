@@ -1,7 +1,7 @@
 //! The chain end to end on the sandbox: work folder -> index -> retrieval -> sourced answer.
 //!
 //! A tiny local stand-in for the gateway answers `/v1/embeddings` (a crude bag-of-words vector,
-//! good enough combined with the real FTS5 lexical search) and `/v1/chat/completions` (a canned
+//! good enough to tell an on-topic excerpt from an off-topic one) and `/v1/chat/completions` (a canned
 //! streamed reply), so this test exercises the client pipeline without needing Ollama running.
 //! Acceptance for milestone A (`docs/ROADMAP.md`): three questions, three sourced answers; a
 //! fourth, off-topic question gets the refusal.
@@ -75,27 +75,46 @@ fn chat_response() -> String {
     "data: {\"choices\":[{\"delta\":{\"content\":\"Reponse fondee sur les extraits fournis.\"}}]}\n\ndata: [DONE]\n\n".to_string()
 }
 
-/// A crude, deterministic embedding: hash each lowercase word into one of `EMBEDDING_DIMENSIONS`
-/// buckets and count it. Not a real model, but real cosine similarity on top of it, combined
-/// with the genuine FTS5 lexical search in `IndexStore`, is enough to tell an on-topic passage
-/// from an off-topic one - which is all this fake stands in for.
+/// The topics of the sandbox, as a real embedding model would see them: a word names the topic it belongs to
+/// and the topic weighs more than a word, so a question and the document it is about are close although they
+/// share a single word. The excerpts are chosen by similarity alone (the words of a question choose nothing by
+/// themselves), so the fake has to carry the meaning.
+const TOPICS: &[(&str, &[&str])] = &[
+    ("topic-diabetes", &["metformine", "hba1c", "glycemie", "cholesterol"]),
+    ("topic-headache", &["cephalees", "neurologie"]),
+    ("topic-joints", &["articulaires", "anticorps", "rhumatologie", "rhumatoide"]),
+];
+const TOPIC_WEIGHT: f32 = 6.0;
+
 const STOPWORDS: &[&str] = &[
     "le", "la", "les", "de", "des", "du", "un", "une", "et", "est", "a", "au", "aux", "en", "pour",
     "sur", "avec", "que", "qui", "quel", "quelle", "quels", "quelles", "ce", "ci", "depuis",
     "combien", "temps", "il", "elle", "d", "l", "s", "n",
 ];
 
+/// A crude, deterministic embedding: hash each lowercase word into one of `EMBEDDING_DIMENSIONS`
+/// buckets and count it, and add the topic of the words that name one. Not a real model, but real cosine
+/// similarity on top of it is enough to tell an on-topic passage from an off-topic one - which is all this
+/// fake stands in for.
 fn bag_of_words_embedding(text: &str) -> Vec<f32> {
     let mut buckets = vec![0.0_f32; EMBEDDING_DIMENSIONS];
+    let mut add = |word: &str, weight: f32| {
+        let mut hasher = DefaultHasher::new();
+        word.hash(&mut hasher);
+        let bucket = (hasher.finish() as usize) % EMBEDDING_DIMENSIONS;
+        buckets[bucket] += weight;
+    };
     for word in text.split(|c: char| !c.is_alphanumeric()) {
         let word = word.to_lowercase();
         if word.is_empty() || STOPWORDS.contains(&word.as_str()) {
             continue;
         }
-        let mut hasher = DefaultHasher::new();
-        word.hash(&mut hasher);
-        let bucket = (hasher.finish() as usize) % EMBEDDING_DIMENSIONS;
-        buckets[bucket] += 1.0;
+        add(&word, 1.0);
+        for (topic, words) in TOPICS {
+            if words.contains(&word.as_str()) {
+                add(topic, TOPIC_WEIGHT);
+            }
+        }
     }
     let norm: f32 = buckets.iter().map(|v| v * v).sum::<f32>().sqrt();
     if norm > 0.0 {

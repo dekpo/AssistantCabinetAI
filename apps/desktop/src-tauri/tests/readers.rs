@@ -114,7 +114,18 @@ async fn each_new_format_is_analysed_searchable_and_left_untouched() {
         ("quote total", "quote.eml"),
         ("cleaning contract", "call.vtt"),
     ] {
-        let hits = lab.index.search_lexical(word, 5).unwrap();
+        let paths: Vec<String> = lab
+            .index
+            .all_documents()
+            .unwrap()
+            .into_iter()
+            .map(|d| d.relative_path)
+            .collect();
+        let first_word = word.split(' ').next().unwrap().to_string();
+        let hits = lab
+            .index
+            .search_lexical_terms_in(&[first_word], 20, &paths)
+            .unwrap();
         let found: Vec<String> = hits
             .iter()
             .filter_map(|hit| hit.chunk_id.split('#').next().map(str::to_string))

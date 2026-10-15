@@ -122,11 +122,6 @@ export interface EvidenceSection {
   lastPage: number;
 }
 
-export interface MatchSpan {
-  start: number;
-  end: number;
-}
-
 export interface Evidence {
   chunkId: string;
   relativePath: string;
@@ -139,9 +134,6 @@ export interface Evidence {
   /** The section of the document the passage starts in, when the document has a structure. `title`
    * is empty for a slice of pages ("pages 21 to 40" is said from the range). */
   section: EvidenceSection | null;
-  /** Where the words of the question stand in `text`, as character offsets (code points, end
-   * exclusive). Empty for a passage found by meaning alone. */
-  matches: MatchSpan[];
   text: string;
   score: number;
   origin: PageOrigin;

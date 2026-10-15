@@ -5,7 +5,7 @@
 //! `#[ignore]`: the real run embeds the library through the gateway and takes minutes.
 //!
 //! ```text
-//! # plumbing check, fake vectors (lexical channels are real, vector channels meaningless)
+//! # plumbing check, fake vectors (the vector channels are meaningless)
 //! ACAI_FAKE=1 ACAI_TIER=30 ACAI_LAB_LABEL=plumbing \
 //!   cargo test --release --test retrieval_lab -- --ignored --nocapture
 //! # the real baseline, through the gateway's embedding model
@@ -26,10 +26,9 @@
 //!
 //! - `pipeline`: what the product sends today for an ordinary question (the folder router, the knowledge step
 //!   with the base off, the search with the baseline limits): six passages at most.
-//! - `hybrid30`: the same ranking (cosine plus the flat lexical bonus) read to a depth of 30 passages, with no
-//!   routing, so recall@10 and recall@30 can be read.
+//! - `hybrid30`: the same ranking (the meaning, the named entities, the identifiers and facts) read to a depth
+//!   of 30 passages, with no routing, so recall@10 and recall@30 can be read.
 //! - `vector30`: cosine alone, depth 30.
-//! - `lexical30`: the application's own full-text query (an OR of every word of four letters or more), depth 30.
 //! - `term_all`: the plain phrase search of `chunks_fts` for the six set sentences of the final test, every
 //!   matching file in rank order (the offline check of `07-record-study-fixes-and-freeze.md`, section 5).
 
@@ -184,7 +183,6 @@ fn assembly_options_from(flags: &str) -> assistant_cabinet_ai_lib::assembly::Ass
             "cap2" => options.per_section_cap = Some(2),
             "neighbours" => options.neighbours = true,
             "edges" => options.edges_first = true,
-            "rrf" => options.fusion = assistant_cabinet_ai_lib::assembly::Fusion::Rrf,
             "pin" => options.pin_identifier = true,
             "facts" => options.facts = true,
             _ => {}
@@ -193,38 +191,15 @@ fn assembly_options_from(flags: &str) -> assistant_cabinet_ai_lib::assembly::Ass
     options
 }
 
-/// The lexical switches of one replay: `phrases,thesaurus` (any of them), or `off`.
-fn lexical_options_from(flags: &str) -> assistant_cabinet_ai_lib::lexical::LexicalOptions {
-    use assistant_cabinet_ai_lib::lexical::LexicalOptions;
-    let mut options = LexicalOptions::OFF;
-    for flag in flags.split(',').map(str::trim) {
-        match flag {
-            "phrases" => options.phrases = true,
-            "thesaurus" => options.thesaurus = true,
-            "" | "off" | "cap1" | "cap2" | "neighbours" | "edges" | "rrf" | "pin" | "facts" => {}
-            other => panic!("unknown lexical switch {other}"),
-        }
-    }
-    options
-}
-
-/// `ACAI_LEXICAL_SETS="off;phrases;near;phrases,near"` replays the questions once per set over the same
-/// analysed index and writes each to `<label>-<set>`; without it one replay runs with `ACAI_LEXICAL`.
-fn lexical_sets() -> Vec<(String, assistant_cabinet_ai_lib::lexical::LexicalOptions)> {
-    match std::env::var("ACAI_LEXICAL_SETS") {
+/// `ACAI_ASSEMBLY_SETS="off;pin;pin,facts"` replays the questions once per set over the same analysed index and
+/// writes each to `<label>-<set>`; without it one replay runs with `ACAI_ASSEMBLY`.
+fn assembly_sets() -> Vec<(String, assistant_cabinet_ai_lib::assembly::AssemblyOptions)> {
+    match std::env::var("ACAI_ASSEMBLY_SETS") {
         Ok(sets) if !sets.trim().is_empty() => sets
             .split(';')
-            .map(|set| (set.trim().replace(',', "+"), lexical_options_from(set)))
+            .map(|set| (set.trim().replace(',', "+"), assembly_options_from(set)))
             .collect(),
-        _ => vec![(String::new(), lexical_options_from(&env("ACAI_LEXICAL", "off")))],
-    }
-}
-
-/// The same sets read for the assembly (`cap1`, `cap2`, `neighbours`, `edges`), in the same order.
-fn assembly_sets() -> Vec<assistant_cabinet_ai_lib::assembly::AssemblyOptions> {
-    match std::env::var("ACAI_LEXICAL_SETS") {
-        Ok(sets) if !sets.trim().is_empty() => sets.split(';').map(assembly_options_from).collect(),
-        _ => vec![assembly_options_from(&env("ACAI_LEXICAL", "off"))],
+        _ => vec![(String::new(), assembly_options_from(&env("ACAI_ASSEMBLY", "off")))],
     }
 }
 
@@ -403,9 +378,7 @@ async fn replay_the_exam_without_the_model() {
     let mut embeddings: HashMap<String, Vec<f32>> = HashMap::new();
     let rerank_wanted = env("ACAI_RERANK", "0") == "1";
 
-    let assemblies = assembly_sets();
-    for ((set_name, set_options), assembly) in lexical_sets().into_iter().zip(assemblies) {
-    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(Some(set_options));
+    for (set_name, assembly) in assembly_sets() {
     assistant_cabinet_ai_lib::assembly::set_assembly_options_for_measurement(Some(assembly));
     let out = if set_name.is_empty() {
         out.clone()
@@ -511,22 +484,6 @@ async fn replay_the_exam_without_the_model() {
         let hybrid = from_evidence(&outcome.evidence, facts);
         lines.push(line(index, &q.id, "hybrid30", route, ms, &hybrid));
 
-        // refusal: would the application refuse this question before any embedding or model?
-        {
-            let started = Instant::now();
-            let verdict = assistant_cabinet_ai_lib::refusal::check(index, &q.text);
-            let ms = started.elapsed().as_secs_f64() * 1000.0;
-            let (refused, terms) = match verdict {
-                Ok(assistant_cabinet_ai_lib::refusal::Verdict::Unknown(words)) => (true, words),
-                _ => (false, Vec::new()),
-            };
-            lines.push(
-                json!({"id": q.id, "channel": "refusal", "route": route, "ms": ms,
-                       "results": [], "refused": refused, "terms": terms})
-                .to_string(),
-            );
-        }
-
         // rerank6 / rerank30: the first thirty candidates put in order by the gateway's reranker
         // (`ACAI_RERANK=1`). `rerank6` is what the model would read; `rerank30` the whole new order.
         // A question that names a file, or asks about every document, is not reranked (the product's rule,
@@ -598,27 +555,6 @@ async fn replay_the_exam_without_the_model() {
             .collect();
         lines.push(line(index, &q.id, "vector30", route, ms, &vector));
 
-        // lexical30: the application's own full-text query
-        let started = Instant::now();
-        let hits = index
-            .search_lexical(&q.text, chunks.len().max(DEPTH))
-            .expect("searches the words");
-        let ms = started.elapsed().as_secs_f64() * 1000.0;
-        let lexical: Vec<Passage> = hits
-            .iter()
-            .filter_map(|hit| by_id.get(hit.chunk_id.as_str()).map(|c| (hit.rank, *c)))
-            .filter(|(_, c)| permitted(&c.relative_path))
-            .take(DEPTH)
-            .map(|(rank, c)| Passage {
-                path: c.relative_path.clone(),
-                page: c.page_number,
-                chunk_id: c.chunk_id.clone(),
-                score: -rank,
-                fact: carries_fact(facts, &c.text),
-            })
-            .collect();
-        lines.push(line(index, &q.id, "lexical30", route, ms, &lexical));
-
         // term_all: the plain phrase search, every matching passage, for the six set sentences
         let set_term = SET_TERMS
             .iter()
@@ -661,6 +597,5 @@ async fn replay_the_exam_without_the_model() {
         skipped
     );
     }
-    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(None);
     assistant_cabinet_ai_lib::assembly::set_assembly_options_for_measurement(None);
 }

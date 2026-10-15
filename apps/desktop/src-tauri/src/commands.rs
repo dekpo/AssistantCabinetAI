@@ -2183,15 +2183,6 @@ async fn sourced_answer(
     // model below read the question as she wrote it.
     let search_text = conversation::retrieval_query(&question, &history);
     stage.lap_ms();
-    // A question about a name or a code that no document holds has nothing to be answered from: say so now,
-    // with no embedding and no model. Only for a search of the whole selection (a named file is the user's
-    // own choice).
-    if crate::assembly::assembly_options().refusal && matches!(plan, Plan::WholeFolder) {
-        if let crate::refusal::Verdict::Unknown(_) = crate::refusal::check(&index, &question)? {
-            measured.refusal = Some("unknown_terms");
-            return Err(AppError::InsufficientEvidence);
-        }
-    }
     let query_vectors = state
         .gateway
         .embed(

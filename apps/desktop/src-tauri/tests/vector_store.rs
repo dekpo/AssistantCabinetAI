@@ -113,7 +113,7 @@ async fn a_question_of_another_dimension_is_reported_not_compared_silently() {
         "every stored vector has another length than the question"
     );
     assert!(
-        !other.evidence.is_empty(),
-        "the word half of the search still answers"
+        other.evidence.is_empty(),
+        "vectors of another length are not compared: nothing is ranked on them"
     );
 }

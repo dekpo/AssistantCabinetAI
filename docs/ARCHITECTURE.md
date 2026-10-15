@@ -79,7 +79,7 @@ TextExtractor       extract(path) -> ExtractedDocument            pdf / docx / t
 OcrProvider         recognise(page image) -> OcrPage              one local engine, replaceable
 Chunker             chunk(document) -> Chunk[]                    keeps file, page, section
 Embedder            embed(text[]) -> Vector[]                     gateway today, local ONNX later
-IndexStore          upsert / search_lexical / search_vector       SQLite today
+IndexStore          upsert / search_identifier / search_vector    SQLite today
 RetrievalService    search(query, scope) -> Evidence[]
 AnalysisScope       resolve(inventory) -> ScopeResolution         the documents she chose; default none, which answers without excerpts
 ConversationMemory  fit_history(turns, budget) -> ChatTurn[]      recent exchanges within the model's window; excerpts never resent

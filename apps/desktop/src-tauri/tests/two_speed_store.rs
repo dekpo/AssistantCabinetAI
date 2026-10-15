@@ -190,7 +190,15 @@ fn an_index_from_before_is_untouched_until_the_upgrade_and_the_upgrade_loses_not
         (after[0].text.as_str(), after[0].embedding.clone()),
         ("old words", vec![1.0, 2.0])
     );
-    let hits = store.search_lexical("words", 5).unwrap();
+    let paths: Vec<String> = store
+        .all_documents()
+        .unwrap()
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
+    let hits = store
+        .search_lexical_terms_in(&["words".to_string()], 5, &paths)
+        .unwrap();
     assert_eq!(hits.len(), 1, "the word index is intact");
     assert!(
         !store.upgrade_layout().unwrap(),
@@ -199,7 +207,7 @@ fn an_index_from_before_is_untouched_until_the_upgrade_and_the_upgrade_loses_not
 }
 
 #[test]
-fn a_search_finds_a_passage_without_a_vector_by_its_words_and_says_how_many_it_could_not_weigh() {
+fn a_search_finds_the_passages_with_a_vector_by_meaning_and_says_how_many_it_could_not_weigh() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
     let chunks = vec![
@@ -219,8 +227,12 @@ fn a_search_finds_a_passage_without_a_vector_by_its_words_and_says_how_many_it_c
         .unwrap();
     let found = search(&store, "nightingale registry", &vector(0.9)).unwrap();
     assert!(
-        found.iter().any(|e| e.chunk_id == "a.txt#p1#s1"),
-        "the passage with no vector is found by its words"
+        found.iter().any(|e| e.chunk_id == "a.txt#p1#s2"),
+        "the passage with a vector is found by its meaning"
+    );
+    assert!(
+        !found.iter().any(|e| e.chunk_id == "a.txt#p1#s1"),
+        "the passage with no vector is not found by its words: nothing but the vector places it"
     );
 
     let outcome = assistant_cabinet_ai_lib::retrieval::search_scoped_counted(

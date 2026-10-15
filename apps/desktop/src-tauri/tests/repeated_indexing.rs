@@ -272,9 +272,16 @@ async fn a_document_deleted_from_the_folder_stops_being_citable() {
         "a document that left the folder is reported by name, not silently kept"
     );
     assert!(second.chunk_count < chunks_with_both);
+    let mut paths: Vec<String> = index
+        .all_documents()
+        .unwrap()
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
+    paths.push(SCAN.to_string());
     assert!(
         index
-            .search_lexical("rhumatologie", 10)
+            .search_lexical_terms_in(&["rhumatologie".to_string()], 10, &paths)
             .expect("searches")
             .is_empty(),
         "the deleted document's passages must no longer be findable"

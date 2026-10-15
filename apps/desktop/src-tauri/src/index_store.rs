@@ -221,8 +221,8 @@ impl IndexStore {
                 .execute_batch(PENDING_INDEX)
                 .map_err(|_| AppError::IndexUnavailable)?;
         }
-        // One card per document (`cards`): a short digest built with no model, indexed by words and
-        // embedded like a passage, and never a passage of the document.
+        // One card per document (`cards`): a short digest built with no model, embedded like a passage, and
+        // never a passage of the document.
         connection
             .execute_batch(
                 "
@@ -232,10 +232,6 @@ impl IndexStore {
                     version INTEGER NOT NULL,
                     text TEXT NOT NULL,
                     embedding BLOB
-                );
-                CREATE VIRTUAL TABLE IF NOT EXISTS document_cards_fts USING fts5(
-                    relative_path UNINDEXED,
-                    text
                 );
                 ",
             )
@@ -301,11 +297,13 @@ impl IndexStore {
                 ",
             )
             .map_err(|_| AppError::IndexUnavailable)?;
-        // The stems and trigram tables of an earlier version (removed: `docs/RETRIEVAL-QUALITY.md`, "Methods
-        // removed, and why") are dropped, empty or not; a new index never has them. The recorded layout goes
+        // The stems and trigram tables of an earlier version, and the word index of the cards (removed:
+        // `docs/RETRIEVAL-QUALITY.md`, "Methods removed, and why"), are dropped, empty or not; a new index never
+        // has them. The recorded layout goes
         // too; a new index has no such table yet, and an error there means there is nothing to forget.
         connection
-            .execute_batch("DROP TABLE IF EXISTS chunks_lex; DROP TABLE IF EXISTS chunks_tri;")
+            .execute_batch("DROP TABLE IF EXISTS chunks_lex; DROP TABLE IF EXISTS chunks_tri;
+                 DROP TABLE IF EXISTS document_cards_fts;")
             .map_err(|_| AppError::IndexUnavailable)?;
         let _ = connection.execute("DELETE FROM file_profile_meta WHERE key = 'lexical_layout'", []);
         Self::ensure_column(
@@ -857,7 +855,7 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
-    /// Store the card of a document, without a vector (phase 2 computes it), and index its words.
+    /// Store the card of a document, without a vector (phase 2 computes it).
     pub fn replace_card(
         &mut self,
         relative_path: &str,
@@ -879,54 +877,17 @@ impl IndexStore {
         let embedding = kept.and_then(|(old, vector)| (old == text).then_some(vector).flatten());
         let tx = self.transaction()?;
         tx.execute(
-            "DELETE FROM document_cards_fts WHERE relative_path = ?1",
-            [relative_path],
-        )
-        .map_err(|_| AppError::IndexUnavailable)?;
-        tx.execute(
             "INSERT OR REPLACE INTO document_cards (relative_path, sha256, version, text, embedding)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![relative_path, sha256, version, text, embedding],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
-        tx.execute(
-            "INSERT INTO document_cards_fts (relative_path, text) VALUES (?1, ?2)",
-            rusqlite::params![relative_path, text],
-        )
-        .map_err(|_| AppError::IndexUnavailable)?;
         tx.commit().map_err(|_| AppError::IndexUnavailable)
-    }
-
-    /// The documents whose card holds these words, best first.
-    pub fn search_cards(&self, query: &str, limit: usize) -> Result<Vec<String>, AppError> {
-        let expression = fts_match_expression(query);
-        if expression.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT relative_path FROM document_cards_fts WHERE document_cards_fts MATCH ?1
-                 ORDER BY bm25(document_cards_fts) LIMIT ?2",
-            )
-            .map_err(|_| AppError::IndexUnavailable)?;
-        let rows = statement
-            .query_map(rusqlite::params![expression, limit as i64], |row| {
-                row.get::<_, String>(0)
-            })
-            .map_err(|_| AppError::IndexUnavailable)?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|_| AppError::IndexUnavailable)
     }
 
     fn forget_card(tx: &rusqlite::Transaction<'_>, relative_path: &str) -> Result<(), AppError> {
         tx.execute(
             "DELETE FROM document_cards WHERE relative_path = ?1",
-            [relative_path],
-        )
-        .map_err(|_| AppError::IndexUnavailable)?;
-        tx.execute(
-            "DELETE FROM document_cards_fts WHERE relative_path = ?1",
             [relative_path],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
@@ -1641,7 +1602,7 @@ impl IndexStore {
         tx.execute_batch(
             "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;
              DELETE FROM chunk_sections; DELETE FROM chunk_pages; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
-             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts; DELETE FROM document_summaries; DELETE FROM ld_facts;",
+             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_summaries; DELETE FROM ld_facts;",
         )
         .map_err(|_| AppError::IndexUnavailable)?;
         knowledge::store::clear_domain(&tx, Domain::Documents)?;
@@ -1724,126 +1685,28 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
-    /// FTS5 lexical search, escaping the query to a simple `OR`-of-terms match so punctuation
-    /// in a question cannot break the FTS syntax. The expressions come from `lexical::plan`: with every
-    /// switch of `lexical_options()` off that is the one it always was.
-    pub fn search_lexical(&self, query: &str, limit: usize) -> Result<Vec<LexicalHit>, AppError> {
-        self.search_lexical_planned(query, limit, None)
-    }
-
-    /// The same full-text search, held to the chunks of `relative_paths`.
-    ///
-    /// The restriction is part of the query, so the `limit` is spent on in-scope chunks only. A
-    /// search of the whole index that is filtered afterwards is not equivalent: a file outside the
-    /// selection stuffed with the query's words takes the best lexical places, and the match the
-    /// selection does hold goes without its bonus. An empty set allows nothing, not everything.
-    ///
-    /// `bm25(chunks_fts)` is unchanged by the join: the full-text table is still the one the
-    /// `MATCH` is written against, so its ranking function sees the same statistics.
-    pub fn search_lexical_in(
-        &self,
-        query: &str,
-        limit: usize,
-        relative_paths: &[String],
-    ) -> Result<Vec<LexicalHit>, AppError> {
-        if relative_paths.is_empty() {
-            return Ok(Vec::new());
-        }
-        self.search_lexical_planned(query, limit, Some(relative_paths))
-    }
-
-    /// Run the tiers of the plan in turn and keep the first `limit` distinct passages: the passages of a
-    /// stronger tier come first, in the order the full-text ranking gives them.
-    fn search_lexical_planned(
-        &self,
-        query: &str,
-        limit: usize,
-        relative_paths: Option<&[String]>,
-    ) -> Result<Vec<LexicalHit>, AppError> {
-        let options = crate::lexical::lexical_options();
-        let plan = if options.is_off() {
-            let expression = fts_match_expression(query);
-            crate::lexical::LexicalPlan {
-                tiers: (!expression.is_empty())
-                    .then_some(crate::lexical::Tier { expression })
-                    .into_iter()
-                    .collect(),
-            }
-        } else {
-            crate::lexical::plan(query, &options, crate::lexical::Lexicon::shipped())
-        };
-        let mut hits: Vec<LexicalHit> = Vec::new();
-        for (position, tier) in plan.tiers.iter().enumerate() {
-            if position > 0 && hits.len() >= limit {
-                break;
-            }
-            let found = match self.run_tier(tier, limit, relative_paths) {
-                Ok(found) => found,
-                // A later tier is a refinement: one the full-text index cannot read is skipped, the
-                // first one (the words) is the search itself.
-                Err(_) if position > 0 => continue,
-                Err(error) => return Err(error),
-            };
-            for hit in found {
-                if hits.len() >= limit {
-                    break;
-                }
-                if !hits.iter().any(|known| known.chunk_id == hit.chunk_id) {
-                    hits.push(hit);
-                }
-            }
-        }
-        Ok(hits)
-    }
-
-    /// Whether the documents hold these words one after the other (a code is the phrase of its parts) in any
-    /// passage, or in the names, entities and headers the file profiles keep. Reads the full-text indexes only.
-    pub fn phrase_in_index(&self, parts: &[String]) -> Result<bool, AppError> {
-        if parts.is_empty() {
-            return Ok(false);
-        }
-        let expression = format!("\"{}\"", parts.join(" "));
-        for sql in [
-            "SELECT 1 FROM chunks_fts WHERE chunks_fts MATCH ?1 LIMIT 1",
-            "SELECT 1 FROM file_profile_fts WHERE file_profile_fts MATCH ?1 LIMIT 1",
-        ] {
-            let found = self
-                .connection
-                .query_row(sql, [&expression], |_| Ok(()))
-                .optional()
-                .map_err(|_| AppError::IndexUnavailable)?;
-            if found.is_some() {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
     /// The passages that hold an identifier written in the question (`FAC-2026-014`), found as the phrase of
-    /// its parts in the full-text index. Empty when the question holds none.
+    /// its parts in the full-text index. Empty when the question holds none. The only passages the words of a
+    /// question choose, and they are codes, not words.
     pub fn search_identifier(
         &self,
         question: &str,
         limit: usize,
         relative_paths: Option<&[String]>,
     ) -> Result<Vec<LexicalHit>, AppError> {
-        let Some(expression) = crate::lexical::identifier_expression(question) else {
+        let Some(expression) = crate::identifier::identifier_expression(question) else {
             return Ok(Vec::new());
         };
         if relative_paths.is_some_and(|paths| paths.is_empty()) {
             return Ok(Vec::new());
         }
-        self.run_tier(
-            &crate::lexical::Tier { expression },
-            limit,
-            relative_paths,
-        )
+        self.run_expression(&expression, limit, relative_paths)
     }
 
     /// One full-text expression against the passages as written, best match first.
-    fn run_tier(
+    fn run_expression(
         &self,
-        tier: &crate::lexical::Tier,
+        expression: &str,
         limit: usize,
         relative_paths: Option<&[String]>,
     ) -> Result<Vec<LexicalHit>, AppError> {
@@ -1859,7 +1722,7 @@ impl IndexStore {
                     .prepare(&sql)
                     .map_err(|_| AppError::IndexUnavailable)?;
                 let rows = statement
-                    .query_map(rusqlite::params![tier.expression, limit as i64], |row| {
+                    .query_map(rusqlite::params![expression, limit as i64], |row| {
                         Ok(LexicalHit {
                             chunk_id: row.get(0)?,
                             // bm25() in SQLite FTS5 is lower-is-better; keep as-is and let the caller sort.
@@ -1885,7 +1748,7 @@ impl IndexStore {
                     .map_err(|_| AppError::IndexUnavailable)?;
                 let rows = statement
                     .query_map(
-                        rusqlite::params![tier.expression, paths, limit as i64],
+                        rusqlite::params![expression, paths, limit as i64],
                         |row| {
                             Ok(LexicalHit {
                                 chunk_id: row.get(0)?,
@@ -1901,10 +1764,8 @@ impl IndexStore {
     }
 
     /// The full-text search for the surface forms of entities (`entity_terms_expression`), held to
-    /// the chunks of `relative_paths`. A separate door from `search_lexical_in` on purpose: the
-    /// question's own words keep the generic rule (a word of fewer than four letters is dropped),
-    /// while the forms of a name a question resolved to are searched whole and whatever their length,
-    /// because `Roy` and `Ng` are exactly the names that rule loses.
+    /// the chunks of `relative_paths`. The forms of a name a question resolved to are searched whole and
+    /// whatever their length, because `Roy` and `Ng` are short names.
     pub fn search_lexical_terms_in(
         &self,
         terms: &[String],
@@ -2306,10 +2167,19 @@ pub struct TabularInventoryRow {
 /// (`docs/WORK-FOLDER-INVENTORY.md`).
 impl crate::folder_questions::CorpusWords for IndexStore {
     fn contains(&self, word: &str) -> bool {
-        !self
-            .search_lexical(word, 1)
-            .map(|hits| hits.is_empty())
-            .unwrap_or(true)
+        let expression = corpus_word_expression(word);
+        if expression.is_empty() {
+            return false;
+        }
+        self.connection
+            .query_row(
+                "SELECT 1 FROM chunks_fts WHERE chunks_fts MATCH ?1 LIMIT 1",
+                [&expression],
+                |_| Ok(()),
+            )
+            .optional()
+            .map(|found| found.is_some())
+            .unwrap_or(false)
     }
 
     fn profiles(&self) -> Option<&dyn crate::finder::rank::ProfileFacts> {
@@ -2405,29 +2275,16 @@ fn decode_vector(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
-/// A plain `OR`-of-terms match: strip FTS5 operator characters and quote each term, so a
-/// question containing `?`, `"` or `-` cannot be read as query syntax. `OR` rather than `AND`
-/// because a natural-language question shares only its content words with the passage that
-/// answers it, rarely every word in the sentence.
-///
-/// Terms shorter than four characters are dropped: a length cutoff, not a language-specific
-/// stopword list, but it removes most short function words in French and in English alike, so
-/// a lexical hit means a real content word matched rather than an article or a preposition
-/// that recurs in every document in the folder.
-fn fts_match_expression(query: &str) -> String {
-    lexical_words(query)
-        .map(|term| format!("\"{term}\""))
+/// The expression that asks the passages whether the router's `word` is in the corpus: the pieces of the word
+/// made of letters and digits, four characters or more (a shorter piece is a function word in French and in
+/// English alike, and says nothing about the corpus), each quoted so that no character of the word can be read
+/// as full-text syntax. Empty when no piece remains.
+fn corpus_word_expression(word: &str) -> String {
+    word.split(|c: char| !c.is_alphanumeric())
+        .filter(|piece| piece.chars().count() >= 4)
+        .map(|piece| format!("\"{piece}\""))
         .collect::<Vec<_>>()
         .join(" OR ")
-}
-
-/// The words of a question the word search uses: letters and digits runs of four characters or more.
-/// One rule for the search itself and for marking those words in the passages it returns, so the two
-/// cannot drift apart.
-pub fn lexical_words(query: &str) -> impl Iterator<Item = &str> {
-    query
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|term| term.chars().count() >= 4)
 }
 
 /// The most surface forms one expression carries: an entity has a handful of aliases, and a
@@ -2438,9 +2295,8 @@ const MAX_ENTITY_TERMS: usize = 60;
 /// An FTS5 expression for the surface forms of resolved entities: each form quoted as a phrase (so
 /// `jean dupont` must appear in that order and `dupont` alone is a word), joined with OR. A form
 /// of one or two letters is only kept when it has a letter and is not a lone initial; the generic
-/// `fts_match_expression` drops every word of fewer than four characters, which loses `Roy`, `Lee`
-/// and `Ng` (master section 4). Nothing but letters and digits survives, so a form can never carry
-/// FTS syntax.
+/// A form of two letters is kept (`Roy`, `Lee` and `Ng` are names, master section 4). Nothing but letters
+/// and digits survives, so a form can never carry FTS syntax.
 pub fn entity_terms_expression(terms: &[String]) -> String {
     let mut seen = std::collections::BTreeSet::new();
     let mut phrases = Vec::new();
@@ -2633,8 +2489,9 @@ mod tests {
         assert_eq!(gone, vec!["inbox/deleted.pdf".to_string()]);
         assert_eq!(store.all_documents().unwrap().len(), 1);
         // The point of the whole thing: its passages can no longer be offered as evidence.
+        let both = ["inbox/kept.pdf".to_string(), "inbox/deleted.pdf".to_string()];
         assert!(store
-            .search_lexical("Camille", 10)
+            .search_lexical_terms_in(&["Camille".to_string()], 10, &both)
             .unwrap()
             .iter()
             .all(|hit| !hit.chunk_id.contains("deleted")));
@@ -2821,7 +2678,9 @@ mod tests {
             )
             .unwrap();
 
-        let hits = store.search_lexical("HbA1c", 5).unwrap();
+        let hits = store
+            .search_lexical_terms_in(&["HbA1c".to_string()], 5, &["inbox/letter.pdf".to_string()])
+            .unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].chunk_id, "inbox/letter.pdf#p1#s1");
@@ -2849,66 +2708,46 @@ mod tests {
         (dir, store)
     }
 
-    /// The bundled SQLite must offer `json_each`, and `bm25` must mean the same thing through the
-    /// join: the same chunks, ranked the same way, as the unrestricted search over the same files.
     #[test]
-    fn a_scoped_lexical_search_ranks_exactly_like_the_unrestricted_one() {
+    fn a_scoped_entity_search_only_returns_chunks_of_the_given_files() {
         let (_dir, store) = store_with_three_files();
-        let every_path: Vec<String> = [
-            "Archive \u{e9}t\u{e9}/it's \"a\" name.pdf",
-            "b.pdf",
-            "c.pdf",
-        ]
-        .iter()
-        .map(|path| path.to_string())
-        .collect();
-
-        let unrestricted = store.search_lexical("cephalees episodiques", 6).unwrap();
-        let scoped = store
-            .search_lexical_in("cephalees episodiques", 6, &every_path)
-            .unwrap();
-
-        assert_eq!(unrestricted.len(), 2);
-        assert_eq!(scoped, unrestricted);
-        assert!(scoped[0].rank <= scoped[1].rank, "bm25 is lower-is-better");
-    }
-
-    #[test]
-    fn a_scoped_lexical_search_only_returns_chunks_of_the_given_files() {
-        let (_dir, store) = store_with_three_files();
+        let form = ["cephalees".to_string()];
 
         let hits = store
-            .search_lexical_in("cephalees", 6, &["b.pdf".to_string()])
+            .search_lexical_terms_in(&form, 6, &["b.pdf".to_string()])
             .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].chunk_id, "b.pdf#p1#s1");
 
         let none = store
-            .search_lexical_in("cephalees", 6, &["c.pdf".to_string()])
+            .search_lexical_terms_in(&form, 6, &["c.pdf".to_string()])
             .unwrap();
         assert!(none.is_empty());
     }
 
     #[test]
-    fn a_scoped_lexical_search_over_no_files_allows_nothing() {
+    fn a_scoped_entity_search_over_no_files_allows_nothing() {
         let (_dir, store) = store_with_three_files();
 
         assert!(store
-            .search_lexical_in("cephalees", 6, &[])
+            .search_lexical_terms_in(&["cephalees".to_string()], 6, &[])
             .unwrap()
             .is_empty());
-        assert!(!store.search_lexical("cephalees", 6).unwrap().is_empty());
     }
 
     /// Folders keep their accents (only file names are made plain), and a path may hold a quote:
     /// the set travels as a JSON value, never spliced into the SQL.
     #[test]
-    fn a_scoped_lexical_search_accepts_accents_and_quotes_in_a_path() {
+    fn a_scoped_entity_search_accepts_accents_and_quotes_in_a_path() {
         let (_dir, store) = store_with_three_files();
         let awkward = "Archive \u{e9}t\u{e9}/it's \"a\" name.pdf".to_string();
 
         let hits = store
-            .search_lexical_in("cephalees", 6, &[awkward.clone()])
+            .search_lexical_terms_in(
+                &["cephalees".to_string()],
+                6,
+                std::slice::from_ref(&awkward),
+            )
             .unwrap();
 
         assert_eq!(hits.len(), 1);
@@ -2916,11 +2755,15 @@ mod tests {
     }
 
     #[test]
-    fn a_scoped_lexical_search_spends_its_limit_inside_the_scope() {
+    fn a_scoped_entity_search_spends_its_limit_inside_the_scope() {
         let (_dir, store) = store_with_three_files();
 
         let hits = store
-            .search_lexical_in("cephalees episodiques", 1, &["b.pdf".to_string()])
+            .search_lexical_terms_in(
+                &["cephalees episodiques".to_string()],
+                1,
+                &["b.pdf".to_string()],
+            )
             .unwrap();
 
         assert_eq!(hits.len(), 1, "the limit applies after the restriction");
@@ -3172,14 +3015,28 @@ mod tests {
     }
 
     #[test]
-    fn a_question_mark_in_the_query_does_not_break_the_search() {
+    fn syntax_characters_in_a_name_or_a_code_do_not_break_the_search() {
         let dir = tempfile::tempdir().unwrap();
         let store = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
+        let paths = ["a.pdf".to_string()];
 
-        let hits = store
-            .search_lexical("What is Camille's HbA1c level?", 5)
-            .unwrap();
+        let forms = ["Camille's \"HbA1c\" level?".to_string(), "NEAR(".to_string()];
+        assert!(store.search_lexical_terms_in(&forms, 5, &paths).unwrap().is_empty());
+        assert!(store
+            .search_identifier("What is FAC-2026-014\"? OR (", 5, Some(&paths))
+            .unwrap()
+            .is_empty());
+    }
 
-        assert!(hits.is_empty());
+    #[test]
+    fn the_router_asks_the_passages_whether_a_word_is_in_the_corpus() {
+        use crate::folder_questions::CorpusWords;
+        let (_dir, store) = store_with_three_files();
+
+        assert!(store.contains("cephalees"));
+        assert!(store.contains("Nausees"));
+        assert!(!store.contains("zirconium"));
+        assert!(!store.contains("ces"), "a word of fewer than four letters says nothing");
+        assert!(!store.contains("\"(\""));
     }
 }

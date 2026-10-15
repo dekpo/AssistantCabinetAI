@@ -79,18 +79,24 @@ async fn the_words_of_a_file_name_are_searchable_through_the_name_profile() {
         );
         assert!(!note.matches(query), "{query:?} must not find the note");
     }
-    assert!(
+    let paths: Vec<String> = lab
+        .index
+        .all_documents()
+        .expect("lists")
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
+    let in_passages = |word: &str| {
         lab.index
-            .search_lexical("dermatologie", 10)
+            .search_lexical_terms_in(&[word.to_string()], 10, &paths)
             .expect("searches")
-            .is_empty(),
+    };
+    assert!(
+        in_passages("dermatologie").is_empty(),
         "the passages' index is left as it was: names get their own columns"
     );
     assert!(
-        !lab.index
-            .search_lexical("controle", 10)
-            .expect("searches")
-            .is_empty(),
+        !in_passages("controle").is_empty(),
         "the control word that is in the text must be found"
     );
 }

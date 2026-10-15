@@ -307,7 +307,14 @@ fn an_index_created_by_the_current_schema_migrates_without_losing_anything() {
         PageOrigin::TextLayer,
         "the default of the added column"
     );
-    assert_eq!(store.search_lexical("Quarterly", 5).unwrap().len(), 1);
+    let paths = vec!["inbox/old.txt".to_string()];
+    assert_eq!(
+        store
+            .search_lexical_terms_in(&["Quarterly".to_string()], 5, &paths)
+            .unwrap()
+            .len(),
+        1
+    );
     assert_eq!(store.all_tabular_inventories().unwrap().len(), 1);
 
     // The knowledge base is there, seeded, and empty.

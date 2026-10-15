@@ -54,16 +54,17 @@ The index is SQLite: full-text search for lexical matching, plus stored vectors 
 folder holds tens of files, not millions, so brute-force cosine is fast enough and avoids a vector-database
 dependency for the prototype. Chunks keep file, page and section so that a citation can point at them.
 
-**The lexical bonus is held to the scope.** The full-text search only decides which chunks earn a small bonus
-(0.2) on top of their vector score, and it keeps six places. Run over the whole index and filtered afterwards, a
-file outside the user's selection that repeats the question's words takes all six places and the match the
-selection really holds goes without its bonus. So for a named file, a chosen set of files and the current folder
-the full-text query itself is restricted to those files' paths (`IndexStore::search_lexical_in`, a join on
-`chunks` with the path set passed as one JSON value, `bm25` unchanged); only "the whole index" keeps the
-unrestricted search. "Each document" runs that query once for its whole list of files, not once per file. Ranking,
-the caps, the four-character minimum for a query term and the order in which "each document" takes files are
-**unchanged**: those change what the user gets and are decided with measurements
-(`docs/DECISIONS.md`, "Settled by KB lot 0").
+**The excerpts are chosen by meaning.** Since 15 October 2026 the words of a question choose nothing by
+themselves: a passage enters the ranking by its cosine similarity to the question (floor `MIN_VECTOR_SCORE`), and
+two things more only, both held to the scope: the passages that write a surface form of a name the question
+resolved to (a small bonus, `ENTITY_BONUS` 0.2) and the passages that hold a code or a date or an amount written in
+the question (pinned first). The full-text table `chunks_fts` stays for those doors and for the router's "is this
+word in the corpus" lookup; it no longer ranks anything by itself. For a named file, a chosen set of files and the
+current folder the entity query is restricted to those files' paths (`IndexStore::search_lexical_terms_in`, a join
+on `chunks` with the path set passed as one JSON value); "the whole index" is never searched for a name. "Each
+document" runs the entity and identifier queries once for its whole list of files, not once per file. The caps and
+the order in which "each document" takes files are unchanged. What was removed, with the figures it gave:
+`docs/RETRIEVAL-QUALITY.md`, section 12.7.
 
 **Embeddings.** First implementation is a no-store call to the gateway: the server computes vectors and
 discards them, storing nothing. A local ONNX computation with a small model can replace it later behind the
@@ -191,16 +192,15 @@ question --> router (named file? each document? deterministic answer?)
          --> excerpts --> gateway --> answer + sources + (auto) a targeting report
 ```
 
-- **Lexical, held to the scope, twice over.** The question's own words keep the rule above (a word of fewer than
-  four letters is dropped). The surface forms of a name the question resolved to are searched apart
-  (`IndexStore::search_lexical_terms_in`, `files_matching_terms_in`): each form is quoted as a phrase and a form of
-  two letters or more is kept, because `Roy`, `Lee` and `Ng` are exactly the names the generic rule loses. They
-  serve two purposes: the **safety net** that keeps in the reduced set a document that only says `M. Dupont`, and,
-  in `auto` only, extra lexical bonus candidates for the search itself. The embedding text is always the question.
+- **Entities, held to the scope.** The surface forms of a name the question resolved to are searched in the
+  passages (`IndexStore::search_lexical_terms_in`, `files_matching_terms_in`): each form is quoted as a phrase and a
+  form of two letters or more is kept, because `Roy`, `Lee` and `Ng` are short names. They serve two purposes: the
+  **safety net** that keeps in the reduced set a document that only says `M. Dupont`, and, in `auto` only, the
+  passages that write the name earn the entity bonus in the search itself. The embedding text is always the question.
 - **Nothing the base has not read is left out.** A selected file with no source row under its current content, or
   read by no extractor, is searched whatever the base knows about the others.
 - **The closest passage by meaning.** `SearchOutcome::best_vector_score` is the best cosine similarity of the scope,
-  without the lexical bonus; the widening reads it. Its scale belongs to the embedding model
+  without the entity bonus; the widening reads it. Its scale belongs to the embedding model
   (`nomic-embed-text`: unrelated 0.55 to 0.65, a passage that answers 0.70 and above), measured by
   `docs/test-reports/knowledge-base-pass-1/lots/lot-06-widen-calibration.py`.
 - **Equivalence.** With the mode `off`, or `suggest`, or the widen action, the search is the one that has always

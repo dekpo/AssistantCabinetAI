@@ -1,6 +1,6 @@
 //! Lot 7 of the long-documents programme: the ranking no longer loads the text of every passage for every
 //! question, and it must return exactly what it returned when it did. This test keeps the old algorithm as
-//! a reference (every passage loaded, cosine plus the lexical bonus, one stable sort, the two caps) and
+//! a reference (every passage loaded, the cosine similarity alone, one stable sort, the two caps) and
 //! compares the passages, their order, their scores and the counts on a library, in every scope and at two
 //! sets of limits.
 
@@ -104,75 +104,33 @@ struct Expected {
 
 fn reference(
     index: &IndexStore,
-    query: &str,
     embedding: &[f32],
     scope: RetrievalScope<'_>,
     limits: RetrievalLimits,
 ) -> Expected {
-    let (chunks, lexical): (Vec<StoredChunk>, Vec<String>) = match scope {
-        RetrievalScope::WholeFolder => (
-            index.all_chunks().unwrap(),
-            index
-                .search_lexical(query, limits.max_chunks)
-                .unwrap()
-                .into_iter()
-                .map(|h| h.chunk_id)
-                .collect(),
-        ),
-        RetrievalScope::File(path) => (
-            index.chunks_for_document(path).unwrap(),
-            index
-                .search_lexical_in(query, limits.max_chunks, &[path.to_string()])
-                .unwrap()
-                .into_iter()
-                .map(|h| h.chunk_id)
-                .collect(),
-        ),
-        RetrievalScope::Files(paths) => (
-            paths
-                .iter()
-                .flat_map(|p| index.chunks_for_document(p).unwrap())
-                .collect(),
-            index
-                .search_lexical_in(query, limits.max_chunks, paths)
-                .unwrap()
-                .into_iter()
-                .map(|h| h.chunk_id)
-                .collect(),
-        ),
-        RetrievalScope::CurrentFolder(paths) => (
-            index
-                .all_chunks()
-                .unwrap()
-                .into_iter()
-                .filter(|c| paths.contains(&c.relative_path))
-                .collect(),
-            index
-                .search_lexical_in(query, limits.max_chunks, paths)
-                .unwrap()
-                .into_iter()
-                .map(|h| h.chunk_id)
-                .collect(),
-        ),
+    let chunks: Vec<StoredChunk> = match scope {
+        RetrievalScope::WholeFolder => index.all_chunks().unwrap(),
+        RetrievalScope::File(path) => index.chunks_for_document(path).unwrap(),
+        RetrievalScope::Files(paths) => paths
+            .iter()
+            .flat_map(|p| index.chunks_for_document(p).unwrap())
+            .collect(),
+        RetrievalScope::CurrentFolder(paths) => index
+            .all_chunks()
+            .unwrap()
+            .into_iter()
+            .filter(|c| paths.contains(&c.relative_path))
+            .collect(),
     };
     let mut best = f32::NEG_INFINITY;
     let mut scored: Vec<(String, f32, usize)> = Vec::new();
     for chunk in &chunks {
         let vector_score = cosine_similarity(&chunk.embedding, embedding);
         best = best.max(vector_score);
-        let bonus = if lexical.contains(&chunk.chunk_id) {
-            0.2
-        } else {
-            0.0
-        };
-        if vector_score < MIN_VECTOR_SCORE && bonus == 0.0 {
+        if vector_score < MIN_VECTOR_SCORE {
             continue;
         }
-        scored.push((
-            chunk.chunk_id.clone(),
-            vector_score + bonus,
-            chunk.text.len(),
-        ));
+        scored.push((chunk.chunk_id.clone(), vector_score, chunk.text.len()));
     }
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     let mut ids = Vec::new();
@@ -229,7 +187,7 @@ fn the_lean_ranking_returns_what_the_loading_one_returned_in_every_scope() {
                 RetrievalScope::Files(&some),
                 RetrievalScope::CurrentFolder(&folder),
             ] {
-                let expected = reference(&index, &text, &embedding, scope, limits);
+                let expected = reference(&index, &embedding, scope, limits);
                 let found =
                     search_scoped_counted_with_terms(&index, &text, &[], &embedding, scope, limits)
                         .unwrap();
@@ -248,7 +206,7 @@ fn the_lean_ranking_returns_what_the_loading_one_returned_in_every_scope() {
 }
 
 #[test]
-fn a_passage_without_a_vector_is_ranked_by_its_words_alone_as_before() {
+fn a_passage_without_a_vector_is_counted_and_not_found_by_its_words() {
     let dir = tempfile::tempdir().unwrap();
     let mut index = IndexStore::open_at(&dir.path().join("index.sqlite3")).unwrap();
     let make = |id: &str, text: &str| Chunk {
@@ -286,12 +244,13 @@ fn a_passage_without_a_vector_is_ranked_by_its_words_alone_as_before() {
         RetrievalLimits::BASELINE,
     )
     .unwrap();
-    assert_eq!(found.unvectorised_chunks, 1);
+    assert_eq!(
+        found.unvectorised_chunks, 1,
+        "the answer layer says the meaning part did not see it (`partial_vectors`)"
+    );
     assert!(
-        found
-            .evidence
-            .iter()
-            .any(|e| e.chunk_id == "extra.txt#p1#s1"),
-        "found by its words alone"
+        found.evidence.is_empty(),
+        "the words of the question bring nothing in by themselves: {:?}",
+        found.evidence
     );
 }

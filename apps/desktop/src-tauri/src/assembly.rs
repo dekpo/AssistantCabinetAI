@@ -11,36 +11,15 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-/// How the word search and the search by meaning are put together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Fusion {
-    /// Today: the cosine of the passage, plus a flat 0.2 when the word search put it among its first.
-    #[default]
-    FlatBonus,
-    /// Reciprocal Rank Fusion: each list counts by the rank of the passage in it (1 / (60 + rank)), whatever
-    /// the scale of its scores. The word search is read deeper so that its ranks mean something.
-    Rrf,
-}
-
-/// How deep the word search is read when the lists are fused by rank.
-pub const RRF_DEPTH: usize = 50;
-/// The constant of Reciprocal Rank Fusion: the larger, the flatter the weight of the first ranks.
-pub const RRF_K: f32 = 60.0;
-
 /// One switch per method. `Default` is the ranking as it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AssemblyOptions {
-    /// How the two searches are put together.
-    pub fusion: Fusion,
     /// A passage that holds an identifier written in the question (`FAC-2026-014`) comes first.
     pub pin_identifier: bool,
     /// The search hands its first thirty candidates to the gateway's reranker, which reads each with the
     /// question; the best are kept. Without a reranker on the gateway, or when it fails, the order is the
     /// search's own.
     pub rerank: bool,
-    /// A question about a name or a code that no document holds is refused before any embedding or model
-    /// (`refusal`).
-    pub refusal: bool,
     /// At most this many passages from one section (or one slice of pages) of one document. A passage with
     /// no section is not capped. `None` is no cap.
     pub per_section_cap: Option<usize>,
@@ -55,10 +34,8 @@ pub struct AssemblyOptions {
 
 impl AssemblyOptions {
     pub const OFF: Self = Self {
-        fusion: Fusion::FlatBonus,
         pin_identifier: false,
         rerank: false,
-        refusal: false,
         per_section_cap: None,
         neighbours: false,
         edges_first: false,
@@ -78,16 +55,15 @@ pub fn assembly_options() -> AssemblyOptions {
 }
 
 /// The methods kept by the measures of lots C to E (`docs/RETRIEVAL-QUALITY.md`, section 12). Kept: the
-/// identifier pinned first (never worse in any family, one gain) and the refusal of a name or a code that no
-/// document holds (0 false refusals on 404 answerable questions, 9 of 23 absent questions refused with no
-/// model). Kept at lot "facts" (15 October 2026): a date or an amount written in the question finds the passage
-/// that writes it another way (normal_form family +0.18 on the sample set and +0.55 on the big set, real
-/// vectors; nothing else moved, no family fell; 0.4 to 0.6 % of an Analyse). Left off: fusion by rank (it
-/// lowers the product's own ranking), the cap, the neighbour and the edges (no gain on the fixtures), and the
-/// reranker (measured: a gain, but a family falls, section 12).
+/// identifier pinned first (never worse in any family, one gain). Kept at lot "facts" (15 October 2026): a date
+/// or an amount written in the question finds the passage that writes it another way (normal_form family +0.18
+/// on the sample set and +0.55 on the big set, real vectors; nothing else moved, no family fell; 0.4 to 0.6 % of
+/// an Analyse). Left off: the cap, the neighbour and the edges (no gain on the fixtures), and the reranker
+/// (measured: a gain, but a family falls, section 12). Removed on 15 October 2026 by the owner, on a judgement of
+/// the answers and not on a measure: the word bonus and the fusion by rank, the generic phrases and the
+/// refusal before the model (section 12.7).
 const PRODUCT_CHOICE: AssemblyOptions = AssemblyOptions {
     pin_identifier: true,
-    refusal: true,
     facts: true,
     ..AssemblyOptions::OFF
 };

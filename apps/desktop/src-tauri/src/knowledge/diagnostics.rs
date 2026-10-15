@@ -127,15 +127,12 @@ pub struct RetrievalDiagnostics {
     pub routing_ms: u64,
     /// The one embedding call for the question.
     pub embedding_ms: u64,
-    /// Lexical and vector search, the cut to the caps.
+    /// The search by meaning, the entities and identifiers, the cut to the caps.
     pub search_ms: u64,
     /// Putting the candidates in order by the gateway's reranker; 0 when it was not asked.
     pub rerank_ms: u64,
     /// `reranked`, or `failed` when the reranker could not answer and the order of the search stayed.
     pub rerank: Option<&'static str>,
-    /// `unknown_terms` when the question was refused because every name and code it holds is unknown to the
-    /// documents (`refusal`): no embedding and no model were spent.
-    pub refusal: Option<&'static str>,
     /// Reading the selected workbooks: from the typed cache, or from the file on a miss.
     pub workbook_load_ms: u64,
     /// Every workbook this question read came from the typed cache. `false` when none was read.

@@ -43,7 +43,6 @@ fn evidence(id: &str, text: &str) -> Evidence {
         ordinal: 1,
         last_page: 1,
         section: None,
-        matches: Vec::new(),
         text: text.to_string(),
         score: 0.1,
         origin: PageOrigin::TextLayer,

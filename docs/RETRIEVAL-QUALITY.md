@@ -239,6 +239,8 @@ Today each folder card (Documents, Data) has its own search field above « Docum
 
 ## 12. Results of lots B to H (15 October 2026)
 
+**Superseded in part on 15 October 2026 (evening).** The owner removed the word channel, the generic phrases, the thesaurus, the fusion by rank, the refusal before the model, the marking of words and the block « Passages trouvés » (section 12.7, last table). Sections 12.1 to 12.5 stay as the record of what each gave on the fixtures; the product no longer runs those methods.
+
 Every figure below says which kind it is. **Real**: the embedding model of the AI machine (tower, RTX 5060, GPU) computed the vectors. **Fake**: vectors made up for the plumbing (the half of the search that reads words is real, the half that reads meaning is meaningless). The "pipeline" channel is what the product sends to the model. A method is kept only if something rises and no family falls (section 4).
 
 ### 12.1 Lot B: the word channel (exam of 131 scored questions, real)
@@ -306,7 +308,7 @@ It helps overall, above all identifiers and multi-entity questions, but under th
 
 ### 12.6 What the product runs with
 
-`PRODUCT_CHOICE` (`assembly.rs`, `lexical.rs`): phrases on; identifier pinned on; refusal on; dates and amounts as facts on (section 12.9); everything else off (the reranker is measured and left off, sections 12.3 and 12.8; the thesaurus stays off for the reason in section 12.7).
+`PRODUCT_CHOICE` (`assembly.rs`): identifier pinned on; dates and amounts as facts on (section 12.9); everything else off (the reranker is measured and left off, sections 12.3 and 12.8). The excerpts the model reads are the passages closest in **meaning** to the question (cosine similarity above `MIN_VECTOR_SCORE`), plus the passages that write a name the question resolved to (`ENTITY_BONUS`, 0.2, held to the scope), plus the passages that hold a code or a fact written in the question, within the limits of `RetrievalLimits::for_budget`.
 
 ### 12.7 Methods removed, and why (15 October 2026)
 
@@ -322,15 +324,29 @@ Owner rule of 15 October 2026 (`AGENTS.md`, "No dead code by accident"): a metho
 
 What went with them: the dependency `rust-stemmers`, the tables `chunks_lex` and `chunks_tri` and the Analyse step `ensure_lexical_layout`, the lab flags `near`, `content`, `stems`, `weights`, `trigram`, and their tests. **An index written by the previous version** still holds the two tables (empty unless a switch was on, which the product never turned on): opening it drops them, and the recorded layout (`file_profile_meta`, key `lexical_layout`); `tests/lexical_migration.rs` proves it on an index made the old way. Nothing else in that index changes, and nothing needs to be analysed again.
 
-**Kept off, with its reason (not removed): the thesaurus.** A small data file per pack (`resources/thesaurus/*.json`), one switch (`LexicalOptions::thesaurus`). It measured 0.000 only because **no exam question uses a synonym**: it is unproven, not useless. It is to be judged on real documents (a Swiss "LAMal" against "assurance maladie obligatoire", a French "mutuelle" against "complementaire"). Until then it stays off and costs nothing but the data file.
-
 **Measured, not removed, to decide with the owner:**
 
 | Method | The figures | Recommendation |
 | --- | --- | --- |
-| Fusion by rank (RRF) | Lowers the product's own ranking on every set (exam recall -0.172 and fact -0.214 with `nomic`; big set identifier family -0.027) while raising the test channel hybrid30 by +0.093 (section 12.3) | Remove: it is refused and the test channel is not the product |
 | Neighbour passage | Lowers the 8,000-page set (0.980 to 0.760) and the 1,007-document library (0.782 to 0.745) (section 12.2) | Remove |
 | Cap per section, best passages at both ends | No change on any set; the fixtures hold no question spread over several sections of one book, which is a limit of the fixtures, not a proof (section 12.2) | Keep until a real book answers the question, or remove on the owner's word |
+
+**Removed on 15 October 2026 (evening) by the owner, on a judgement of the answers and not on a measure.** Her sentence « Si tu dois pouvoir trouver la table des matieres a la fin de ce document » marked « table », « pouvoir », « dois », « trouver » and sent fourteen verses that had nothing to do with a table of contents, shown in a block « Passages trouves ». The same question had been answered on the evening of 14 October. The decision: the model receives the excerpts chosen by the **meaning** of her sentence; the words of a question choose nothing by themselves. **None of the following was found useless by a figure.** The figures below are what each gave on the fixtures, written so that the next agent knows what was given up.
+
+| Method | What it was | What it gave on the fixtures | Do not try again unless |
+| --- | --- | --- | --- |
+| **The word bonus** | A full-text search over every word of four letters or more of the question (`IndexStore::search_lexical`, `search_lexical_in`), the first passages it returned earning a flat +0.2 on their cosine, and a passage of cosine under 0.15 entering the ranking if it held a word. It **existed before lots A to H** (`docs/RETRIEVAL-RESEARCH.md`, 14 October), so this removal goes further than the state of the evening of 14 October. | The pipeline channel of the exam, recall@10 0.784 with the phrases added to it (0.843); the word search alone `lexical30` 0.780 recall@10 (section 12.1). On the 1 007-document library the recall rose by 0.047 with the phrases. | A question whose answer is a rare word that the embedding model places far from its passage (a code, a product name) is lost on real documents, listed with its text, **and** the codes and names already kept (below) do not cover it. |
+| **Generic phrases** (lot B) | The quoted phrases of a question and its content words side by side, joined to the words in the one OR expression. | Pipeline recall@10 0.784 to 0.843 on the exam, `identifier` family +0.273, planted fact found +0.286 (section 12.1). The codes were the whole gain, and the code door is kept. | The same as the word bonus. |
+| **Fusion by rank (RRF)** | `Fusion::Rrf`, `RRF_K`, `RRF_DEPTH`: each list counting by its rank. | Refused in lot D: exam recall -0.172 and fact -0.214 with `nomic`, big-set identifier family -0.027, hybrid30 +0.093 (section 12.3). | There is a second ranked list to fuse (a reranker that stays on, a word channel again). |
+| **The thesaurus** | A data file per pack, `resources/thesaurus/health-fr.json` and `health-ch.json`, one switch. | 0.000: no exam question uses a synonym. It was never proven. | A real document shows a synonym the embedding model misses (« LAMal » against « assurance maladie obligatoire »). |
+| **The refusal before the model** (lot E) | `refusal.rs`: a question whose every name and code was unknown to the index was refused with a machine code, no embedding and no model. | **0 false refusals on 404 answerable questions**; unanswerable questions refused: 9 of 23 (exam 2 of 7, big set 3 of 12, 800 pages 4 of 4) (section 12.4). | The model is seen inventing an answer to a question about a name or a code that no document holds, on real documents. The model now always receives the question and says itself that the excerpts do not answer. |
+| **The marking of words** (lot A) | `Evidence.matches`, `MatchSpan`, `attach_matches`, `query_phrases`, `match_spans`: where the words of the question stand in each passage. | Display only. | The reader asks to see why a passage was chosen, and the choice is again made by words. |
+| **The block « Passages trouvés »** (lot F) | `FoundPassagesBlock.tsx`, `lib/foundPassages.ts`: the passages above the answer, the words marked. | Display only. « Resumer » and « Afficher le fichier » moved to the « Sources » disclosure (`SourceFiles.tsx`), one pair per document. | The same as the marking of words. |
+| **The word index of the cards** | The table `document_cards_fts` and `IndexStore::search_cards`, called by tests only. | None. | A search of the cards by words has a caller. |
+
+**Kept, because the codes and the entities need them:** the full-text table `chunks_fts` itself; `search_identifier` and `identifier.rs` (`identifier_shaped`, `identifier_expression`: a code is written the same way in the question and in the document, whatever the language); `search_lexical_terms_in` and `files_matching_terms_in` (the surface forms of a resolved name, `ENTITY_BONUS` 0.2, held to the scope); `phrase_in_index` is **gone** (its only caller was the refusal). The router asks the passages whether a word is in the corpus through a small lookup (`corpus_word_expression`, `LIMIT 1`) behind `CorpusWords::contains`.
+
+**Side effects, said plainly.** A passage with no vector yet (an Analyse stopped, or running) is no longer found by its words: it is counted and the answer says the search by meaning did not see it (`partial_vectors`), as before. An index written by the previous version needs **no new Analyse**: `chunks_fts` and every other table are unchanged; opening it drops the empty `document_cards_fts` table. The laboratory (`tests/retrieval_lab.rs`) lost its channels `lexical30` and `refusal` and its lexical switches; the variable `ACAI_LEXICAL_SETS` is now `ACAI_ASSEMBLY_SETS`; `scripts/retrieval_lab_refusal.py` is deleted.
 
 ### 12.8 The reranker, with the one remedy tried once (15 October 2026, 16:57 to 17:05, real vectors)
 

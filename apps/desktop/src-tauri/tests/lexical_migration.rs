@@ -80,8 +80,16 @@ fn an_index_with_the_removed_tables_loses_them_and_keeps_its_passages() {
         )
         .unwrap();
     assert_eq!(recorded, 0);
-    let hits = store.search_lexical("montant facture", 3).unwrap();
-    assert_eq!(hits.len(), 1, "the passage is still found by its words");
+    let paths: Vec<String> = store
+        .all_documents()
+        .unwrap()
+        .into_iter()
+        .map(|d| d.relative_path)
+        .collect();
+    let hits = store
+        .search_lexical_terms_in(&["montant".to_string()], 3, &paths)
+        .unwrap();
+    assert_eq!(hits.len(), 1, "the passage is still in the full-text index");
 
     // Opening it again changes nothing.
     drop(store);

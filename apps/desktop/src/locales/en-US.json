@@ -28,14 +28,8 @@
     "offline": "AI Unavailable",
     "recheck": "Check the AI"
   },
-  "found": {
-    "title": "Passages found: {passages} passages in {documents} documents",
-    "titleOne": "Passages found: {passages} in 1 document",
-    "page": "page {page}",
-    "pages": "pages {from} to {to}",
-    "byMeaning": "found by meaning",
-    "show": "Show the file",
-    "others": "Other documents ({documents}): found by meaning, no word of the question"
+  "sources": {
+    "show": "Show the file"
   },
   "summary": {
     "button": "Summarise",

@@ -5,7 +5,7 @@ recall@10 and of fact@10 overall and in every family (a "family" is the category
 planted fact with --planted), and lists the questions that got worse with their text. A method is kept only
 if something rises and no family falls.
 
-    python scripts/retrieval_lab_compare.py data/retrieval-lab/off data/retrieval-lab/phrases --channels pipeline lexical30
+    python scripts/retrieval_lab_compare.py data/retrieval-lab/off data/retrieval-lab/phrases --channels pipeline hybrid30
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("base", type=Path)
     parser.add_argument("others", type=Path, nargs="+")
     parser.add_argument("--questions", type=Path, default=score.DEFAULT_QUESTIONS)
-    parser.add_argument("--channels", nargs="*", default=["pipeline", "lexical30"])
+    parser.add_argument("--channels", nargs="*", default=["pipeline"])
     parser.add_argument("--planted", action="store_true", help="families are the kinds of planted fact")
     args = parser.parse_args(argv)
     questions = score.load_questions(args.questions)

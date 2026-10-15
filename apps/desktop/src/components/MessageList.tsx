@@ -3,10 +3,9 @@ import { useTranslation } from "../i18n/I18nProvider";
 import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
-import { FoundPassagesBlock } from "./FoundPassagesBlock";
+import { SourceFiles } from "./SourceFiles";
 import { localiseInternalNames } from "../lib/displayNames";
-import { annotationLines, answerForCopy, sourceGroupLine } from "../lib/annotations";
-import { groupSources } from "../lib/sourceGroups";
+import { annotationLines, answerForCopy } from "../lib/annotations";
 import { formatTabularAnswer, tabularSourceLine } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
 import {
@@ -261,11 +260,6 @@ export function MessageList({
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
-              {/* What the search found, before the answer: complete as soon as the retrieval is, so it
-                  stays useful when the model is slow, fails or is stopped. */}
-              {entry.sources !== undefined && entry.sources.length > 0 ? (
-                <FoundPassagesBlock sources={entry.sources} />
-              ) : null}
               {/* A div, not a paragraph: markdown emits lists and headings, which cannot legally
                   nest inside a `<p>` and make the browser restructure the DOM silently. */}
               <div className="message__body message__body--markdown">
@@ -308,13 +302,7 @@ export function MessageList({
               {entry.sources !== undefined && entry.sources.length > 0 ? (
                 <details className="message__sources">
                   <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
-                  <ul className="message__sources-list">
-                    {groupSources(entry.sources).map((group) => (
-                      <li key={group.relativePath} className="message__source">
-                        {sourceGroupLine(t, group)}
-                      </li>
-                    ))}
-                  </ul>
+                  <SourceFiles sources={entry.sources} />
                 </details>
               ) : null}
               {/* The same disclosure for an answer the tabular engine computed: a workbook cites

@@ -235,3 +235,74 @@ Every other column is identical: recall@10 1.000, MRR 0.739, fact@10 1.000 (`pip
 ## 11. The unified field in the left panel (decision 6, explained)
 
 Today each folder card (Documents, Data) has its own search field above « Documents utilisés », and each searches only its own domain. The unified field would be **one field at the top of the left panel** that searches both domains at once. The finder already returns `domain` on every hit, so the engine needs nothing; what is left is interface: where the results appear (one list with a small badge « document » or « tableur », or two groups), how « add these files to the selection » acts on both folders at once (the mixed documents-and-tables selection already exists), and what the two cards show while a filter is active. It is about one to two hours of client work and one design decision (the layout). It is left for after the human test of the finder, so that the layout is decided on what she has actually used.
+
+## 12. Results of lots B to H (15 October 2026)
+
+Every figure below says which kind it is. **Real**: the embedding model of the AI machine (tower, RTX 5060, GPU) computed the vectors. **Fake**: vectors made up for the plumbing (the half of the search that reads words is real, the half that reads meaning is meaningless). The "pipeline" channel is what the product sends to the model. A method is kept only if something rises and no family falls (section 4).
+
+### 12.1 Lot B: the word channel (exam of 131 scored questions, real)
+
+| Method | Pipeline recall@10 | Pipeline fact@10 | Verdict |
+| --- | --- | --- | --- |
+| nothing | 0.784 | 0.714 | base |
+| **phrases** (the question's phrases as alternatives of one OR with the words) | **0.843** | **1.000** | **kept**; identifier family +0.273; no family worse |
+| near | +0.000 | | not kept |
+| content terms | +0.002 | | not kept |
+| stems (second tier) | +0.001 | hybrid30 fact -0.071 | regresses, not kept |
+| stems and weights | 0.000 | hybrid30 fact -0.143 | regresses, not kept |
+| trigram | 0.000 | | not kept |
+| thesaurus | 0.000 | | no exam question uses a synonym: unproven, stays off |
+
+Other sets with phrases: the planted 800-page document (real) 1.000/1.000, unchanged; 8,000 pages (fake) 0.980/0.960, unchanged; the 1,007-document library (fake) recall +0.047, fact@10 0.914 to 0.986, identifier family +0.318, no family worse. A first design (phrases as a tier before the words) lowered the planted set by 0.04 and was redesigned. The tables of the unused methods exist and stay empty unless a switch is on.
+
+### 12.2 Lot C: inside a long document (real on the exam and the 800 pages, fake on the two big sets)
+
+Cap per section (1 and 2), neighbour passage, best passages at both ends: no change on any set except the neighbour passage, which **lowers** the 8,000-page set (recall 0.980 to 0.760) and the library (0.782 to 0.745). None is kept. The fixtures contain no question whose answer is spread over several sections of one book, so a gain could not be shown for the cap or the ends: this is a limit of the fixtures, not a proof. Built beside: the question « quelles sections parlent de X » answered from the index with no model; and the passage-level reduction of the knowledge base measured in the diagnostics only, never applied.
+
+### 12.3 Lot D: fusion by rank, pinned identifier, embedding models, reranker
+
+Fusion by rank (Reciprocal Rank Fusion), real vectors, product channel, two embedding models:
+
+| Set | nomic | bge-m3 |
+| --- | --- | --- |
+| exam (131) | recall -0.172, fact -0.214 | -0.106, -0.143 |
+| big set (223) | -0.004; identifier family **worse** -0.027 | -0.009; identifier family **worse** -0.054 |
+| 800 pages (50) | -0.020, planted **worse** | 0 |
+
+It improves the "hybrid30" test channel (+0.093 on the exam) but lowers the product's own ranking: **refused**. The identifier pinned first: never worse anywhere, one gain (exam with bge-m3, identifier family +0.045): **kept**.
+
+Embedding models under the final pipeline (real):
+
+| Set | Pipeline recall@10, nomic / bge-m3 | Meaning-only recall@10 | Analyse time |
+| --- | --- | --- | --- |
+| exam | 0.843 / 0.837 (identifier -0.045, follow-up -0.214) | 0.581 / 0.719 | 31.8 s / 52.1 s |
+| big set | 0.928 / 0.933 | 0.879 / 0.942 | 60.7 s / 85.2 s |
+| 800 pages | 1.000 / 1.000 | 0.960 / 1.000 | 55.5 s / 77.7 s |
+
+On what the product sends the two are equal (bge-m3 is worse in two exam families), and bge-m3 takes 40 to 64 % longer to Analyse. **Recommendation: keep `nomic-embed-text`** (it is the owner's choice: changing the model means a full re-Analyse). A third model (`qwen3-embedding:0.6b`) was measured earlier: no better on the product path and the slowest.
+
+**The reranker, measured (real vectors, 15 October 2026, 14:54 to 14:59).** Service `bge-reranker-v2-m3` behind Text Embeddings Inference on the tower's GPU, through the gateway's `POST /v1/rerank`; the first thirty candidates are put in order and the best six are kept ("rerank6" is what the model would read). Median added time 95 to 164 ms.
+
+| Set | Recall@10, product order to rerank6 | Fact@10 | Families that fall |
+| --- | --- | --- | --- |
+| exam (131) | 0.843 to 0.858 (+0.015); whole new order of 30: 0.899 (+0.056) | 1.000 to 1.000 | **named_file -0.333**, person -0.030, homonym -0.094, mixed -0.042 |
+| big set (223) | 0.928 to 0.960 (+0.031) | 0.901 to 0.946 (+0.045) | none; identifier family +0.189 |
+| 800 pages (50) | 1.000 to 1.000 | 1.000 | none |
+
+It helps overall, above all identifiers and multi-entity questions, but under the rule (no family may fall) it is **not switched on**: a question that names a file (« Que dit 2026-05-05_courrier.pdf ? ») is ranked worse, because the passage does not contain the file's name. The obvious remedy, not built or measured: do not rerank a question that names a file. The `rerank` switch stays off until the owner decides. The service first failed to start (the Docker virtual machine of the tower, 7.57 GiB, killed it while it loaded the weights next to the other containers); it loaded normally after a restart of Docker with nothing else loaded, and `docs/INSTALL-SERVER.md`, section 11, says how to keep it up.
+
+### 12.4 Lot E: refusal and checking the answer
+
+- **Refusal before any model.** A question whose every name or code is unknown to the index is refused with a machine code, no embedding and no model. Real index, 404 answerable questions: **0 false refusals** (the first run had 3, on « Que dit <file>.docx ? »: a file name given in a question is where to look, not a fact; and a decimal such as 6.8 is no code; both fixed and replayed); unanswerable questions refused: exam 2 of 7, big set 3 of 12, 800 pages 4 of 4. **Kept.** The other absent questions still reach the model, whose own refusal stays the second line.
+- **Quotations and citations.** What the answer puts between guillemets must be in a passage it was given (spaces, quotes, dashes, case and page breaks read as one); a reference such as `[7]` must name a passage that exists. An anomaly is **appended under the answer**, never edited into it. The normaliser is shared with the figure check.
+- **Not built:** the model citing passage identifiers that the application maps back, and Ollama's structured `format`. Both need a measure with real generation on the tower; they are left for the next run.
+
+### 12.5 Lots F, G, H (interface)
+
+- **F. « Passages trouvés »** above the answer, from the retrieval alone: files with a word of the question first, the others folded under « trouvés par le sens », the words marked, section and pages. « Ouvrir à la page » is **not** built: the application has no viewer that opens a page; the button shows the file in the file manager and the page is written beside it. The author and the date of the file are not in the evidence the answer carries, so they are not shown.
+- **G. Summaries.** Chapters (the beginning of each) and full reading (every batch of text), started by hand from the block above, each showing its number of parts and its expected duration first, a visible progress line, a Stop that ends the call at once, resumable, kept in the index per file hash and prompt version, dropped when the file changes. A full reading is called complete only when every part was read; otherwise the count is said. The expected duration is the floor of a call (17 s) plus the tokens at 90 a second until the machine has been measured, then its own average. **The chat does not read these summaries yet.**
+- **H. Leftovers.** Labels of the six file states in both catalogues, shown on the chips; chips over the facets (type, year, format, state) that narrow the search of the left panel; the share of passages with a vector, per file, on the listing; the screen of the user's own document types (list, save, delete, apply now without reading any file). The human test of the stop button, the progress lines and the card line « Recherche par sens » (KBD-62) is still owed.
+
+### 12.6 What the product runs with
+
+`PRODUCT_CHOICE` (`assembly.rs`, `lexical.rs`): phrases on; identifier pinned on; refusal on; everything else off (the reranker is measured and left off, section 12.3).

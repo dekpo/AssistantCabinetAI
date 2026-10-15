@@ -56,7 +56,7 @@ MODEL_ALIASES=granite3.1-moe:1b=granite3.1-moe:1b,granite3.1-moe:3b=granite3.1-m
 DEFAULT_MODEL_ALIAS=ministral-3:3b
 DEFAULT_EMBEDDING_ALIAS=assistant-embed
 DEFAULT_OUTPUT_LOCALE=fr-FR
-OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_MAX_LOADED_MODELS=2     # with the GPU; 1 on a machine without one (section 5)
 MAX_OUTPUT_TOKENS=2048
 LLM_REQUEST_TIMEOUT_SECONDS=300
 MODEL_CONTEXT_WINDOWS=granite3.1-moe:1b=8192,granite3.1-moe:3b=12288,ministral-3:3b=16384,qwen2.5:1.5b=4096,qwen3:0.6b=4096,qwen3:1.7b=4096,gemma4:e2b=12288
@@ -78,13 +78,25 @@ To generate the secret: `-join ((48..57)+(65..90)+(97..122) | Get-Random -Count 
 
 Docker Desktop on Windows gives containers the card through WSL 2; Ollama's image carries its own CUDA libraries, so nothing is installed inside the container. `compose.gpu.yaml` asks for the card; `COMPOSE_FILE` in `.env` (section 4) adds it to every `docker compose` command run in the folder, so a later `docker compose up -d server` cannot start an Ollama without it.
 
-1. Test that Docker sees the card, before touching the stack: `docker run --rm --gpus all ubuntu nvidia-smi` should list the RTX 5060 (**not verified**; if it fails, update Docker Desktop and the NVIDIA driver, restart Windows).
+1. Test that Docker sees the card, before touching the stack: `docker run --rm --gpus all ubuntu nvidia-smi` should list the RTX 5060 (**run** on the tower, 15 October 2026: it does; if it fails elsewhere, update Docker Desktop and the NVIDIA driver, restart Windows).
 2. Add the `COMPOSE_FILE` line to `.env` and run `docker compose config | Select-String nvidia` (it must print the device reservation).
 3. `docker compose up -d`: Compose recreates the `ollama` container with the card.
 4. Check, in this order: `docker exec assistant-cabinet-ollama nvidia-smi` lists the card; ask one question from the desktop (or `docker exec assistant-cabinet-ollama ollama run ministral-3:3b "ok"`); then `docker exec assistant-cabinet-ollama ollama ps` shows `100% GPU` in the `PROCESSOR` column. A split such as `40%/60% CPU/GPU` means the model plus its cache do not fit in the 8 GB (the browser and the desktop use about 1.3 GB of it): lower `MODEL_CONTEXT_WINDOWS` for that alias.
 5. Memory: the card has 8 GB, of which about 1.35 GB is used by the Windows session. `ministral-3:3b` with a 16384-token window is 4.2 GB. Keep `OLLAMA_MAX_LOADED_MODELS=1` until a measure shows that the chat model and the embedding model fit together.
 
 On a machine with **no** GPU (the dev PC, the Mac mini) leave `COMPOSE_FILE` unset: the default stack is unchanged.
+
+**Measured on the tower, 15 October 2026** (gateway at `192.168.1.83:8080`, `ministral-3:3b` and the embedding models, GPU on; `ollama ps` said `100% GPU`; fictional text, 16 passages of 1 200 characters a batch, median of three warm batches):
+
+| | On the processor (13 to 14 October) | On the GPU |
+| --- | --- | --- |
+| Embedding, `assistant-embed` (`nomic-embed-text`) | about 108 to 120 ms a passage | **21 ms** |
+| Embedding, `bge-m3` | about 260 ms | **27 ms** |
+| Embedding, `qwen3-embedding:0.6b` | about 500 ms | **23 ms** |
+| First word, a prompt of 2 000 or 9 000 characters, model already loaded | 16 to 29 s | **0.2 to 0.4 s** |
+| First call after another model was loaded (the model is swapped in) | included in the figures above | 7 to 17 s |
+
+With `OLLAMA_MAX_LOADED_MODELS=1` every question pays one swap (the question is embedded by the embedding model, then the chat model is loaded again): that, not the processor, was most of the 16 to 18 s "floor" recorded in `docs/CONTEXT-BUDGET.md`. **Set `OLLAMA_MAX_LOADED_MODELS=2` on a GPU machine** (**run** on the tower, 15 October 2026): `ollama ps` shows `nomic-embed-text` (323 MB) and `ministral-3:3b` (4.1 GB, window 16384) both at `100% GPU`, and after the first round (both loaded from disk, 18 s and 36 s) a question embedding takes 0.13 to 0.15 s and the first word of the answer 0.12 to 0.15 s (four rounds, tiny prompt). With the reranker (section 10) and `bge-m3` the total must be checked again: the card has 8 GB, of which about 1.35 GB is used by the Windows session.
 
 ## 6. Start the stack and pull the models
 
@@ -129,7 +141,32 @@ A change to `.env` needs `docker compose up -d`. A change to the embedding model
 
 ## 10. Not yet in this recipe
 
-- The reranker service (added with the reranker, `docs/RETRIEVAL-QUALITY.md` lot D).
 - A per-person access key, and what replaces the firewall rule (sprint 4).
 - The Mac mini variant: Ollama natively or in Docker without a GPU reservation, the larger context windows listed in `.env.example`, and its own measures (`apps/server/scripts/measure_context.py`).
 - Open WebUI first-account steps and the recreation of the instructions from `prompts/` (`docs/OPERATIONS.md`).
+
+## 11. The reranker (optional, lot D of the retrieval-quality programme)
+
+A cross-encoder (`BAAI/bge-reranker-v2-m3`, Apache 2.0, served by Text Embeddings Inference) that reads each candidate passage with the question. The gateway offers it as `POST /v1/rerank`; the desktop uses it only if the `rerank` switch is on (off by default: see `docs/RETRIEVAL-QUALITY.md`, section 12.3). The weights (2.3 GB) are downloaded from the model hub the first time the service starts.
+
+1. In `.env`, extend `COMPOSE_FILE` and choose the image for the card:
+
+   ```text
+   COMPOSE_FILE=compose.yaml;compose.gpu.yaml;compose.rerank.yaml;compose.rerank-gpu.yaml
+   RERANK_IMAGE_TAG=120-1.9
+   ```
+
+   `120-1.9` is for an RTX 50 card (experimental upstream), `89-1.9` for an RTX 40, `86-1.9` for an RTX 30, `cpu-1.9` for a machine without a GPU (drop the two `gpu` files then).
+2. `docker compose up -d --build`. The weights are kept in the Docker volume `assistant-cabinet_reranker-data` (a folder of the machine failed on Windows: "Cannot allocate memory").
+3. Check: `curl http://<SERVER_BIND_ADDRESS>:8080/health` shows `"rerank_available":true`, and a `POST /v1/rerank` with a query and a few documents returns scores.
+
+**Known problem on the tower (15 October 2026).** The Docker virtual machine of the tower has **7.57 GiB**. Loading the weights needs about 5 GiB for a moment, on top of the AI server (about 2 GiB) and the other containers: the process is killed (exit 137) and, with `restart: unless-stopped`, starts again every ten seconds. Two ways out, the first being the lasting one:
+
+- Give the virtual machine more memory: create the file `.wslconfig` in the user's folder with the two lines `[wsl2]` and `memory=12GB`, then `wsl --shutdown` and start Docker Desktop again (this stops every container for a minute or two). The tower has 16 GB.
+- Or start the reranker alone once so that the weights are loaded to the GPU: stop `assistant-cabinet-ollama`, `assistant-cabinet-open-webui` and `assistant-cabinet-server`, start `assistant-cabinet-reranker`, wait for the line saying it is ready in `docker logs assistant-cabinet-reranker`, then start the three others. This must be repeated whenever the container is recreated.
+
+Until one of them is done, stop the loop: `docker update --restart=no assistant-cabinet-reranker` then `docker stop assistant-cabinet-reranker` (or remove the two `rerank` files from `COMPOSE_FILE`).
+
+## 12. Commands that need the logged-on session (Windows)
+
+On the tower, Docker Desktop's credential helper only works inside the user's own session: `docker pull`, `docker compose pull` and `docker compose up --build` fail over SSH with "A specified logon session does not exist". The work was done by a one-shot scheduled task that runs a `.cmd` file with no window (`wscript //B` and a small `.vbs`, window style 0), so that nothing appears on the screen of the person working on the tower. Commands that only talk to the running engine (`docker ps`, `docker logs`, `docker exec`, `docker inspect`) work over SSH. Do this rarely, say when it runs, and prefer a pull the owner starts herself from a normal terminal.

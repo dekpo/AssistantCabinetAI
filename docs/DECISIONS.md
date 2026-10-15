@@ -1271,3 +1271,22 @@ All recommendations of `docs/RETRIEVAL-QUALITY.md` section 8 were accepted.
 | Unified field in the left panel | Not now; explained to the owner (`docs/RETRIEVAL-QUALITY.md` section 10) |
 
 Built (lot A), to confirm: `Evidence.last_page` and `Evidence.matches` (character offsets of the question's words, empty for a passage found by meaning), the same on the finder's `Locator` (`lastPage`); the figure check knows every page of a range; `EvidenceCoverage` carries `partial`, `unvectorisedChunks`, `mismatchedChunks` and is sent for every search that is not a named file, with the number of documents the search was allowed to look at as its denominator.
+
+## Settled by measures for search quality: lots B to H (15 October 2026, tab 3)
+
+Decided by the figures of `docs/RETRIEVAL-QUALITY.md` section 12, under the rule that a method is kept only if something rises and no family falls. To confirm by the owner.
+
+| Subject | Decision |
+| --- | --- |
+| Word channel | **Phrases** kept: the question's phrases join its words in one OR expression (pipeline recall@10 0.784 to 0.843, fact@10 0.714 to 1.000 on the exam, identifier family +0.273). Not kept: near, content terms, stems, weights, trigram, thesaurus (no gain, or a family falls). The tables for them exist and stay empty |
+| Inside a long document | Nothing kept: the neighbour passage lowers the big sets; the cap and the ends show no gain on fixtures that have no question spread over several sections (a limit of the fixtures). Mechanics stay behind switches |
+| Fusion by rank | **Refused**: it lowers the product's own ranking on the exam and two families on the big sets |
+| Identifier pinned first | **Kept** (never worse; identifier family +0.045 with bge-m3) |
+| Refusal before any model | **Kept**: 0 false refusals on 404 answerable questions; a file name written in a question and a decimal number are not facts to find |
+| Quotations and citations | Checked and **appended**, never rewritten: a quotation absent from every passage, a `[n]` that names no passage |
+| Embedding model | **Stay on `nomic-embed-text`** (recommendation): equal on the product path, 40 to 64 % faster to Analyse than bge-m3, which is better only on meaning-only search. Changing it means a full re-Analyse on every device |
+| Reranker | **Measured, off.** Overall gain (exam +0.015, big set +0.031, 800 pages 0) and 95 to 164 ms, but a question naming a file ranks worse (-0.33 on 9 questions) and person -0.03: under the rule it stays off. Remedy to try if the owner wishes: no rerank for a question that names a file. Memory of the tower's Docker virtual machine: `docs/INSTALL-SERVER.md`, section 11 |
+| Summaries | Chapters and full reading, started by hand, duration shown first, stoppable, kept per file hash and prompt version; complete only when every part was read. The chat does not read them yet |
+| « Ouvrir à la page » | Not built: the application has no page viewer. The button shows the file in the file manager and the page is written beside it |
+
+Owner remark, 15 October 2026, on the reranker: if it does not make the search faster and gives wrong results, it must be removed. Checked against the figures: it was never meant to be faster, and it is not (it adds 95 to 164 ms a question); it does not give wrong answers as a rule (recall +0.015 on the exam, +0.031 on the big set, 0 on 800 pages) but ranks worse one family, the questions that name a file (-0.33 on 9 questions), and slightly person (-0.03). Consequence: the `rerank` switch stays off and the product never calls the service. The code (gateway endpoint, client step, `compose.rerank*.yaml`) is kept for now because it costs nothing while off; removing it is a separate decision for the owner, to be taken after the remedy (no rerank for a question that names a file) has been tried or refused.

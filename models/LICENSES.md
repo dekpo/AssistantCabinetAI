@@ -165,6 +165,19 @@ docker compose exec ollama ollama pull qwen3.5:2b
 docker compose exec ollama ollama pull bge-m3
 ```
 
+## bge-reranker-v2-m3 (reranker, optional service, lot D of the retrieval-quality programme)
+
+| Field | Value |
+| --- | --- |
+| Served by | Text Embeddings Inference (Apache 2.0), `compose.rerank.yaml`; weights downloaded from the model hub at the first start into a Docker volume |
+| Hugging Face source | [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) |
+| Licence | Apache 2.0 (card read on 15 October 2026: `License: apache-2.0`) |
+| Size | about 0.6 B parameters, F32 weights of about 2.3 GB |
+| Commercial use | Allowed under Apache 2.0 |
+| Why this one | A cross-encoder reads each candidate passage with the question and scores it; multilingual, French included |
+| Limits | Not a medical device; it sees only the passages the application sends, on the internal network; stores nothing |
+| Next review | Kept only if the measure of `docs/RETRIEVAL-QUALITY.md` section 12 shows a gain; the first load needs about 5 GiB of memory in the Docker VM |
+
 ## gemma2-9b-it (Windows bench, removed from disk 21 September 2026)
 
 | Field | Value |

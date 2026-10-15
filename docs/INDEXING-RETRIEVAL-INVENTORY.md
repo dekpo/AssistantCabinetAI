@@ -70,9 +70,9 @@ Status: **done** · **build** (decided, to build) · **measure** (built behind a
 | --- | --- | --- |
 | Semantic chunking, late chunking, RAPTOR / GraphRAG, ColBERT, fine-tuning an embedding model, query rewriting or HyDE by the model | M 11, R A10 A11 A12 F4 H4 | rejected for now |
 | A model-written context per chunk (contextual retrieval) and generated questions per chunk (doc2query) | M 11, R A4 A7 | later, heavy, started by hand, ideally on the Mac mini |
-| Tantivy in place of FTS5; an ANN index (HNSW) | R C7 H3 | rejected / later (beyond about 100 000 passages) |
-| **Dates and amounts as facts (`ld_facts`)** | S2, owner | deferred to its own session |
-| New readers: ODT, RTF, EML, VTT, ODP, PPTX, ODS (F-20, KBD-30) | owner, 13 Oct | postponed after this work |
+| Tantivy in place of FTS5; an ANN index (HNSW) | R C7 H3 | Tantivy rejected; the ANN index **measured 15 Oct 2026** on 120 000 fake-vector passages, not wired (`docs/RETRIEVAL-QUALITY.md` 12.11) |
+| **Dates and amounts as facts (`ld_facts`)** | S2, owner | **built 15 Oct 2026** (`facts.rs`, `docs/RETRIEVAL-QUALITY.md` 12.9): the question's date or amount finds the passage that writes it another way; no answer from a fact alone |
+| New readers: ODT, RTF, EML, VTT, ODP, PPTX, ODS (F-20, KBD-30) | owner, 13 Oct | **built 15 Oct 2026** (`readers/`, ODS on the tabular side; `docs/RETRIEVAL-QUALITY.md` 12.10) |
 | Fixes that only serve `auto` (F-17, F-18, F-19) and F-21 (the model's sentence against the engine block) | owner, 12 and 13 Oct | not started |
 | Books of 1 000 pages in the lab | owner, 14 Oct | not for now |
 

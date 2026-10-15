@@ -1278,7 +1278,7 @@ Decided by the figures of `docs/RETRIEVAL-QUALITY.md` section 12, under the rule
 
 | Subject | Decision |
 | --- | --- |
-| Word channel | **Phrases** kept: the question's phrases join its words in one OR expression (pipeline recall@10 0.784 to 0.843, fact@10 0.714 to 1.000 on the exam, identifier family +0.273). Not kept: near, content terms, stems, weights, trigram, thesaurus (no gain, or a family falls). The tables for them exist and stay empty |
+| Word channel | **Phrases** kept: the question's phrases join its words in one OR expression (pipeline recall@10 0.784 to 0.843, fact@10 0.714 to 1.000 on the exam, identifier family +0.273). Not kept: near, content terms, stems, weights, trigram, thesaurus (no gain, or a family falls). *(15 October 2026, tab 4: the first five were removed with their tables; the thesaurus stays off with its reason written down: see below.)* |
 | Inside a long document | Nothing kept: the neighbour passage lowers the big sets; the cap and the ends show no gain on fixtures that have no question spread over several sections (a limit of the fixtures). Mechanics stay behind switches |
 | Fusion by rank | **Refused**: it lowers the product's own ranking on the exam and two families on the big sets |
 | Identifier pinned first | **Kept** (never worse; identifier family +0.045 with bge-m3) |
@@ -1290,3 +1290,20 @@ Decided by the figures of `docs/RETRIEVAL-QUALITY.md` section 12, under the rule
 | « Ouvrir à la page » | Not built: the application has no page viewer. The button shows the file in the file manager and the page is written beside it |
 
 Owner remark, 15 October 2026, on the reranker: if it does not make the search faster and gives wrong results, it must be removed. Checked against the figures: it was never meant to be faster, and it is not (it adds 95 to 164 ms a question); it does not give wrong answers as a rule (recall +0.015 on the exam, +0.031 on the big set, 0 on 800 pages) but ranks worse one family, the questions that name a file (-0.33 on 9 questions), and slightly person (-0.03). Consequence: the `rerank` switch stays off and the product never calls the service. The code (gateway endpoint, client step, `compose.rerank*.yaml`) is kept for now because it costs nothing while off; removing it is a separate decision for the owner, to be taken after the remedy (no rerank for a question that names a file) has been tried or refused.
+
+## Settled in tab 4: one note to check, dead code, facts, readers, the approximate index (15 October 2026)
+
+Owner instructions of 15 October 2026 are carried out; what the figures decide is marked. To confirm by the owner.
+
+| Subject | Decision |
+| --- | --- |
+| One "to check" note per answer | Everything the answer states that no excerpt carries is **one note**, one short sentence per kind (figures and dates, quotations between guillemets, `[n]` that names no passage), each list capped at five with « et N autres », nothing repeated, the answer itself never rewritten. The mixed tier keeps its own corrections |
+| Summaries are checked too | The figures and quotations of a hand-started summary are looked up in the text of the unit it was made from; the result is stored beside it (`summary_checks`, a companion table: an old index needs no migration, and a summary stored before the check is checked when first read) and shown as the same note. A flagged summary is shown, never edited |
+| No dead code by accident | Written in `AGENTS.md`: a method measured useless or harmful is removed, or kept with its reason written down; `docs/RETRIEVAL-QUALITY.md`, "Methods removed, and why" is the table |
+| Removed | Stems (and the `rust-stemmers` dependency), field weights, trigram, near, content terms, with their tables `chunks_lex` and `chunks_tri`. An index written before has them dropped when it is opened (tested on an index made the old way); nothing is analysed again |
+| Kept off with a reason | The thesaurus: unproven because no exam question uses a synonym; judged on real documents |
+| Left to the owner | Fusion by rank and the neighbour passage (recommended: remove), the cap and the ends (keep until a real book answers, or remove) |
+| Reranker | The remedy was tried once: no rerank for a question that names a file or asks about every document (in the product, switch off). The named-file fall is gone, **person falls by 0.012 (3 questions)**: not switched on, not removed, **her decision** (`docs/RETRIEVAL-QUALITY.md` 12.8) |
+| Dates and amounts as facts | **Kept and on**: `ld_facts` written by the Analyse's file-profile pass, 0.4 to 0.6 % of an Analyse; the facts bring their passage first when at most three passages state them; the formats come from the vocabulary files (months, currencies) and the existing readers of dates and numbers; the Swiss apostrophe grouping is read by the figure scanner. No answer is given from a fact alone |
+| New readers | ODT, ODP, PPTX, RTF, EML, VTT as documents; ODS as a workbook. Readers, never converters. A slide is a page, notes and attachments are not read |
+| Approximate index | **Measured only**, on fake vectors, in `tests/ann_recall.rs`; not wired into the product, because the threshold of recall below which it falls back to the exact search is the owner's to set (`docs/RETRIEVAL-QUALITY.md` 12.11) |

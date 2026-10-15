@@ -69,18 +69,19 @@ Gaps that lot A has to close, read in the code:
 
 | Switch | Lot | Needs a new Analyse? | Where it acts |
 | --- | --- | --- | --- |
-| `french_stems` | B | **yes** (an extra full-text column, rebuilt from stored text: no re-extraction, no re-embedding) | `chunks_fts`, `file_profile_fts`, query stemmed the same way |
-| `field_weights` | B | yes (title and section columns in `chunks_fts`, same rebuild) | `bm25()` weights |
-| `phrase_and_near` | B | no | query builder |
+| ~~`french_stems`~~ | B | removed 15 Oct 2026 (section 12.7) | |
+| ~~`field_weights`~~ | B | removed 15 Oct 2026 (section 12.7) | |
+| `phrases` (the `near` half was removed, section 12.7) | B | no | query builder |
 | `thesaurus` | B | no (data per pack) | query builder, OR-groups |
-| `content_terms` (off, shadow, on) | B | no | the ordinary road's lexical half |
-| `trigram` | B | yes (a second full-text table) | measured option |
+| ~~`content_terms`~~ | B | removed 15 Oct 2026 (section 12.7) | |
+| ~~`trigram`~~ | B | removed 15 Oct 2026 (section 12.7) | |
 | `per_locator_cap`, `neighbours`, `one_per_section`, `edges_first` | C | no | the cap loop and the assembly |
 | `passage_targeting` (off, shadow) | C | no | `kb_mentions.chunk_id` read in the diagnostics only |
 | `fusion` (flat bonus, RRF) | D | no | replaces the +0.2 bonus; `ranking_parity` stays the guard of the default |
 | `pin_identifier` | D | no | exact identifier first on the ordinary road |
 | `rerank` | D | no | after the candidate list |
 | `refusal_check` | E | no | after retrieval, before generation |
+| `facts` | 15 Oct (tab 4) | no (the facts are written by the file-profile pass of an Analyse) | the passages that state a date or an amount of the question come first (section 12.9) |
 
 **An index-time switch never acts silently on an index that lacks its structure.** The layout is recorded in `file_profile_meta` (the table that already carries the profile and embedding versions); a query-side switch whose column is absent falls back to today's query, and the old-index line (« L'index doit être refait : appuyez sur Analyser. ») is the way back. The rebuild of a full-text table from stored text runs inside an Analyse the user started, shows in its summary, and costs seconds, not the 45 minutes of the embeddings (to be measured, not assumed).
 
@@ -109,7 +110,7 @@ Real elapsed cost of a measure: about 3 minutes for the exam (real), about 5 for
 
 ## 6. Lots B to H: design in short, each measured alone
 
-**B. The lexical channel, precise.** Elision and diacritics; a Snowball French stemmer in Rust stored as an extra full-text column, the query stemmed the same way (**the crate's licence is checked from its manifest before it is added; free licences only**); `bm25()` weights on `file_profile_fts` and `chunks_fts` (title, section path, author, subject above the body); quoted phrases and `NEAR`; a thesaurus per pack as data under `resources/`, cumulative (a pack adds groups, never a French assumption in code); isolated content terms for the ordinary road's lexical half (shadow first: the diagnostics record what would change); a trigram table as a measured option. A set sentence keeps saying that it searches the word itself unless the thesaurus is on, and then it names the groups it used. Risk: stemming merges unrelated words (« porte », « portée »); the exam's `identifier` and `person` families must not drop. Expected: about 2 h 30 with six measures.
+**B. The lexical channel, precise.** *(Update of 15 October 2026: only the phrases and the thesaurus remain; the stems, the weights, `NEAR`, the content terms and the trigram tables were measured useless or harmful and removed, section 12.7.)* Elision and diacritics; a Snowball French stemmer in Rust stored as an extra full-text column, the query stemmed the same way (**the crate's licence is checked from its manifest before it is added; free licences only**); `bm25()` weights on `file_profile_fts` and `chunks_fts` (title, section path, author, subject above the body); quoted phrases and `NEAR`; a thesaurus per pack as data under `resources/`, cumulative (a pack adds groups, never a French assumption in code); isolated content terms for the ordinary road's lexical half (shadow first: the diagnostics record what would change); a trigram table as a measured option. A set sentence keeps saying that it searches the word itself unless the thesaurus is on, and then it names the groups it used. Risk: stemming merges unrelated words (« porte », « portée »); the exam's `identifier` and `person` families must not drop. Expected: about 2 h 30 with six measures.
 
 **C. Searching inside a long document.** A cap per locator (section, or a slice of pages) replaces the idea of a cap per file, **inside the same total** (`RetrievalLimits` is not raised: the tower reads about 90 tokens a second); neighbours of a kept passage inside the same character cap; one passage per section unless it is the answer; the best passages at the start and end; per-passage targeting through `kb_mentions.chunk_id` **in shadow only** (the diagnostics record what a passage-level reduction would have kept); "quelles sections parlent de X ?" answered from the index grouped by section, no model; the document card is never a passage (it has its own table, so no passage query can return one: a test already pins it). Measured on the 1 000-page fixtures: the right section in the first 6 passages, with the total number of passages unchanged. About 2 h.
 
@@ -253,7 +254,7 @@ Every figure below says which kind it is. **Real**: the embedding model of the A
 | trigram | 0.000 | | not kept |
 | thesaurus | 0.000 | | no exam question uses a synonym: unproven, stays off |
 
-Other sets with phrases: the planted 800-page document (real) 1.000/1.000, unchanged; 8,000 pages (fake) 0.980/0.960, unchanged; the 1,007-document library (fake) recall +0.047, fact@10 0.914 to 0.986, identifier family +0.318, no family worse. A first design (phrases as a tier before the words) lowered the planted set by 0.04 and was redesigned. The tables of the unused methods exist and stay empty unless a switch is on.
+Other sets with phrases: the planted 800-page document (real) 1.000/1.000, unchanged; 8,000 pages (fake) 0.980/0.960, unchanged; the 1,007-document library (fake) recall +0.047, fact@10 0.914 to 0.986, identifier family +0.318, no family worse. A first design (phrases as a tier before the words) lowered the planted set by 0.04 and was redesigned. The tables of the methods not kept were removed on 15 October 2026 (section 12.7).
 
 ### 12.2 Lot C: inside a long document (real on the exam and the 800 pages, fake on the two big sets)
 
@@ -305,4 +306,68 @@ It helps overall, above all identifiers and multi-entity questions, but under th
 
 ### 12.6 What the product runs with
 
-`PRODUCT_CHOICE` (`assembly.rs`, `lexical.rs`): phrases on; identifier pinned on; refusal on; everything else off (the reranker is measured and left off, section 12.3).
+`PRODUCT_CHOICE` (`assembly.rs`, `lexical.rs`): phrases on; identifier pinned on; refusal on; dates and amounts as facts on (section 12.9); everything else off (the reranker is measured and left off, sections 12.3 and 12.8; the thesaurus stays off for the reason in section 12.7).
+
+### 12.7 Methods removed, and why (15 October 2026)
+
+Owner rule of 15 October 2026 (`AGENTS.md`, "No dead code by accident"): a method measured useless or harmful is removed, or kept with its reason written down. The table is what stops the next agent from repeating the experiment. Every figure is from the lot B measure of section 12.1 (131 scored questions of the exam, **real** vectors, pipeline channel, 15 October 2026) unless it says otherwise.
+
+| Method | What it was | The figures | Why removed | Do not try again unless |
+| --- | --- | --- | --- | --- |
+| **Stems** | A second tier of the word search over the passage's words reduced to their French Snowball stems (`rust-stemmers`), in an extra full-text table `chunks_lex`. | Recall@10 +0.001; hybrid30 fact -0.071 | Nothing rose and a channel fell; the stemmer is French, which breaks the rule that no country's language is in code. | A real library shows questions that differ from their passage only by an inflection, a fixture holds some (none of the 205 exam questions does), **and** the stemmer comes from the locale or a pack as data. |
+| **Field weights** | A word in the title or the section path of a passage counted four times a word in its body (`bm25()` weights over `chunks_lex`). Needed the stems table. | Recall@10 0.000; hybrid30 fact -0.143 (with the stems) | No gain, and a fall. | A real library where the wording of a question is in the section titles and not in the body, measured with the weights alone on a table that holds only the section path. |
+| **Trigram** | A last tier finding a piece of a word or of a code, over a trigram table `chunks_tri` (a second table holding the text of every passage again). | Recall@10 0.000 | No gain; the table cost disk. | A real question gives part of a code or of a word that the phrases cannot match (a truncated invoice number), shown on a list of real misses. |
+| **Near** | An FTS5 `NEAR(w1 w2 ..., 10)` group of the content words, as one more alternative. | Recall@10 +0.000 | No gain: the phrases already put two words side by side first. | A question style with its words far apart and a phrase that fails, shown on real questions. |
+| **Content terms** | The words of the way a question is asked ("which documents mention ...") left out of the word search. | Recall@10 +0.002 (less than one question moves it: 0.008) | Noise; the ranking already weighs a word by its rarity, so a common frame word counts little. | Long questions are the product's habit and the frame words are seen flooding the ranking on real questions. |
+
+What went with them: the dependency `rust-stemmers`, the tables `chunks_lex` and `chunks_tri` and the Analyse step `ensure_lexical_layout`, the lab flags `near`, `content`, `stems`, `weights`, `trigram`, and their tests. **An index written by the previous version** still holds the two tables (empty unless a switch was on, which the product never turned on): opening it drops them, and the recorded layout (`file_profile_meta`, key `lexical_layout`); `tests/lexical_migration.rs` proves it on an index made the old way. Nothing else in that index changes, and nothing needs to be analysed again.
+
+**Kept off, with its reason (not removed): the thesaurus.** A small data file per pack (`resources/thesaurus/*.json`), one switch (`LexicalOptions::thesaurus`). It measured 0.000 only because **no exam question uses a synonym**: it is unproven, not useless. It is to be judged on real documents (a Swiss "LAMal" against "assurance maladie obligatoire", a French "mutuelle" against "complementaire"). Until then it stays off and costs nothing but the data file.
+
+**Measured, not removed, to decide with the owner:**
+
+| Method | The figures | Recommendation |
+| --- | --- | --- |
+| Fusion by rank (RRF) | Lowers the product's own ranking on every set (exam recall -0.172 and fact -0.214 with `nomic`; big set identifier family -0.027) while raising the test channel hybrid30 by +0.093 (section 12.3) | Remove: it is refused and the test channel is not the product |
+| Neighbour passage | Lowers the 8,000-page set (0.980 to 0.760) and the 1,007-document library (0.782 to 0.745) (section 12.2) | Remove |
+| Cap per section, best passages at both ends | No change on any set; the fixtures hold no question spread over several sections of one book, which is a limit of the fixtures, not a proof (section 12.2) | Keep until a real book answers the question, or remove on the owner's word |
+
+### 12.8 The reranker, with the one remedy tried once (15 October 2026, 16:57 to 17:05, real vectors)
+
+The remedy: **no rerank for a question that names a file or asks about every document** (the router's `Plan::OneFile` and `Plan::EveryDocument`; the same rule in `commands.rs` and in the lab). The questions it skips are scored with their unreranked passages, so every family is judged on the same questions. Pipeline order against `rerank6` (the six passages the model would read):
+
+| Set | Recall@10 | Fact@10 | Families that fall |
+| --- | --- | --- | --- |
+| exam (131) | 0.784 to 0.834 (+0.050) | 0.714 to 1.000 | **person -0.012** (3 questions of 36: « Jean Dupontet » (a misspelt name), « Marie Martin », « Pierre-Alain Oberson ») |
+| big set (223) | 0.928 to 0.960 (+0.031) | 0.897 to 0.946 (+0.049) | none; identifier family +0.189 (one book question lost its fact: L057) |
+| 800 pages (50) | 1.000 to 1.000 | 1.000 | none |
+
+The named-file fall (-0.333 on 9 questions) is gone; the median added time is 95 to 162 ms. **A family still falls (person, 3 questions)**, so by the rule the reranker is not switched on, and the owner's instruction ("if the defect does not go away, remove it") is not met cleanly either: the defect she named went away and a smaller one appeared. **Left for her decision**, with the code in place and the switch off: (a) switch it on and accept the three questions; (b) remove it everywhere; (c) look at why the reranker puts a misspelt or common name lower (the remedy for names would be the same kind: the router knows a person was resolved). Recommendation: (c) first, a quarter of an hour of lab time, then (a).
+
+### 12.9 Dates and amounts as facts (15 October 2026)
+
+Table `ld_facts`, written by the file-profile pass of an Analyse (documents only): kind (`date` or `amount`), normal value (`2026-03-12`; `1200.00`), currency, the surface text, the passage, its page and its character offset, with the file's hash. Dates go through the reader of the header (`file_profile::header::date_spans`, which `dates_in` now calls), numbers through the scanner that checks an answer (`number_check::scan_spans`, which now also reads the apostrophe grouping of Swiss amounts: `1'200.50`); the month names and the currencies are **data** in `resources/profile/*/` (`currencies`: EUR and USD in the base, CHF in the `health-ch` pack, read for every pack). An amount is a number with a currency beside it; a bare number is not a fact. A question that writes a date or an amount finds, by its normal value, the passages that state it in any other writing; they come first, like an identifier, **only when at most three passages state it** (a date that many passages state tells nothing).
+
+| Set (real vectors) | Pipeline recall@10, without to with `facts` | Families |
+| --- | --- | --- |
+| sample (31 files, 50 questions, 11 `normal_form`) | 0.950 to 1.000 | `normal_form` +0.182; nothing falls |
+| big set (500 files, 247 questions, 11 `normal_form`) | 0.906 to 0.932 | `normal_form` +0.545; nothing falls |
+| exam (131) | 0.843 to 0.843 | unchanged |
+| 800 pages (50) | 1.000 to 1.000 | unchanged |
+
+**Cost.** Writing every fact of the library again takes 11 ms of an Analyse of 2.6 s (sample, 0.40 %), 298 ms of 77.8 s (big set, 0.38 %), 163 ms of 28.8 s (exam, 0.57 %), 346 ms of 56.6 s (800 pages, 0.61 %): under the 5 % target. **Honest limit:** the `normal_form` questions were written for this feature (`scripts/gen-retrieval-lab.py`, `NORMAL_FORM`, added after the absent questions so that no earlier question changes its number), so the gain proves it works, not how often a real question writes a date another way. Not built: answering "what is the amount of invoice X" from a fact alone with no model; the facts only bring the passage, which is then shown and checked like any other (« Passages trouvés », the "to check" note). The first Analyse after this version reads every document's profile again (the vocabulary changed), which writes the facts of the existing library.
+
+### 12.10 New readers (15 October 2026)
+
+ODT, ODP, PPTX, RTF, EML and VTT are read by `readers/` (a module per format; the zip and XML crates the DOCX reader already uses, and small parsers of their own for RTF, e-mail and WebVTT: no new dependency); ODS joins the tabular side through the same `calamine` reader as the XLSX (`TabularFormat::Ods`). A slide is a page; the speaker notes are not read; an attachment of an e-mail is not read; a file that cannot be parsed is named in the summary and does not stop the others. Readers, never converters: no file is changed.
+
+### 12.11 Approximate nearest-neighbour index
+
+Measured, **not wired into the product** (15 October 2026, `tests/ann_recall.rs`, ignored test, dev-only dependency `instant-distance` 0.6, MIT or Apache 2.0, pure Rust, Windows and macOS). **Fake vectors**: 120 000 passages of 768 dimensions in groups of 60, 300 questions each near one passage, the exact search in memory as the truth. They say how the graph behaves on this many points, not how real documents retrieve; the recall must be measured again on a real library of that size.
+
+| Groups | Build (HNSW, ef_construction 100, ef_search 100) | Recall@10 / @30 | Median per question, exact / approximate |
+| --- | --- | --- | --- |
+| well apart (spread 0.3) | 314 s | 1.0000 / 1.0000 | 62 ms / 0.96 ms |
+| overlapping (spread 2.0) | 1 072 s | 1.0000 / 0.9999 | 64 ms / 4.2 ms |
+
+What it says. (1) On this size the exact scan costs about 62 ms in memory, so the approximate index is not needed to stay fast below or near 100 000 passages; the product reads the vectors from SQLite, which is slower than memory and is to be measured on a real index of that size before deciding. (2) The recall is excellent on fake data, which is easy; no threshold can be set from it. (3) **The build is the cost**: 5 to 18 minutes of one machine for 120 000 passages, so it can only run inside an Analyse the user started, with the interface showing it. (4) Memory and disk: the library holds its vectors once (369 MB for 120 000 at 768 dimensions); this crate keeps a **second copy** of every vector inside the index (another 369 MB in memory, and on disk if the graph is saved) plus about 31 MB of graph, which is why it is not wired in: an index that stores only the graph and reads the vectors from SQLite is needed (a graph of our own, or another crate), and that is a design to agree on. **Left for the owner:** the recall below which the product returns to the exact search (a proposal: 0.98 at 10, measured at the end of each Analyse on a sample of the library's own passages as questions), and whether the library of any practice will ever reach 100 000 passages (not measured: count the passages of the pilot's real index first).

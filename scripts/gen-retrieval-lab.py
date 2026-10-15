@@ -226,6 +226,23 @@ ABSENT = [
     "Quels sont les horaires d'ouverture du secrétariat ?",
 ]
 
+# Dates and amounts written in the question another way than in the document (`facts`): the fact is written in
+# the document, and the file name does not carry the date the question asks for. Added after the absent
+# questions so that no earlier question changes its number.
+NORMAL_FORM: list[tuple] = [
+    ("courriers/2026-05-20_lettre-medecin-conseil-vuillemin.pdf", "Quel courrier fixe un rendez-vous au 24/06/2026 ?", "24 juin 2026"),
+    ("comptes-rendus/2026-08-19_note-formation-hygiene.md", "Qu'est-ce qui est prévu le 09/10/2026 ?", "9 octobre 2026"),
+    ("courriers/2026-06-03_lettre-arret-travail-gaillard.docx", "Quel arrêt de travail commence le 02/06/2026 ?", "2 juin 2026"),
+    ("courriers/2026-04-28_reference-sinistre.txt", "Quel dégât des eaux date du 20.04.2026 ?", "20 avril 2026"),
+    ("contrats/2026-07-15_attestation-assurance-rc.docx", "Quelle attestation court jusqu'au 31/12/2026 ?", "31 décembre 2026"),
+    ("factures/2026-05-12_devis-informatique-leman.pdf", "Quel devis totalise 3420 CHF ?", "CHF 3 420.00"),
+    ("courriers/2026-03-04_lettre-caisse-ferrand.pdf", "Que couvre le versement de 212,40 CHF ?", "CHF 212.40"),
+    ("comptes-rendus/2026-05-06_compte-rendu-reunion-materiel.docx", "À quoi correspond le montant de 9800 CHF ?", "CHF 9 800"),
+    ("factures/2026-02-17_facture-fac-2026-0418.pdf", "Quelle facture s'élève à 310,50 francs ?", "CHF 310.50"),
+    ("courriers/2026-08-04_facture-transport-aebi.pdf", "Quel transport a coûté 385 CHF ?", "CHF 385"),
+    ("contrats/2026-07-01_contrat-nettoyage-proprex.pdf", "Quel contrat coûte 640 CHF par mois ?", "CHF 640"),
+]
+
 # --- the table split by a page break: the header is the last line of page 1, the rows start page 2.
 TABLE_HEADER = f"{'Prestation':<34}{'Tarif de base (CHF)':<26}Participation patient (CHF)"
 TABLE_ROWS = [
@@ -402,9 +419,23 @@ class Builder:
                 where = sorted({page_of(paragraphs, title, f) for f in facts}) if fmt == "pdf" else [1]
                 self.add_question(q_kind, text, [path], facts, where)
 
+    def normal_form(self) -> None:
+        """Questions that write a date or an amount of a document another way than the document does."""
+        for path, text, fact in NORMAL_FORM:
+            document = next((d for d in self.documents if d["path"] == path), None)
+            if document is None:
+                continue
+            written = next(
+                (" ".join(paragraphs) + " " + title for p, _, title, paragraphs, _ in SHORT + IDENTIFIERS + STRUCTURED if p == path),
+                "",
+            )
+            assert squash(fact) in squash(written), (path, fact)
+            self.add_question("normal_form", text, [path], [fact], [1])
+
     def finish(self, absent_extra: list, limit: int) -> dict:
         for text in ABSENT + absent_extra:
             self.add_question("absent", text, [], [], [])
+        self.normal_form()
         assert len(self.documents) <= limit, f"{len(self.documents)} files: more than the {limit} allowed"
         manifest = {
             "seed": 0, "documents": len(self.documents), "workbooks": 0, "questions": len(self.questions),

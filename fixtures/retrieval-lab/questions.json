@@ -1183,5 +1183,357 @@
   "carry_over": [],
   "kind": "absent",
   "fact_pages": []
+ },
+ {
+  "id": "L040",
+  "category": "normal_form",
+  "text": "Quel courrier fixe un rendez-vous au 24/06/2026 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-05-20_lettre-medecin-conseil-vuillemin.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-05-20_lettre-medecin-conseil-vuillemin.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "24 juin 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L041",
+  "category": "normal_form",
+  "text": "Qu'est-ce qui est prévu le 09/10/2026 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "comptes-rendus/2026-08-19_note-formation-hygiene.md"
+  ],
+  "relevant_readable": [
+   "comptes-rendus/2026-08-19_note-formation-hygiene.md"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "9 octobre 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L042",
+  "category": "normal_form",
+  "text": "Quel arrêt de travail commence le 02/06/2026 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-06-03_lettre-arret-travail-gaillard.docx"
+  ],
+  "relevant_readable": [
+   "courriers/2026-06-03_lettre-arret-travail-gaillard.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "2 juin 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L043",
+  "category": "normal_form",
+  "text": "Quel dégât des eaux date du 20.04.2026 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-04-28_reference-sinistre.txt"
+  ],
+  "relevant_readable": [
+   "courriers/2026-04-28_reference-sinistre.txt"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "20 avril 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L044",
+  "category": "normal_form",
+  "text": "Quelle attestation court jusqu'au 31/12/2026 ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "contrats/2026-07-15_attestation-assurance-rc.docx"
+  ],
+  "relevant_readable": [
+   "contrats/2026-07-15_attestation-assurance-rc.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "31 décembre 2026"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L045",
+  "category": "normal_form",
+  "text": "Quel devis totalise 3420 CHF ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "factures/2026-05-12_devis-informatique-leman.pdf"
+  ],
+  "relevant_readable": [
+   "factures/2026-05-12_devis-informatique-leman.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 3 420.00"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L046",
+  "category": "normal_form",
+  "text": "Que couvre le versement de 212,40 CHF ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-03-04_lettre-caisse-ferrand.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-03-04_lettre-caisse-ferrand.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 212.40"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L047",
+  "category": "normal_form",
+  "text": "À quoi correspond le montant de 9800 CHF ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "comptes-rendus/2026-05-06_compte-rendu-reunion-materiel.docx"
+  ],
+  "relevant_readable": [
+   "comptes-rendus/2026-05-06_compte-rendu-reunion-materiel.docx"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 9 800"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L048",
+  "category": "normal_form",
+  "text": "Quelle facture s'élève à 310,50 francs ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "factures/2026-02-17_facture-fac-2026-0418.pdf"
+  ],
+  "relevant_readable": [
+   "factures/2026-02-17_facture-fac-2026-0418.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 310.50"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L049",
+  "category": "normal_form",
+  "text": "Quel transport a coûté 385 CHF ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "courriers/2026-08-04_facture-transport-aebi.pdf"
+  ],
+  "relevant_readable": [
+   "courriers/2026-08-04_facture-transport-aebi.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 385"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
+ },
+ {
+  "id": "L050",
+  "category": "normal_form",
+  "text": "Quel contrat coûte 640 CHF par mois ?",
+  "entities": [],
+  "name_entities": [],
+  "relevant_documents": [
+   "contrats/2026-07-01_contrat-nettoyage-proprex.pdf"
+  ],
+  "relevant_readable": [
+   "contrats/2026-07-01_contrat-nettoyage-proprex.pdf"
+  ],
+  "relevant_workbooks": [],
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "expect": {
+   "resolution": "none",
+   "between": [],
+   "contains": [
+    "CHF 640"
+   ]
+  },
+  "min_tier": 0,
+  "follow_up_of": null,
+  "carry_over": [],
+  "kind": "normal_form",
+  "fact_pages": [
+   1
+  ]
  }
 ]

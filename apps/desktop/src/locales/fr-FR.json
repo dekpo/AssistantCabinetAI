@@ -143,9 +143,16 @@
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
     "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
-    "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",
-    "unverifiedQuote": "La citation « {quote} » ne figure dans aucun des extraits utilisés : vérifiez-la dans vos documents.",
-    "unknownCitation": "La réponse renvoie à l'extrait [{number}], qui n'existe pas : ne vous y fiez pas.",
+    "toCheck": {
+      "title": "À vérifier dans vos documents.",
+      "figures": "Chiffres ou dates absents des extraits utilisés : {items}.",
+      "quotes": "Citations absentes des extraits utilisés : {items}.",
+      "references": "Renvois à des extraits qui n'existent pas : {items}.",
+      "quote": "« {quote} »",
+      "more": "{items} et {more}",
+      "otherOne": "autre",
+      "otherMany": "autres"
+    },
     "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
     "mixedTableUnavailable": {
       "not_asked_about": "Cette question ne portait sur aucune de vos tables.",

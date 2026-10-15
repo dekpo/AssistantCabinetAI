@@ -48,6 +48,9 @@ pub struct AssemblyOptions {
     pub neighbours: bool,
     /// The best passages are first and last in what the model reads: a long list is read worse in the middle.
     pub edges_first: bool,
+    /// A passage that states a date or an amount written in the question, in any way of writing it, comes
+    /// first, like an identifier, when at most three passages state it (`facts`).
+    pub facts: bool,
 }
 
 impl AssemblyOptions {
@@ -59,6 +62,7 @@ impl AssemblyOptions {
         per_section_cap: None,
         neighbours: false,
         edges_first: false,
+        facts: false,
     };
 }
 
@@ -76,12 +80,15 @@ pub fn assembly_options() -> AssemblyOptions {
 /// The methods kept by the measures of lots C to E (`docs/RETRIEVAL-QUALITY.md`, section 12). Kept: the
 /// identifier pinned first (never worse in any family, one gain) and the refusal of a name or a code that no
 /// document holds (0 false refusals on 404 answerable questions, 9 of 23 absent questions refused with no
-/// model). Left off: fusion by rank (it lowers the product's own ranking), the cap, the neighbour and the
-/// edges (no gain on the fixtures), and the reranker (measured: a gain, but a family falls,
-/// section 12).
+/// model). Kept at lot "facts" (15 October 2026): a date or an amount written in the question finds the passage
+/// that writes it another way (normal_form family +0.18 on the sample set and +0.55 on the big set, real
+/// vectors; nothing else moved, no family fell; 0.4 to 0.6 % of an Analyse). Left off: fusion by rank (it
+/// lowers the product's own ranking), the cap, the neighbour and the edges (no gain on the fixtures), and the
+/// reranker (measured: a gain, but a family falls, section 12).
 const PRODUCT_CHOICE: AssemblyOptions = AssemblyOptions {
     pin_identifier: true,
     refusal: true,
+    facts: true,
     ..AssemblyOptions::OFF
 };
 

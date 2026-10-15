@@ -9,9 +9,11 @@ use std::path::Path;
 use serde::Serialize;
 use walkdir::WalkDir;
 
-/// Extensions this session's extractor understands. `.csv` and `.xlsx` are a later pipeline
-/// (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
-pub const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx", "txt", "md", "jpg", "jpeg", "png"];
+/// Extensions the document extractor understands. The workbooks (`.csv`, `.xlsx`, `.ods`) are the tabular
+/// pipeline's (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
+pub const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "pdf", "docx", "txt", "md", "jpg", "jpeg", "png", "odt", "odp", "pptx", "rtf", "eml", "vtt",
+];
 
 /// Whether the document pipeline can extract this extension. Lowercase, without the dot.
 pub fn is_supported(extension: &str) -> bool {

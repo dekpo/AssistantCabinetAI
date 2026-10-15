@@ -352,19 +352,37 @@ pub fn dates_in_text(text: &str, vocabulary: &ProfileVocabulary) -> Vec<String> 
     out
 }
 
-/// Every date in `line`, as `YYYY-MM-DD`, with whether it is introduced as `<place>, <marker> <date>`
-/// (a comma, then a marker word such as `on` or the French `du`).
-fn dates_in(line: &str, vocabulary: &ProfileVocabulary) -> Vec<(String, bool)> {
-    let mut found: Vec<(usize, NaiveDate)> = Vec::new();
+/// One date found in a line: as `YYYY-MM-DD`, and where it is written (byte offsets in the line).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DateSpan {
+    pub iso: String,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Every date in `line`, in order of appearance, with the span it is written in. The one reader of dates:
+/// `dates_in` (the header) and the facts of the Analyse (`facts`) both go through it.
+pub fn date_spans(line: &str, vocabulary: &ProfileVocabulary) -> Vec<DateSpan> {
+    let mut found: Vec<(usize, usize, NaiveDate)> = Vec::new();
     let (iso, european) = numeric_date_patterns();
     for captures in iso.captures_iter(line) {
         if let Some(date) = ymd(&captures[1], &captures[2], &captures[3]) {
-            found.push((captures.get(0).map_or(0, |m| m.start()), date));
+            let whole = captures.get(0);
+            found.push((
+                whole.map_or(0, |m| m.start()),
+                whole.map_or(0, |m| m.end()),
+                date,
+            ));
         }
     }
     for captures in european.captures_iter(line) {
         if let Some(date) = ymd(&captures[3], &captures[2], &captures[1]) {
-            found.push((captures.get(0).map_or(0, |m| m.start()), date));
+            let whole = captures.get(0);
+            found.push((
+                whole.map_or(0, |m| m.start()),
+                whole.map_or(0, |m| m.end()),
+                date,
+            ));
         }
     }
 
@@ -373,42 +391,58 @@ fn dates_in(line: &str, vocabulary: &ProfileVocabulary) -> Vec<(String, bool)> {
     for index in 0..tokens.len() {
         let (start, token) = &tokens[index];
         // day month year
-        if let (Some(day), Some((_, month)), Some((_, year))) = (
+        if let (Some(day), Some((_, month)), Some((year_start, year))) = (
             day_number(token),
             tokens.get(index + 1),
             tokens.get(index + 2),
         ) {
-            if let (Some(month), Ok(year)) = (vocabulary.month_number(month), year.parse::<i32>()) {
-                if let Some(date) = NaiveDate::from_ymd_opt(year, month, day).filter(plausible_year)
+            if let (Some(month), Ok(number)) = (vocabulary.month_number(month), year.parse::<i32>())
+            {
+                if let Some(date) =
+                    NaiveDate::from_ymd_opt(number, month, day).filter(plausible_year)
                 {
-                    found.push((*start, date));
+                    found.push((*start, year_start + year.len(), date));
                 }
             }
         }
         // month day year
-        if let (Some(month), Some(day), Some((_, year))) = (
+        if let (Some(month), Some(day), Some((year_start, year))) = (
             vocabulary.month_number(token),
             tokens.get(index + 1).and_then(|(_, t)| day_number(t)),
             tokens.get(index + 2),
         ) {
-            if let Ok(year) = year.parse::<i32>() {
-                if let Some(date) = NaiveDate::from_ymd_opt(year, month, day).filter(plausible_year)
+            if let Ok(number) = year.parse::<i32>() {
+                if let Some(date) =
+                    NaiveDate::from_ymd_opt(number, month, day).filter(plausible_year)
                 {
-                    found.push((*start, date));
+                    found.push((*start, year_start + year.len(), date));
                 }
             }
         }
     }
 
-    found.sort_by_key(|(start, _)| *start);
+    found.sort_by_key(|(start, _, _)| *start);
     found.dedup();
     found
         .into_iter()
-        .filter(|(_, date)| plausible_year(date))
-        .map(|(start, date)| {
+        .filter(|(_, _, date)| plausible_year(date))
+        .map(|(start, end, date)| DateSpan {
+            iso: date.format("%Y-%m-%d").to_string(),
+            start,
+            end,
+        })
+        .collect()
+}
+
+/// Every date in `line`, as `YYYY-MM-DD`, with whether it is introduced as `<place>, <marker> <date>`
+/// (a comma, then a marker word such as `on` or the French `du`).
+fn dates_in(line: &str, vocabulary: &ProfileVocabulary) -> Vec<(String, bool)> {
+    date_spans(line, vocabulary)
+        .into_iter()
+        .map(|span| {
             (
-                date.format("%Y-%m-%d").to_string(),
-                introduced_by_marker(&line[..start], vocabulary),
+                span.iso,
+                introduced_by_marker(&line[..span.start], vocabulary),
             )
         })
         .collect()

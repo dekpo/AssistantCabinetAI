@@ -11,6 +11,10 @@
 //! Everything is stored in the workstation's index (`document_summaries`), keyed by the file and its hash and by
 //! the prompt version: a changed file or a changed prompt makes the stored summaries stale, never wrong. The
 //! server stores nothing. This module returns facts and counts, never a sentence.
+//!
+//! A summary is checked like an answer: the figures and the quotations it states are looked up in the text of
+//! the unit it was made from, and what appears in no part of that text is stored beside the summary
+//! (`summary_checks`) and shown as a note. The summary itself is never edited.
 
 use std::future::Future;
 use std::time::Instant;
@@ -20,6 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 use crate::index_store::IndexStore;
+use crate::{number_check, quotation};
 
 /// Bump when `SUMMARY_INSTRUCTION` changes: the summaries written with another version are stale.
 pub const SUMMARY_PROMPT_VERSION: i64 = 1;
@@ -53,6 +58,17 @@ CREATE TABLE IF NOT EXISTS document_summaries (
     first_page INTEGER NOT NULL,
     last_page INTEGER NOT NULL,
     text TEXT NOT NULL,
+    PRIMARY KEY (relative_path, stage, unit)
+);
+-- Beside the summaries, so that an index written before the check existed needs no migration of its table:
+-- a summary with no row here is checked when it is first read. The lists are JSON arrays of strings.
+CREATE TABLE IF NOT EXISTS summary_checks (
+    relative_path TEXT NOT NULL,
+    stage INTEGER NOT NULL,
+    unit INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    unverified_numbers TEXT NOT NULL,
+    unverified_quotes TEXT NOT NULL,
     PRIMARY KEY (relative_path, stage, unit)
 );
 CREATE TABLE IF NOT EXISTS summary_speed (
@@ -137,7 +153,16 @@ pub struct StoredSummary {
     pub first_page: u32,
     pub last_page: u32,
     pub text: String,
+    /// Figures and dates the summary states that the text it was made from does not carry.
+    pub unverified_numbers: Vec<String>,
+    /// Quotations the summary makes that the text it was made from does not carry.
+    pub unverified_quotes: Vec<String>,
 }
+
+/// Fewest digits for a figure of a summary to be checked, and fewest words for a quotation: the same as for
+/// an answer (`commands.rs`).
+const CHECK_MIN_DIGITS: usize = 2;
+const CHECK_MIN_QUOTE_WORDS: usize = 4;
 
 struct Passage {
     text: String,
@@ -316,36 +341,89 @@ pub fn status(index: &IndexStore, path: &str, stage: Stage) -> Result<SummarySta
     })
 }
 
-/// The summaries stored for the file as it is now, chapters before the full reading.
+/// The summaries stored for the file as it is now, chapters before the full reading, each with what it states
+/// that its text does not carry. A summary stored before that check existed is checked here, once, from the
+/// text of its unit (local and cheap: no model), and the result is kept.
 pub fn read_all(index: &IndexStore, path: &str) -> Result<Vec<StoredSummary>, AppError> {
     let Some(hash) = current_hash(index, path)? else {
         return Ok(Vec::new());
     };
-    let mut statement = index
-        .connection()
-        .prepare(
-            "SELECT stage, unit, title, first_page, last_page, text FROM document_summaries
-             WHERE relative_path = ?1 AND sha256 = ?2 AND prompt_version = ?3 ORDER BY stage, unit",
-        )
-        .map_err(|_| AppError::IndexUnavailable)?;
-    let rows = statement
-        .query_map(params![path, hash, SUMMARY_PROMPT_VERSION], |row| {
-            Ok(StoredSummary {
-                stage: if row.get::<_, i64>(0)? == 1 {
-                    Stage::Chapters
-                } else {
-                    Stage::FullReading
-                },
-                unit: row.get::<_, i64>(1)? as usize,
-                title: row.get(2)?,
-                first_page: row.get::<_, i64>(3)?.max(0) as u32,
-                last_page: row.get::<_, i64>(4)?.max(0) as u32,
-                text: row.get(5)?,
+    let mut rows: Vec<(StoredSummary, Option<(String, String)>)> = Vec::new();
+    {
+        let mut statement = index
+            .connection()
+            .prepare(
+                "SELECT s.stage, s.unit, s.title, s.first_page, s.last_page, s.text,
+                        c.unverified_numbers, c.unverified_quotes
+                 FROM document_summaries s
+                 LEFT JOIN summary_checks c
+                   ON c.relative_path = s.relative_path AND c.stage = s.stage AND c.unit = s.unit
+                  AND c.sha256 = s.sha256
+                 WHERE s.relative_path = ?1 AND s.sha256 = ?2 AND s.prompt_version = ?3
+                 ORDER BY s.stage, s.unit",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let mapped = statement
+            .query_map(params![path, hash, SUMMARY_PROMPT_VERSION], |row| {
+                let numbers: Option<String> = row.get(6)?;
+                let quotes: Option<String> = row.get(7)?;
+                Ok((
+                    StoredSummary {
+                        stage: if row.get::<_, i64>(0)? == 1 {
+                            Stage::Chapters
+                        } else {
+                            Stage::FullReading
+                        },
+                        unit: row.get::<_, i64>(1)? as usize,
+                        title: row.get(2)?,
+                        first_page: row.get::<_, i64>(3)?.max(0) as u32,
+                        last_page: row.get::<_, i64>(4)?.max(0) as u32,
+                        text: row.get(5)?,
+                        unverified_numbers: Vec::new(),
+                        unverified_quotes: Vec::new(),
+                    },
+                    numbers.zip(quotes),
+                ))
             })
-        })
-        .map_err(|_| AppError::IndexUnavailable)?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|_| AppError::IndexUnavailable)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        for row in mapped {
+            rows.push(row.map_err(|_| AppError::IndexUnavailable)?);
+        }
+    }
+    let decode = |text: &str| serde_json::from_str::<Vec<String>>(text).unwrap_or_default();
+    let mut units: [Option<Vec<Unit>>; 2] = [None, None];
+    let mut summaries = Vec::with_capacity(rows.len());
+    for (mut summary, check) in rows {
+        let (numbers, quotes) = match check {
+            Some((numbers, quotes)) => (decode(&numbers), decode(&quotes)),
+            None => {
+                let slot = match summary.stage {
+                    Stage::Chapters => 0,
+                    Stage::FullReading => 1,
+                };
+                if units[slot].is_none() {
+                    units[slot] = Some(units_for(index, path, summary.stage)?);
+                }
+                let found = units[slot]
+                    .iter()
+                    .flatten()
+                    .find(|unit| unit.index == summary.unit);
+                match found {
+                    Some(unit) => {
+                        let check = check_summary(unit, &summary.text);
+                        store_check(index, path, summary.stage, summary.unit, &hash, &check)?;
+                        check
+                    }
+                    // The unit no longer exists in this form: nothing to check it against.
+                    None => (Vec::new(), Vec::new()),
+                }
+            }
+        };
+        summary.unverified_numbers = numbers;
+        summary.unverified_quotes = quotes;
+        summaries.push(summary);
+    }
+    Ok(summaries)
 }
 
 /// The speed of this machine, in milliseconds a unit, as the last runs measured it. `None` before any run.
@@ -388,6 +466,38 @@ pub fn estimate_seconds(remaining: usize, ms_per_unit: Option<f64>) -> f64 {
     remaining as f64 * per_unit
 }
 
+/// What `summary` states that `unit` does not carry. The title and the pages of the unit are known figures too
+/// (a summary says "page 12", and a chapter title can hold a number).
+fn check_summary(unit: &Unit, summary: &str) -> (Vec<String>, Vec<String>) {
+    let known = [unit.text.as_str(), unit.title.as_str()];
+    let pages: Vec<u32> = (unit.first_page..=unit.last_page.min(unit.first_page + 1_000)).collect();
+    (
+        number_check::unsupported_numbers_with_pages(summary, &known, &pages, CHECK_MIN_DIGITS),
+        quotation::unverified_quotations(summary, &known, CHECK_MIN_QUOTE_WORDS),
+    )
+}
+
+fn store_check(
+    index: &IndexStore,
+    path: &str,
+    stage: Stage,
+    unit: usize,
+    hash: &str,
+    check: &(Vec<String>, Vec<String>),
+) -> Result<(), AppError> {
+    let encode = |items: &Vec<String>| serde_json::to_string(items).map_err(|_| AppError::IndexUnavailable);
+    index
+        .connection()
+        .execute(
+            "INSERT OR REPLACE INTO summary_checks
+             (relative_path, stage, unit, sha256, unverified_numbers, unverified_quotes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![path, stage.number(), unit as i64, hash, encode(&check.0)?, encode(&check.1)?],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+    Ok(())
+}
+
 fn store(
     index: &IndexStore,
     path: &str,
@@ -396,6 +506,7 @@ fn store(
     unit: &Unit,
     text: &str,
 ) -> Result<(), AppError> {
+    store_check(index, path, stage, unit.index, hash, &check_summary(unit, text))?;
     index
         .connection()
         .execute(
@@ -452,6 +563,13 @@ where
             "DELETE FROM document_summaries
              WHERE relative_path = ?1 AND stage = ?2 AND (sha256 <> ?3 OR prompt_version <> ?4)",
             params![path, stage.number(), hash, SUMMARY_PROMPT_VERSION],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+    index
+        .connection()
+        .execute(
+            "DELETE FROM summary_checks WHERE relative_path = ?1 AND stage = ?2 AND sha256 <> ?3",
+            params![path, stage.number(), hash],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
     let mut finished: Vec<bool> = vec![false; total];

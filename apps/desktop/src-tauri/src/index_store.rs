@@ -248,6 +248,10 @@ impl IndexStore {
         connection
             .execute_batch(crate::summaries::SCHEMA)
             .map_err(|_| AppError::IndexUnavailable)?;
+        // The dates and amounts the passages state, written by the file-profile pass of an Analyse (`facts`).
+        connection
+            .execute_batch(crate::facts::SCHEMA)
+            .map_err(|_| AppError::IndexUnavailable)?;
         // The structure of the documents (`structure`): purely additive tables, beside the chunks. A
         // document with no `doc_structure` row, or an older version, is read again by the next Analyse
         // (its vectors are reused); until then the search works as before, with no section label.
@@ -294,23 +298,16 @@ impl IndexStore {
                 );
                 CREATE INDEX IF NOT EXISTS chunk_pages_by_document
                     ON chunk_pages (relative_path);
-                -- The word search made precise (`lexical`): the stems of a passage with the words of its
-                -- title and section path, and the passage as characters. Both are written by the Analyse
-                -- only when the matching switch is on, and a search whose table is empty falls back to the
-                -- plain words.
-                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_lex USING fts5(
-                    chunk_id UNINDEXED,
-                    section,
-                    stems
-                );
-                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_tri USING fts5(
-                    chunk_id UNINDEXED,
-                    body,
-                    tokenize = 'trigram'
-                );
                 ",
             )
             .map_err(|_| AppError::IndexUnavailable)?;
+        // The stems and trigram tables of an earlier version (removed: `docs/RETRIEVAL-QUALITY.md`, "Methods
+        // removed, and why") are dropped, empty or not; a new index never has them. The recorded layout goes
+        // too; a new index has no such table yet, and an error there means there is nothing to forget.
+        connection
+            .execute_batch("DROP TABLE IF EXISTS chunks_lex; DROP TABLE IF EXISTS chunks_tri;")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let _ = connection.execute("DELETE FROM file_profile_meta WHERE key = 'lexical_layout'", []);
         Self::ensure_column(
             connection,
             "doc_structure",
@@ -971,197 +968,6 @@ impl IndexStore {
         Ok(())
     }
 
-    /// Drop the lexical rows (stems and trigrams) of the passages stored for `relative_path`.
-    fn forget_lexical_rows(
-        tx: &rusqlite::Transaction<'_>,
-        relative_path: &str,
-    ) -> Result<(), AppError> {
-        for table in ["chunks_lex", "chunks_tri"] {
-            tx.execute(
-                &format!(
-                    "DELETE FROM {table} WHERE chunk_id IN
-                         (SELECT chunk_id FROM chunks WHERE relative_path = ?1)"
-                ),
-                [relative_path],
-            )
-            .map_err(|_| AppError::IndexUnavailable)?;
-        }
-        Ok(())
-    }
-
-    /// Write the stems and the trigrams of a document's passages, for the switches that are on. `sections`
-    /// are (position, parent, title) and `owners` the section each passage starts in: the words of the
-    /// titles above a passage, and of the file name, are its section path.
-    fn write_lexical_rows(
-        tx: &rusqlite::Transaction<'_>,
-        relative_path: &str,
-        sections: &[(usize, Option<usize>, String)],
-        owners: &std::collections::HashMap<String, usize>,
-    ) -> Result<(), AppError> {
-        let options = crate::lexical::lexical_options();
-        let stems = options.wants_stems_table();
-        if !(stems || options.trigram) {
-            return Ok(());
-        }
-        Self::forget_lexical_rows(tx, relative_path)?;
-        let by_position: std::collections::HashMap<usize, (Option<usize>, &str)> = sections
-            .iter()
-            .map(|(position, parent, title)| (*position, (*parent, title.as_str())))
-            .collect();
-        let file_words = crate::lexical::stem_text(
-            std::path::Path::new(relative_path)
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .unwrap_or(""),
-        );
-        let mut statement = tx
-            .prepare("SELECT chunk_id, text FROM chunks WHERE relative_path = ?1")
-            .map_err(|_| AppError::IndexUnavailable)?;
-        let rows: Vec<(String, String)> = statement
-            .query_map([relative_path], |row| Ok((row.get(0)?, row.get(1)?)))
-            .map_err(|_| AppError::IndexUnavailable)?
-            .collect::<Result<_, _>>()
-            .map_err(|_| AppError::IndexUnavailable)?;
-        for (chunk_id, text) in rows {
-            if stems {
-                // The titles from the section the passage starts in up to the top, then the file name.
-                let mut path_words = file_words.clone();
-                let mut position = owners.get(&chunk_id).copied();
-                let mut guard = 0;
-                while let Some(current) = position {
-                    let Some((parent, title)) = by_position.get(&current) else {
-                        break;
-                    };
-                    path_words.push(' ');
-                    path_words.push_str(&crate::lexical::stem_text(title));
-                    position = *parent;
-                    guard += 1;
-                    if guard > 16 {
-                        break;
-                    }
-                }
-                tx.execute(
-                    "INSERT INTO chunks_lex (chunk_id, section, stems) VALUES (?1, ?2, ?3)",
-                    rusqlite::params![chunk_id, path_words, crate::lexical::stem_text(&text)],
-                )
-                .map_err(|_| AppError::IndexUnavailable)?;
-            }
-            if options.trigram {
-                tx.execute(
-                    "INSERT INTO chunks_tri (chunk_id, body) VALUES (?1, ?2)",
-                    rusqlite::params![chunk_id, text],
-                )
-                .map_err(|_| AppError::IndexUnavailable)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// What the lexical tables hold, as the Analyse that wrote them wanted it: `stems=1,trigram=0`.
-    fn wanted_lexical_layout() -> String {
-        let options = crate::lexical::lexical_options();
-        format!(
-            "stems={},trigram={}",
-            u8::from(options.wants_stems_table()),
-            u8::from(options.trigram)
-        )
-    }
-
-    /// Make the stems and trigram tables match the switches that are on, from the text already stored: no
-    /// file is read and no vector computed, so it costs seconds, and only an Analyse the user started calls
-    /// it. Returns how many passages were written, or `None` when the tables were already right.
-    pub fn ensure_lexical_layout(&mut self) -> Result<Option<usize>, AppError> {
-        let wanted = Self::wanted_lexical_layout();
-        let recorded: Option<String> = self
-            .connection
-            .query_row(
-                "SELECT value FROM file_profile_meta WHERE key = 'lexical_layout'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|_| AppError::IndexUnavailable)?;
-        let nothing_wanted = wanted == "stems=0,trigram=0";
-        if recorded.as_deref() == Some(wanted.as_str()) || (recorded.is_none() && nothing_wanted) {
-            return Ok(None);
-        }
-        let tx = self.transaction()?;
-        tx.execute_batch("DELETE FROM chunks_lex; DELETE FROM chunks_tri;")
-            .map_err(|_| AppError::IndexUnavailable)?;
-        let paths: Vec<String> = {
-            let mut statement = tx
-                .prepare("SELECT DISTINCT relative_path FROM chunks ORDER BY relative_path")
-                .map_err(|_| AppError::IndexUnavailable)?;
-            let found: Vec<String> = statement
-                .query_map([], |row| row.get(0))
-                .map_err(|_| AppError::IndexUnavailable)?
-                .collect::<Result<_, _>>()
-                .map_err(|_| AppError::IndexUnavailable)?;
-            found
-        };
-        let mut written = 0usize;
-        for path in &paths {
-            let sections: Vec<(usize, Option<usize>, String)> = {
-                let mut statement = tx
-                    .prepare(
-                        "SELECT position, parent, title FROM doc_sections WHERE relative_path = ?1",
-                    )
-                    .map_err(|_| AppError::IndexUnavailable)?;
-                let found: Vec<(usize, Option<usize>, String)> = statement
-                    .query_map([path], |row| {
-                        Ok((
-                            row.get::<_, i64>(0)? as usize,
-                            row.get::<_, Option<i64>>(1)?.map(|p| p as usize),
-                            row.get::<_, String>(2)?,
-                        ))
-                    })
-                    .map_err(|_| AppError::IndexUnavailable)?
-                    .collect::<Result<_, _>>()
-                    .map_err(|_| AppError::IndexUnavailable)?;
-                found
-            };
-            let owners: std::collections::HashMap<String, usize> = {
-                let mut statement = tx
-                    .prepare("SELECT chunk_id, position FROM chunk_sections WHERE relative_path = ?1")
-                    .map_err(|_| AppError::IndexUnavailable)?;
-                let found: std::collections::HashMap<String, usize> = statement
-                    .query_map([path], |row| {
-                        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
-                    })
-                    .map_err(|_| AppError::IndexUnavailable)?
-                    .collect::<Result<_, _>>()
-                    .map_err(|_| AppError::IndexUnavailable)?;
-                found
-            };
-            Self::write_lexical_rows(&tx, path, &sections, &owners)?;
-        }
-        if !nothing_wanted {
-            written = tx
-                .query_row("SELECT COUNT(*) FROM chunks_lex", [], |row| row.get::<_, i64>(0))
-                .map_err(|_| AppError::IndexUnavailable)? as usize;
-            written += tx
-                .query_row("SELECT COUNT(*) FROM chunks_tri", [], |row| row.get::<_, i64>(0))
-                .map_err(|_| AppError::IndexUnavailable)? as usize;
-        }
-        tx.execute(
-            "INSERT OR REPLACE INTO file_profile_meta (key, value) VALUES ('lexical_layout', ?1)",
-            [wanted],
-        )
-        .map_err(|_| AppError::IndexUnavailable)?;
-        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
-        Ok(Some(written))
-    }
-
-    /// Whether a lexical table holds anything: a search that wants stems or trigrams uses them only if the
-    /// Analyse wrote them.
-    fn lexical_table_has_rows(&self, table: &str) -> bool {
-        self.connection
-            .query_row(&format!("SELECT 1 FROM {table} LIMIT 1"), [], |_| Ok(()))
-            .optional()
-            .map(|found| found.is_some())
-            .unwrap_or(false)
-    }
-
     /// Store the structure of one document and mark it as read under `version`. Replaces whatever was
     /// stored for the path. An empty `Structure` is a valid answer ("no sections"): it records that the
     /// document was looked at, so it is not read again for that reason.
@@ -1199,17 +1005,6 @@ impl IndexStore {
             )
             .map_err(|_| AppError::IndexUnavailable)?;
         }
-        let owners: std::collections::HashMap<String, usize> = structure
-            .chunk_sections
-            .iter()
-            .map(|(chunk_id, position)| (chunk_id.clone(), *position))
-            .collect();
-        let titles: Vec<(usize, Option<usize>, String)> = structure
-            .sections
-            .iter()
-            .map(|section| (section.position, section.parent, section.title.clone()))
-            .collect();
-        Self::write_lexical_rows(&tx, relative_path, &titles, &owners)?;
         for (chunk_id, last_page) in &structure.chunk_ends {
             tx.execute(
                 "INSERT OR REPLACE INTO chunk_pages (chunk_id, relative_path, last_page) VALUES (?1, ?2, ?3)",
@@ -1372,7 +1167,6 @@ impl IndexStore {
             [relative_path],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
-        Self::forget_lexical_rows(tx, relative_path)?;
         tx.execute(
             "DELETE FROM chunks_fts WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE relative_path = ?1)",
             [relative_path],
@@ -1846,8 +1640,8 @@ impl IndexStore {
         let tx = self.transaction()?;
         tx.execute_batch(
             "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;
-             DELETE FROM chunks_lex; DELETE FROM chunks_tri; DELETE FROM chunk_sections; DELETE FROM chunk_pages; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
-             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts; DELETE FROM document_summaries;",
+             DELETE FROM chunk_sections; DELETE FROM chunk_pages; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
+             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts; DELETE FROM document_summaries; DELETE FROM ld_facts;",
         )
         .map_err(|_| AppError::IndexUnavailable)?;
         knowledge::store::clear_domain(&tx, Domain::Documents)?;
@@ -1901,7 +1695,6 @@ impl IndexStore {
         for path in &gone {
             // The FTS table mirrors `chunks` by `chunk_id`, so it is cleared from the same list
             // rather than from a second query that could disagree with it.
-            Self::forget_lexical_rows(&tx, path)?;
             tx.execute(
                 "DELETE FROM chunks_fts WHERE chunk_id IN
                      (SELECT chunk_id FROM chunks WHERE relative_path = ?1)",
@@ -1910,6 +1703,7 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)?;
             Self::forget_structure(&tx, path)?;
             Self::forget_card(&tx, path)?;
+            crate::facts::forget(&tx, path)?;
             tx.execute("DELETE FROM chunks WHERE relative_path = ?1", [path])
                 .map_err(|_| AppError::IndexUnavailable)?;
             tx.execute("DELETE FROM documents WHERE relative_path = ?1", [path])
@@ -1966,23 +1760,12 @@ impl IndexStore {
         limit: usize,
         relative_paths: Option<&[String]>,
     ) -> Result<Vec<LexicalHit>, AppError> {
-        let mut options = crate::lexical::lexical_options();
-        // A switch whose table the Analyse did not write is as if it were off.
-        if options.wants_stems_table() && !self.lexical_table_has_rows("chunks_lex") {
-            options.french_stems = false;
-            options.field_weights = false;
-        }
-        if options.trigram && !self.lexical_table_has_rows("chunks_tri") {
-            options.trigram = false;
-        }
+        let options = crate::lexical::lexical_options();
         let plan = if options.is_off() {
             let expression = fts_match_expression(query);
             crate::lexical::LexicalPlan {
                 tiers: (!expression.is_empty())
-                    .then_some(crate::lexical::Tier {
-                        source: crate::lexical::Source::Plain,
-                        expression,
-                    })
+                    .then_some(crate::lexical::Tier { expression })
                     .into_iter()
                     .collect(),
             }
@@ -2051,38 +1834,20 @@ impl IndexStore {
             return Ok(Vec::new());
         }
         self.run_tier(
-            &crate::lexical::Tier {
-                source: crate::lexical::Source::Plain,
-                expression,
-            },
+            &crate::lexical::Tier { expression },
             limit,
             relative_paths,
         )
     }
 
-    /// One full-text expression against the table of its source, best match first.
+    /// One full-text expression against the passages as written, best match first.
     fn run_tier(
         &self,
         tier: &crate::lexical::Tier,
         limit: usize,
         relative_paths: Option<&[String]>,
     ) -> Result<Vec<LexicalHit>, AppError> {
-        use crate::lexical::Source;
-        let (table, rank) = match tier.source {
-            Source::Plain => ("chunks_fts", "bm25(chunks_fts)".to_string()),
-            // The columns are (chunk_id, section, stems): the section counts more only when asked.
-            Source::Stems { weighted: false } => {
-                ("chunks_lex", "bm25(chunks_lex, 0.0, 1.0, 1.0)".to_string())
-            }
-            Source::Stems { weighted: true } => (
-                "chunks_lex",
-                format!(
-                    "bm25(chunks_lex, 0.0, {:.1}, 1.0)",
-                    crate::lexical::SECTION_WEIGHT
-                ),
-            ),
-            Source::Trigram => ("chunks_tri", "bm25(chunks_tri)".to_string()),
-        };
+        let (table, rank) = ("chunks_fts", "bm25(chunks_fts)");
         match relative_paths {
             None => {
                 let sql = format!(

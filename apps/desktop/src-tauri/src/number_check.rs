@@ -11,7 +11,8 @@
 //! a comma: "1 450,00" is one amount. Splitting it at the space made the check report "450,00" as
 //! contradicting a table value of 1 450, a false correction shown under three correct answers in the
 //! lot D replay. A group of exactly three digits after a group of one to three, separated by a space
-//! (ordinary, no-break or narrow no-break), belongs to the number.
+//! (ordinary, no-break or narrow no-break), belongs to the number. So does the apostrophe some countries
+//! group thousands with ("1'200.50"), under the same rule.
 
 /// One number found in a text: as written, and the values it can mean.
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +25,7 @@ pub struct Number {
 }
 
 fn is_group_space(ch: char) -> bool {
-    ch == ' ' || ch == '\u{a0}' || ch == '\u{202f}'
+    ch == ' ' || ch == '\u{a0}' || ch == '\u{202f}' || ch == '\'' || ch == '\u{2019}'
 }
 
 fn is_mark(ch: char) -> bool {
@@ -36,6 +37,14 @@ fn is_mark(ch: char) -> bool {
 /// mixed tier keeps three; a document answer keeps two, which is what catches a price such as 80.
 /// A run that starts right after a letter ("A4", "W1") is an identifier, not a number.
 pub fn scan(text: &str, min_digits: usize) -> Vec<Number> {
+    scan_spans(text, min_digits)
+        .into_iter()
+        .map(|(number, _, _)| number)
+        .collect()
+}
+
+/// [`scan`], with where each number starts and ends, as character positions in `text`.
+pub fn scan_spans(text: &str, min_digits: usize) -> Vec<(Number, usize, usize)> {
     let chars: Vec<char> = text.chars().collect();
     let mut found = Vec::new();
     let mut index = 0;
@@ -92,7 +101,7 @@ pub fn scan(text: &str, min_digits: usize) -> Vec<Number> {
         let compact: String = text.chars().filter(|ch| !is_group_space(*ch)).collect();
         let values = number_values(&compact, &marks, grouped);
         if !values.is_empty() {
-            found.push(Number { text, values });
+            found.push((Number { text, values }, start, index));
         }
     }
     found

@@ -186,26 +186,22 @@ fn assembly_options_from(flags: &str) -> assistant_cabinet_ai_lib::assembly::Ass
             "edges" => options.edges_first = true,
             "rrf" => options.fusion = assistant_cabinet_ai_lib::assembly::Fusion::Rrf,
             "pin" => options.pin_identifier = true,
+            "facts" => options.facts = true,
             _ => {}
         }
     }
     options
 }
 
-/// The lexical switches of one replay: `phrases,near,content,thesaurus` (any of them), or `off`.
+/// The lexical switches of one replay: `phrases,thesaurus` (any of them), or `off`.
 fn lexical_options_from(flags: &str) -> assistant_cabinet_ai_lib::lexical::LexicalOptions {
-    use assistant_cabinet_ai_lib::lexical::{ContentTerms, LexicalOptions};
+    use assistant_cabinet_ai_lib::lexical::LexicalOptions;
     let mut options = LexicalOptions::OFF;
     for flag in flags.split(',').map(str::trim) {
         match flag {
             "phrases" => options.phrases = true,
-            "near" => options.near = true,
-            "content" => options.content_terms = ContentTerms::On,
             "thesaurus" => options.thesaurus = true,
-            "stems" => options.french_stems = true,
-            "weights" => options.field_weights = true,
-            "trigram" => options.trigram = true,
-            "" | "off" | "cap1" | "cap2" | "neighbours" | "edges" | "rrf" | "pin" => {}
+            "" | "off" | "cap1" | "cap2" | "neighbours" | "edges" | "rrf" | "pin" | "facts" => {}
             other => panic!("unknown lexical switch {other}"),
         }
     }
@@ -287,21 +283,7 @@ async fn replay_the_exam_without_the_model() {
         ocr: Some(&ocr),
         rasterizer: Some(&rasterizer),
     };
-    // The Analyse writes the stems and trigram tables when a switch asks for them: every set that is replayed
-    // below reads the same index, so it is built with the union of what the sets need.
-    let union = lexical_sets()
-        .iter()
-        .fold(assistant_cabinet_ai_lib::lexical::LexicalOptions::OFF, |all, (_, set)| {
-            assistant_cabinet_ai_lib::lexical::LexicalOptions {
-                french_stems: all.french_stems || set.french_stems,
-                field_weights: all.field_weights || set.field_weights,
-                trigram: all.trigram || set.trigram,
-                ..all
-            }
-        });
-    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(Some(union));
     let library = library_on(&truth, tier, &PACKS, &stack).await;
-    assistant_cabinet_ai_lib::lexical::set_lexical_options_for_measurement(None);
     let index = &library.lab.index;
     let chunks = index.all_chunks().expect("reads the chunks");
     let by_id: HashMap<&str, &StoredChunk> =
@@ -321,7 +303,26 @@ async fn replay_the_exam_without_the_model() {
         .as_ref()
         .and_then(|s| s.profile.as_ref())
         .map(|p| p.elapsed_ms);
+    // The dates and amounts the Analyse wrote as facts, and what writing them all again costs (the one
+    // transaction the profile pass uses), to compare with the Analyse itself.
+    let (facts_count, facts_ms) = {
+        let side = library.lab.side();
+        let vocabulary = assistant_cabinet_ai_lib::facts::shipped_vocabulary();
+        let started = Instant::now();
+        side.execute_batch("BEGIN").expect("begins");
+        for path in &library.product_files {
+            assistant_cabinet_ai_lib::facts::write(&side, path, vocabulary).expect("writes the facts");
+        }
+        side.execute_batch("COMMIT").expect("commits");
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        let count: i64 = side
+            .query_row("SELECT COUNT(*) FROM ld_facts", [], |row| row.get(0))
+            .unwrap_or(0);
+        (count, ms)
+    };
     let analyse = json!({
+        "facts": facts_count,
+        "facts_ms": facts_ms,
         "profile_ms": profile_ms,
         "label": label,
         "fake_vectors": fake,
@@ -507,14 +508,8 @@ async fn replay_the_exam_without_the_model() {
         )
         .expect("searches");
         let ms = started.elapsed().as_secs_f64() * 1000.0;
-        lines.push(line(
-            index,
-            &q.id,
-            "hybrid30",
-            route,
-            ms,
-            &from_evidence(&outcome.evidence, facts),
-        ));
+        let hybrid = from_evidence(&outcome.evidence, facts);
+        lines.push(line(index, &q.id, "hybrid30", route, ms, &hybrid));
 
         // refusal: would the application refuse this question before any embedding or model?
         {
@@ -534,7 +529,15 @@ async fn replay_the_exam_without_the_model() {
 
         // rerank6 / rerank30: the first thirty candidates put in order by the gateway's reranker
         // (`ACAI_RERANK=1`). `rerank6` is what the model would read; `rerank30` the whole new order.
-        if rerank_wanted && !fake {
+        // A question that names a file, or asks about every document, is not reranked (the product's rule,
+        // `commands.rs`): the passage does not hold the file's name, so the reranker ranks it worse. Its
+        // lines are the unreranked ones, so every family is scored on the same questions.
+        let reranked = !matches!(first.route, RouteKind::NamedFile | RouteKind::EveryDocument);
+        if rerank_wanted && !fake && !reranked {
+            lines.push(line(index, &q.id, "rerank6", route, 0.0, &pipeline));
+            lines.push(line(index, &q.id, "rerank30", route, 0.0, &hybrid));
+        }
+        if rerank_wanted && !fake && reranked {
             let candidates = retrieval::search_scoped_counted_with_terms(
                 index,
                 &q.text,

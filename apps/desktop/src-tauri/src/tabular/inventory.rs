@@ -46,6 +46,7 @@ impl ColumnType {
 pub enum TabularFormat {
     Csv,
     Xlsx,
+    Ods,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

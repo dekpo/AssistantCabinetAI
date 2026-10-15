@@ -113,6 +113,10 @@
     "tiff",
     "scan"
   ],
+  "currencies": {
+    "EUR": ["€", "eur", "euro", "euros"],
+    "USD": ["$", "usd", "dollar", "dollars"]
+  },
   "months": [
     [
       "january",

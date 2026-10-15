@@ -701,6 +701,9 @@ fn delete_profile(connection: &Connection, domain: Domain, path: &str) -> Result
             params![domain.as_str(), path],
         )
         .map_err(|_| AppError::IndexUnavailable)?;
+    if domain == Domain::Documents {
+        crate::facts::forget(connection, path)?;
+    }
     Ok(())
 }
 
@@ -796,6 +799,12 @@ fn build_one(
         cells,
     )?;
     write_sections(&tx, domain, &item.relative_path, settings)?;
+    // The dates and amounts the passages state, in their normal form. Documents only, and they follow the
+    // chunks: a document that is read again for another reason keeps them (a passage that no longer exists
+    // is never returned: the lookup joins the chunks).
+    if domain == Domain::Documents && !item.empty {
+        crate::facts::write(&tx, &item.relative_path, settings.vocabulary)?;
+    }
     tx.commit().map_err(|_| AppError::IndexUnavailable)
 }
 

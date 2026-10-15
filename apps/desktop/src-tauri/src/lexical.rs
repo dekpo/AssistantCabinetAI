@@ -1,19 +1,22 @@
-//! The lexical channel, made precise (retrieval-quality programme, lot B). Each method sits behind its own
-//! switch in `LexicalOptions`, is measured alone against the baseline (`docs/RETRIEVAL-QUALITY.md`) and is
-//! kept only if it helps and nothing regresses. With every switch off the query is today's, byte for byte.
+//! The lexical channel, made precise (retrieval-quality programme, lot B). Each method kept sits behind its own
+//! switch in `LexicalOptions`, was measured alone against the baseline (`docs/RETRIEVAL-QUALITY.md`) and is kept
+//! only if it helps and nothing regresses. With every switch off the query is today's, byte for byte.
 //!
-//! **The plan.** A question becomes a few full-text expressions, strongest first (`LexicalPlan::tiers`):
-//! the exact phrases (what the user quoted, identifier-shaped words such as `FAC-2026-014` or
-//! `756.1234.5678.97`, two content words side by side), then the content words close to each other, then
-//! every content word. The index runs the tiers in turn and keeps the first hits, so a passage that holds
-//! the phrase wins the places a passage that only holds one word of it would take.
+//! **The plan.** A question becomes one full-text expression over the passages as written: the words of four
+//! letters or more, and, with the phrases on, the exact phrases (what the user quoted, identifier-shaped words
+//! such as `FAC-2026-014` or `756.1234.5678.97`, two content words side by side) as alternatives of the same
+//! `OR`, so that the ranking, which weighs a word by its rarity, decides between a phrase and a rare word.
+//!
+//! **Methods removed.** The stems, the trigrams, the proximity group, the content terms and the field weights
+//! were measured useless or harmful and are gone, with their tables: `docs/RETRIEVAL-QUALITY.md`, "Methods
+//! removed, and why", says what each was and when to try it again.
 //!
 //! **Data, not code.** The words that belong to the way a question is asked (the frame) come from the
 //! question vocabulary of the router, and the synonyms from `resources/thesaurus/<pack>.json`. Every
 //! shipped pack is read, cumulatively: a synonym group only adds terms, so a Swiss term never harms a
 //! French user.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::sync::{OnceLock, RwLock};
 
 use serde::Deserialize;
@@ -21,59 +24,26 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::knowledge::normalize::fold_word;
 
-/// What to do with the words that only frame a question ("which documents mention ...").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ContentTerms {
-    /// Today: every word of four letters or more is searched.
-    #[default]
-    Off,
-    /// The words of the frame are left out of the search.
-    On,
-}
-
 /// One switch per method. `Default` is today's behaviour exactly.
-///
-/// The last three change what the Analyse writes (a table beside `chunks_fts`); a search whose table is
-/// not there falls back to the plain words, so an index from before them is never searched wrongly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LexicalOptions {
-    /// Exact phrases first: what the user quoted, identifier-shaped words, two content words side by side.
+    /// Exact phrases: what the user quoted, identifier-shaped words, two content words side by side.
     pub phrases: bool,
-    /// Then the content words that stand close to each other.
-    pub near: bool,
-    /// Leave the words of the question's frame out of the search.
-    pub content_terms: ContentTerms,
-    /// Search the synonyms of the active packs too.
+    /// Search the synonyms of the active packs too. Kept off until a real document shows a synonym it finds
+    /// (no question of the exam uses one): `docs/RETRIEVAL-QUALITY.md`, "Methods removed, and why".
     pub thesaurus: bool,
-    /// Search the stems of the words (French Snowball): a plural and its singular, a verb and its forms meet.
-    pub french_stems: bool,
-    /// A word in the title or the section path of a passage counts more than the same word in its body.
-    /// Needs the stems table, which holds the section path.
-    pub field_weights: bool,
-    /// A last tier that finds a word or a code as a piece of a longer one (three characters at least).
-    pub trigram: bool,
 }
 
 impl LexicalOptions {
     /// Every switch off.
     pub const OFF: Self = Self {
         phrases: false,
-        near: false,
-        content_terms: ContentTerms::Off,
         thesaurus: false,
-        french_stems: false,
-        field_weights: false,
-        trigram: false,
     };
 
     /// Whether any switch changes the query.
     pub fn is_off(&self) -> bool {
         *self == Self::OFF
-    }
-
-    /// Whether the Analyse writes the stems table (the stems, and the section path the weights use).
-    pub fn wants_stems_table(&self) -> bool {
-        self.french_stems || self.field_weights
     }
 }
 
@@ -89,11 +59,10 @@ pub fn lexical_options() -> LexicalOptions {
         .unwrap_or(PRODUCT_CHOICE)
 }
 
-/// The methods kept by the measures of lot B (`docs/RETRIEVAL-QUALITY.md`, section 12): the phrases. They
+/// The method kept by the measures of lot B (`docs/RETRIEVAL-QUALITY.md`, section 12): the phrases. They
 /// raised the recall of the exam by 0.059 on what the product sends (0.784 to 0.843, the `identifier` family by
 /// 0.273) and the planted fact found by 0.286, with no family lower; on the library of 1 007 documents the
-/// recall rose by 0.047. The synonyms, the content words, the near group, the stems, the weights and the
-/// trigrams did not raise anything that the phrases did not, or made a family fall: they stay off.
+/// recall rose by 0.047. The synonyms stay off, with their reason written beside the switch.
 const PRODUCT_CHOICE: LexicalOptions = LexicalOptions {
     phrases: true,
     ..LexicalOptions::OFF
@@ -353,21 +322,9 @@ fn shipped_frame() -> HashSet<String> {
 // The plan
 // ---------------------------------------------------------------------------------------------
 
-/// Which full-text table an expression is written for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Source {
-    /// `chunks_fts`: the passage as written.
-    Plain,
-    /// `chunks_lex`: the stems of the passage, and with `weighted` its section path counts more.
-    Stems { weighted: bool },
-    /// `chunks_tri`: the passage as characters, to find a piece of a word or of a code.
-    Trigram,
-}
-
-/// One expression and the table it is for.
+/// One full-text expression, a valid `MATCH` argument for `chunks_fts`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tier {
-    pub source: Source,
     pub expression: String,
 }
 
@@ -383,178 +340,64 @@ impl LexicalPlan {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Stems
-// ---------------------------------------------------------------------------------------------
-
-/// The stem of a word under the French Snowball rules, without accents. A word with a digit in it (a code,
-/// a date, an amount) is left alone: only its case and accents are folded.
-pub fn stem_word(word: &str) -> String {
-    let lower = word.nfc().collect::<String>().to_lowercase();
-    if lower.chars().any(|c| c.is_ascii_digit()) {
-        return fold_word(&lower);
-    }
-    let stemmer = rust_stemmers::Stemmer::create(rust_stemmers::Algorithm::French);
-    fold_word(&stemmer.stem(&lower))
-}
-
-/// The text as the stems table stores it: its words stemmed, one space apart.
-pub fn stem_text(text: &str) -> String {
-    text.nfc()
-        .collect::<String>()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|piece| !piece.is_empty())
-        .map(stem_word)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn quoted(words: &[String]) -> String {
     format!("\"{}\"", words.join(" "))
 }
 
-/// How many positions apart content words may stand for the `near` tier.
-const NEAR_DISTANCE: usize = 10;
-/// A `near` group of more than this many words matches almost nothing.
-const NEAR_MAX_WORDS: usize = 5;
-/// How much a word in the section path weighs against the same word in the body.
-pub const SECTION_WEIGHT: f64 = 4.0;
-
-/// The expressions for `question` under `options`. With every switch off the one tier is the OR of the
-/// words of four letters or more, over the passage as written, as it always was.
+/// The expression for `question` under `options`. With every switch off the one tier is the OR of the words
+/// of four letters or more, over the passage as written, as it always was.
+///
+/// The pieces are alternatives of one `OR`, not tiers one after the other: the ranking adds up what a passage
+/// holds, each piece weighing what its rarity makes it weigh, so an identifier or a rare word beats a phrase
+/// every passage of a template repeats (a first version put the phrases first and lost the rare word:
+/// `docs/RETRIEVAL-QUALITY.md`, section 12).
 pub fn plan(question: &str, options: &LexicalOptions, lexicon: &Lexicon) -> LexicalPlan {
     let all_words = words_of(question);
-    let is_frame = |word: &Word| lexicon.frame.contains(&fold_word(&word.text));
-    let wanted = |word: &Word| {
-        word.content && (options.content_terms == ContentTerms::Off || !is_frame(word))
-    };
-    let kept: Vec<&Word> = all_words.iter().filter(|word| wanted(word)).collect();
+    let kept: Vec<&Word> = all_words.iter().filter(|word| word.content).collect();
 
-    let stems = options.wants_stems_table();
-    let stem_source = Source::Stems {
-        weighted: options.field_weights,
-    };
-
-    // The expression for one table: `stemmed` writes every word as its stem and names the stem columns.
-    // The pieces are alternatives of one `OR`, not tiers one after the other: the ranking adds up what a
-    // passage holds, each piece weighing what its rarity makes it weigh, so an identifier or a rare word
-    // beats a phrase every passage of a template repeats (a first version put the phrases first and lost
-    // the rare word: `docs/RETRIEVAL-QUALITY.md`, section 12).
-    let expression_for = |stemmed: bool| -> Option<String> {
-        let term = |word: &str| -> String {
-            if stemmed {
-                stem_word(word)
-            } else {
-                word.to_string()
-            }
-        };
-        let mut alternatives: Vec<String> = Vec::new();
-        fn add(alternatives: &mut Vec<String>, alternative: String) {
-            if !alternatives
-                .iter()
-                .any(|known| known.eq_ignore_ascii_case(&alternative))
-            {
-                alternatives.push(alternative);
-            }
+    let mut alternatives: Vec<String> = Vec::new();
+    fn add(alternatives: &mut Vec<String>, alternative: String) {
+        if !alternatives
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(&alternative))
+        {
+            alternatives.push(alternative);
         }
-
-        if options.phrases {
-            let mut phrases: Vec<Vec<String>> = Vec::new();
-            phrases.extend(quoted_phrases(question));
-            phrases.extend(identifier_shaped(question));
-            // Two content words side by side in the question.
-            for pair in all_words.windows(2) {
-                if wanted(&pair[0]) && wanted(&pair[1]) {
-                    phrases.push(vec![pair[0].text.clone(), pair[1].text.clone()]);
-                }
-            }
-            for phrase in phrases {
-                let phrase: Vec<String> = phrase.iter().map(|w| term(w)).collect();
-                add(&mut alternatives, quoted(&phrase));
-            }
-        }
-
-        if options.near && (2..=NEAR_MAX_WORDS).contains(&kept.len()) {
-            let group: Vec<String> = kept
-                .iter()
-                .map(|w| format!("\"{}\"", term(&w.text)))
-                .collect();
-            add(
-                &mut alternatives,
-                format!("NEAR({}, {NEAR_DISTANCE})", group.join(" ")),
-            );
-        }
-
-        // The words are never de-duplicated: with every switch off this is the expression it always was.
-        for word in &kept {
-            alternatives.push(format!("\"{}\"", term(&word.text)));
-        }
-        if options.thesaurus && !lexicon.thesaurus.is_empty() {
-            let folded: Vec<String> = all_words.iter().map(|w| fold_word(&w.text)).collect();
-            for equivalent in lexicon.thesaurus.equivalents(&folded) {
-                let phrase: Vec<String> = equivalent.iter().map(|w| term(w)).collect();
-                add(&mut alternatives, quoted(&phrase));
-            }
-        }
-        if alternatives.is_empty() {
-            return None;
-        }
-        let joined = alternatives.join(" OR ");
-        Some(match (stemmed, options.field_weights) {
-            (false, _) => joined,
-            (true, true) => format!("{{section stems}} : ({joined})"),
-            (true, false) => format!("{{stems}} : ({joined})"),
-        })
-    };
-
-    // The passage as written comes first. The stems are a second tier: they fill the places the exact words
-    // left empty, and never push an exact match out (stems first put "Martine" where "Martin" was asked:
-    // `docs/RETRIEVAL-QUALITY.md`, section 12).
-    let plain = expression_for(false).map(|expression| Tier {
-        source: Source::Plain,
-        expression,
-    });
-    let stemmed = if stems {
-        expression_for(true).map(|expression| Tier {
-            source: stem_source,
-            expression,
-        })
-    } else {
-        None
-    };
-    // With the weights the title and the section path outrank the body, which only the stems table can say:
-    // that tier goes first. Without them the stems only fill the places the exact words left empty.
-    let mut tiers = Vec::new();
-    if options.field_weights {
-        tiers.extend(stemmed);
-        tiers.extend(plain);
-    } else {
-        tiers.extend(plain);
-        tiers.extend(stemmed);
     }
 
-    if options.trigram {
-        // The words and the codes as the text has them, folded to lower case by the table itself. A trigram
-        // needs three characters at least; the words kept have four.
-        let mut pieces: Vec<String> = kept.iter().map(|w| format!("\"{}\"", w.text)).collect();
-        for code in question.split_whitespace().filter_map(|piece| {
-            let piece = piece.trim_matches(|c: char| !c.is_alphanumeric());
-            let coded = piece.chars().any(|c| c.is_ascii_digit())
-                && piece.chars().any(|c| matches!(c, '-' | '.' | '/' | '_'));
-            (coded && piece.chars().count() >= 4).then(|| format!("\"{piece}\""))
-        }) {
-            if !pieces.contains(&code) {
-                pieces.push(code);
+    if options.phrases {
+        let mut phrases: Vec<Vec<String>> = Vec::new();
+        phrases.extend(quoted_phrases(question));
+        phrases.extend(identifier_shaped(question));
+        // Two content words side by side in the question.
+        for pair in all_words.windows(2) {
+            if pair[0].content && pair[1].content {
+                phrases.push(vec![pair[0].text.clone(), pair[1].text.clone()]);
             }
         }
-        if !pieces.is_empty() {
-            tiers.push(Tier {
-                source: Source::Trigram,
-                expression: pieces.join(" OR "),
-            });
+        for phrase in phrases {
+            add(&mut alternatives, quoted(&phrase));
         }
     }
-    LexicalPlan { tiers }
+
+    // The words are never de-duplicated: with every switch off this is the expression it always was.
+    for word in &kept {
+        alternatives.push(format!("\"{}\"", word.text));
+    }
+    if options.thesaurus && !lexicon.thesaurus.is_empty() {
+        let folded: Vec<String> = all_words.iter().map(|w| fold_word(&w.text)).collect();
+        for equivalent in lexicon.thesaurus.equivalents(&folded) {
+            add(&mut alternatives, quoted(&equivalent));
+        }
+    }
+    if alternatives.is_empty() {
+        return LexicalPlan { tiers: Vec::new() };
+    }
+    LexicalPlan {
+        tiers: vec![Tier {
+            expression: alternatives.join(" OR "),
+        }],
+    }
 }
 
 /// The identifiers written in the question as one full-text expression (their parts as phrases, alternatives
@@ -565,16 +408,6 @@ pub fn identifier_expression(question: &str) -> Option<String> {
         .map(|parts| quoted(parts))
         .collect();
     (!phrases.is_empty()).then(|| phrases.join(" OR "))
-}
-
-/// The words the content-terms switch would leave out of this question, for the diagnostics and the tests.
-pub fn frame_words_of(question: &str, lexicon: &Lexicon) -> BTreeMap<usize, String> {
-    words_of(question)
-        .into_iter()
-        .enumerate()
-        .filter(|(_, word)| word.content && lexicon.frame.contains(&fold_word(&word.text)))
-        .map(|(position, word)| (position, word.text))
-        .collect()
 }
 
 #[cfg(test)]
@@ -649,41 +482,6 @@ mod tests {
     }
 
     #[test]
-    fn the_near_group_holds_two_to_five_content_words() {
-        let options = LexicalOptions {
-            near: true,
-            ..LexicalOptions::OFF
-        };
-        let found = tiers("annual fee Camille", options);
-        assert_eq!(
-            found,
-            vec!["NEAR(\"annual\" \"Camille\", 10) OR \"annual\" OR \"Camille\"".to_string()]
-        );
-        let alone = tiers("Camille", options);
-        assert_eq!(
-            alone,
-            vec!["\"Camille\"".to_string()],
-            "one word has nothing near it"
-        );
-    }
-
-    #[test]
-    fn the_frame_words_are_left_out_only_when_asked() {
-        let on = LexicalOptions {
-            content_terms: ContentTerms::On,
-            ..LexicalOptions::OFF
-        };
-        assert_eq!(
-            tiers("Which documents mention Camille", on),
-            vec!["\"Camille\"".to_string()]
-        );
-        assert_eq!(
-            tiers("Which documents mention Camille", LexicalOptions::OFF),
-            vec!["\"Which\" OR \"documents\" OR \"mention\" OR \"Camille\"".to_string()]
-        );
-    }
-
-    #[test]
     fn a_synonym_group_adds_the_other_entries_as_phrases() {
         let on = LexicalOptions {
             thesaurus: true,
@@ -705,60 +503,6 @@ mod tests {
         assert!(
             !tiers("What does the cover include", LexicalOptions::OFF)[0].contains("indemnity")
         );
-    }
-
-    #[test]
-    fn the_stem_of_a_plural_and_of_its_singular_is_the_same_and_a_code_is_left_alone() {
-        assert_eq!(stem_word("courriers"), stem_word("courrier"));
-        assert_eq!(stem_word("factures"), stem_word("facture"));
-        assert_eq!(
-            stem_word("Facture"),
-            stem_word("facture"),
-            "case does not count"
-        );
-        assert_eq!(stem_word("FAC"), "fac");
-        assert_eq!(stem_word("0114"), "0114");
-        assert_eq!(stem_word("756"), "756");
-        assert_eq!(stem_text("Factures annuelles"), "factur annuel");
-    }
-
-    #[test]
-    fn the_stems_follow_the_exact_words_and_the_weights_put_the_section_path_first() {
-        let stems = LexicalOptions {
-            french_stems: true,
-            ..LexicalOptions::OFF
-        };
-        let weighted = LexicalOptions {
-            field_weights: true,
-            ..stems
-        };
-        let found = plan("factures annuelles", &stems, &lexicon());
-        assert_eq!(found.tiers.len(), 2);
-        assert_eq!(found.tiers[0].source, Source::Plain);
-        assert_eq!(found.tiers[0].expression, "\"factures\" OR \"annuelles\"");
-        assert_eq!(found.tiers[1].source, Source::Stems { weighted: false });
-        assert_eq!(
-            found.tiers[1].expression,
-            "{stems} : (\"factur\" OR \"annuel\")"
-        );
-        let found = plan("factures annuelles", &weighted, &lexicon());
-        assert_eq!(found.tiers[0].source, Source::Stems { weighted: true });
-        assert!(found.tiers[0].expression.starts_with("{section stems} : ("));
-        assert_eq!(found.tiers[1].source, Source::Plain);
-    }
-
-    #[test]
-    fn the_trigram_tier_comes_last_and_carries_the_words_and_the_codes_as_written() {
-        let on = LexicalOptions {
-            trigram: true,
-            ..LexicalOptions::OFF
-        };
-        let found = plan("invoice FAC-2026-014 total", &on, &lexicon());
-        assert_eq!(found.tiers.len(), 2);
-        assert_eq!(found.tiers[0].source, Source::Plain);
-        assert_eq!(found.tiers[1].source, Source::Trigram);
-        assert!(found.tiers[1].expression.contains("\"FAC-2026-014\""));
-        assert!(found.tiers[1].expression.contains("\"invoice\""));
     }
 
     #[test]
@@ -785,10 +529,7 @@ mod tests {
             .unwrap();
         let options = LexicalOptions {
             phrases: true,
-            near: true,
-            content_terms: ContentTerms::On,
             thesaurus: true,
-            ..LexicalOptions::OFF
         };
         let found = tiers(
             "which documents mention \"annual fee\" FAC-2026-014 cover",

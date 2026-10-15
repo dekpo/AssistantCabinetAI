@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
-import { annotationLines, answerForCopy, computedBlock, sourceLines } from "./annotations";
+import { annotationLines, answerForCopy, computedBlock, sourceLines, toCheckNote } from "./annotations";
 import type { TabularAnswer, TargetingReport } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
@@ -55,17 +55,50 @@ describe("what is written under an answer", () => {
   it("says a figure the model stated is in none of the excerpts", () => {
     const lines = annotationLines(french, "fr-FR", entry({ unverifiedNumbers: ["80"] }));
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("« 80 »");
-    expect(annotationLines(english, "en-US", entry({ unverifiedNumbers: ["80"] }))[0]).toContain("“80”");
+    expect(lines[0]).toContain("80");
+    expect(lines[0]).toContain("À vérifier");
+    expect(annotationLines(english, "en-US", entry({ unverifiedNumbers: ["80"] }))[0]).toContain("80");
   });
 
-  it("says a quotation found in no excerpt and a citation of a passage that does not exist", () => {
-    const e = entry({ unverifiedQuotes: ["la franchise est de 500 francs"], unknownCitations: [9] });
+  it("groups figures, quotations and missing excerpts in one note, one sentence per kind", () => {
+    const e = entry({
+      unverifiedNumbers: ["80", "12 mars 2026"],
+      unverifiedQuotes: ["la franchise est de 500 francs"],
+      unknownCitations: [9],
+    });
     const lines = annotationLines(french, "fr-FR", e);
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("80, 12 mars 2026");
     expect(lines[0]).toContain("« la franchise est de 500 francs »");
-    expect(lines[1]).toContain("[9]");
-    expect(annotationLines(english, "en-US", e)[0]).toContain("“la franchise est de 500 francs”");
+    expect(lines[0]).toContain("[9]");
+    expect(lines[0]?.match(/À vérifier/g)).toHaveLength(1);
+    const en = annotationLines(english, "en-US", e)[0];
+    expect(en).toContain("“la franchise est de 500 francs”");
+    expect(en).toContain("[9]");
+  });
+
+  it("caps each list and says how many more there are, without repeating anything", () => {
+    const numbers = ["1", "2", "3", "4", "5", "6", "7", "1"];
+    const [line] = annotationLines(french, "fr-FR", entry({ unverifiedNumbers: numbers }));
+    expect(line).toContain("1, 2, 3, 4, 5 et 2 autres");
+    expect(line).not.toContain("6");
+    const [one] = annotationLines(french, "fr-FR", entry({ unverifiedNumbers: ["1", "2", "3", "4", "5", "6"] }));
+    expect(one).toContain("et 1 autre.");
+  });
+
+  it("cuts a long quotation so the note stays short", () => {
+    const long = "a".repeat(200);
+    const [line] = annotationLines(french, "fr-FR", entry({ unverifiedQuotes: [long] }));
+    expect((line ?? "").length).toBeLessThan(200);
+    expect(line).toContain("…");
+  });
+
+  it("writes the same note under a summary, which has no excerpt references", () => {
+    expect(toCheckNote(french, { unverifiedNumbers: [], unverifiedQuotes: [] })).toBeNull();
+    const note = toCheckNote(french, { unverifiedNumbers: ["777"], unverifiedQuotes: [] });
+    expect(note).toContain("À vérifier");
+    expect(note).toContain("777");
+    expect(note).not.toContain("Citations");
   });
 
   it("has nothing to say about an answer that rests on nothing special", () => {

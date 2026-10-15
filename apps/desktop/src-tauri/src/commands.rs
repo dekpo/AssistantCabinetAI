@@ -2213,13 +2213,15 @@ async fn sourced_answer(
     // How much of the folder this model can read: the excerpts follow its window.
     let limits = retrieval::RetrievalLimits::for_budget(&writer.budget);
     // A reranker reads the first candidates with the question and keeps the best: the search then hands it
-    // more than the model can read. Not for a question about every document (one passage each).
+    // more than the model can read. Not for a question about every document (one passage each), and not
+    // for a question that names a file: the passage does not hold the file's name, so the reranker ranks
+    // it worse (`docs/RETRIEVAL-QUALITY.md`, section 12.3).
     let reranker_takes = state
         .rerank_documents
         .load(std::sync::atomic::Ordering::Relaxed);
     let rerank = crate::assembly::assembly_options().rerank
         && reranker_takes > 0
-        && !matches!(plan, Plan::EveryDocument(_));
+        && !matches!(plan, Plan::EveryDocument(_) | Plan::OneFile(_));
     let search_limits = match rerank {
         true => {
             let mut wide = retrieval::limits_for_rerank(limits);

@@ -91,6 +91,17 @@ pub fn extract(
         "pdf" => extract_pdf(path, &file.relative_path, ocr, rasterizer, locale)?,
         "docx" => (extract_docx(path)?, false),
         "txt" | "md" => (extract_plain_text(path)?, false),
+        // The readers of the other text formats: one page, or one per slide (`readers`).
+        extension if crate::readers::EXTENSIONS.contains(&extension) => {
+            let texts = crate::readers::read(extension, path)
+                .ok_or(ExtractionError::UnsupportedExtension)??;
+            let pages = texts
+                .into_iter()
+                .enumerate()
+                .map(|(position, text)| native_page(position as u32 + 1, text))
+                .collect();
+            (pages, false)
+        }
         "jpg" | "jpeg" | "png" => extract_image(path, &file.relative_path, file.extension.as_str(), ocr, locale)?,
         _ => return Err(ExtractionError::UnsupportedExtension),
     };

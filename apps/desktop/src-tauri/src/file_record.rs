@@ -42,11 +42,11 @@ impl FileKind {
     /// From the lowercase extension, without the dot. The only place a file's type is decided.
     pub fn from_extension(extension: &str) -> Self {
         match extension {
-            "txt" | "md" => Self::DocumentText,
+            "txt" | "md" | "eml" | "vtt" => Self::DocumentText,
             "pdf" => Self::DocumentPdf,
-            "docx" => Self::DocumentOffice,
+            "docx" | "odt" | "odp" | "pptx" | "rtf" => Self::DocumentOffice,
             "jpg" | "jpeg" | "png" => Self::Image,
-            "csv" | "xls" | "xlsx" | "xlsm" => Self::TabularCandidate,
+            "csv" | "xls" | "xlsx" | "xlsm" | "ods" => Self::TabularCandidate,
             "" => Self::Other,
             _ => Self::Unsupported,
         }
@@ -234,6 +234,13 @@ pub fn mime_type_for(extension: &str) -> &'static str {
         "csv" => "text/csv",
         "xls" => "application/vnd.ms-excel",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "ods" => "application/vnd.oasis.opendocument.spreadsheet",
+        "odt" => "application/vnd.oasis.opendocument.text",
+        "odp" => "application/vnd.oasis.opendocument.presentation",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "rtf" => "application/rtf",
+        "eml" => "message/rfc822",
+        "vtt" => "text/vtt",
         _ => "application/octet-stream",
     }
 }
@@ -261,8 +268,23 @@ mod tests {
     }
 
     #[test]
+    fn the_text_formats_with_a_reader_are_documents_and_the_ods_workbook_is_not() {
+        for extension in ["odt", "odp", "pptx", "rtf"] {
+            assert_eq!(FileKind::from_extension(extension), FileKind::DocumentOffice);
+        }
+        for extension in ["eml", "vtt"] {
+            assert_eq!(FileKind::from_extension(extension), FileKind::DocumentText);
+        }
+        for extension in ["odt", "odp", "pptx", "rtf", "eml", "vtt"] {
+            assert!(crate::discovery::is_supported(extension), "{extension}");
+        }
+        assert_eq!(FileKind::from_extension("ods"), FileKind::TabularCandidate);
+        assert!(!crate::discovery::is_supported("ods"));
+    }
+
+    #[test]
     fn a_spreadsheet_is_recognised_without_becoming_a_document() {
-        for extension in ["csv", "xls", "xlsx"] {
+        for extension in ["csv", "xls", "xlsx", "ods"] {
             let kind = FileKind::from_extension(extension);
             assert_eq!(kind, FileKind::TabularCandidate);
             assert!(

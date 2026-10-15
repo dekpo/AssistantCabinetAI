@@ -7,7 +7,8 @@ mod common;
 
 use assistant_cabinet_ai_lib::error::AppError;
 use assistant_cabinet_ai_lib::summaries::{
-    estimate_seconds, record_speed, run, status, stored_speed, units_for, Stage, SummaryProgress,
+    estimate_seconds, read_all, record_speed, run, status, stored_speed, units_for, Stage,
+    SummaryProgress,
     SUMMARY_INSTRUCTION,
 };
 use common::knowledge::Lab;
@@ -245,4 +246,94 @@ fn the_summary_instruction_stays_neutral_about_who_the_user_is() {
             "{word:?} found in SUMMARY_INSTRUCTION"
         );
     }
+}
+
+async fn summarised_with(text: &'static str) -> Lab {
+    let mut lab = analysed_book().await;
+    run(
+        &mut lab.index,
+        "book.md",
+        Stage::Chapters,
+        move |_prompt: String| async move { Ok(text.to_string()) },
+        || false,
+        |_progress: SummaryProgress| {},
+    )
+    .await
+    .expect("runs");
+    lab
+}
+
+#[tokio::test]
+async fn a_summary_is_checked_against_the_text_it_was_made_from_and_never_edited() {
+    let text = "The deposit is 777 euros, the sentence number 12 is in the text, and the file says \
+\"a promise that is written nowhere in the part\".";
+    let lab = summarised_with(text).await;
+    let stored = read_all(&lab.index, "book.md").expect("reads");
+    assert_eq!(stored.len(), 3);
+    for summary in &stored {
+        assert_eq!(summary.text, text, "a flagged summary is shown as written");
+        assert_eq!(
+            summary.unverified_numbers,
+            vec!["777".to_string()],
+            "12 is in the unit text, 777 is in none"
+        );
+        assert_eq!(
+            summary.unverified_quotes,
+            vec!["a promise that is written nowhere in the part".to_string()]
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_summary_that_keeps_to_its_text_carries_no_note() {
+    let lab = summarised_with("The part goes on with the usual words, in sentence number 12.").await;
+    for summary in read_all(&lab.index, "book.md").expect("reads") {
+        assert!(summary.unverified_numbers.is_empty());
+        assert!(summary.unverified_quotes.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_summary_stored_before_the_check_existed_is_checked_when_it_is_read() {
+    let lab = summarised_with("The deposit is 777 euros.").await;
+    // An index written by the previous version has the summaries and no check table content.
+    lab.side()
+        .execute("DELETE FROM summary_checks", [])
+        .expect("forgets the checks");
+    let stored = read_all(&lab.index, "book.md").expect("reads");
+    assert_eq!(stored.len(), 3);
+    assert!(stored
+        .iter()
+        .all(|summary| summary.unverified_numbers == vec!["777".to_string()]));
+    let kept: i64 = lab
+        .side()
+        .query_row("SELECT COUNT(*) FROM summary_checks", [], |row| row.get(0))
+        .expect("counts");
+    assert_eq!(kept, 3, "the check is kept: it is not computed again");
+}
+
+#[tokio::test]
+async fn the_checks_of_a_changed_file_go_with_its_summaries() {
+    let mut lab = summarised_with("The deposit is 777 euros.").await;
+    lab.write(
+        "book.md",
+        &format!("{}\n# Chapter 4 delta\nA new chapter.\n", book()),
+    );
+    lab.analyse().await;
+    assert!(read_all(&lab.index, "book.md").unwrap().is_empty());
+    run(
+        &mut lab.index,
+        "book.md",
+        Stage::Chapters,
+        |_prompt: String| async move { Ok("Nothing to flag here.".to_string()) },
+        || false,
+        |_progress: SummaryProgress| {},
+    )
+    .await
+    .expect("runs");
+    let rows: i64 = lab
+        .side()
+        .query_row("SELECT COUNT(*) FROM summary_checks", [], |row| row.get(0))
+        .expect("counts");
+    assert_eq!(rows, 4, "only the four checks of the new version remain");
 }

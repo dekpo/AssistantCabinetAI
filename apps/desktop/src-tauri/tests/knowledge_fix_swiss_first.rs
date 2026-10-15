@@ -549,12 +549,12 @@ async fn the_analyse_summary_counts_the_files_it_could_not_read_by_format() {
     let mut lab = Lab::new();
     lab.write("lettre.txt", "Un courrier lisible.\n");
     for name in [
-        "a.odt",
-        "b.ODT",
-        "dossier/c.odt",
-        "note.rtf",
-        "mail.eml",
-        "reunion.vtt",
+        "a.pages",
+        "b.PAGES",
+        "dossier/c.pages",
+        "note.wps",
+        "mail.msg",
+        "reunion.srt",
     ] {
         lab.write(name, "contenu\n");
     }
@@ -574,10 +574,10 @@ async fn the_analyse_summary_counts_the_files_it_could_not_read_by_format() {
     assert_eq!(
         found,
         [
-            ("odt".to_string(), 3),
-            ("eml".to_string(), 1),
-            ("rtf".to_string(), 1),
-            ("vtt".to_string(), 1),
+            ("pages".to_string(), 3),
+            ("msg".to_string(), 1),
+            ("srt".to_string(), 1),
+            ("wps".to_string(), 1),
         ]
     );
     assert_eq!(summary.indexed_files, 1);

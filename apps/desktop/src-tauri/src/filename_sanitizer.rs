@@ -314,12 +314,12 @@ mod tests {
 
     #[test]
     fn unrelated_hidden_and_lock_files_keep_their_names() {
-        let root = folder_with(&["notes perso.odt", ".cache file.txt", "~$Mon doc.docx"]);
+        let root = folder_with(&["notes perso.zip", ".cache file.txt", "~$Mon doc.docx"]);
 
         let report = sanitize_folder(root.path());
 
         assert!(report.renamed.is_empty());
-        assert!(root.path().join("notes perso.odt").is_file());
+        assert!(root.path().join("notes perso.zip").is_file());
         assert!(root.path().join(".cache file.txt").is_file());
         assert!(root.path().join("~$Mon doc.docx").is_file());
     }

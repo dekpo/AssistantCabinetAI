@@ -40,6 +40,9 @@ export interface StoredSummary {
   firstPage: number;
   lastPage: number;
   text: string;
+  /** Figures, dates and quotations the summary states that the text it was made from does not carry. */
+  unverifiedNumbers: string[];
+  unverifiedQuotes: string[];
 }
 
 interface Place {

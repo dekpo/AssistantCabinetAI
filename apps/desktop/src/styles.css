@@ -2020,6 +2020,13 @@ body {
   color: var(--text-quiet);
 }
 
+/* The note under a summary that states a figure or a quotation its text does not carry. */
+.summary__check {
+  display: block;
+  color: var(--text-quiet);
+  font-style: italic;
+}
+
 /* The chips over the facets of a search, and the dialog of the user's own document types. */
 .finder__filters {
   margin: 6px 0 0;

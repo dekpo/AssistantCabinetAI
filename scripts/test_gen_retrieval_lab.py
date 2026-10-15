@@ -54,6 +54,14 @@ class SyntheticSet(unittest.TestCase):
         document = next(d for d in self.documents if d["path"] == gen.TABLE_PATH)
         self.assertEqual(document["pages"], 2)
 
+    def test_a_normal_form_question_writes_the_date_or_amount_another_way_than_the_document(self):
+        asked = [q for q in self.questions if q["category"] == "normal_form"]
+        self.assertGreaterEqual(len(asked), 10)
+        for question in asked:
+            self.assertEqual(len(question["relevant_readable"]), 1)
+            for fact in question["expect"]["contains"]:
+                self.assertNotIn(gen.squash(fact), gen.squash(question["text"]), question["id"])
+
     def test_the_question_ids_are_unique(self):
         ids = [q["id"] for q in self.questions]
         self.assertEqual(len(ids), len(set(ids)))

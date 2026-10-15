@@ -347,10 +347,24 @@ async fn the_six_set_sentences_of_the_final_test_find_their_files_and_nothing_el
         let mut paths: Vec<&str> = listed.iter().map(|d| d.relative_path.as_str()).collect();
         paths.extend(others.iter().map(String::as_str));
         let hit = expected.iter().filter(|path| paths.contains(path)).count();
+        // The sandbox's truth was written when ODT and RTF files could not be read (`readable: false`); they
+        // are read now (`readers`), so a place named in one of them is a right answer the truth does not
+        // list yet. Any other file that is not expected is still a wrong file.
         let wrong: Vec<&&str> = paths
             .iter()
             .filter(|path| !expected.contains(path))
+            .filter(|path| {
+                !path
+                    .rsplit_once('.')
+                    .is_some_and(|(_, extension)| {
+                        assistant_cabinet_ai_lib::readers::EXTENSIONS
+                            .contains(&extension.to_ascii_lowercase().as_str())
+                    })
+            })
             .collect();
+        if !wrong.is_empty() {
+            println!("{id} wrong files: {wrong:?}");
+        }
         println!(
             "{id} {question}: expected {} found {hit} listed {total} wrong {} kind {:?}",
             expected.len(),

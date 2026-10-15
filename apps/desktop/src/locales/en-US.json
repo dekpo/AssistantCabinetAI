@@ -143,9 +143,16 @@
     "sourceItemSheetColumn": "{path}, sheet {sheet}, column {column}",
     "deterministicData": "Answer computed from your data folder, without the AI.",
     "documentsNotNeeded": "Answered from your tables; the selected documents were not needed.",
-    "unverifiedNumber": "The figure “{number}” appears in none of the excerpts used, nor in your question: check it in your documents.",
-    "unverifiedQuote": "The quotation “{quote}” appears in none of the excerpts used: check it in your documents.",
-    "unknownCitation": "The answer refers to excerpt [{number}], which does not exist: do not rely on it.",
+    "toCheck": {
+      "title": "To check in your documents.",
+      "figures": "Figures or dates found in none of the excerpts used: {items}.",
+      "quotes": "Quotations found in none of the excerpts used: {items}.",
+      "references": "References to excerpts that do not exist: {items}.",
+      "quote": "“{quote}”",
+      "more": "{items} and {more}",
+      "otherOne": "other",
+      "otherMany": "others"
+    },
     "mixedComputedTitle": "Computed from your data (by the engine, not by the AI):",
     "mixedTableUnavailable": {
       "not_asked_about": "This question had nothing for your tables.",

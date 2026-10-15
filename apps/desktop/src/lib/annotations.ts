@@ -98,18 +98,63 @@ export function annotationLines(t: Translator, locale: string, entry: ChatEntry)
   if (entry.fillPlan !== undefined) {
     lines.push(t("fill.noModel"));
   }
-  // A figure the model stated that is in none of the excerpts it was given and not in the question.
-  for (const number of entry.unverifiedNumbers ?? []) {
-    lines.push(t("chat.unverifiedNumber", { number }));
-  }
-  // What the answer puts between quotation marks must be in an excerpt; a cited passage must exist.
-  for (const quote of entry.unverifiedQuotes ?? []) {
-    lines.push(t("chat.unverifiedQuote", { quote }));
-  }
-  for (const number of entry.unknownCitations ?? []) {
-    lines.push(t("chat.unknownCitation", { number: String(number) }));
+  const toCheck = toCheckNote(t, entry);
+  if (toCheck !== null) {
+    lines.push(toCheck);
   }
   return lines;
+}
+
+/** Most items named per kind in the "to check" note; the rest is counted. */
+const TO_CHECK_MAX_ITEMS = 5;
+/** Longest quotation written in the note, in characters. */
+const TO_CHECK_MAX_QUOTE = 60;
+
+function listed(t: Translator, items: string[]): string {
+  const distinct = [...new Set(items)];
+  const shown = distinct.slice(0, TO_CHECK_MAX_ITEMS).join(", ");
+  const more = distinct.length - TO_CHECK_MAX_ITEMS;
+  return more > 0
+    ? t("chat.toCheck.more", {
+        items: shown,
+        more: counted(more, t("chat.toCheck.otherOne"), t("chat.toCheck.otherMany")),
+      })
+    : shown;
+}
+
+/** What a text states that no excerpt carries: the three lists the engine returns for an answer, and
+ * the first two for a summary. */
+export interface ToCheck {
+  unverifiedNumbers?: string[];
+  unverifiedQuotes?: string[];
+  unknownCitations?: number[];
+}
+
+/**
+ * One note for everything the answer states that no excerpt carries, grouped by kind: figures and
+ * dates, quotations between quotation marks, and `[n]` references to a passage that does not exist.
+ * One short sentence per kind, items listed once and capped; the answer itself is never rewritten.
+ * `null` when there is nothing to check.
+ */
+export function toCheckNote(t: Translator, entry: ToCheck): string | null {
+  const sentences: string[] = [];
+  const figures = entry.unverifiedNumbers ?? [];
+  if (figures.length > 0) {
+    sentences.push(t("chat.toCheck.figures", { items: listed(t, figures) }));
+  }
+  const quotes = (entry.unverifiedQuotes ?? []).map((quote) =>
+    t("chat.toCheck.quote", {
+      quote: quote.length > TO_CHECK_MAX_QUOTE ? `${quote.slice(0, TO_CHECK_MAX_QUOTE).trimEnd()}…` : quote,
+    }),
+  );
+  if (quotes.length > 0) {
+    sentences.push(t("chat.toCheck.quotes", { items: listed(t, quotes) }));
+  }
+  const references = (entry.unknownCitations ?? []).map((number) => `[${number}]`);
+  if (references.length > 0) {
+    sentences.push(t("chat.toCheck.references", { items: listed(t, references) }));
+  }
+  return sentences.length === 0 ? null : `${t("chat.toCheck.title")} ${sentences.join(" ")}`;
 }
 
 /** The engine's own figure in a mixed answer, as shown beside the model's prose: a title and the

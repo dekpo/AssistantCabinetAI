@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
+import { toCheckNote } from "../lib/annotations";
 import { copyToClipboard } from "../lib/clipboard";
 import { cancelSummary, readSummaries, runSummary, summaryPlan } from "../lib/ipc";
 import {
@@ -122,6 +123,9 @@ export function SummaryPanel({ relativePath }: { relativePath: string }) {
                     <li key={`${stage}-${item.unit}`} className="summary__item">
                       <span className="summary__where">{summaryUnitLabel(t, item)}</span>
                       <span>{item.text}</span>
+                      {toCheckNote(t, item) === null ? null : (
+                        <span className="summary__check">{toCheckNote(t, item)}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

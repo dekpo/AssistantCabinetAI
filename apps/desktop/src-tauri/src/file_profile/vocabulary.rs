@@ -92,6 +92,9 @@ struct RawVocabulary {
     file_name_extensions: Vec<String>,
     #[serde(default)]
     months: Vec<Vec<String>>,
+    /// Currency code to the ways it is written beside an amount (`EUR`: the euro sign, `eur`, `euros`).
+    #[serde(default)]
+    currencies: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     header_labels: RawHeaderLabels,
     #[serde(default)]
@@ -193,6 +196,9 @@ pub struct ProfileVocabulary {
     /// Folded month name or abbreviation to its number, 1 to 12, from every language shipped: a
     /// document is written in its own language, whatever the interface speaks.
     months: HashMap<String, u32>,
+    /// Folded way of writing a currency to its code, from every pack shipped: an amount is read in its own
+    /// currency whatever pack is active (a cross-border worker has both).
+    currencies: HashMap<String, String>,
     labels: HeaderLabels,
     types: BTreeMap<String, DocumentTypeRule>,
     /// Identifier scheme id to the ways its compact form is written in groups (`[3, 4, 4, 2]` for the
@@ -258,6 +264,16 @@ impl ProfileVocabulary {
                         }
                         vocabulary.months.insert(key, index as u32 + 1);
                     }
+                }
+            }
+            for (code, writings) in raw.currencies {
+                if code.is_empty() || writings.iter().any(|writing| fold(writing).trim().is_empty()) {
+                    return Err(invalid(file.id, "currencies"));
+                }
+                for writing in writings {
+                    vocabulary
+                        .currencies
+                        .insert(fold(&writing).trim().to_string(), code.clone());
                 }
             }
             for (scheme, groups) in raw.identifier_layouts {
@@ -365,6 +381,11 @@ impl ProfileVocabulary {
     /// The number (1 to 12) of a month written as `word` (a name or an abbreviation, any case).
     pub fn month_number(&self, word: &str) -> Option<u32> {
         self.months.get(&words_key(word)).copied()
+    }
+
+    /// The currency code (`EUR`) of a way of writing it beside an amount (`euros`, any case or accent).
+    pub fn currency_of(&self, writing: &str) -> Option<&str> {
+        self.currencies.get(fold(writing).trim()).map(String::as_str)
     }
 
     pub fn labels(&self) -> &HeaderLabels {

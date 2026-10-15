@@ -1,4 +1,4 @@
-//! Lot B of the retrieval-quality programme, the query side: phrases, proximity, the words of the frame and
+//! Lot B of the retrieval-quality programme, the query side: phrases and
 //! synonyms change which passages the word search puts first, each only when its own switch is on, and
 //! with every switch off the search is the one it always was. The options are process-wide, so the tests of
 //! this file take turns.
@@ -9,7 +9,7 @@ use assistant_cabinet_ai_lib::chunking::Chunk;
 use assistant_cabinet_ai_lib::extraction::PageOrigin;
 use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::lexical::{
-    set_lexical_options_for_measurement, ContentTerms, LexicalOptions,
+    set_lexical_options_for_measurement, LexicalOptions,
 };
 
 static TURN: Mutex<()> = Mutex::new(());
@@ -99,26 +99,6 @@ fn with_every_switch_off_the_search_is_the_old_one_and_the_product_runs_with_the
         first(&store, question, 3)
     };
     assert_eq!(product.first().map(String::as_str), Some("b"));
-}
-
-#[test]
-fn the_words_of_the_frame_no_longer_pull_passages_that_only_share_the_frame() {
-    let (store, _dir) = store(&[
-        ("a", "Ces documents parlent de la sauvegarde des donnees."),
-        ("b", "Compte rendu de la reunion avec Camille Dupont."),
-        ("c", "Des documents sans rapport, et d'autres documents qui parlent ailleurs."),
-    ]);
-    let question = "Quels documents parlent de Camille ?";
-    let on = with(
-        LexicalOptions {
-            content_terms: ContentTerms::On,
-            ..LexicalOptions::OFF
-        },
-        || first(&store, question, 3),
-    );
-    assert_eq!(on, vec!["b".to_string()], "only the passage with the name");
-    let off = with(LexicalOptions::OFF, || first(&store, question, 3));
-    assert!(off.len() > 1, "the frame words match other passages: {off:?}");
 }
 
 #[test]

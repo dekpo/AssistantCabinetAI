@@ -2,6 +2,9 @@
   "schema": 1,
   "id": "health-ch",
   "locale": "fr-FR",
+  "currencies": {
+    "CHF": ["chf", "fr.", "franc", "francs"]
+  },
   "generic_values": {
     "exact": [
       "secretariat",

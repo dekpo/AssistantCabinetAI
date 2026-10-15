@@ -2,7 +2,7 @@
  "seed": 0,
  "documents": 29,
  "workbooks": 0,
- "questions": 39,
+ "questions": 50,
  "generated_by": "scripts/gen-retrieval-lab.py",
  "book_extracts": 0,
  "by_format": {

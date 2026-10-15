@@ -323,7 +323,8 @@ pub fn search_scoped_counted_with_terms(
 ) -> Result<SearchOutcome, crate::error::AppError> {
     let mut lexical_hits = lexical_hits_in(index, query_text, scope, lexical_depth(limits))?;
     lexical_hits.extend(term_hits_in(index, extra_terms, scope, limits)?);
-    let pinned = pinned_in(index, query_text, scope, limits)?;
+    let mut pinned = pinned_in(index, query_text, scope, limits)?;
+    pinned.extend(fact_pins_in(index, query_text, scope)?);
     let mut found = search_scoped_with_hits(
         index,
         query_embedding,
@@ -390,6 +391,43 @@ fn lexical_hits_in(
             index.search_lexical_in(query_text, limits.max_chunks, relative_paths)
         }
     }
+}
+
+/// Most passages a date or an amount of the question may pin. A date that many passages state tells nothing
+/// about which one is meant: then none is pinned and the ranking decides.
+const FACT_PIN_MAX: usize = 3;
+
+/// The passages that state a date or an amount written in the question, in whatever way they write it
+/// (`facts`), when that switch is on and the fact is discriminating (at most `FACT_PIN_MAX` passages). Held
+/// to the scope's files like the word search. They come before any other passage, like an identifier.
+fn fact_pins_in(
+    index: &IndexStore,
+    query_text: &str,
+    scope: RetrievalScope<'_>,
+) -> Result<std::collections::HashSet<String>, crate::error::AppError> {
+    if !assembly_options().facts {
+        return Ok(std::collections::HashSet::new());
+    }
+    let one;
+    let paths: Option<&[String]> = match scope {
+        RetrievalScope::WholeFolder => None,
+        RetrievalScope::File(relative_path) => {
+            one = [relative_path.to_string()];
+            Some(&one)
+        }
+        RetrievalScope::Files(paths) | RetrievalScope::CurrentFolder(paths) => Some(paths),
+    };
+    let found = crate::facts::passages_for_question(
+        index.connection(),
+        query_text,
+        crate::facts::shipped_vocabulary(),
+        paths,
+        FACT_PIN_MAX + 1,
+    )?;
+    if found.len() > FACT_PIN_MAX {
+        return Ok(std::collections::HashSet::new());
+    }
+    Ok(found.into_iter().collect())
 }
 
 /// The same, for the surface forms of resolved entities. Always held to the scope's own files: the

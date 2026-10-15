@@ -5,6 +5,9 @@ export interface SourceGroup {
   relativePath: string;
   /** Ascending, without repeats: two excerpts from one page are one page. */
   pages: number[];
+  /** Titles of the sections the excerpts start in, in order, without repeats; none for a document
+   * with no structure. */
+  sections: string[];
   /** Whether any excerpt from this file was read by recognition rather than from its text layer. */
   ocr: boolean;
 }
@@ -20,11 +23,16 @@ export function groupSources(sources: Evidence[]): SourceGroup[] {
     const group = groups.get(source.relativePath) ?? {
       relativePath: source.relativePath,
       pages: [],
+      sections: [],
       ocr: false,
     };
     if (!group.pages.includes(source.pageNumber)) {
       group.pages.push(source.pageNumber);
       group.pages.sort((a, b) => a - b);
+    }
+    const title = source.section?.title;
+    if (title !== undefined && title !== "" && !group.sections.includes(title)) {
+      group.sections.push(title);
     }
     group.ocr = group.ocr || source.origin === "ocr";
     groups.set(source.relativePath, group);

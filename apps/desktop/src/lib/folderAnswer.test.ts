@@ -417,3 +417,49 @@ describe("a ranking by date", () => {
     );
   });
 });
+
+describe("a long document in a word search", () => {
+  const withPlaces = (pages: number[], matchesTotal: number): FolderAnswer => ({
+    kind: "document_search",
+    domain: "documents",
+    query: "franchise",
+    terms: ["franchise"],
+    prefix: false,
+    quoted: false,
+    businessType: null,
+    identifier: false,
+    entity: null,
+    total: 1,
+    listed: [
+      {
+        relativePath: "livres/guide.pdf",
+        title: null,
+        businessType: null,
+        excerpt: null,
+        page: pages[0] ?? null,
+        pages,
+        matchesTotal,
+      },
+    ],
+    others: [],
+    coverage: { searched: 1, unreadable: 0, unanalysed: 0, partial: 0 },
+  } as unknown as FolderAnswer);
+
+  it("lists the pages where the words matched, once for the file", () => {
+    const text = formatFolderAnswer(french, withPlaces([12, 40, 41], 3));
+
+    expect(text).toContain("- livres/guide.pdf (pages 12, 40, 41)");
+  });
+
+  it("says how many passages matched when there are more places than are listed", () => {
+    const text = formatFolderAnswer(french, withPlaces([12, 40], 9));
+
+    expect(text).toContain("(pages 12, 40 ; 9 passages)");
+  });
+
+  it("keeps the single page of a short document as before", () => {
+    const text = formatFolderAnswer(french, withPlaces([2], 1));
+
+    expect(text).toContain("- livres/guide.pdf (page 2)");
+  });
+});

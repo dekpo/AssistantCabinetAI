@@ -106,11 +106,22 @@ export interface ChatTurn {
 
 export type PageOrigin = "textLayer" | "ocr";
 
+export interface EvidenceSection {
+  title: string;
+  level: number;
+  firstPage: number;
+  lastPage: number;
+}
+
 export interface Evidence {
   chunkId: string;
   relativePath: string;
   pageNumber: number;
-  section: number;
+  /** The passage's rank inside its page: what tells two passages of one page apart. */
+  ordinal: number;
+  /** The section of the document the passage starts in, when the document has a structure. `title`
+   * is empty for a slice of pages ("pages 21 to 40" is said from the range). */
+  section: EvidenceSection | null;
   text: string;
   score: number;
   origin: PageOrigin;
@@ -287,6 +298,10 @@ export interface DocumentListing {
   businessType: string | null;
   excerpt: string | null;
   page: number | null;
+  /** The pages where the words matched, ascending: a long document has several. */
+  pages?: number[];
+  /** How many passages of the file matched, counting those beyond the pages listed. */
+  matchesTotal?: number;
 }
 
 /**
@@ -511,6 +526,9 @@ export interface IndexProgress {
   /** The pass has read every file and is now reading the names in documents analysed earlier:
    * `processedFiles` and `totalFiles` then count those documents. */
   readingNames?: boolean;
+  /** Second phase: passages that have their vector, and passages in all. Absent while files are read. */
+  vectorsDone?: number;
+  vectorsTotal?: number;
 }
 
 /** A file that could not be embedded: the pass went on without it and will try it again. */
@@ -586,6 +604,10 @@ export interface IndexSummary {
   knowledge?: KnowledgeSummary | null;
   /** What the file profile pass did, as counts. Null when it could not start; it never blocks a pass. */
   profile?: ProfileSummary | null;
+  /** The user stopped the pass: what was read is kept and the next pass goes on from there. */
+  cancelled?: boolean;
+  /** Passages that still have no vector at the end of the pass. They are found by their words. */
+  vectorsPending?: number;
 }
 
 /** The file profile pass of an Analyse (`file_profile::store`). Counts only, never a name. */
@@ -1137,6 +1159,21 @@ export interface ProfileIndexStatus {
   data: FolderProfileStatus;
 }
 
+/** Stop the analysis that is running. What it wrote stays; the next one goes on from there. */
+export function cancelAnalysis(): Promise<void> {
+  return invoke<void>("cancel_analysis");
+}
+
+/** How many passages have their meaning vector, out of all of them (one cheap lookup). */
+export interface VectorShare {
+  done: number;
+  total: number;
+}
+
+export function vectorShare(): Promise<VectorShare> {
+  return invoke<VectorShare>("vector_share");
+}
+
 export function profileIndexStatus(): Promise<ProfileIndexStatus> {
   return invoke<ProfileIndexStatus>("profile_index_status");
 }
@@ -1222,7 +1259,13 @@ export interface FinderHit {
   reasons: FinderReason[];
   /** The passage that matched, for the files of the page only. */
   excerpt: string | null;
-  locator: { page: number | null; section: number | null } | null;
+  /** `ordinal` is the passage's rank inside its page; `sectionLabel` the title of the section of the
+   * document it starts in, when the document has a structure. */
+  locator: { page: number | null; ordinal: number | null; sectionLabel: string | null } | null;
+  /** Every place where the words matched in this file, in reading order (at most 20), and how many
+   * passages matched in all. A long document is one hit with all its places. */
+  locators?: { page: number | null; ordinal: number | null; sectionLabel: string | null }[];
+  locatorsTotal?: number;
 }
 
 /** `label` is the entity's canonical name in the entity facet, null elsewhere. */
@@ -1498,6 +1541,8 @@ export interface SourceMentions {
   sourceId: number;
   domain: "documents" | "data";
   relativePath: string;
+  /** The source has more names than its cap: the names listed for it are the most confident ones. */
+  truncated: boolean;
   mentions: MentionView[];
 }
 

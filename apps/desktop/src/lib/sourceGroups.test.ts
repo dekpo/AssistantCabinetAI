@@ -39,3 +39,29 @@ describe("groupSources", () => {
     expect(group?.ocr).toBe(true);
   });
 });
+
+describe("groupSources, sections", () => {
+  const withSection = (relativePath: string, pageNumber: number, title: string | null): Evidence =>
+    ({
+      relativePath,
+      pageNumber,
+      origin: "textLayer",
+      section: title === null ? null : { title, level: 1, firstPage: 1, lastPage: 9 },
+    }) as Evidence;
+
+  it("names the sections the excerpts start in, once each, in order", () => {
+    const [group] = groupSources([
+      withSection("a.pdf", 3, "2.1 Hygiène"),
+      withSection("a.pdf", 5, "2.1 Hygiène"),
+      withSection("a.pdf", 8, "3 Déchets"),
+    ]);
+
+    expect(group?.sections).toStrictEqual(["2.1 Hygiène", "3 Déchets"]);
+  });
+
+  it("names nothing for a document with no structure or a slice of pages", () => {
+    const [group] = groupSources([withSection("a.pdf", 3, null), withSection("a.pdf", 4, "")]);
+
+    expect(group?.sections).toStrictEqual([]);
+  });
+});

@@ -4,6 +4,8 @@ import {
   analysisFraction,
   analysisPendingDocuments,
   countPendingDocuments,
+  unfinishedPercent,
+  vectorPercent,
 } from "../lib/analysis";
 import { scopedPaths, scopeFromSearch, selectionOf } from "../lib/analysisScope";
 import { shownFiles } from "../lib/finderField";
@@ -11,6 +13,7 @@ import { errorMessage, normaliseError, type AppError } from "../lib/errors";
 import { knowledgeLines } from "../lib/knowledgeSummary";
 import { unreadFormatsLines } from "../lib/unreadFormats";
 import {
+  cancelAnalysis,
   chooseWorkFolder,
   ensureSuggestedWorkFolder,
   resetIndex,
@@ -26,6 +29,7 @@ import { counted } from "../lib/plural";
 import { useFinderSearch } from "../state/useFinderSearch";
 import type { IndexingState } from "../state/useIndexing";
 import { useProfileStatus } from "../state/useProfileStatus";
+import { useVectorShare } from "../state/useVectorShare";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DocumentGlyph } from "./DocumentGlyph";
 import { ErrorBanner } from "./ErrorBanner";
@@ -140,6 +144,9 @@ export function WorkFolderCard({
   });
   /* An index written before the profile existed is said, never rebuilt: only Analyse fills it. */
   const profileStatus = useProfileStatus("documents", workFolder, finishedPasses);
+  const vectors = useVectorShare(workFolder, finishedPasses);
+  /* Shown only while the meaning search is incomplete: nothing at 100 %. */
+  const meaningPercent = unfinishedPercent(vectors);
 
   const refreshInventory = useCallback(() => {
     if (workFolder === null) {
@@ -268,6 +275,20 @@ export function WorkFolderCard({
           /* Files in a format nothing in the product reads: said, so that an answer drawn from the
              others is never mistaken for an answer drawn from the whole folder. */
           ...unreadFormatsLines(t, indexing.summary.unreadFormats),
+          /* A pass the user stopped, or one the server did not finish: what was read is kept, the
+             word search already works on all of it, and the next pass goes on from there. */
+          ...(indexing.summary.cancelled === true
+            ? [t("workFolder.summaryStopped")]
+            : (indexing.summary.vectorsPending ?? 0) > 0
+              ? [
+                  t("workFolder.summaryMeaningPartial", {
+                    percent: Math.floor(
+                      (100 * Math.max(0, indexing.summary.chunkCount - (indexing.summary.vectorsPending ?? 0))) /
+                        Math.max(1, indexing.summary.chunkCount),
+                    ),
+                  }),
+                ]
+              : []),
           /* What the knowledge base did with the names, counts only. The line that asks her to act
              (a document whose names were not recorded) comes first among them. */
           ...knowledgeLines(t, indexing.summary.knowledge),
@@ -451,10 +472,21 @@ export function WorkFolderCard({
             label={
               indexing.progress.readingNames === true
                 ? t("workFolder.progressNamesLabel")
-                : t("workFolder.progressLabel")
+                : vectorPercent(indexing.progress) !== null
+                  ? t("workFolder.progressMeaningLabel", { percent: vectorPercent(indexing.progress) ?? 0 })
+                  : t("workFolder.progressLabel")
             }
           />
         )}
+        {indexing.running ? (
+          <button
+            type="button"
+            className="button button--compact"
+            onClick={() => void cancelAnalysis()}
+          >
+            {t("workFolder.stop")}
+          </button>
+        ) : null}
       </div>
       {inventory === null ? (
         /* No inventory to put it under - a folder that could not be read still owes her an
@@ -487,6 +519,11 @@ export function WorkFolderCard({
           {profileStatus === "needsAnalyse" ? (
             <p className="card__description finder__notice" role="status">
               {t("finder.needsAnalyse")}
+            </p>
+          ) : null}
+          {meaningPercent !== null ? (
+            <p className="card__description finder__notice" role="status">
+              {t("workFolder.meaningShare", { percent: meaningPercent })}
             </p>
           ) : null}
           {inventory.summary.totalFiles === 0 ? (

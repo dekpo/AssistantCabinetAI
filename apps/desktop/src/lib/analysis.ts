@@ -23,6 +23,30 @@ export function countPending(files: FileRecord[]): number {
   ).length;
 }
 
+/**
+ * The share of the meaning search computed so far, as a whole percent, or null while the files are
+ * still being read. Rounded down: it says 100 only when every passage has its vector.
+ */
+export function vectorPercent(progress: IndexProgress): number | null {
+  const total = progress.vectorsTotal ?? 0;
+  if (total <= 0) {
+    return null;
+  }
+  return Math.floor((100 * Math.min(total, progress.vectorsDone ?? 0)) / total);
+}
+
+/**
+ * The share of the meaning search computed, as a whole percent, while it is incomplete; null when
+ * nothing is known, there is nothing to compute, or every passage has its vector (the card says
+ * nothing at 100 %).
+ */
+export function unfinishedPercent(share: { done: number; total: number } | null): number | null {
+  if (share === null || share.total <= 0 || share.done >= share.total) {
+    return null;
+  }
+  return Math.floor((100 * share.done) / share.total);
+}
+
 /** The kinds the document pass reads; mirrors `FileKind::is_document` in `file_record.rs`. */
 const DOCUMENT_KINDS: ReadonlySet<FileRecord["kind"]> = new Set([
   "document_text",
@@ -56,6 +80,10 @@ export function analysisPendingDocuments(files: FileRecord[]): boolean {
  * counted in `processedFiles`.
  */
 export function analysisFraction(progress: IndexProgress): number {
+  // Second phase: every file is read, the vectors are being computed; the bar follows them.
+  if ((progress.vectorsTotal ?? 0) > 0) {
+    return Math.min(1, Math.max(0, (progress.vectorsDone ?? 0) / (progress.vectorsTotal ?? 1)));
+  }
   if (progress.totalFiles <= 0) {
     return 1;
   }

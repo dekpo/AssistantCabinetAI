@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   analysisFraction,
+  vectorPercent,
+  unfinishedPercent,
   analysisPending,
   analysisPendingDocuments,
   countPending,
@@ -170,5 +172,53 @@ describe("analysisFraction", () => {
   it("never draws past either end of the bar", () => {
     expect(analysisFraction(progress(20, 12))).toBe(1);
     expect(analysisFraction(progress(-1, 12))).toBe(0);
+  });
+});
+
+describe("the two phases of a pass", () => {
+  const reading = (done: number, total: number): IndexProgress => ({
+    processedFiles: done,
+    totalFiles: total,
+    batchIndex: 0,
+    batchTotal: 0,
+  });
+  const meaning = (done: number, total: number): IndexProgress => ({
+    processedFiles: 4,
+    totalFiles: 4,
+    batchIndex: 0,
+    batchTotal: 0,
+    vectorsDone: done,
+    vectorsTotal: total,
+  });
+
+  it("draws the bar from the files while they are read, and from the vectors after", () => {
+    expect(analysisFraction(reading(1, 4))).toBe(0.25);
+    expect(analysisFraction(meaning(30, 60))).toBe(0.5);
+    expect(analysisFraction(meaning(60, 60))).toBe(1);
+  });
+
+  it("says no share while the files are read", () => {
+    expect(vectorPercent(reading(1, 4))).toBeNull();
+    expect(vectorPercent(meaning(0, 0))).toBeNull();
+  });
+
+  it("gives the share as a whole percent that only reaches 100 when everything is done", () => {
+    expect(vectorPercent(meaning(0, 60))).toBe(0);
+    expect(vectorPercent(meaning(31, 50))).toBe(62);
+    expect(vectorPercent(meaning(599, 600))).toBe(99);
+    expect(vectorPercent(meaning(600, 600))).toBe(100);
+  });
+});
+
+describe("the share shown on the folder card", () => {
+  it("shows a whole percent only while the meaning search is incomplete", () => {
+    expect(unfinishedPercent({ done: 62, total: 100 })).toBe(62);
+    expect(unfinishedPercent({ done: 99, total: 100 })).toBe(99);
+  });
+
+  it("shows nothing at 100 %, when nothing is known, or when there is nothing to compute", () => {
+    expect(unfinishedPercent({ done: 100, total: 100 })).toBeNull();
+    expect(unfinishedPercent(null)).toBeNull();
+    expect(unfinishedPercent({ done: 0, total: 0 })).toBeNull();
   });
 });

@@ -104,9 +104,10 @@ function detail(overrides: Partial<EntityDetail> = {}): EntityDetail {
         sourceId: 1,
         domain: "documents",
         relativePath: "rapports/mars.txt",
+        truncated: false,
         mentions: [mention({})],
       },
-      { sourceId: 2, domain: "data", relativePath: "rdv.xlsx", mentions: [cellsMention] },
+      { sourceId: 2, domain: "data", relativePath: "rdv.xlsx", truncated: false, mentions: [cellsMention] },
     ],
     mentionCount: 2,
     relations: [],
@@ -200,6 +201,7 @@ describe("where an entity comes from, drawn", () => {
           sourceId: 1,
           domain: "documents",
           relativePath: "a.txt",
+          truncated: false,
           mentions: [
             mention({ origin: "manual", splitFrom: 3, entityId: 9, method: "manual" }),
           ],
@@ -348,5 +350,17 @@ describe("the other sections, drawn", () => {
     expect(page("en-US", createElement(KnowledgeLink, { onOpen: () => {} }))).toContain(
       "See the knowledge",
     );
+  });
+});
+
+describe("a source over its cap", () => {
+  it("says that the names listed for it are not all of them", () => {
+    const html = provenance("fr-FR", {
+      sources: [
+        { sourceId: 1, domain: "documents", relativePath: "livre.pdf", truncated: true, mentions: [mention({})] },
+      ],
+    });
+
+    expect(html).toContain("plus de noms que le maximum retenu");
   });
 });

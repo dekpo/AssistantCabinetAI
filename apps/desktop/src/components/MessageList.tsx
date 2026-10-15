@@ -4,7 +4,7 @@ import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
-import { annotationLines, answerForCopy } from "../lib/annotations";
+import { annotationLines, answerForCopy, sourceGroupLine } from "../lib/annotations";
 import { groupSources } from "../lib/sourceGroups";
 import { formatTabularAnswer, tabularSourceLine } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
@@ -305,11 +305,7 @@ export function MessageList({
                   <ul className="message__sources-list">
                     {groupSources(entry.sources).map((group) => (
                       <li key={group.relativePath} className="message__source">
-                        {t(group.pages.length > 1 ? "chat.sourceItemPages" : "chat.sourceItemPage", {
-                          path: group.relativePath,
-                          pages: group.pages.join(", "),
-                        })}
-                        {group.ocr ? t("chat.sourceOcrMarker") : null}
+                        {sourceGroupLine(t, group)}
                       </li>
                     ))}
                   </ul>

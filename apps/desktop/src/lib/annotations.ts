@@ -4,7 +4,7 @@ import { coverageLine } from "./coverage";
 import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
 import { counted } from "./plural";
-import { groupSources } from "./sourceGroups";
+import { groupSources, type SourceGroup } from "./sourceGroups";
 import { formatTabularAnswer, tabularSourceLine } from "./tabularAnswer";
 import { targetingNoteText } from "./targeting";
 
@@ -115,17 +115,25 @@ export function computedBlock(t: Translator, locale: string, entry: ChatEntry): 
   return [t("chat.mixedComputedTitle"), "", formatTabularAnswer(t, entry.mixedTable, locale)].join("\n");
 }
 
+/** One document of the sources: its path, its pages, the sections the excerpts start in, and a mark if a
+ * page was read by recognition. Shown under an answer and copied with it, the same line. */
+export function sourceGroupLine(t: Translator, group: SourceGroup): string {
+  return (
+    t(group.pages.length > 1 ? "chat.sourceItemPages" : "chat.sourceItemPage", {
+      path: group.relativePath,
+      pages: group.pages.join(", "),
+    }) +
+    (group.sections.length > 0 ? t("chat.sourceSections", { sections: group.sections.join(" ; ") }) : "") +
+    (group.ocr ? t("chat.sourceOcrMarker") : "")
+  );
+}
+
 /** The lists of sources under an answer, as plain lines under one heading: the documents (one line
- * per file, with its pages), then the sheets and columns the engine read. Empty when there are none. */
+ * per file, with its pages and sections), then the sheets and columns the engine read. Empty when
+ * there are none. */
 export function sourceLines(t: Translator, entry: ChatEntry): string[] {
   const items = [
-    ...groupSources(entry.sources ?? []).map(
-      (group) =>
-        t(group.pages.length > 1 ? "chat.sourceItemPages" : "chat.sourceItemPage", {
-          path: group.relativePath,
-          pages: group.pages.join(", "),
-        }) + (group.ocr ? t("chat.sourceOcrMarker") : ""),
-    ),
+    ...groupSources(entry.sources ?? []).map((group) => sourceGroupLine(t, group)),
     ...(entry.tabularSource === undefined ? [] : [tabularSourceLine(t, entry.tabularSource)]),
     ...(entry.mixedTableSource === undefined ? [] : [tabularSourceLine(t, entry.mixedTableSource)]),
   ];

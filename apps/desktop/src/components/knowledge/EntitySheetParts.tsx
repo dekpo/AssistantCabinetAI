@@ -128,6 +128,11 @@ export function ProvenanceList({
               </span>{" "}
               <span className="sheet__path">{source.relativePath}</span>
             </p>
+            {source.truncated ? (
+              <p className="sheet__meta" role="note">
+                {t("manage.sheet.sourceTruncated")}
+              </p>
+            ) : null}
             <ul className="sheet__mentions">
               {source.mentions.map((mention) => (
                 <MentionRow

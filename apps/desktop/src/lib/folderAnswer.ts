@@ -187,8 +187,16 @@ function documentSearch(t: Translator, answer: DocumentSearch): string {
   if (answer.listed.length > 0) {
     lines.push("");
     for (const file of answer.listed) {
-      const place =
-        file.page === null ? "" : ` (${t("folderAnswer.search.page", { page: file.page })})`;
+      const pages = file.pages ?? [];
+      const shown = pages.length > 1;
+      const more = (file.matchesTotal ?? 0) > pages.length;
+      const place = shown
+        ? ` (${t("folderAnswer.search.pages", { pages: pages.join(", ") })}${
+            more ? ` ; ${t("folderAnswer.search.matches", { count: file.matchesTotal ?? 0 })}` : ""
+          })`
+        : file.page === null
+          ? ""
+          : ` (${t("folderAnswer.search.page", { page: file.page })})`;
       lines.push(`- ${file.relativePath}${place}`);
       if (file.excerpt !== null && file.excerpt !== "") {
         lines.push(`  ${t("folderAnswer.search.excerpt", { text: plain(file.excerpt) })}`);

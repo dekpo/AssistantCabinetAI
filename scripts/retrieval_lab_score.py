@@ -59,7 +59,8 @@ def first_ranks(results: list[dict], relevant: set[str]) -> list[int]:
     return ranks
 
 
-def score_question(results: list[dict], relevant: set[str], facts_expected: bool, fact_pages: list[int] | None = None) -> dict:
+def score_question(results: list[dict], relevant: set[str], facts_expected: bool, fact_pages: list[int] | None = None,
+                   fact_sections: list[str] | None = None) -> dict:
     """The figures of one question that has at least one relevant file."""
     ranks = first_ranks(results, relevant)
     figures: dict = {"expected": len(relevant), "returned": len(results)}
@@ -79,6 +80,12 @@ def score_question(results: list[dict], relevant: set[str], facts_expected: bool
         if fact_pages:
             # the passage carries the fact AND sits on the page the ground truth gives (PDF; a DOCX is one page)
             figures["page@10"] = 1.0 if any(p.get("fact") and p["path"] in relevant and p["page"] in fact_pages for p in results[:10]) else 0.0
+        if fact_sections and any("section_label" in p for p in results):
+            # the passage carries the fact AND names the document section the ground truth gives; scored only
+            # when the retrieval reports section labels (the product does not before the structure work)
+            figures["section@10"] = 1.0 if any(
+                p.get("fact") and p["path"] in relevant and p.get("section_label") in fact_sections for p in results[:10]
+            ) else 0.0
     return figures
 
 
@@ -98,7 +105,7 @@ def summarise_channel(questions: dict[str, dict], rows: dict[str, dict]) -> dict
         relevant = set(question["relevant_readable"])
         if relevant:
             scored[qid] = score_question(row["results"], relevant, bool(question["expect"]["contains"]),
-                                         question.get("fact_pages"))
+                                         question.get("fact_pages"), question.get("fact_sections"))
         elif question["category"] in ("unknown", "entity_free") or not question["relevant_documents"]:
             unanswerable.append(len(row["results"]))
     summary: dict = {"questions": len(scored), "unanswerable": len(unanswerable)}
@@ -109,6 +116,7 @@ def summarise_channel(questions: dict[str, dict], rows: dict[str, dict]) -> dict
     for k in CUTOFFS:
         summary[f"fact@{k}"] = mean([s[f"fact@{k}"] for s in scored.values() if f"fact@{k}" in s])
     summary["page@10"] = mean([s["page@10"] for s in scored.values() if "page@10" in s])
+    summary["section@10"] = mean([s["section@10"] for s in scored.values() if "section@10" in s])
     summary["fact_questions"] = sum(1 for s in scored.values() if "fact@5" in s)
     summary["files_expected"] = sum(s["expected"] for s in scored.values())
     summary["files_found"] = sum(s["hits"] for s in scored.values())
@@ -132,6 +140,32 @@ def by_category(questions: dict[str, dict], summary: dict) -> dict[str, dict]:
         }
         for category, items in sorted(groups.items())
     }
+
+
+def by_plant(questions: dict[str, dict], summary: dict, rows: dict[str, dict]) -> dict[str, dict]:
+    """The figures per kind of planted fact (`plant` in the long-document questions): where a method wins or
+    loses. An `absent` question has no fact to find; it reports the passages returned for it, which a refusal
+    rule has to catch."""
+    groups: dict[str, list[dict]] = {}
+    for qid, figures in summary["per_question"].items():
+        kind = questions[qid].get("plant")
+        if kind:
+            groups.setdefault(kind, []).append(figures)
+    out = {
+        kind: {
+            "n": len(items),
+            "fact@5": mean([i["fact@5"] for i in items if "fact@5" in i]),
+            "fact@10": mean([i["fact@10"] for i in items if "fact@10" in i]),
+            "fact@30": mean([i["fact@30"] for i in items if "fact@30" in i]),
+            "page@10": mean([i["page@10"] for i in items if "page@10" in i]),
+            "section@10": mean([i["section@10"] for i in items if "section@10" in i]),
+        }
+        for kind, items in sorted(groups.items())
+    }
+    absent = [len(row["results"]) for qid, row in rows.items() if questions.get(qid, {}).get("plant") == "absent"]
+    if absent:
+        out["absent"] = {"n": len(absent), "passages_returned": mean([float(n) for n in absent])}
+    return out
 
 
 def fmt(value: float | None, digits: int = 3) -> str:
@@ -217,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--against", type=Path, help="another run folder to compare with")
     parser.add_argument("--detail", nargs="*", help="question ids to print channel by channel")
     parser.add_argument("--categories", action="store_true", help="also print the figures per category")
+    parser.add_argument("--planted", action="store_true", help="also print the figures per kind of planted fact (long documents)")
     parser.add_argument("--json", type=Path, help="write the summaries to this file")
     args = parser.parse_args(argv)
 
@@ -239,6 +274,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nper category, {channel}:")
             for category, g in by_category(questions, s).items():
                 print(f"  {category:15} n={g['n']:3} R@10 {fmt(g['recall@10'])} R@30 {fmt(g['recall@30'])} MRR {fmt(g['mrr'])}")
+    if args.planted:
+        for channel, s in summaries.items():
+            print(f"\nplanted facts, {channel}:")
+            for kind, g in by_plant(questions, s, run[channel]).items():
+                if kind == "absent":
+                    print(f"  {kind:12} n={g['n']:3} passages returned on average {fmt(g['passages_returned'], 1)}")
+                else:
+                    print(f"  {kind:12} n={g['n']:3} fact@5 {fmt(g['fact@5'])} fact@10 {fmt(g['fact@10'])} fact@30 {fmt(g['fact@30'])}"
+                          f" page@10 {fmt(g['page@10'])} section@10 {fmt(g['section@10'])}")
     if args.detail:
         detail(questions, run, args.detail)
     if args.against:

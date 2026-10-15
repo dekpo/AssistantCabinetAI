@@ -52,6 +52,43 @@ class ScoreQuestion(unittest.TestCase):
         self.assertEqual(figures["fact@5"], 0.0)
 
 
+class PlantedFacts(unittest.TestCase):
+    def labelled(self, path: str, label: str, fact: bool = True) -> dict:
+        return {**passage(path, fact=fact), "section_label": label}
+
+    def test_a_fact_counts_for_its_section_only_when_the_passage_names_that_section(self):
+        results = [self.labelled("a", "2.1 Hygiene"), self.labelled("a", "9.9 Other")]
+        right = score.score_question(results, {"a"}, True, None, ["2.1 Hygiene"])
+        self.assertEqual(right["section@10"], 1.0)
+        wrong = score.score_question(results[1:], {"a"}, True, None, ["2.1 Hygiene"])
+        self.assertEqual(wrong["section@10"], 0.0)
+
+    def test_the_section_is_not_scored_when_the_passages_carry_no_label(self):
+        figures = score.score_question([passage("a", fact=True)], {"a"}, True, None, ["2.1 Hygiene"])
+        self.assertNotIn("section@10", figures)
+
+    def test_the_figures_are_grouped_by_kind_of_planted_fact(self):
+        questions = {
+            "Q1": {"id": "Q1", "category": "planted", "plant": "table_split", "relevant_readable": ["a"],
+                   "relevant_documents": ["a"], "expect": {"contains": ["x"]}, "text": "t1", "fact_pages": [3]},
+            "Q2": {"id": "Q2", "category": "planted", "plant": "prose", "relevant_readable": ["b"],
+                   "relevant_documents": ["b"], "expect": {"contains": ["y"]}, "text": "t2"},
+            "Q3": {"id": "Q3", "category": "absent", "plant": "absent", "relevant_readable": [],
+                   "relevant_documents": [], "expect": {"contains": []}, "text": "t3"},
+        }
+        rows = {
+            "Q1": {"id": "Q1", "channel": "c", "route": "r", "ms": 1.0, "results": [passage("a", fact=False)]},
+            "Q2": {"id": "Q2", "channel": "c", "route": "r", "ms": 2.0, "results": [passage("b", fact=True)]},
+            "Q3": {"id": "Q3", "channel": "c", "route": "r", "ms": 3.0, "results": [passage("z"), passage("y")]},
+        }
+        summary = score.summarise_channel(questions, rows)
+        groups = score.by_plant(questions, summary, rows)
+        self.assertEqual(groups["table_split"]["fact@10"], 0.0)
+        self.assertEqual(groups["prose"]["fact@10"], 1.0)
+        self.assertEqual(groups["absent"]["passages_returned"], 2.0)
+        self.assertEqual(groups["absent"]["n"], 1)
+
+
 class WholeRun(unittest.TestCase):
     def setUp(self):
         self.folder = Path(tempfile.mkdtemp())

@@ -15,7 +15,8 @@
 //!
 //! Variables: `ACAI_GATEWAY`, `ACAI_EMBED_ALIAS` (default `assistant-embed`), `ACAI_TIER` (default 200),
 //! `ACAI_FAKE=1`, `ACAI_SANDBOX_DIR`, `ACAI_LAB_LABEL` (default `run`), `ACAI_LAB_OUT` (default
-//! `<repo>/data/retrieval-lab/<label>`, which git ignores).
+//! `<repo>/data/retrieval-lab/<label>`, which git ignores), `ACAI_LAB_ANALYSE_ONLY=1` (write `analyse.json`
+//! and `finder.json`, skip the questions: the long-document baselines of `docs/LONG-DOCUMENTS.md`).
 //!
 //! It writes, in the output folder: `analyse.json` (the pass, its split, the index size, the embedding model and
 //! its dimension) and `run.jsonl` (one line per question and channel: the route, the time, and the ranked
@@ -38,6 +39,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use assistant_cabinet_ai_lib::discovery::discover_all;
+use assistant_cabinet_ai_lib::file_profile::build::Domain;
+use assistant_cabinet_ai_lib::finder::{find, FinderQuery, FinderScope, InventoryFile};
 use assistant_cabinet_ai_lib::gateway::GatewayClient;
 use assistant_cabinet_ai_lib::index_store::{cosine_similarity, StoredChunk};
 use assistant_cabinet_ai_lib::knowledge::normalize::TitleSet;
@@ -134,13 +138,34 @@ fn from_evidence(evidence: &[Evidence], facts: &[String]) -> Vec<Passage> {
         .collect()
 }
 
-fn line(id: &str, channel: &str, route: &str, ms: f64, passages: &[Passage]) -> String {
+fn line(
+    index: &assistant_cabinet_ai_lib::index_store::IndexStore,
+    id: &str,
+    channel: &str,
+    route: &str,
+    ms: f64,
+    passages: &[Passage],
+) -> String {
+    // The title of the section each passage starts in, when the document has a structure: scored as
+    // `section@10` by `scripts/retrieval_lab_score.py`.
+    let ids: Vec<String> = passages.iter().map(|p| p.chunk_id.clone()).collect();
+    let labels = index.sections_of_chunks(&ids).unwrap_or_default();
+    let results: Vec<Value> = passages
+        .iter()
+        .map(|p| {
+            let mut value = passage_json(p);
+            if let Some(section) = labels.get(&p.chunk_id).filter(|s| !s.title.is_empty()) {
+                value["section_label"] = json!(section.title);
+            }
+            value
+        })
+        .collect();
     json!({
         "id": id,
         "channel": channel,
         "route": route,
         "ms": (ms * 1000.0).round() / 1000.0,
-        "results": passages.iter().map(passage_json).collect::<Vec<_>>(),
+        "results": results,
     })
     .to_string()
 }
@@ -149,6 +174,25 @@ fn line(id: &str, channel: &str, route: &str, ms: f64, passages: &[Passage]) -> 
 #[ignore]
 async fn replay_the_exam_without_the_model() {
     let truth = Truth::load();
+    // The chunker for long documents is measured at other sizes by setting these (measurement only).
+    if ["ACAI_CHUNK_MAX", "ACAI_CHUNK_OVERLAP", "ACAI_CHUNK_PREFIX"]
+        .iter()
+        .any(|name| std::env::var(name).is_ok())
+    {
+        use assistant_cabinet_ai_lib::chunking_long::{
+            set_long_options_for_measurement, LongOptions,
+        };
+        let defaults = LongOptions::default();
+        set_long_options_for_measurement(Some(LongOptions {
+            max_chars: env("ACAI_CHUNK_MAX", &defaults.max_chars.to_string())
+                .parse()
+                .unwrap_or(defaults.max_chars),
+            overlap_percent: env("ACAI_CHUNK_OVERLAP", &defaults.overlap_percent.to_string())
+                .parse()
+                .unwrap_or(defaults.overlap_percent),
+            prefix: env("ACAI_CHUNK_PREFIX", "1") != "0",
+        }));
+    }
     let label = env("ACAI_LAB_LABEL", "run");
     let fake = env("ACAI_FAKE", "0") == "1";
     let url = env("ACAI_GATEWAY", "http://127.0.0.1:8080");
@@ -196,7 +240,13 @@ async fn replay_the_exam_without_the_model() {
         .and_then(|s| s.timings.as_ref())
         .and_then(|t| serde_json::to_value(t).ok())
         .unwrap_or(Value::Null);
+    let profile_ms = library
+        .summary
+        .as_ref()
+        .and_then(|s| s.profile.as_ref())
+        .map(|p| p.elapsed_ms);
     let analyse = json!({
+        "profile_ms": profile_ms,
         "label": label,
         "fake_vectors": fake,
         "embedding_alias": if fake { "fake" } else { alias.as_str() },
@@ -215,6 +265,53 @@ async fn replay_the_exam_without_the_model() {
     )
     .expect("writes analyse.json");
     println!("{}", serde_json::to_string_pretty(&analyse).unwrap());
+
+    // --- the finder over the profile tables, timed: a word and the whole folder, five runs each
+    let inventory: Vec<InventoryFile> = discover_all(library.lab.work_path())
+        .iter()
+        .map(InventoryFile::from)
+        .collect();
+    let side = library.lab.side();
+    let mut probes = Vec::new();
+    for text in SET_TERMS.iter().map(|(_, term)| *term).chain([""]) {
+        let query = FinderQuery {
+            text: Some(text.to_string()),
+            limit: Some(10_000),
+            ..FinderQuery::default()
+        };
+        let mut times = Vec::new();
+        let mut files = 0;
+        for _ in 0..5 {
+            let started = Instant::now();
+            let result = find(
+                &side,
+                Domain::Documents,
+                &inventory,
+                &query,
+                &FinderScope::WholeFolder,
+            )
+            .expect("the finder answers");
+            times.push(started.elapsed().as_secs_f64() * 1000.0);
+            files = result.total;
+        }
+        probes.push(json!({
+            "query": if text.is_empty() { "(all files)" } else { text },
+            "files": files,
+            "ms_median": median(times),
+        }));
+    }
+    std::fs::write(
+        out.join("finder.json"),
+        serde_json::to_string_pretty(&json!({"inventory": inventory.len(), "probes": probes}))
+            .unwrap(),
+    )
+    .expect("writes finder.json");
+
+    // `ACAI_LAB_ANALYSE_ONLY=1`: stop here, so the memory peak measured around this process is the Analyse's
+    // (plus loading the chunks above), not the questions'.
+    if env("ACAI_LAB_ANALYSE_ONLY", "0") == "1" {
+        return;
+    }
 
     // --- the questions
     let vocabulary = QueryVocabulary::load("fr-FR", &PACKS).expect("loads the vocabulary");
@@ -285,7 +382,7 @@ async fn replay_the_exam_without_the_model() {
         let allowed: Option<HashSet<&str>> = selection
             .as_ref()
             .map(|paths| paths.iter().map(String::as_str).collect());
-        let permitted = |path: &str| allowed.as_ref().map_or(true, |set| set.contains(path));
+        let permitted = |path: &str| allowed.as_ref().is_none_or(|set| set.contains(path));
 
         // pipeline: the product's own path, six passages at most
         let started = Instant::now();
@@ -295,7 +392,7 @@ async fn replay_the_exam_without_the_model() {
             .as_ref()
             .map(|s| from_evidence(&s.outcome.evidence, facts))
             .unwrap_or_default();
-        lines.push(line(&q.id, "pipeline", route, ms, &pipeline));
+        lines.push(line(index, &q.id, "pipeline", route, ms, &pipeline));
 
         // hybrid30: the same ranking, deeper
         let started = Instant::now();
@@ -314,6 +411,7 @@ async fn replay_the_exam_without_the_model() {
         .expect("searches");
         let ms = started.elapsed().as_secs_f64() * 1000.0;
         lines.push(line(
+            index,
             &q.id,
             "hybrid30",
             route,
@@ -341,7 +439,7 @@ async fn replay_the_exam_without_the_model() {
                 fact: carries_fact(facts, &c.text),
             })
             .collect();
-        lines.push(line(&q.id, "vector30", route, ms, &vector));
+        lines.push(line(index, &q.id, "vector30", route, ms, &vector));
 
         // lexical30: the application's own full-text query
         let started = Instant::now();
@@ -362,7 +460,7 @@ async fn replay_the_exam_without_the_model() {
                 fact: carries_fact(facts, &c.text),
             })
             .collect();
-        lines.push(line(&q.id, "lexical30", route, ms, &lexical));
+        lines.push(line(index, &q.id, "lexical30", route, ms, &lexical));
 
         // term_all: the plain phrase search, every matching passage, for the six set sentences
         let set_term = SET_TERMS
@@ -394,7 +492,7 @@ async fn replay_the_exam_without_the_model() {
                     fact: false,
                 })
                 .collect();
-            lines.push(line(&q.id, "term_all", route, ms, &phrase_hits));
+            lines.push(line(index, &q.id, "term_all", route, ms, &phrase_hits));
         }
     }
 

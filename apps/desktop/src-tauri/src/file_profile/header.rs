@@ -338,6 +338,20 @@ fn numeric_date_patterns() -> &'static (Regex, Regex) {
     })
 }
 
+/// Every date written in `text`, as `YYYY-MM-DD`, in order of appearance, without repeats. For the dates
+/// of a section of a long document.
+pub fn dates_in_text(text: &str, vocabulary: &ProfileVocabulary) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines() {
+        for (iso, _) in dates_in(line, vocabulary) {
+            if !out.contains(&iso) {
+                out.push(iso);
+            }
+        }
+    }
+    out
+}
+
 /// Every date in `line`, as `YYYY-MM-DD`, with whether it is introduced as `<place>, <marker> <date>`
 /// (a comma, then a marker word such as `on` or the French `du`).
 fn dates_in(line: &str, vocabulary: &ProfileVocabulary) -> Vec<(String, bool)> {

@@ -3,6 +3,7 @@
 //! Kept out of `commands.rs` so the pipeline can be exercised without Tauri, and so no piece of
 //! it depends on the webview being present.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -10,11 +11,13 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::chunking;
+use crate::chunking_long;
+use crate::cleaning;
 use crate::discovery::{self, DiscoveredFile};
 use crate::error::AppError;
 use crate::extraction::{self, ExtractionError, PageOrigin};
 use crate::gateway::GatewayClient;
-use crate::index_store::IndexStore;
+use crate::index_store::{self, IndexStore};
 use crate::knowledge::backfill;
 use crate::knowledge::diagnostics::{
     elapsed_ms, timed_ms, AnalysisPass, AnalysisTimings, FileTiming, StageTimer,
@@ -22,7 +25,9 @@ use crate::knowledge::diagnostics::{
 use crate::knowledge::ingest::KnowledgeContext;
 use crate::knowledge::KnowledgeSummary;
 use crate::ocr::{ImageFormat, OcrError, OcrInput, OcrPage, OcrProvider};
+use crate::ocr_resume;
 use crate::raster::PageRasterizer;
+use crate::structure;
 
 /// How much one embeddings request carries. The gateway's own ceilings (`MAX_EMBEDDING_*`) stay
 /// as the hard limit; these are what a request is sized to *in practice*, because the latency of
@@ -111,6 +116,11 @@ pub struct IndexSummary {
     /// What the file profile pass did, as counts (`file_profile::store`). `None` when it could not
     /// start; it never blocks a pass.
     pub profile: Option<crate::file_profile::store::ProfileSummary>,
+    /// The user stopped the pass. Everything written stays; the next pass goes on from there.
+    pub cancelled: bool,
+    /// Passages that still have no vector at the end of the pass (stopped, or refused by the server).
+    /// They are found by their words; the next pass computes their vectors.
+    pub vectors_pending: usize,
 }
 
 /// How many files of one format the pass could not read. The format is the extension, lowercase and
@@ -155,7 +165,7 @@ fn unread_formats(everything: &[DiscoveredFile]) -> Vec<UnreadFormat> {
 
 /// How far one pass has got, sent while it runs so a long analysis shows its progress rather than
 /// an unbroken spinner. Counts only: no document text and not even a file name travels here.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexProgress {
     /// Files already dealt with, whether indexed, skipped as unchanged, or unreadable.
@@ -171,6 +181,16 @@ pub struct IndexProgress {
     /// interface says so instead of showing a bar that seems to start again.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub reading_names: bool,
+    /// Phase 2: passages that have their vector, and passages in all. Both 0 while the files are being
+    /// read (phase 1). The interface shows "meaning search: x %" from them.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub vectors_done: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub vectors_total: usize,
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 /// One pass over the work folder. Files whose content hash has not changed since the last pass
@@ -243,12 +263,70 @@ fn write_document(
     }
 }
 
-/// [`run`], with the knowledge base taking part. For each file, once every embedding exists, the
-/// names in its chunks are read and written in the same transaction as the chunks; a failure of
-/// the knowledge step is bypassed (the chunks are committed, the file is counted in
-/// `knowledge.errors`, the next pass tries the names again). After the last file, documents
-/// analysed earlier that are behind the knowledge base are read again from their stored text, with
-/// no request to the gateway (`knowledge::backfill`).
+/// Write the text of one document whose vectors may still be missing (`None`): through the knowledge
+/// context when there is one, as `write_document` does.
+#[allow(clippy::too_many_arguments)]
+fn write_document_pending(
+    index: &mut IndexStore,
+    knowledge: &mut Option<&mut KnowledgeContext>,
+    relative_path: &str,
+    sha256: &str,
+    chunks: &[crate::chunking::Chunk],
+    vectors: &[Option<Vec<f32>>],
+    ocr_engine: Option<&str>,
+    ocr_engine_version: Option<&str>,
+) -> Result<(), AppError> {
+    match knowledge {
+        Some(context) => context.store_document_pending(
+            index,
+            relative_path,
+            sha256,
+            false,
+            chunks,
+            vectors,
+            ocr_engine,
+            ocr_engine_version,
+        ),
+        None => index.replace_document_pending(
+            relative_path,
+            sha256,
+            false,
+            chunks,
+            vectors,
+            ocr_engine,
+            ocr_engine_version,
+        ),
+    }
+}
+
+/// Run blocking work (parsing a PDF, recognising a scan) without holding the executor thread: on the
+/// application's multi-threaded runtime it moves off the worker; elsewhere (a current-thread test
+/// runtime) it simply runs.
+fn run_blocking<T>(work: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(work)
+        }
+        _ => work(),
+    }
+}
+
+/// [`run`], with the knowledge base taking part, in **two speeds**.
+///
+/// Phase 1, file by file: read, clean, cut, and write the text, the word index, the structure and the
+/// names, with the vector of a passage only when it is already known (an unchanged passage keeps its
+/// stored one). When phase 1 is over for every file, the names of documents analysed earlier are read
+/// (`knowledge::backfill`) and the file profiles are built: the word search, the finder and the entity
+/// base work on everything from that moment on.
+///
+/// Phase 2, batch by batch: the passages that have no vector, in reading order, 16 at a time and 20 000
+/// characters at most, each batch stored in its own transaction. A pass that stops, by `cancelled` or by
+/// an error, keeps everything written; the next pass reads only what changed and computes only the
+/// vectors that are missing.
+///
+/// A file that cannot be read, or whose passages the server keeps refusing, is reported by name and the
+/// pass goes on with the others (`FailedFile`); the pass stops only when the server itself is gone
+/// (three files in a row), and then too with everything kept.
 ///
 /// `knowledge: None` is the pass as it was before the knowledge base. A context whose mode is
 /// `Off` writes the documents without touching a `kb_*` row.
@@ -262,11 +340,55 @@ pub async fn run_with_knowledge(
     ocr: Option<&dyn OcrProvider>,
     rasterizer: Option<&dyn PageRasterizer>,
     locale: &str,
-    // `on_progress` is called once before the first file and once after the last. `Sync` rather
-    // than a plain closure so the future stays `Send` and can be awaited from a Tauri command.
+    on_progress: &(dyn Fn(IndexProgress) + Sync),
+    knowledge: Option<&mut KnowledgeContext>,
+) -> Result<IndexSummary, AppError> {
+    run_cancellable(
+        index,
+        gateway,
+        server_url,
+        embedding_alias,
+        work_folder,
+        ocr,
+        rasterizer,
+        locale,
+        on_progress,
+        knowledge,
+        &|| false,
+    )
+    .await
+}
+
+/// [`run_with_knowledge`] that stops, between two files or two batches, when `cancelled()` is true. The
+/// summary then says `cancelled`; what was written stays.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_cancellable(
+    index: &mut IndexStore,
+    gateway: &GatewayClient,
+    server_url: &str,
+    embedding_alias: &str,
+    work_folder: &std::path::Path,
+    ocr: Option<&dyn OcrProvider>,
+    rasterizer: Option<&dyn PageRasterizer>,
+    locale: &str,
+    // `on_progress` is called before the first file, as each file starts, after each batch of vectors
+    // and once at the end. `Sync` rather than a plain closure so the future stays `Send` and can be
+    // awaited from a Tauri command.
     on_progress: &(dyn Fn(IndexProgress) + Sync),
     mut knowledge: Option<&mut KnowledgeContext>,
+    cancelled: &(dyn Fn() -> bool + Sync),
 ) -> Result<IndexSummary, AppError> {
+    // The Analyse is the moment an index from before is brought to the layout where a vector may be
+    // absent: passages and vectors are copied as they are.
+    index.upgrade_layout()?;
+    // Vectors of two models cannot be compared. An index made with another model than the one asked for
+    // now has its vectors computed again, here, in the pass the user started (nothing at launch).
+    if let Some((model, _)) = index.embedding_info()? {
+        if model != embedding_alias {
+            index.reset_vectors()?;
+            index.set_embedding_info(embedding_alias, 0)?;
+        }
+    }
     if let Some(context) = knowledge.as_mut() {
         if context.mode.reads_files() {
             context.begin_pass(index.connection());
@@ -304,9 +426,7 @@ pub async fn run_with_knowledge(
     on_progress(IndexProgress {
         processed_files: 0,
         total_files,
-        batch_index: 0,
-        batch_total: 0,
-        reading_names: false,
+        ..IndexProgress::default()
     });
     let mut indexed_files = 0usize;
     let mut unchanged_files = 0usize;
@@ -314,11 +434,9 @@ pub async fn run_with_knowledge(
     let mut ocr_files = Vec::new();
     let mut low_confidence_files = Vec::new();
     let mut failed_files: Vec<FailedFile> = Vec::new();
-    let mut consecutive_failures = 0usize;
-    // The model may still have to be loaded for the first request of a pass: it gets the longer
-    // deadline until one request has succeeded.
-    let mut model_warm = false;
+    let mut was_cancelled = false;
 
+    // ---------------------------------------------------------------- phase 1: the text of every file
     for (position, file) in files.iter().enumerate() {
         finish_file(
             &mut timings,
@@ -326,6 +444,10 @@ pub async fn run_with_knowledge(
             &mut file_timing,
             file_started,
         );
+        if cancelled() {
+            was_cancelled = true;
+            break;
+        }
         file_started = Instant::now();
         // Reported as this file starts rather than as it ends, because several branches below
         // `continue`, and a count some paths forget to advance is worse than one that is a
@@ -333,9 +455,7 @@ pub async fn run_with_knowledge(
         on_progress(IndexProgress {
             processed_files: position,
             total_files,
-            batch_index: 0,
-            batch_total: 0,
-            reading_names: false,
+            ..IndexProgress::default()
         });
         let (hashed, hash_ms) = timed_ms(|| hash_file(file));
         timings.hash_ms += hash_ms;
@@ -354,14 +474,54 @@ pub async fn run_with_knowledge(
         };
         file_active = true;
 
+        // A scan is read page by page and each recognised page is kept as it is recognised, so a stop
+        // or a failure in the middle of a thousand pages loses none of them.
+        let page_cache = (ocr.is_some()
+            && matches!(file.extension.as_str(), "pdf" | "jpg" | "jpeg" | "png"))
+        .then(|| ocr_resume::PageCache::open(index.path()))
+        .flatten();
+        if let Some(cache) = &page_cache {
+            cache.forget_other_versions(&file.relative_path, &sha256);
+        }
+        let cached_ocr = page_cache
+            .as_ref()
+            .zip(ocr)
+            .map(|(cache, inner)| ocr_resume::CachedOcr {
+                inner,
+                cache,
+                sha256: &sha256,
+            });
+        let cached_rasterizer = page_cache.as_ref().zip(rasterizer).map(|(cache, inner)| {
+            ocr_resume::CachedRasterizer {
+                inner,
+                cache,
+                relative_path: &file.relative_path,
+                sha256: &sha256,
+                cancelled,
+            }
+        });
+        let file_ocr: Option<&dyn OcrProvider> = match &cached_ocr {
+            Some(cached) => Some(cached as &dyn OcrProvider),
+            None => ocr,
+        };
+        let file_rasterizer: Option<&dyn PageRasterizer> = match &cached_rasterizer {
+            Some(cached) => Some(cached as &dyn PageRasterizer),
+            None => rasterizer,
+        };
         let ocr_before = timed_ocr.as_ref().map_or(0, TimedOcr::spent_ms);
-        let (extracted, extraction_ms) =
-            timed_ms(|| extraction::extract(file, ocr, rasterizer, locale));
+        let (extracted, extraction_ms) = timed_ms(|| {
+            run_blocking(|| extraction::extract(file, file_ocr, file_rasterizer, locale))
+        });
         let ocr_ms = timed_ocr.as_ref().map_or(0, TimedOcr::spent_ms) - ocr_before;
         file_timing.ocr_ms = ocr_ms;
         file_timing.extract_ms = extraction_ms.saturating_sub(ocr_ms);
         timings.ocr_ms += file_timing.ocr_ms;
         timings.extract_ms += file_timing.extract_ms;
+        if cancelled() {
+            // What was just read is dropped: the file is read again by the next pass.
+            was_cancelled = true;
+            break;
+        }
 
         match extracted {
             Ok(document) if document.empty => {
@@ -380,6 +540,12 @@ pub async fn run_with_knowledge(
                     )
                 });
                 written?;
+                index.replace_structure(
+                    &file.relative_path,
+                    structure::STRUCTURE_VERSION,
+                    chunking_long::CHUNKER_SHORT,
+                    &structure::Structure::default(),
+                )?;
                 file_timing.write_ms += write_ms;
                 timings.write_ms += write_ms;
                 empty_files.push(file.relative_path.clone());
@@ -391,15 +557,59 @@ pub async fn run_with_knowledge(
                 if document.low_confidence {
                     low_confidence_files.push(file.relative_path.clone());
                 }
-                let (chunks, chunk_ms) = timed_ms(|| chunking::chunk(&document));
+                // A long document is cleaned (repeated headers, cut words, odd characters) before it
+                // is cut into passages; a short one comes back unchanged. Counted with the chunking.
+                //
+                // Whether it is long is decided on the text as extracted, before the cleaning removes
+                // anything from it. A long one is cut by the chunker for long documents (headings,
+                // tables and lists whole, optional overlap and prefix); a short one by today's.
+                let long = chunking::is_long(&document);
+                let (document, clean_ms) = timed_ms(|| cleaning::clean(document));
+                let ((chunks, built), chunk_ms) = timed_ms(|| {
+                    let sections = structure::sections_for(
+                        std::path::Path::new(&file.absolute_path),
+                        &file.extension,
+                        &document,
+                    );
+                    if long {
+                        let cut = chunking_long::chunk_long(
+                            &document,
+                            &sections,
+                            &chunking_long::long_options(),
+                        );
+                        (
+                            cut.chunks,
+                            structure::Structure {
+                                sections,
+                                chunk_sections: cut.owners,
+                            },
+                        )
+                    } else {
+                        let chunks = chunking::chunk(&document);
+                        let chunk_sections = structure::assign(&sections, &document, &chunks);
+                        (
+                            chunks,
+                            structure::Structure {
+                                sections,
+                                chunk_sections,
+                            },
+                        )
+                    }
+                });
+                let chunk_ms = chunk_ms + clean_ms;
+                let chunker = if long {
+                    chunking_long::CHUNKER_LONG
+                } else {
+                    chunking_long::CHUNKER_SHORT
+                };
                 file_timing.chunk_ms = chunk_ms;
                 file_timing.chunks = chunks.len();
                 timings.chunk_ms += chunk_ms;
                 for chunk in &chunks {
                     timings.note_chunk_text(&chunk.text);
                 }
+                let (engine, version) = ocr_identity(ocr, document.used_ocr);
                 if chunks.is_empty() {
-                    let (engine, version) = ocr_identity(ocr, document.used_ocr);
                     let (written, write_ms) = timed_ms(|| {
                         write_document(
                             index,
@@ -414,73 +624,61 @@ pub async fn run_with_knowledge(
                         )
                     });
                     written?;
+                    index.replace_structure(
+                        &file.relative_path,
+                        structure::STRUCTURE_VERSION,
+                        chunking_long::CHUNKER_SHORT,
+                        &structure::Structure::default(),
+                    )?;
                     file_timing.write_ms += write_ms;
                     timings.write_ms += write_ms;
                     empty_files.push(file.relative_path.clone());
                 } else {
-                    // Nothing is written until every vector exists: a file that fails halfway
-                    // leaves no trace in the index, so it is never mistaken for an analysed one.
-                    let embed_started = Instant::now();
-                    let embedded = embed_chunks(
-                        gateway,
-                        server_url,
-                        embedding_alias,
-                        &chunks,
-                        &mut model_warm,
-                        &|batch_index, batch_total| {
-                            on_progress(IndexProgress {
-                                processed_files: position,
-                                total_files,
-                                batch_index,
-                                batch_total,
-                                reading_names: false,
-                            })
-                        },
-                    )
-                    .await;
-                    // Counted whether or not it worked: a request that ran into its deadline is
-                    // exactly the time worth knowing about.
-                    file_timing.embed_ms = elapsed_ms(embed_started.elapsed());
-                    timings.embed_ms += file_timing.embed_ms;
-                    let embeddings = match embedded {
-                        Ok(vectors) => {
-                            consecutive_failures = 0;
-                            timings.embed_batches += plan_batches(&chunks).len();
-                            timings.embedded_chars += chunks
-                                .iter()
-                                .map(|chunk| chunk.text.chars().count())
-                                .sum::<usize>();
-                            vectors
-                        }
-                        Err(error) if is_about_this_file(&error) => {
-                            consecutive_failures += 1;
-                            if consecutive_failures >= MAX_CONSECUTIVE_FAILED_FILES {
-                                return Err(error);
-                            }
-                            failed_files.push(FailedFile {
-                                path: file.relative_path.clone(),
-                                code: error.code().to_string(),
-                                data: error.data(),
-                            });
-                            continue;
-                        }
-                        Err(error) => return Err(error),
-                    };
-                    let (engine, version) = ocr_identity(ocr, document.used_ocr);
+                    // A passage whose id and text are exactly those already stored for this file
+                    // keeps its stored vector: a file read again for another reason (its structure
+                    // changed version, one paragraph was edited) is not embedded again as a whole.
+                    // The others are stored without a vector; phase 2 computes it.
+                    let stored = index.chunks_for_document(&file.relative_path)?;
+                    let stored_prefixes = index.index_prefixes_of(&file.relative_path)?;
+                    let reusable: HashMap<&str, &index_store::StoredChunk> = stored
+                        .iter()
+                        .filter(|old| !old.embedding.is_empty())
+                        .map(|old| (old.chunk_id.as_str(), old))
+                        .collect();
+                    let vectors: Vec<Option<Vec<f32>>> = chunks
+                        .iter()
+                        .map(|chunk| {
+                            reusable
+                                .get(chunk.chunk_id.as_str())
+                                .filter(|old| {
+                                    old.text == chunk.text
+                                        && chunk.index_text
+                                            == stored_prefixes
+                                                .get(&chunk.chunk_id)
+                                                .map(|prefix| format!("{prefix}\n{}", chunk.text))
+                                })
+                                .map(|old| old.embedding.clone())
+                        })
+                        .collect();
                     let (written, write_ms) = timed_ms(|| {
-                        write_document(
+                        write_document_pending(
                             index,
                             &mut knowledge,
                             &file.relative_path,
                             &sha256,
-                            false,
                             &chunks,
-                            &embeddings,
+                            &vectors,
                             engine,
                             version,
                         )
                     });
                     written?;
+                    index.replace_structure(
+                        &file.relative_path,
+                        structure::STRUCTURE_VERSION,
+                        chunker,
+                        &built,
+                    )?;
                     file_timing.write_ms += write_ms;
                     timings.write_ms += write_ms;
                     indexed_files += 1;
@@ -490,10 +688,23 @@ pub async fn run_with_knowledge(
                 }
             }
             Err(ExtractionError::UnsupportedExtension) => continue,
+            // A file that cannot be read does not stop the others: it is named, and the next pass
+            // tries it again.
             Err(_) => {
-                return Err(AppError::ExtractionFailed {
+                let error = AppError::ExtractionFailed {
                     path: file.relative_path.clone(),
-                })
+                };
+                failed_files.push(FailedFile {
+                    path: file.relative_path.clone(),
+                    code: error.code().to_string(),
+                    data: error.data(),
+                });
+            }
+        }
+        // The document is stored: the pages kept for it are no longer needed.
+        if let Some(cache) = &page_cache {
+            if index.stored_hash(&file.relative_path)?.as_deref() == Some(sha256.as_str()) {
+                cache.forget(&file.relative_path);
             }
         }
     }
@@ -505,40 +716,219 @@ pub async fn run_with_knowledge(
         file_started,
     );
 
-    // Documents analysed before this pass that the knowledge base has not read as they are now:
-    // local, from the stored text, no request. Failing here costs nothing but a note in the summary.
-    let knowledge_summary = match knowledge.as_mut() {
-        Some(context) if context.mode.reads_files() => {
-            let announce = |progress: backfill::RefreshProgress| {
+    // The names of documents analysed earlier and the profile of every document, from the text that is
+    // stored now: local, no request. A pass stopped by the user does not spend time on them; the next
+    // one does. Failing here costs nothing but a note in the summary.
+    let mut knowledge_summary = None;
+    let mut profile = None;
+    if !was_cancelled {
+        knowledge_summary = match knowledge.as_mut() {
+            Some(context) if context.mode.reads_files() => {
+                let announce = |progress: backfill::RefreshProgress| {
+                    on_progress(IndexProgress {
+                        processed_files: progress.done,
+                        total_files: progress.total,
+                        reading_names: true,
+                        ..IndexProgress::default()
+                    })
+                };
+                if backfill::refresh_documents(index, context, &|| false, &announce).is_err() {
+                    context.note_failed("");
+                }
+                Some(context.summary(index.connection()))
+            }
+            _ => None,
+        };
+        profile = crate::file_profile::store::run_documents(
+            index,
+            work_folder,
+            knowledge.as_deref(),
+            locale,
+        );
+        // The card of each document, from the text, structure and profile just stored. A failure costs
+        // the cards of this pass, never the pass.
+        let _ = crate::cards::build_missing(index);
+    }
+
+    // ------------------------------------------------------------ phase 2: the vectors, batch by batch
+    let mut model_warm = false;
+    let mut consecutive_failures = 0usize;
+    let mut refused: Vec<String> = Vec::new();
+    let mut phase_two_error: Option<AppError> = None;
+    let mut vectors_started = false;
+    if !was_cancelled {
+        let counts = index.vector_counts()?;
+        let mut done = counts.done;
+        let total = counts.total;
+        if done < total {
+            let deadlines = gateway.embedding_deadlines();
+            let announce = |done: usize, total: usize| {
                 on_progress(IndexProgress {
-                    processed_files: progress.done,
-                    total_files: progress.total,
-                    batch_index: 0,
-                    batch_total: 0,
-                    reading_names: true,
+                    processed_files: total_files,
+                    total_files,
+                    vectors_done: done,
+                    vectors_total: total,
+                    ..IndexProgress::default()
                 })
             };
-            if backfill::refresh_documents(index, context, &|| false, &announce).is_err() {
-                context.note_failed("");
+            vectors_started = true;
+            announce(done, total);
+            loop {
+                if cancelled() {
+                    was_cancelled = true;
+                    break;
+                }
+                let mut batch = index.pending_chunks_excluding(EMBEDDING_BATCH_INPUTS, &refused)?;
+                if batch.is_empty() {
+                    break;
+                }
+                let lengths: Vec<usize> = batch
+                    .iter()
+                    .map(|pending| pending.text.chars().count())
+                    .collect();
+                let keep = batch_len(&lengths);
+                let characters: usize = lengths[..keep].iter().sum();
+                batch.truncate(keep);
+                let texts: Vec<String> = batch.iter().map(|pending| pending.text.clone()).collect();
+                let deadline = if model_warm {
+                    deadlines.batch
+                } else {
+                    deadlines.first_batch
+                };
+                let started = Instant::now();
+                let embedded = gateway
+                    .embed_batch(server_url, embedding_alias, &texts, deadline)
+                    .await;
+                timings.embed_ms += elapsed_ms(started.elapsed());
+                match embedded {
+                    Ok(vectors) => {
+                        if !model_warm {
+                            // The first vectors of the pass: they say what the model returns now. If
+                            // the stored ones have another length, the model behind the name changed.
+                            let dimension = vectors.first().map_or(0, Vec::len);
+                            if dimension > 0 {
+                                if index
+                                    .vector_dimension_in_use()?
+                                    .is_some_and(|stored| stored != dimension)
+                                {
+                                    index.reset_vectors()?;
+                                    done = index.vector_counts()?.done;
+                                }
+                                index.set_embedding_info(embedding_alias, dimension)?;
+                            }
+                        }
+                        model_warm = true;
+                        consecutive_failures = 0;
+                        let stored: Vec<(String, Vec<f32>)> = batch
+                            .iter()
+                            .map(|pending| pending.chunk_id.clone())
+                            .zip(vectors)
+                            .collect();
+                        index.store_vectors(&stored)?;
+                        timings.embed_batches += 1;
+                        timings.embedded_chars += characters;
+                        done += stored.len();
+                        announce(done, total);
+                    }
+                    Err(error) if is_about_this_file(&error) => {
+                        // A batch mixes files, so the one that made it fail is not known: each file
+                        // of the batch is tried on its own, and only the file the server keeps
+                        // refusing is set aside. Its text stays in the index and is searchable by
+                        // words; the next pass tries its vectors again.
+                        let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
+                        for (position, pending) in batch.iter().enumerate() {
+                            match groups
+                                .iter_mut()
+                                .find(|(path, _)| *path == pending.relative_path)
+                            {
+                                Some((_, members)) => members.push(position),
+                                None => {
+                                    groups.push((pending.relative_path.clone(), vec![position]))
+                                }
+                            }
+                        }
+                        let mut first_error = Some(error);
+                        for (path, members) in groups {
+                            let outcome = match first_error.take() {
+                                // A batch of one file already failed as a whole: that is its answer.
+                                Some(error) if batch.iter().all(|p| p.relative_path == path) => {
+                                    Err(error)
+                                }
+                                _ => {
+                                    let group: Vec<String> =
+                                        members.iter().map(|m| texts[*m].clone()).collect();
+                                    let started = Instant::now();
+                                    let result = gateway
+                                        .embed_batch(server_url, embedding_alias, &group, deadline)
+                                        .await;
+                                    timings.embed_ms += elapsed_ms(started.elapsed());
+                                    result
+                                }
+                            };
+                            match outcome {
+                                Ok(vectors) => {
+                                    consecutive_failures = 0;
+                                    let stored: Vec<(String, Vec<f32>)> = members
+                                        .iter()
+                                        .map(|m| batch[*m].chunk_id.clone())
+                                        .zip(vectors)
+                                        .collect();
+                                    index.store_vectors(&stored)?;
+                                    timings.embed_batches += 1;
+                                    timings.embedded_chars += members
+                                        .iter()
+                                        .map(|m| texts[*m].chars().count())
+                                        .sum::<usize>();
+                                    done += stored.len();
+                                    announce(done, total);
+                                }
+                                Err(error) if is_about_this_file(&error) => {
+                                    consecutive_failures += 1;
+                                    failed_files.push(FailedFile {
+                                        path: path.clone(),
+                                        code: error.code().to_string(),
+                                        data: error.data(),
+                                    });
+                                    refused.push(path);
+                                    if consecutive_failures >= MAX_CONSECUTIVE_FAILED_FILES {
+                                        phase_two_error = Some(error);
+                                        break;
+                                    }
+                                }
+                                Err(error) => {
+                                    phase_two_error = Some(error);
+                                    break;
+                                }
+                            }
+                        }
+                        if phase_two_error.is_some() {
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        phase_two_error = Some(error);
+                        break;
+                    }
+                }
             }
-            Some(context.summary(index.connection()))
         }
-        _ => None,
-    };
+    }
 
-    // The profile of every analysed document, from what is already stored: nothing is read again but the
-    // properties of a file that changed. A failure costs nothing but a missing summary.
-    let profile =
-        crate::file_profile::store::run_documents(index, work_folder, knowledge.as_deref(), locale);
-
+    let remaining = index.vector_counts()?;
+    // The last report keeps the share of vectors the pass reached, so the bar never goes back.
     on_progress(IndexProgress {
         processed_files: total_files,
         total_files,
-        batch_index: 0,
-        batch_total: 0,
-        reading_names: false,
+        vectors_done: if vectors_started { remaining.done } else { 0 },
+        vectors_total: if vectors_started { remaining.total } else { 0 },
+        ..IndexProgress::default()
     });
     timings.total_ms = pass_timer.total_ms();
+
+    // A server that is gone stops the pass with an error, as it always did; everything written stays.
+    if let Some(error) = phase_two_error {
+        return Err(error);
+    }
 
     Ok(IndexSummary {
         scanned_files: total_files,
@@ -557,6 +947,8 @@ pub async fn run_with_knowledge(
         timings: Some(timings),
         knowledge: knowledge_summary,
         profile,
+        cancelled: was_cancelled,
+        vectors_pending: remaining.total - remaining.done,
     })
 }
 
@@ -634,10 +1026,7 @@ fn unavailable_capabilities(
     missing
 }
 
-fn ocr_identity<'a>(
-    ocr: Option<&'a dyn OcrProvider>,
-    used_ocr: bool,
-) -> (Option<&'a str>, Option<&'a str>) {
+fn ocr_identity(ocr: Option<&dyn OcrProvider>, used_ocr: bool) -> (Option<&str>, Option<&str>) {
     if used_ocr {
         ocr.map(|provider| (Some(provider.id()), Some(provider.version())))
             .unwrap_or((None, None))
@@ -675,7 +1064,25 @@ fn should_skip(
 
     // An empty scan stored before the engine existed should be retried now that we have one.
     let retry_empty = stored.empty && ocr.is_some() && stored.ocr_engine.is_none();
-    Ok(!retry_empty)
+    if retry_empty {
+        return Ok(false);
+    }
+    // A document whose structure was never read, or was read by an older detection, is read again;
+    // its vectors are reused, so this costs the extraction and not the embedding.
+    let structure_current = index
+        .structure_version(&file.relative_path)?
+        .is_some_and(|version| version >= structure::STRUCTURE_VERSION);
+    if !structure_current {
+        return Ok(false);
+    }
+    // A document stored with more text than the long threshold must have been cut by the chunker for
+    // long documents; one cut by the old chunker is read again (a short one never is for this).
+    let expected = if index.stored_chars(&file.relative_path)? > chunking::LONG_DOCUMENT_CHARS {
+        chunking_long::CHUNKER_LONG
+    } else {
+        chunking_long::CHUNKER_SHORT
+    };
+    Ok(index.stored_chunker(&file.relative_path)?.unwrap_or(0) >= expected)
 }
 
 fn hash_file(file: &DiscoveredFile) -> std::io::Result<String> {
@@ -697,70 +1104,23 @@ fn is_about_this_file(error: &AppError) -> bool {
     }
 }
 
-/// Cut the chunks into the requests that will carry them: at most `EMBEDDING_BATCH_INPUTS`
-/// chunks and `EMBEDDING_BATCH_CHARS` characters each, in order, none empty. A chunk longer than
-/// the character cap still travels, alone.
-fn plan_batches(chunks: &[chunking::Chunk]) -> Vec<std::ops::Range<usize>> {
-    let mut batches = Vec::new();
-    let mut start = 0usize;
+/// How many of the passages waiting, taken in order from the front, make one request: at most
+/// `EMBEDDING_BATCH_INPUTS` of them and `EMBEDDING_BATCH_CHARS` characters (`docs/RETRIEVAL.md`: the
+/// latency of a request grows with its size and the request has a deadline). A passage longer than
+/// the character cap still travels, alone. `lengths` are the characters of each waiting passage.
+fn batch_len(lengths: &[usize]) -> usize {
+    let mut taken = 0usize;
     let mut chars = 0usize;
-    for (position, chunk) in chunks.iter().enumerate() {
-        let chunk_chars = chunk.text.chars().count();
-        let in_batch = position - start;
-        if in_batch > 0
-            && (in_batch + 1 > EMBEDDING_BATCH_INPUTS
-                || chars + chunk_chars > EMBEDDING_BATCH_CHARS)
+    for length in lengths {
+        if taken > 0
+            && (taken + 1 > EMBEDDING_BATCH_INPUTS || chars + length > EMBEDDING_BATCH_CHARS)
         {
-            batches.push(start..position);
-            start = position;
-            chars = 0;
+            break;
         }
-        chars += chunk_chars;
+        chars += length;
+        taken += 1;
     }
-    if start < chunks.len() {
-        batches.push(start..chunks.len());
-    }
-    batches
-}
-
-/// Send chunk text to the gateway in small batches (`docs/RETRIEVAL.md`): the latency of one
-/// request grows with its size and the request has a deadline, so a long document is many short
-/// calls rather than one that can run past it. The vectors come back in chunk order.
-///
-/// `on_batch` receives (batches done, batches in all): once before the first, then after each.
-async fn embed_chunks(
-    gateway: &GatewayClient,
-    server_url: &str,
-    embedding_alias: &str,
-    chunks: &[chunking::Chunk],
-    model_warm: &mut bool,
-    on_batch: &(dyn Fn(usize, usize) + Sync),
-) -> Result<Vec<Vec<f32>>, AppError> {
-    let batches = plan_batches(chunks);
-    let deadlines = gateway.embedding_deadlines();
-    let mut vectors = Vec::with_capacity(chunks.len());
-
-    on_batch(0, batches.len());
-    for (done, range) in batches.iter().enumerate() {
-        let texts: Vec<String> = chunks[range.clone()]
-            .iter()
-            .map(|chunk| chunk.text.clone())
-            .collect();
-        let deadline = if *model_warm {
-            deadlines.batch
-        } else {
-            deadlines.first_batch
-        };
-        vectors.extend(
-            gateway
-                .embed_batch(server_url, embedding_alias, &texts, deadline)
-                .await?,
-        );
-        *model_warm = true;
-        on_batch(done + 1, batches.len());
-    }
-
-    Ok(vectors)
+    taken
 }
 
 #[cfg(test)]
@@ -807,53 +1167,30 @@ mod tests {
         );
     }
 
-    fn chunk_of(chars: usize) -> chunking::Chunk {
-        chunking::Chunk {
-            chunk_id: "a.txt#p1#s1".into(),
-            relative_path: "a.txt".into(),
-            page_number: 1,
-            section: 1,
-            text: "x".repeat(chars),
-            origin: PageOrigin::TextLayer,
-            confidence: None,
-        }
+    #[test]
+    fn short_passages_are_cut_by_count() {
+        let lengths = vec![100usize; 40];
+        assert_eq!(batch_len(&lengths), 16);
+        assert_eq!(batch_len(&lengths[16..]), 16);
+        assert_eq!(batch_len(&lengths[32..]), 8);
     }
 
     #[test]
-    fn short_chunks_are_cut_by_count() {
-        let chunks: Vec<_> = (0..40).map(|_| chunk_of(100)).collect();
-
-        let batches = plan_batches(&chunks);
-
-        assert_eq!(batches, vec![0..16, 16..32, 32..40]);
+    fn long_passages_are_cut_by_characters_before_the_count_is_reached() {
+        let lengths = vec![6_000usize; 10];
+        assert_eq!(batch_len(&lengths), 3);
     }
 
     #[test]
-    fn long_chunks_are_cut_by_characters_before_the_count_is_reached() {
-        let chunks: Vec<_> = (0..10).map(|_| chunk_of(6_000)).collect();
-
-        let batches = plan_batches(&chunks);
-
-        assert!(batches.iter().all(|range| range.len() <= 3));
-        assert_eq!(batches.iter().map(|range| range.len()).sum::<usize>(), 10);
+    fn a_passage_over_the_character_cap_travels_alone_rather_than_being_dropped() {
+        let lengths = [EMBEDDING_BATCH_CHARS + 1, 100, 100];
+        assert_eq!(batch_len(&lengths), 1);
+        assert_eq!(batch_len(&lengths[1..]), 2);
     }
 
     #[test]
-    fn a_chunk_over_the_character_cap_travels_alone_rather_than_being_dropped() {
-        let chunks = vec![
-            chunk_of(100),
-            chunk_of(EMBEDDING_BATCH_CHARS + 1),
-            chunk_of(100),
-        ];
-
-        let batches = plan_batches(&chunks);
-
-        assert_eq!(batches, vec![0..1, 1..2, 2..3]);
-    }
-
-    #[test]
-    fn no_chunks_means_no_request() {
-        assert!(plan_batches(&[]).is_empty());
+    fn nothing_waiting_means_no_request() {
+        assert_eq!(batch_len(&[]), 0);
     }
 
     #[test]

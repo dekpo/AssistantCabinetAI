@@ -22,7 +22,7 @@ use rusqlite::{params, Connection};
 use super::contracts::{
     CardEntity, Coverage, DateRange, EntityFilter, Facet, Facets, FileCard, FileHit, FinderQuery,
     FinderResult, FinderScope, InventoryFile, Locator, Reason, TextSearch, DEFAULT_LIMIT,
-    MAX_LIMIT,
+    MAX_LIMIT, MAX_LOCATORS,
 };
 use crate::discovery::is_supported;
 use crate::error::AppError;
@@ -93,6 +93,10 @@ struct Found {
     reasons: Vec<Reason>,
     /// The first passage that matched: `(chunk id, page, section)`.
     passage: Option<(String, i64, i64)>,
+    /// The first passages that matched, in reading order, at most `MAX_LOCATORS`.
+    passages: Vec<(String, i64, i64)>,
+    /// How many passages matched in all.
+    passage_total: usize,
 }
 
 impl Found {
@@ -558,7 +562,8 @@ fn by_passage(
         .prepare(
             "SELECT chunks.relative_path, chunks.chunk_id, chunks.page_number, chunks.section
              FROM chunks_fts JOIN chunks ON chunks.chunk_id = chunks_fts.chunk_id
-             WHERE chunks_fts MATCH ?1",
+             WHERE chunks_fts MATCH ?1
+             ORDER BY chunks.relative_path, chunks.page_number, chunks.section",
         )
         .map_err(unavailable)?;
     let rows = statement
@@ -580,6 +585,10 @@ fn by_passage(
         }
         let entry = matches.entry(path).or_default();
         entry.add("word", "passage");
+        entry.passage_total += 1;
+        if entry.passages.len() < MAX_LOCATORS {
+            entry.passages.push((chunk_id.clone(), page, section));
+        }
         let earlier = entry
             .passage
             .as_ref()
@@ -863,6 +872,20 @@ fn entity_facet(
     Ok(facets)
 }
 
+/// The title of the section a passage starts in, by one lookup on the stored structure.
+fn section_label_of(connection: &Connection, chunk_id: &str) -> Option<String> {
+    connection
+        .query_row(
+            "SELECT s.title FROM chunk_sections c
+             JOIN doc_sections s ON s.relative_path = c.relative_path AND s.position = c.position
+             WHERE c.chunk_id = ?1",
+            [chunk_id],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .filter(|title| !title.is_empty())
+}
+
 fn build_hits(
     connection: &Connection,
     domain: Domain,
@@ -886,7 +909,8 @@ fn build_hits(
                 excerpt_of(connection, chunk_id, terms, last_is_prefix),
                 Some(Locator {
                     page: Some(*page_number),
-                    section: Some(*section),
+                    ordinal: Some(*section),
+                    section_label: section_label_of(connection, chunk_id),
                 }),
             ),
             None => (None, None),
@@ -905,6 +929,20 @@ fn build_hits(
             reasons: found.reasons.clone(),
             excerpt,
             locator,
+            locators: if paths_only {
+                Vec::new()
+            } else {
+                found
+                    .passages
+                    .iter()
+                    .map(|(chunk_id, page_number, ordinal)| Locator {
+                        page: Some(*page_number),
+                        ordinal: Some(*ordinal),
+                        section_label: section_label_of(connection, chunk_id),
+                    })
+                    .collect()
+            },
+            locators_total: found.passage_total,
         });
     }
     Ok(hits)

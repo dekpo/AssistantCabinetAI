@@ -166,6 +166,17 @@ pub fn answer_in(
                 business_type: hit.card.business_type,
                 excerpt: hit.excerpt,
                 page: hit.locator.and_then(|locator| locator.page),
+                pages: {
+                    let mut pages: Vec<i64> = hit
+                        .locators
+                        .iter()
+                        .filter_map(|locator| locator.page)
+                        .collect();
+                    pages.sort_unstable();
+                    pages.dedup();
+                    pages
+                },
+                matches_total: hit.locators_total,
             });
         } else {
             others.push(hit.relative_path);

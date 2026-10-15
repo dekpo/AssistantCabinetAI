@@ -87,6 +87,9 @@ pub enum OcrError {
     /// The page took longer than the per-page budget.
     #[error("timeout")]
     Timeout,
+    /// The user stopped the pass: the page was not read, and is not an error of the document.
+    #[error("stopped")]
+    Stopped,
 }
 
 /// Test double. Public so integration tests (`tests/end_to_end_retrieval.rs`) can inject it

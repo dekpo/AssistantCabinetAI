@@ -10,7 +10,7 @@
 //! pass forgets every document that is not in front of it. The consequence to keep in mind: after
 //! switching folders, the index still describes the old one until that pass has run.
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::chunking::Chunk;
 use crate::error::AppError;
@@ -45,6 +45,7 @@ pub fn configure_connection(connection: &Connection) -> Result<(), AppError> {
 
 pub struct IndexStore {
     connection: Connection,
+    path: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +115,25 @@ pub enum RefreshWrite {
     Stale,
 }
 
+/// The passages still waiting for their vector, in reading order, found without scanning the table.
+const PENDING_INDEX: &str = "CREATE INDEX IF NOT EXISTS chunks_pending
+    ON chunks (relative_path, page_number, section) WHERE embedding IS NULL;";
+
+/// How many passages have their vector, out of how many.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VectorCounts {
+    pub done: usize,
+    pub total: usize,
+}
+
+/// A passage that has no vector yet, with the text the model is given for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingChunk {
+    pub chunk_id: String,
+    pub relative_path: String,
+    pub text: String,
+}
+
 impl IndexStore {
     pub fn open_at(path: &std::path::Path) -> Result<Self, AppError> {
         if let Some(parent) = path.parent() {
@@ -122,7 +142,10 @@ impl IndexStore {
         let connection = Connection::open(path).map_err(|_| AppError::IndexUnavailable)?;
         configure_connection(&connection)?;
         Self::migrate(&connection)?;
-        Ok(Self { connection })
+        Ok(Self {
+            connection,
+            path: path.to_path_buf(),
+        })
     }
 
     pub fn open_in_app_data(directory: &std::path::Path) -> Result<Self, AppError> {
@@ -144,7 +167,7 @@ impl IndexStore {
                     page_number INTEGER NOT NULL,
                     section INTEGER NOT NULL,
                     text TEXT NOT NULL,
-                    embedding BLOB NOT NULL
+                    embedding BLOB
                 );
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
                     chunk_id UNINDEXED,
@@ -181,6 +204,82 @@ impl IndexStore {
                 "CREATE INDEX IF NOT EXISTS chunks_by_document ON chunks (relative_path);",
             )
             .map_err(|_| AppError::IndexUnavailable)?;
+        // A passage whose vector is not computed yet has none (NULL): the Analyse writes the text first
+        // and the vectors afterwards. An index written before that has the column NOT NULL and is left
+        // as it is until an Analyse upgrades it (`upgrade_layout`).
+        if Self::layout_is_nullable(connection) {
+            connection
+                .execute_batch(PENDING_INDEX)
+                .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        // One card per document (`cards`): a short digest built with no model, indexed by words and
+        // embedded like a passage, and never a passage of the document.
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE IF NOT EXISTS document_cards (
+                    relative_path TEXT PRIMARY KEY,
+                    sha256 TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    text TEXT NOT NULL,
+                    embedding BLOB
+                );
+                CREATE VIRTUAL TABLE IF NOT EXISTS document_cards_fts USING fts5(
+                    relative_path UNINDEXED,
+                    text
+                );
+                ",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        // The pages of a scan already recognised by a pass that did not finish (`ocr_resume`).
+        connection
+            .execute_batch(crate::ocr_resume::SCHEMA)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        // The structure of the documents (`structure`): purely additive tables, beside the chunks. A
+        // document with no `doc_structure` row, or an older version, is read again by the next Analyse
+        // (its vectors are reused); until then the search works as before, with no section label.
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE IF NOT EXISTS doc_structure (
+                    relative_path TEXT PRIMARY KEY,
+                    version INTEGER NOT NULL,
+                    chunker INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE IF NOT EXISTS chunk_index_text (
+                    chunk_id TEXT PRIMARY KEY,
+                    relative_path TEXT NOT NULL,
+                    prefix TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS chunk_index_text_by_document
+                    ON chunk_index_text (relative_path);
+                CREATE TABLE IF NOT EXISTS doc_sections (
+                    relative_path TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    parent INTEGER,
+                    level INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    first_page INTEGER NOT NULL,
+                    last_page INTEGER NOT NULL,
+                    source TEXT NOT NULL,
+                    PRIMARY KEY (relative_path, position)
+                );
+                CREATE TABLE IF NOT EXISTS chunk_sections (
+                    chunk_id TEXT PRIMARY KEY,
+                    relative_path TEXT NOT NULL,
+                    position INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS chunk_sections_by_document
+                    ON chunk_sections (relative_path);
+                ",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        Self::ensure_column(
+            connection,
+            "doc_structure",
+            "chunker",
+            "INTEGER NOT NULL DEFAULT 1",
+        )?;
         // After the index's own tables: the knowledge base lives in the same file and is purely
         // additive, so a database from before it exists is opened and extended, never rewritten.
         // A schema that cannot be completed leaves the file in a state nobody has tested, so it is
@@ -299,6 +398,657 @@ impl IndexStore {
         .map(|_| ())
     }
 
+    fn layout_is_nullable(connection: &Connection) -> bool {
+        let Ok(mut statement) = connection.prepare("PRAGMA table_info(chunks)") else {
+            return false;
+        };
+        let Ok(rows) = statement.query_map([], |row| {
+            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(3)?))
+        }) else {
+            return false;
+        };
+        let nullable = rows
+            .flatten()
+            .any(|(name, not_null)| name == "embedding" && not_null == 0);
+        nullable
+    }
+
+    /// Whether a passage may be stored before its vector (the layout of an index made or upgraded by
+    /// this version). An index from before is not, and keeps working as it did until the Analyse
+    /// upgrades it.
+    pub fn vectors_nullable(&self) -> bool {
+        Self::layout_is_nullable(&self.connection)
+    }
+
+    /// Bring an index from before to the layout where a vector may be absent: the passages and their
+    /// vectors are copied as they are, in one transaction, and the word index is not touched. Called by
+    /// the Analyse the user started, never at launch. `false` when there was nothing to do.
+    pub fn upgrade_layout(&mut self) -> Result<bool, AppError> {
+        if self.vectors_nullable() {
+            return Ok(false);
+        }
+        let tx = self.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE chunks_next (
+                chunk_id TEXT PRIMARY KEY,
+                relative_path TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                section INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                embedding BLOB,
+                origin TEXT NOT NULL DEFAULT 'text_layer',
+                confidence REAL
+             );
+             INSERT INTO chunks_next (chunk_id, relative_path, page_number, section, text, embedding, origin, confidence)
+                SELECT chunk_id, relative_path, page_number, section, text, embedding, origin, confidence FROM chunks;
+             DROP TABLE chunks;
+             ALTER TABLE chunks_next RENAME TO chunks;
+             CREATE INDEX IF NOT EXISTS chunks_by_document ON chunks (relative_path);",
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.execute_batch(PENDING_INDEX)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(true)
+    }
+
+    /// The embedding model and the dimension the stored vectors were made with, if recorded. Vectors of
+    /// two models cannot be compared, so the index says which one made its own.
+    pub fn embedding_info(&self) -> Result<Option<(String, usize)>, AppError> {
+        let read = |key: &str| -> Result<Option<String>, AppError> {
+            self.connection
+                .query_row(
+                    "SELECT value FROM file_profile_meta WHERE key = ?1",
+                    [key],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|_| AppError::IndexUnavailable)
+        };
+        let Some(model) = read("embedding_model")? else {
+            return Ok(None);
+        };
+        let dimension = read("embedding_dimension")?
+            .and_then(|d| d.parse().ok())
+            .unwrap_or(0);
+        Ok(Some((model, dimension)))
+    }
+
+    pub fn set_embedding_info(&mut self, model: &str, dimension: usize) -> Result<(), AppError> {
+        for (key, value) in [
+            ("embedding_model", model.to_string()),
+            ("embedding_dimension", dimension.to_string()),
+        ] {
+            self.connection
+                .execute(
+                    "INSERT OR REPLACE INTO file_profile_meta (key, value) VALUES (?1, ?2)",
+                    rusqlite::params![key, value],
+                )
+                .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        Ok(())
+    }
+
+    /// The length of the vectors already stored, if any is.
+    pub fn vector_dimension_in_use(&self) -> Result<Option<usize>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT LENGTH(embedding) / 4 FROM chunks WHERE embedding IS NOT NULL LIMIT 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map(|found| found.map(|d| d as usize))
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// Forget every vector, of the passages and of the cards: they wait to be computed again, and the
+    /// text, the words and everything else stay. Done by the Analyse when the embedding model changed.
+    pub fn reset_vectors(&mut self) -> Result<(), AppError> {
+        let tx = self.transaction()?;
+        tx.execute_batch(
+            "UPDATE chunks SET embedding = NULL; UPDATE document_cards SET embedding = NULL;",
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// Where the index file is, so a worker that needs its own connection can open one.
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    /// How many passages have their vector, out of all of them.
+    pub fn vector_counts(&self) -> Result<VectorCounts, AppError> {
+        self.counts(
+            "SELECT COUNT(*), COALESCE(SUM(embedding IS NOT NULL), 0) FROM chunks",
+            None,
+        )
+    }
+
+    /// The same for one document.
+    pub fn vector_counts_of(&self, relative_path: &str) -> Result<VectorCounts, AppError> {
+        self.counts(
+            "SELECT COUNT(*), COALESCE(SUM(embedding IS NOT NULL), 0) FROM chunks WHERE relative_path = ?1",
+            Some(relative_path),
+        )
+    }
+
+    fn counts(&self, sql: &str, path: Option<&str>) -> Result<VectorCounts, AppError> {
+        let read = |row: &rusqlite::Row<'_>| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?));
+        let (total, done) = match path {
+            Some(path) => self.connection.query_row(sql, [path], read),
+            None => self.connection.query_row(sql, [], read),
+        }
+        .map_err(|_| AppError::IndexUnavailable)?;
+        // The cards are computed like the passages and count with them.
+        let cards_sql = match path {
+            Some(_) => "SELECT COUNT(*), COALESCE(SUM(embedding IS NOT NULL), 0) FROM document_cards WHERE relative_path = ?1",
+            None => "SELECT COUNT(*), COALESCE(SUM(embedding IS NOT NULL), 0) FROM document_cards",
+        };
+        let (card_total, card_done) = match path {
+            Some(path) => self.connection.query_row(cards_sql, [path], read),
+            None => self.connection.query_row(cards_sql, [], read),
+        }
+        .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(VectorCounts {
+            done: (done + card_done) as usize,
+            total: (total + card_total) as usize,
+        })
+    }
+
+    /// The next passages that have no vector, by file, page and rank: the order the vectors are
+    /// computed in, so a stopped pass leaves whole files done.
+    pub fn pending_chunks(&self, limit: usize) -> Result<Vec<PendingChunk>, AppError> {
+        self.pending_chunks_excluding(limit, &[])
+    }
+
+    /// `pending_chunks`, leaving out some files (the ones the server refused in this pass).
+    pub fn pending_chunks_excluding(
+        &self,
+        limit: usize,
+        excluded: &[String],
+    ) -> Result<Vec<PendingChunk>, AppError> {
+        let marks = vec!["?"; excluded.len()].join(",");
+        let filter = if excluded.is_empty() {
+            String::new()
+        } else {
+            format!("AND c.relative_path NOT IN ({marks})")
+        };
+        // The cards first: they are few, and a plan or a summary can use them before the passages.
+        let card_filter = filter.replace("c.relative_path", "relative_path");
+        let card_sql = format!(
+            "SELECT relative_path, substr(text, 1, {CARD_EMBED_CHARS}) FROM document_cards
+             WHERE embedding IS NULL {card_filter} ORDER BY relative_path LIMIT {limit}"
+        );
+        let mut card_statement = self
+            .connection
+            .prepare(&card_sql)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let cards = card_statement
+            .query_map(rusqlite::params_from_iter(excluded.iter()), |row| {
+                let path: String = row.get(0)?;
+                Ok(PendingChunk {
+                    chunk_id: format!("{CARD_ID_PREFIX}{path}"),
+                    relative_path: path,
+                    text: row.get(1)?,
+                })
+            })
+            .map_err(|_| AppError::IndexUnavailable)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        if !cards.is_empty() {
+            return Ok(cards);
+        }
+        let sql = format!(
+            "SELECT c.chunk_id, c.relative_path, c.text, p.prefix
+             FROM chunks c LEFT JOIN chunk_index_text p ON p.chunk_id = c.chunk_id
+             WHERE c.embedding IS NULL {filter}
+             ORDER BY c.relative_path, c.page_number, c.section
+             LIMIT {limit}"
+        );
+        let mut statement = self
+            .connection
+            .prepare(&sql)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map(rusqlite::params_from_iter(excluded.iter()), |row| {
+                let text: String = row.get(2)?;
+                let prefix: Option<String> = row.get(3)?;
+                Ok(PendingChunk {
+                    chunk_id: row.get(0)?,
+                    relative_path: row.get(1)?,
+                    text: match prefix {
+                        Some(prefix) => format!("{prefix}\n{text}"),
+                        None => text,
+                    },
+                })
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// Store one batch of vectors in one transaction. A passage that is gone, or that already has a
+    /// vector, is skipped: the batch was computed for what was stored a moment ago.
+    pub fn store_vectors(&mut self, vectors: &[(String, Vec<f32>)]) -> Result<(), AppError> {
+        let tx = self.transaction()?;
+        for (chunk_id, vector) in vectors {
+            if let Some(path) = chunk_id.strip_prefix(CARD_ID_PREFIX) {
+                tx.execute(
+                    "UPDATE document_cards SET embedding = ?1 WHERE relative_path = ?2 AND embedding IS NULL",
+                    rusqlite::params![encode_vector(vector), path],
+                )
+                .map_err(|_| AppError::IndexUnavailable)?;
+                continue;
+            }
+            tx.execute(
+                "UPDATE chunks SET embedding = ?1 WHERE chunk_id = ?2 AND embedding IS NULL",
+                rusqlite::params![encode_vector(vector), chunk_id],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        tx.commit().map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// `replace_document`, for a pass that writes the text first: `vectors` runs alongside `chunks`, and
+    /// a passage with `None` is stored without a vector and gets it from a later batch. No knowledge
+    /// delta: the document's knowledge is dropped, as in `replace_document_plain`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_document_pending_plain(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        vectors: &[Option<Vec<f32>>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+    ) -> Result<(), AppError> {
+        let tx = self.transaction()?;
+        let borrowed: Vec<Option<&[f32]>> = vectors.iter().map(|v| v.as_deref()).collect();
+        Self::write_document_rows(
+            &tx,
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            &borrowed,
+            ocr_engine,
+            ocr_engine_version,
+        )?;
+        Self::forget_source(
+            &tx,
+            &SourceRef {
+                domain: Domain::Documents,
+                relative_path: relative_path.to_string(),
+                content_id: sha256.to_string(),
+            },
+        )?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// `replace_document`, for a pass that writes the text first: the knowledge base is told that the
+    /// source exists and that no extractor has read it (`KnowledgeDelta::empty`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_document_pending(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        vectors: &[Option<Vec<f32>>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+    ) -> Result<(), AppError> {
+        let source = SourceRef {
+            domain: Domain::Documents,
+            relative_path: relative_path.to_string(),
+            content_id: sha256.to_string(),
+        };
+        self.replace_document_pending_with_knowledge(
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            vectors,
+            ocr_engine,
+            ocr_engine_version,
+            &KnowledgeDelta::empty(source),
+        )
+        .map(|_| ())
+    }
+
+    /// The same, with the knowledge the extraction found, applied in a savepoint as in
+    /// `replace_document_with_knowledge`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_document_pending_with_knowledge(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        vectors: &[Option<Vec<f32>>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+        delta: &KnowledgeDelta,
+    ) -> Result<KnowledgeWrite, AppError> {
+        if delta.source.domain != Domain::Documents
+            || delta.source.relative_path != relative_path
+            || delta.source.content_id != sha256
+        {
+            return Err(AppError::Internal);
+        }
+        let tx = self.transaction()?;
+        let borrowed: Vec<Option<&[f32]>> = vectors.iter().map(|v| v.as_deref()).collect();
+        Self::write_document_rows(
+            &tx,
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            &borrowed,
+            ocr_engine,
+            ocr_engine_version,
+        )?;
+        let write = Self::apply_delta_in_savepoint(&tx, delta)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)?;
+        Ok(write)
+    }
+
+    /// The card of a document, if one was built.
+    pub fn card_of(&self, relative_path: &str) -> Result<Option<StoredCard>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT text, version, embedding IS NOT NULL FROM document_cards WHERE relative_path = ?1",
+                [relative_path],
+                |row| {
+                    Ok(StoredCard {
+                        text: row.get(0)?,
+                        version: row.get(1)?,
+                        has_vector: row.get::<_, i64>(2)? != 0,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The documents that have text and no up-to-date card: never built, built for another version of
+    /// the file, or by an older card builder. (path, content hash)
+    pub fn documents_needing_a_card(
+        &self,
+        version: i64,
+    ) -> Result<Vec<(String, String)>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT d.relative_path, d.sha256 FROM documents d
+                 LEFT JOIN document_cards c ON c.relative_path = d.relative_path
+                 WHERE d.empty = 0 AND (c.relative_path IS NULL OR c.sha256 <> d.sha256 OR c.version <> ?1)
+                 ORDER BY d.relative_path",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([version], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// Store the card of a document, without a vector (phase 2 computes it), and index its words.
+    pub fn replace_card(
+        &mut self,
+        relative_path: &str,
+        sha256: &str,
+        version: i64,
+        text: &str,
+    ) -> Result<(), AppError> {
+        // The same text keeps the vector it already has: a document read again for another reason
+        // is not embedded again.
+        let kept: Option<(String, Option<Vec<u8>>)> = self
+            .connection
+            .query_row(
+                "SELECT text, embedding FROM document_cards WHERE relative_path = ?1",
+                [relative_path],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let embedding = kept.and_then(|(old, vector)| (old == text).then_some(vector).flatten());
+        let tx = self.transaction()?;
+        tx.execute(
+            "DELETE FROM document_cards_fts WHERE relative_path = ?1",
+            [relative_path],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.execute(
+            "INSERT OR REPLACE INTO document_cards (relative_path, sha256, version, text, embedding)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![relative_path, sha256, version, text, embedding],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.execute(
+            "INSERT INTO document_cards_fts (relative_path, text) VALUES (?1, ?2)",
+            rusqlite::params![relative_path, text],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The documents whose card holds these words, best first.
+    pub fn search_cards(&self, query: &str, limit: usize) -> Result<Vec<String>, AppError> {
+        let expression = fts_match_expression(query);
+        if expression.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT relative_path FROM document_cards_fts WHERE document_cards_fts MATCH ?1
+                 ORDER BY bm25(document_cards_fts) LIMIT ?2",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map(rusqlite::params![expression, limit as i64], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    fn forget_card(tx: &rusqlite::Transaction<'_>, relative_path: &str) -> Result<(), AppError> {
+        tx.execute(
+            "DELETE FROM document_cards WHERE relative_path = ?1",
+            [relative_path],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.execute(
+            "DELETE FROM document_cards_fts WHERE relative_path = ?1",
+            [relative_path],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// Everything stored beside the passages of a document: its structure and the prefixed texts.
+    fn forget_structure(
+        tx: &rusqlite::Transaction<'_>,
+        relative_path: &str,
+    ) -> Result<(), AppError> {
+        Self::forget_structure_tables(tx, relative_path)?;
+        tx.execute(
+            "DELETE FROM chunk_index_text WHERE relative_path = ?1",
+            [relative_path],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        Ok(())
+    }
+
+    /// The structure only (sections, the section of each passage, the version): what `replace_structure`
+    /// replaces. The prefixed texts belong to the passage write that came just before it.
+    fn forget_structure_tables(
+        tx: &rusqlite::Transaction<'_>,
+        relative_path: &str,
+    ) -> Result<(), AppError> {
+        for table in ["chunk_sections", "doc_sections", "doc_structure"] {
+            tx.execute(
+                &format!("DELETE FROM {table} WHERE relative_path = ?1"),
+                [relative_path],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        Ok(())
+    }
+
+    /// Store the structure of one document and mark it as read under `version`. Replaces whatever was
+    /// stored for the path. An empty `Structure` is a valid answer ("no sections"): it records that the
+    /// document was looked at, so it is not read again for that reason.
+    pub fn replace_structure(
+        &mut self,
+        relative_path: &str,
+        version: i64,
+        chunker: i64,
+        structure: &crate::structure::Structure,
+    ) -> Result<(), AppError> {
+        let tx = self.transaction()?;
+        Self::forget_structure_tables(&tx, relative_path)?;
+        for section in &structure.sections {
+            tx.execute(
+                "INSERT INTO doc_sections
+                    (relative_path, position, parent, level, title, first_page, last_page, source)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![
+                    relative_path,
+                    section.position as i64,
+                    section.parent.map(|p| p as i64),
+                    section.level,
+                    section.title,
+                    section.first_page,
+                    section.last_page,
+                    section.source.code(),
+                ],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        for (chunk_id, position) in &structure.chunk_sections {
+            tx.execute(
+                "INSERT OR REPLACE INTO chunk_sections (chunk_id, relative_path, position) VALUES (?1, ?2, ?3)",
+                rusqlite::params![chunk_id, relative_path, *position as i64],
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        }
+        tx.execute(
+            "INSERT INTO doc_structure (relative_path, version, chunker) VALUES (?1, ?2, ?3)",
+            rusqlite::params![relative_path, version, chunker],
+        )
+        .map_err(|_| AppError::IndexUnavailable)?;
+        tx.commit().map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The chunker that cut this document (1 = the short-document chunker, 2 = the long one), `None` if
+    /// its structure was never recorded.
+    pub fn stored_chunker(&self, relative_path: &str) -> Result<Option<i64>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT chunker FROM doc_structure WHERE relative_path = ?1",
+                [relative_path],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// How many characters of text are stored for this document: the cheap way to know, before reading
+    /// the file, whether it was long.
+    pub fn stored_chars(&self, relative_path: &str) -> Result<usize, AppError> {
+        self.connection
+            .query_row(
+                "SELECT COALESCE(SUM(LENGTH(text)), 0) FROM chunks WHERE relative_path = ?1",
+                [relative_path],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n as usize)
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The context prefix that was embedded and indexed with the passages of a document that have one
+    /// (the indexed text is the prefix, a line break, and the cited text).
+    pub fn index_prefixes_of(
+        &self,
+        relative_path: &str,
+    ) -> Result<std::collections::HashMap<String, String>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT chunk_id, prefix FROM chunk_index_text WHERE relative_path = ?1")
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([relative_path], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<_, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The version the structure of this document was read under, `None` if it never was.
+    pub fn structure_version(&self, relative_path: &str) -> Result<Option<i64>, AppError> {
+        self.connection
+            .query_row(
+                "SELECT version FROM doc_structure WHERE relative_path = ?1",
+                [relative_path],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The sections of one document, in order.
+    pub fn sections_of(&self, relative_path: &str) -> Result<Vec<StoredSection>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT position, parent, level, title, first_page, last_page, source
+                 FROM doc_sections WHERE relative_path = ?1 ORDER BY position",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let rows = statement
+            .query_map([relative_path], stored_section)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AppError::IndexUnavailable)
+    }
+
+    /// The section of each of these passages (those that sit inside one), by chunk id.
+    pub fn sections_of_chunks(
+        &self,
+        chunk_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, StoredSection>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT s.position, s.parent, s.level, s.title, s.first_page, s.last_page, s.source
+                 FROM chunk_sections c
+                 JOIN doc_sections s ON s.relative_path = c.relative_path AND s.position = c.position
+                 WHERE c.chunk_id = ?1",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let mut out = std::collections::HashMap::new();
+        for id in chunk_ids {
+            if let Some(section) = statement
+                .query_row([id], stored_section)
+                .optional()
+                .map_err(|_| AppError::IndexUnavailable)?
+            {
+                out.insert(id.clone(), section);
+            }
+        }
+        Ok(out)
+    }
+
     /// The chunks, their full-text rows and the document record of one file, replaced inside the
     /// caller's transaction.
     #[allow(clippy::too_many_arguments)]
@@ -308,10 +1058,16 @@ impl IndexStore {
         sha256: &str,
         empty: bool,
         chunks: &[Chunk],
-        embeddings: &[Vec<f32>],
+        embeddings: &[Option<&[f32]>],
         ocr_engine: Option<&str>,
         ocr_engine_version: Option<&str>,
     ) -> Result<(), AppError> {
+        Self::forget_structure(tx, relative_path)?;
+        if empty {
+            // A document with no text has no card; one with text keeps its card until the card is built
+            // again from the new text (`documents_needing_a_card`), so an unchanged card keeps its vector.
+            Self::forget_card(tx, relative_path)?;
+        }
         tx.execute(
             "DELETE FROM chunks WHERE relative_path = ?1",
             [relative_path],
@@ -331,7 +1087,9 @@ impl IndexStore {
         .map_err(|_| AppError::IndexUnavailable)?;
 
         for (chunk, embedding) in chunks.iter().zip(embeddings.iter()) {
-            let bytes = encode_vector(embedding);
+            // An absent vector is NULL: the passage is searchable by its words now and gets its
+            // vector from a later batch.
+            let bytes: Option<Vec<u8>> = embedding.map(encode_vector);
             tx.execute(
                 "INSERT INTO chunks (chunk_id, relative_path, page_number, section, text, embedding, origin, confidence)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -347,11 +1105,27 @@ impl IndexStore {
                 ],
             )
             .map_err(|_| AppError::IndexUnavailable)?;
+            // The full-text index sees the text that was embedded (the context prefix included).
             tx.execute(
                 "INSERT INTO chunks_fts (chunk_id, text) VALUES (?1, ?2)",
-                rusqlite::params![chunk.chunk_id, chunk.text],
+                rusqlite::params![
+                    chunk.chunk_id,
+                    chunk.index_text.as_deref().unwrap_or(&chunk.text)
+                ],
             )
             .map_err(|_| AppError::IndexUnavailable)?;
+            // Only the prefix is kept: the indexed text is the prefix, a line break, and the cited text.
+            if let Some(indexed) = chunk.index_text.as_deref() {
+                let prefix = indexed
+                    .strip_suffix(chunk.text.as_str())
+                    .and_then(|head| head.strip_suffix('\n'))
+                    .unwrap_or("");
+                tx.execute(
+                    "INSERT INTO chunk_index_text (chunk_id, relative_path, prefix) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![chunk.chunk_id, chunk.relative_path, prefix],
+                )
+                .map_err(|_| AppError::IndexUnavailable)?;
+            }
         }
 
         tx.execute(
@@ -451,13 +1225,14 @@ impl IndexStore {
             return Err(AppError::Internal);
         }
         let tx = self.transaction()?;
+        let borrowed: Vec<Option<&[f32]>> = embeddings.iter().map(|v| Some(v.as_slice())).collect();
         Self::write_document_rows(
             &tx,
             relative_path,
             sha256,
             empty,
             chunks,
-            embeddings,
+            &borrowed,
             ocr_engine,
             ocr_engine_version,
         )?;
@@ -483,13 +1258,14 @@ impl IndexStore {
         ocr_engine_version: Option<&str>,
     ) -> Result<(), AppError> {
         let tx = self.transaction()?;
+        let borrowed: Vec<Option<&[f32]>> = embeddings.iter().map(|v| Some(v.as_slice())).collect();
         Self::write_document_rows(
             &tx,
             relative_path,
             sha256,
             empty,
             chunks,
-            embeddings,
+            &borrowed,
             ocr_engine,
             ocr_engine_version,
         )?;
@@ -627,7 +1403,8 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)?;
         let rows = statement
             .query_map([relative_path], |row| {
-                let embedding_bytes: Vec<u8> = row.get(5)?;
+                let embedding_bytes: Vec<u8> =
+                    row.get::<_, Option<Vec<u8>>>(5)?.unwrap_or_default();
                 let origin: String = row.get(6)?;
                 Ok(StoredChunk {
                     chunk_id: row.get(0)?,
@@ -645,6 +1422,84 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)
     }
 
+    /// Visit the vectors of one document (or of all) one row at a time, with the id, the path, the size of
+    /// the passage's text in bytes and the raw vector (empty when the passage has none): the text itself
+    /// is not read. The order is the one `all_chunks` and `chunks_for_document` have.
+    pub fn for_each_vector(
+        &self,
+        relative_path: Option<&str>,
+        visit: &mut dyn FnMut(&str, &str, usize, &[u8]),
+    ) -> Result<(), AppError> {
+        let sql = match relative_path {
+            Some(_) => {
+                "SELECT chunk_id, relative_path, LENGTH(CAST(text AS BLOB)), embedding
+                 FROM chunks WHERE relative_path = ?1"
+            }
+            None => {
+                "SELECT chunk_id, relative_path, LENGTH(CAST(text AS BLOB)), embedding FROM chunks"
+            }
+        };
+        let mut statement = self
+            .connection
+            .prepare(sql)
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let mut rows = match relative_path {
+            Some(path) => statement.query([path]),
+            None => statement.query([]),
+        }
+        .map_err(|_| AppError::IndexUnavailable)?;
+        while let Some(row) = rows.next().map_err(|_| AppError::IndexUnavailable)? {
+            let chunk_id = row.get_ref(0).map_err(|_| AppError::IndexUnavailable)?;
+            let path = row.get_ref(1).map_err(|_| AppError::IndexUnavailable)?;
+            let bytes: i64 = row.get(2).map_err(|_| AppError::IndexUnavailable)?;
+            let raw = match row.get_ref(3).map_err(|_| AppError::IndexUnavailable)? {
+                rusqlite::types::ValueRef::Blob(blob) => blob,
+                _ => &[],
+            };
+            if let (Ok(chunk_id), Ok(path)) = (chunk_id.as_str(), path.as_str()) {
+                visit(chunk_id, path, bytes as usize, raw);
+            }
+        }
+        Ok(())
+    }
+
+    /// The passages with these ids (text and place, no vector), by id.
+    pub fn passages_by_id(
+        &self,
+        chunk_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, StoredChunk>, AppError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT chunk_id, relative_path, page_number, section, text, origin, confidence
+                 FROM chunks WHERE chunk_id = ?1",
+            )
+            .map_err(|_| AppError::IndexUnavailable)?;
+        let mut out = std::collections::HashMap::with_capacity(chunk_ids.len());
+        for id in chunk_ids {
+            let found = statement
+                .query_row([id], |row| {
+                    let origin: String = row.get(5)?;
+                    Ok(StoredChunk {
+                        chunk_id: row.get(0)?,
+                        relative_path: row.get(1)?,
+                        page_number: row.get::<_, i64>(2)? as u32,
+                        section: row.get::<_, i64>(3)? as u32,
+                        text: row.get(4)?,
+                        embedding: Vec::new(),
+                        origin: PageOrigin::from_db_str(&origin),
+                        confidence: row.get(6)?,
+                    })
+                })
+                .optional()
+                .map_err(|_| AppError::IndexUnavailable)?;
+            if let Some(chunk) = found {
+                out.insert(id.clone(), chunk);
+            }
+        }
+        Ok(out)
+    }
+
     /// Forget every document and every chunk, keeping the file and its schema.
     ///
     /// The index is emptied rather than deleted: the connection is open, and on Windows a file
@@ -659,7 +1514,9 @@ impl IndexStore {
     pub fn clear(&mut self) -> Result<(), AppError> {
         let tx = self.transaction()?;
         tx.execute_batch(
-            "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;",
+            "DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM documents;
+             DELETE FROM chunk_sections; DELETE FROM chunk_index_text; DELETE FROM doc_sections;
+             DELETE FROM doc_structure; DELETE FROM document_cards; DELETE FROM document_cards_fts;",
         )
         .map_err(|_| AppError::IndexUnavailable)?;
         knowledge::store::clear_domain(&tx, Domain::Documents)?;
@@ -689,8 +1546,7 @@ impl IndexStore {
     /// while retrieval went on offering its passages as evidence for an answer. Returns the paths
     /// dropped, so the pass can report them by name rather than as a count.
     pub fn retain_documents(&mut self, present: &[String]) -> Result<Vec<String>, AppError> {
-        let known: std::collections::BTreeSet<&str> =
-            present.iter().map(String::as_str).collect();
+        let known: std::collections::BTreeSet<&str> = present.iter().map(String::as_str).collect();
         let stored: Vec<String> = {
             let mut statement = self
                 .connection
@@ -720,6 +1576,8 @@ impl IndexStore {
                 [path],
             )
             .map_err(|_| AppError::IndexUnavailable)?;
+            Self::forget_structure(&tx, path)?;
+            Self::forget_card(&tx, path)?;
             tx.execute("DELETE FROM chunks WHERE relative_path = ?1", [path])
                 .map_err(|_| AppError::IndexUnavailable)?;
             tx.execute("DELETE FROM documents WHERE relative_path = ?1", [path])
@@ -903,7 +1761,8 @@ impl IndexStore {
             .map_err(|_| AppError::IndexUnavailable)?;
         let rows = statement
             .query_map([], |row| {
-                let embedding_bytes: Vec<u8> = row.get(5)?;
+                let embedding_bytes: Vec<u8> =
+                    row.get::<_, Option<Vec<u8>>>(5)?.unwrap_or_default();
                 let origin: String = row.get(6)?;
                 Ok(StoredChunk {
                     chunk_id: row.get(0)?,
@@ -928,7 +1787,7 @@ impl IndexStore {
                  FROM chunks WHERE chunk_id = ?1",
                 [chunk_id],
                 |row| {
-                    let embedding_bytes: Vec<u8> = row.get(5)?;
+                    let embedding_bytes: Vec<u8> = row.get::<_, Option<Vec<u8>>>(5)?.unwrap_or_default();
                     let origin: String = row.get(6)?;
                     Ok(StoredChunk {
                         chunk_id: row.get(0)?,
@@ -1088,8 +1947,7 @@ impl IndexStore {
         &mut self,
         present: &[String],
     ) -> Result<Vec<String>, AppError> {
-        let known: std::collections::BTreeSet<&str> =
-            present.iter().map(String::as_str).collect();
+        let known: std::collections::BTreeSet<&str> = present.iter().map(String::as_str).collect();
         let gone: Vec<String> = self
             .all_tabular_inventories()?
             .into_iter()
@@ -1272,6 +2130,44 @@ fn encode_vector(vector: &[f32]) -> Vec<u8> {
         .collect()
 }
 
+/// A document's card as the index stores it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredCard {
+    pub text: String,
+    pub version: i64,
+    pub has_vector: bool,
+}
+
+/// How much of a card is given to the embedding model: its start (title, size, outline).
+pub const CARD_EMBED_CHARS: usize = 4_000;
+/// The id a card has in the queue of vectors to compute, to tell it from a passage.
+pub const CARD_ID_PREFIX: &str = "card:";
+
+/// A section as the index stores it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredSection {
+    pub position: usize,
+    pub parent: Option<usize>,
+    pub level: u8,
+    /// Empty for a slice of pages.
+    pub title: String,
+    pub first_page: u32,
+    pub last_page: u32,
+    pub source: String,
+}
+
+fn stored_section(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredSection> {
+    Ok(StoredSection {
+        position: row.get::<_, i64>(0)? as usize,
+        parent: row.get::<_, Option<i64>>(1)?.map(|p| p as usize),
+        level: row.get(2)?,
+        title: row.get(3)?,
+        first_page: row.get(4)?,
+        last_page: row.get(5)?,
+        source: row.get(6)?,
+    })
+}
+
 fn decode_vector(bytes: &[u8]) -> Vec<f32> {
     bytes
         .chunks_exact(4)
@@ -1337,12 +2233,23 @@ pub fn entity_terms_expression(terms: &[String]) -> String {
 }
 
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    cosine_similarity_with_norm(a, b, query_norm(b))
+}
+
+/// The length of a vector, as `cosine_similarity` computes it: ranking one question against thousands of
+/// vectors computes it once and passes it down.
+pub fn query_norm(b: &[f32]) -> f32 {
+    b.iter().map(|x| x * x).sum::<f32>().sqrt()
+}
+
+/// `cosine_similarity` with the norm of `b` already known. The same operations in the same order, so the
+/// same value to the last bit.
+pub fn cosine_similarity_with_norm(a: &[f32], b: &[f32], norm_b: f32) -> f32 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
     let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
     let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
     if norm_a == 0.0 || norm_b == 0.0 {
         0.0
     } else {
@@ -1361,6 +2268,7 @@ mod tests {
             page_number: 1,
             section: 1,
             text: text.to_string(),
+            index_text: None,
             origin: crate::extraction::PageOrigin::TextLayer,
             confidence: None,
         }
@@ -1927,7 +2835,11 @@ mod tests {
             .unwrap();
 
         store.clear_tabular_inventories().unwrap();
-        assert_eq!(store.chunk_count().unwrap(), 1, "the Data reset kept the documents");
+        assert_eq!(
+            store.chunk_count().unwrap(),
+            1,
+            "the Data reset kept the documents"
+        );
         assert!(store.all_tabular_inventories().unwrap().is_empty());
 
         store

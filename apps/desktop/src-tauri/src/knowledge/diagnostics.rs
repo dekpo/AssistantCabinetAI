@@ -706,6 +706,7 @@ mod tests {
                 page_number: 1,
                 section: 1,
                 text: text.to_string(),
+                index_text: None,
                 origin: PageOrigin::TextLayer,
                 confidence: None,
             };

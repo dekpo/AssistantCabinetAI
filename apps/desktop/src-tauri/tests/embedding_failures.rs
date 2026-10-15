@@ -260,23 +260,33 @@ async fn a_file_that_cannot_be_embedded_does_not_stop_the_others() {
     let run = pass(work.path(), &gateway.url, quick_deadlines()).await;
 
     let summary = run.result.expect("the pass completes");
-    assert_eq!(summary.indexed_files, 2);
-    assert_eq!(summary.failed_files.len(), 1);
+    // All three texts are stored before any vector is asked for; the server refuses one file's.
+    assert_eq!(summary.indexed_files, 3);
+    assert_eq!(
+        summary.failed_files.len(),
+        1,
+        "only the file the server refuses is named"
+    );
     assert_eq!(summary.failed_files[0].path, "b-stalls.txt");
     assert_eq!(summary.failed_files[0].code, "embedding_timeout");
-    assert!(run.index.stored_document("a-first.txt").unwrap().is_some());
-    assert!(run.index.stored_document("c-last.txt").unwrap().is_some());
+    for good in ["a-first.txt", "c-last.txt"] {
+        let counts = run.index.vector_counts_of(good).unwrap();
+        assert_eq!(
+            counts.done, counts.total,
+            "{good} is fully vectorised, though it shared a batch with the failing file"
+        );
+    }
+    let stalled = run.index.vector_counts_of("b-stalls.txt").unwrap();
+    assert_eq!(stalled.total, 41, "its 40 passages and its card");
     assert!(
-        run.index.stored_document("b-stalls.txt").unwrap().is_none(),
-        "a failed file must not be recorded as analysed"
+        stalled.done < stalled.total,
+        "the failing file keeps its text and lacks some vectors"
     );
     assert!(
-        run.index
-            .chunks_for_document("b-stalls.txt")
-            .unwrap()
-            .is_empty(),
-        "no half-indexed document"
+        !run.index.search_lexical("para-0003", 5).unwrap().is_empty(),
+        "and it is still searchable by words"
     );
+    assert_eq!(summary.vectors_pending, stalled.total - stalled.done);
 }
 
 #[tokio::test]
@@ -317,11 +327,12 @@ async fn a_failed_file_is_tried_again_by_the_next_pass() {
     .await
     .expect("the pass completes");
 
-    assert_eq!(second.indexed_files, 1);
+    assert_eq!(second.indexed_files, 0, "the text is not read again");
     assert!(second.failed_files.is_empty());
+    assert_eq!(second.unchanged_files, 1);
     assert_eq!(
-        second.unchanged_files, 0,
-        "the failed file was never recorded, so it is not skipped"
+        second.vectors_pending, 0,
+        "but its missing vectors are computed now"
     );
 }
 
@@ -335,7 +346,9 @@ async fn an_error_that_is_not_about_one_file_stops_the_pass() {
 
     let error = run.result.expect_err("nothing answers");
     assert_eq!(error.code(), "server_unreachable");
-    assert_eq!(run.index.chunk_count().unwrap(), 0);
+    // The pass stops, and keeps what it wrote: the text of both files, without their vectors.
+    assert_eq!(run.index.chunk_count().unwrap(), 6);
+    assert_eq!(run.index.vector_counts().unwrap().done, 0);
 }
 
 #[tokio::test]
@@ -365,10 +378,15 @@ async fn repeated_failures_end_the_pass_instead_of_grinding_through_the_folder()
 
     let error = run.result.expect_err("a server that stalls on everything");
     assert_eq!(error.code(), "embedding_timeout");
-    // Two attempts per file, and no file after the limit was started.
+    // The shared batch (two attempts), then each file alone (two attempts each) until the limit: the
+    // files after it are not tried.
     assert_eq!(
         gateway.requests().len(),
-        2 * indexing::MAX_CONSECUTIVE_FAILED_FILES
+        2 + 2 * indexing::MAX_CONSECUTIVE_FAILED_FILES
+    );
+    assert_eq!(
+        run.index.chunk_count().unwrap(),
+        2 * (indexing::MAX_CONSECUTIVE_FAILED_FILES + 2) as u64
     );
 }
 
@@ -395,7 +413,14 @@ async fn a_good_file_resets_the_count_of_consecutive_failures() {
         .result
         .expect("failures that are not in a row do not stop the pass");
     assert_eq!(summary.failed_files.len(), pairs);
-    assert_eq!(summary.indexed_files, pairs);
+    assert_eq!(summary.indexed_files, 2 * pairs, "every text is stored");
+    for number in 0..pairs {
+        let good = run
+            .index
+            .vector_counts_of(&format!("{number}-good.txt"))
+            .unwrap();
+        assert_eq!(good.done, good.total, "the good files are fully vectorised");
+    }
 }
 
 // ---------------------------------------------------------------- progress
@@ -411,16 +436,20 @@ async fn progress_moves_inside_a_long_file_and_never_goes_back() {
 
     run.result.expect("the pass completes");
     let steps = run.progress;
-    // 40 chunks at 16 a batch is three batches, reported 0/3 first and then 1/3, 2/3, 3/3.
-    let long: Vec<(usize, usize)> = steps
+    // 43 passages and 2 cards: the cards (one batch), then 16 a batch, then the final report.
+    let vectors: Vec<(usize, usize)> = steps
         .iter()
-        .filter(|step| step.processed_files == 0 && step.batch_total > 0)
-        .map(|step| (step.batch_index, step.batch_total))
+        .filter(|step| step.vectors_total > 0)
+        .map(|step| (step.vectors_done, step.vectors_total))
         .collect();
-    assert_eq!(long, vec![(0, 3), (1, 3), (2, 3), (3, 3)]);
+    assert_eq!(
+        vectors,
+        vec![(0, 45), (2, 45), (18, 45), (34, 45), (45, 45), (45, 45)],
+        "the two cards first, then the passages, then the last report repeats the end"
+    );
     for pair in steps.windows(2) {
-        let before = (pair[0].processed_files, pair[0].batch_index);
-        let after = (pair[1].processed_files, pair[1].batch_index);
+        let before = (pair[0].processed_files, pair[0].vectors_done);
+        let after = (pair[1].processed_files, pair[1].vectors_done);
         assert!(
             after >= before,
             "progress went back: {before:?} then {after:?}"
@@ -445,9 +474,20 @@ async fn progress_carries_counts_and_nothing_else() {
         let object = value.as_object().expect("an object");
         let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
         keys.sort_unstable();
-        assert_eq!(
-            keys,
-            ["batchIndex", "batchTotal", "processedFiles", "totalFiles"]
+        // The counts of the pass; while the vectors are computed, theirs too.
+        let known = [
+            "batchIndex",
+            "batchTotal",
+            "processedFiles",
+            "totalFiles",
+            "vectorsDone",
+            "vectorsTotal",
+        ];
+        assert!(
+            keys.iter().all(|key| known.contains(key))
+                && keys.contains(&"processedFiles")
+                && keys.contains(&"totalFiles"),
+            "{keys:?}"
         );
         assert!(
             object.values().all(Value::is_number),

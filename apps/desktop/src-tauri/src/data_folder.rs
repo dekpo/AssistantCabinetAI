@@ -228,6 +228,8 @@ pub fn analyse_with_knowledge(
         batch_index: 0,
         batch_total: 0,
         reading_names: false,
+        vectors_done: 0,
+        vectors_total: 0,
     });
 
     let mut usable = 0;
@@ -304,6 +306,8 @@ pub fn analyse_with_knowledge(
             batch_index: 0,
             batch_total: 0,
             reading_names: false,
+            vectors_done: 0,
+            vectors_total: 0,
         });
     }
 
@@ -330,6 +334,8 @@ pub fn analyse_with_knowledge(
                         batch_index: 0,
                         batch_total: 0,
                         reading_names: true,
+                        vectors_done: 0,
+                        vectors_total: 0,
                     })
                 };
                 if backfill::refresh_documents(index, context, &|| false, &announce).is_err() {
@@ -348,6 +354,8 @@ pub fn analyse_with_knowledge(
             batch_index: 0,
             batch_total: 0,
             reading_names: false,
+            vectors_done: 0,
+            vectors_total: 0,
         });
     }
     timings.total_ms = pass_timer.total_ms();
@@ -376,6 +384,8 @@ pub fn analyse_with_knowledge(
         timings: Some(timings),
         knowledge: knowledge_summary,
         profile,
+        cancelled: false,
+        vectors_pending: 0,
     })
 }
 

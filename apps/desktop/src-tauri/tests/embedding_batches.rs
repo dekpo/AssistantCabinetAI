@@ -84,7 +84,11 @@ async fn a_long_document_is_embedded_in_several_bounded_requests() {
         );
     }
     let sent: usize = requests.iter().map(|seen| seen.inputs.len()).sum();
-    assert_eq!(sent, CHUNKS, "every chunk is embedded exactly once");
+    assert_eq!(
+        sent,
+        CHUNKS + 1,
+        "every chunk and the document's card are embedded exactly once"
+    );
 }
 
 #[tokio::test]

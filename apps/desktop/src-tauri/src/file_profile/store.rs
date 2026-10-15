@@ -52,10 +52,10 @@ use crate::knowledge::store::column_semantics_for;
 use crate::tabular::inventory::TabularInventory;
 
 /// The layout of the tables. A change here is a migration.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 /// The generation of the builder's logic. Bumped when what a profile holds for the same file changes:
 /// every profile is then rebuilt by the next Analyse.
-pub const BUILD_VERSION: u32 = 1;
+pub const BUILD_VERSION: u32 = 2;
 /// The most header words stored per file.
 const MAX_HEADER_WORDS: usize = 400;
 /// The confidence of a link made by finding a known name in a free-text cell.
@@ -134,6 +134,23 @@ CREATE TABLE IF NOT EXISTS file_profile_sections (
     page_to INTEGER,
     source TEXT NOT NULL,
     PRIMARY KEY (domain, relative_path, position)
+);
+CREATE TABLE IF NOT EXISTS file_profile_section_entities (
+    domain TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    entity_id INTEGER NOT NULL,
+    mentions INTEGER NOT NULL,
+    PRIMARY KEY (domain, relative_path, position, entity_id)
+);
+CREATE INDEX IF NOT EXISTS file_profile_section_entities_by_entity
+    ON file_profile_section_entities (entity_id);
+CREATE TABLE IF NOT EXISTS file_profile_section_dates (
+    domain TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    iso TEXT NOT NULL,
+    PRIMARY KEY (domain, relative_path, position, iso)
 );
 CREATE TABLE IF NOT EXISTS file_profile_original_names (
     domain TEXT NOT NULL,
@@ -578,7 +595,9 @@ fn text_identifiers(
     };
     let mut found: Vec<IdentifierForms> = Vec::new();
     let mut truncated = false;
-    for text in rows.flatten() {
+    // The passages are read one row at a time (a book's are never all in memory), and the reading stops
+    // at the cap: the rest of a long document is not scanned for identifiers once the cap is reached.
+    'passages: for text in rows.flatten() {
         for identifier in identifiers_in(&text, settings.packs, settings.vocabulary) {
             if found.iter().any(|known| {
                 known.scheme_id == identifier.scheme_id && known.compact == identifier.compact
@@ -587,7 +606,7 @@ fn text_identifiers(
             }
             if found.len() >= MAX_IDENTIFIERS_PER_FILE {
                 truncated = true;
-                break;
+                break 'passages;
             }
             found.push(identifier);
         }
@@ -666,6 +685,8 @@ fn delete_profile(connection: &Connection, domain: Domain, path: &str) -> Result
         "file_profile_fields",
         "file_profile_entities",
         "file_profile_sections",
+        "file_profile_section_entities",
+        "file_profile_section_dates",
     ] {
         connection
             .execute(
@@ -774,7 +795,76 @@ fn build_one(
         settings,
         cells,
     )?;
+    write_sections(&tx, domain, &item.relative_path, settings)?;
     tx.commit().map_err(|_| AppError::IndexUnavailable)
+}
+
+/// The most distinct dates kept for one section.
+const MAX_DATES_PER_SECTION: usize = 50;
+
+/// The table of contents of a long document, with the entities and dates of each section, copied from
+/// the structure the Analyse stored (`structure`) and from the knowledge base's mentions. Documents
+/// only. A document with no structure writes nothing.
+fn write_sections(
+    tx: &Connection,
+    domain: Domain,
+    path: &str,
+    settings: &ProfileSettings<'_>,
+) -> Result<(), AppError> {
+    if domain != Domain::Documents {
+        return Ok(());
+    }
+    let unavailable = |_| AppError::IndexUnavailable;
+    tx.execute(
+        "INSERT INTO file_profile_sections (domain, relative_path, position, level, title, page_from, page_to, source)
+         SELECT ?1, relative_path, position, level, title, first_page, last_page, source
+         FROM doc_sections WHERE relative_path = ?2",
+        params![domain.as_str(), path],
+    )
+    .map_err(unavailable)?;
+    tx.execute(
+        "INSERT INTO file_profile_section_entities (domain, relative_path, position, entity_id, mentions)
+         SELECT ?1, ?2, cs.position, m.entity_id, SUM(m.occurrence_count)
+         FROM kb_mentions m JOIN chunk_sections cs ON cs.chunk_id = m.chunk_id
+         WHERE cs.relative_path = ?2 AND m.locator_kind = 'chunk'
+         GROUP BY cs.position, m.entity_id",
+        params![domain.as_str(), path],
+    )
+    .map_err(unavailable)?;
+    // Row by row: a book's passages are never all in memory.
+    let mut passages = tx
+        .prepare(
+            "SELECT cs.position, c.text FROM chunk_sections cs
+             JOIN chunks c ON c.chunk_id = cs.chunk_id
+             WHERE cs.relative_path = ?1 ORDER BY cs.position",
+        )
+        .map_err(unavailable)?;
+    let mut rows = passages.query(params![path]).map_err(unavailable)?;
+    let mut per_section: std::collections::HashMap<i64, Vec<String>> =
+        std::collections::HashMap::new();
+    while let Some(row) = rows.next().map_err(unavailable)? {
+        let position: i64 = row.get(0).map_err(unavailable)?;
+        let text: String = row.get(1).map_err(unavailable)?;
+        let known = per_section.entry(position).or_default();
+        for iso in super::header::dates_in_text(&text, settings.vocabulary) {
+            if known.len() < MAX_DATES_PER_SECTION && !known.contains(&iso) {
+                known.push(iso);
+            }
+        }
+    }
+    drop(rows);
+    drop(passages);
+    for (position, dates) in per_section {
+        for iso in dates {
+            tx.execute(
+                "INSERT OR IGNORE INTO file_profile_section_dates (domain, relative_path, position, iso)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![domain.as_str(), path, position, iso],
+            )
+            .map_err(unavailable)?;
+        }
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

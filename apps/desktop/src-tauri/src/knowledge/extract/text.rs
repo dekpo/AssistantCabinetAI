@@ -50,10 +50,24 @@ pub const EXTRACTOR_ID: &str = "deterministic-text";
 /// sources again (`CURRENT_KB_VERSION` is what decides that; this one is recorded beside it).
 pub const EXTRACTOR_VERSION: u32 = 2;
 
-/// A source with more distinct names than this keeps the most confident ones.
+/// A source with more distinct names than this keeps the most confident ones: the floor, for a document
+/// of up to a thousand passages. A longer one gets more (`caps_for`).
 pub const MAX_ENTITIES_PER_SOURCE: usize = 500;
-/// A source with more mentions than this keeps the most confident ones.
+/// A source with more mentions than this keeps the most confident ones: the floor (`caps_for`).
 pub const MAX_MENTIONS_PER_SOURCE: usize = 5_000;
+/// What a book can hold, however many passages it has.
+const MAX_ENTITIES_CEILING: usize = 20_000;
+const MAX_MENTIONS_CEILING: usize = 100_000;
+
+/// The caps on distinct names and on mentions for a source of `passages` passages: half as many names
+/// and five times as many mentions as passages, never below the floors above (a short document is as it
+/// was) and never above a ceiling. A book of 1 000 pages keeps thousands of names instead of 500.
+pub fn caps_for(passages: usize) -> (usize, usize) {
+    (
+        (passages / 2).clamp(MAX_ENTITIES_PER_SOURCE, MAX_ENTITIES_CEILING),
+        (passages * 5).clamp(MAX_MENTIONS_PER_SOURCE, MAX_MENTIONS_CEILING),
+    )
+}
 
 /// A page the OCR engine rated below this cannot create an entity. The engine itself already
 /// refuses a page below 0.6 (`ocr::tesseract::CONFIDENCE_FLOOR`); between that and this number a
@@ -1383,7 +1397,8 @@ fn merge_within_chunks(candidates: Vec<Candidate>, titles: &TitleSet) -> Vec<Can
 }
 
 /// Apply the per-source caps. Returns whether anything was dropped.
-fn cap(candidates: Vec<Candidate>, titles: &TitleSet) -> (Vec<Candidate>, bool) {
+fn cap(candidates: Vec<Candidate>, titles: &TitleSet, passages: usize) -> (Vec<Candidate>, bool) {
+    let (max_entities, max_mentions) = caps_for(passages);
     let mut truncated = false;
 
     // Distinct names first: keep the most confident, then the most frequent.
@@ -1396,7 +1411,7 @@ fn cap(candidates: Vec<Candidate>, titles: &TitleSet) -> (Vec<Candidate>, bool) 
         entry.1 += candidate.occurrence_count;
     }
     let mut candidates = candidates;
-    if standing.len() > MAX_ENTITIES_PER_SOURCE {
+    if standing.len() > max_entities {
         truncated = true;
         let mut ranked: Vec<(&String, &(f32, u32))> = standing.iter().collect();
         ranked.sort_by(|a, b| {
@@ -1408,13 +1423,13 @@ fn cap(candidates: Vec<Candidate>, titles: &TitleSet) -> (Vec<Candidate>, bool) 
         });
         let keep: BTreeSet<String> = ranked
             .into_iter()
-            .take(MAX_ENTITIES_PER_SOURCE)
+            .take(max_entities)
             .map(|(key, _)| key.clone())
             .collect();
         candidates.retain(|candidate| keep.contains(&group_key(candidate, titles)));
     }
 
-    if candidates.len() > MAX_MENTIONS_PER_SOURCE {
+    if candidates.len() > max_mentions {
         truncated = true;
         let mut ranked: Vec<usize> = (0..candidates.len()).collect();
         ranked.sort_by(|&a, &b| {
@@ -1424,7 +1439,7 @@ fn cap(candidates: Vec<Candidate>, titles: &TitleSet) -> (Vec<Candidate>, bool) 
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(a.cmp(&b))
         });
-        let keep: BTreeSet<usize> = ranked.into_iter().take(MAX_MENTIONS_PER_SOURCE).collect();
+        let keep: BTreeSet<usize> = ranked.into_iter().take(max_mentions).collect();
         let mut position = 0usize;
         candidates.retain(|_| {
             let kept = keep.contains(&position);
@@ -1465,7 +1480,7 @@ impl EntityExtractor for DeterministicTextExtractor {
             reading.file_name(&input.source.relative_path),
             &reading.titles,
         ));
-        let (candidates, truncated) = cap(candidates, &reading.titles);
+        let (candidates, truncated) = cap(candidates, &reading.titles, input.chunks.len());
         ExtractedKnowledge {
             candidates,
             truncated,
@@ -1933,11 +1948,27 @@ mod tests {
     }
 
     #[test]
-    fn a_page_of_one_repeated_name_is_capped_by_mentions_not_entities() {
+    fn a_source_with_many_mentions_in_few_passages_is_capped_by_mentions_not_entities() {
         let packs = PackSet::load("en-US", &[]).unwrap();
-        let chunks: Vec<(String, Option<f32>)> = (0..MAX_MENTIONS_PER_SOURCE + 50)
-            .map(|_| ("Ask Dr Jean Dupont now.".to_string(), None))
+        // Ten people named in every one of 600 passages: 6 000 mentions of 10 names. The cap on mentions
+        // is the floor (600 passages is under a thousand), so it is reached and the names are not.
+        let people = [
+            "Dr Jean Dupont",
+            "Dr Paul Martin",
+            "Dr Anne Bernard",
+            "Dr Luc Moreau",
+            "Dr Eva Roux",
+            "Dr Tom Petit",
+            "Dr Ida Blanc",
+            "Dr Max Girard",
+            "Dr Lea Faure",
+            "Dr Noe Henry",
+        ];
+        let text: String = people
+            .iter()
+            .map(|name| format!("Ask {name} now. "))
             .collect();
+        let chunks: Vec<(String, Option<f32>)> = (0..600).map(|_| (text.clone(), None)).collect();
         let refs: Vec<(&str, Option<f32>)> = chunks.iter().map(|(t, c)| (t.as_str(), *c)).collect();
         let found = read_with("loop.txt", &refs, &Gazetteer::new(), &packs);
         assert!(found.truncated);

@@ -68,10 +68,12 @@ async fn a_pass_reports_what_it_read_embedded_and_wrote() {
     assert_eq!(timings.pass, AnalysisPass::Documents);
     assert_eq!(timings.files_scanned, 7);
     assert_eq!(timings.files_processed, 7);
-    assert!(timings.embed_batches >= 7, "one request at least per file");
+    // The seven letters share a batch: the vectors are asked for after every file is written.
+    assert!(timings.embed_batches >= 1, "at least one request");
     assert!(
-        timings.embed_ms >= 7 * 40,
-        "seven requests of at least 40 ms were measured as {} ms",
+        timings.embed_ms >= 40 * timings.embed_batches as u64,
+        "{} request(s) of at least 40 ms were measured as {} ms",
+        timings.embed_batches,
         timings.embed_ms
     );
     assert!(timings.embed_ms <= timings.total_ms);
@@ -87,10 +89,7 @@ async fn a_pass_reports_what_it_read_embedded_and_wrote() {
         .slowest_files
         .windows(2)
         .all(|pair| pair[0].total_ms >= pair[1].total_ms));
-    assert!(timings
-        .slowest_files
-        .iter()
-        .all(|file| file.position < 7 && file.embed_ms >= 40));
+    assert!(timings.slowest_files.iter().all(|file| file.position < 7));
 }
 
 #[tokio::test]

@@ -591,13 +591,41 @@ impl KnowledgeContext {
         ocr_engine: Option<&str>,
         ocr_engine_version: Option<&str>,
     ) -> Result<(), AppError> {
+        let vectors: Vec<Option<Vec<f32>>> = embeddings.iter().cloned().map(Some).collect();
+        self.store_document_pending(
+            index,
+            relative_path,
+            sha256,
+            empty,
+            chunks,
+            &vectors,
+            ocr_engine,
+            ocr_engine_version,
+        )
+    }
+
+    /// `store_document` for a pass that writes the text first: a passage with `None` is stored without
+    /// its vector and gets it from a later batch (`IndexStore::store_vectors`). The names are read from
+    /// the text, so they do not wait for the vectors.
+    #[allow(clippy::too_many_arguments)]
+    pub fn store_document_pending(
+        &mut self,
+        index: &mut IndexStore,
+        relative_path: &str,
+        sha256: &str,
+        empty: bool,
+        chunks: &[Chunk],
+        vectors: &[Option<Vec<f32>>],
+        ocr_engine: Option<&str>,
+        ocr_engine_version: Option<&str>,
+    ) -> Result<(), AppError> {
         if !self.mode.reads_files() {
-            return index.replace_document_plain(
+            return index.replace_document_pending_plain(
                 relative_path,
                 sha256,
                 empty,
                 chunks,
-                embeddings,
+                vectors,
                 ocr_engine,
                 ocr_engine_version,
             );
@@ -619,22 +647,32 @@ impl KnowledgeContext {
                 KnowledgeDelta::empty(source)
             }
         };
-        let write = index.replace_document_with_knowledge(
+        let write = index.replace_document_pending_with_knowledge(
             relative_path,
             sha256,
             empty,
             chunks,
-            embeddings,
+            vectors,
             ocr_engine,
             ocr_engine_version,
             &delta,
         )?;
+        // Whether this source still hit its caps is kept, so the sheet of an entity can say that the
+        // names of this document are not all there. Rewritten with the source.
+        let _ = index.connection().execute(
+            "DELETE FROM kb_source_truncated WHERE domain = 'documents' AND relative_path = ?1",
+            [relative_path],
+        );
         match (write, built) {
             (crate::knowledge::KnowledgeWrite::Applied(_), Ok(built)) => {
                 self.tally.touched.insert(relative_path.to_string());
                 self.tally.analysed_now.insert(relative_path.to_string());
                 if built.truncated {
                     self.tally.truncated.insert(relative_path.to_string());
+                    let _ = index.connection().execute(
+                        "INSERT OR IGNORE INTO kb_source_truncated (domain, relative_path) VALUES ('documents', ?1)",
+                        [relative_path],
+                    );
                 }
                 self.learn(index.connection(), &built.delta);
             }

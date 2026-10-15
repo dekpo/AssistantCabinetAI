@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::conversation::ContextBudget;
 use crate::extraction::PageOrigin;
-use crate::index_store::{cosine_similarity, IndexStore, LexicalHit};
+use crate::index_store::{cosine_similarity_with_norm, query_norm, IndexStore, LexicalHit};
 
 /// How many excerpts an answer may cite at most, for a model whose window is the baseline
 /// (`ContextBudget::DEFAULT`) or smaller. A larger window raises it (`RetrievalLimits`).
@@ -64,11 +64,43 @@ pub struct Evidence {
     pub chunk_id: String,
     pub relative_path: String,
     pub page_number: u32,
-    pub section: u32,
+    /// The passage's rank inside its page (1, 2, ...): what tells two passages of one page apart. Not a
+    /// section of the document; that is `section`.
+    pub ordinal: u32,
+    /// The section of the document the passage starts in, when the document has a structure.
+    pub section: Option<EvidenceSection>,
     pub text: String,
     pub score: f32,
     pub origin: PageOrigin,
     pub confidence: Option<f32>,
+}
+
+/// The section a passage belongs to, as the citation shows it. `title` is empty for a slice of pages
+/// (the interface says "pages 21 to 40" from the range).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EvidenceSection {
+    pub title: String,
+    pub level: u8,
+    pub first_page: u32,
+    pub last_page: u32,
+}
+
+/// Name the section of each passage, from the structure the Analyse stored. A passage of a document
+/// with no structure keeps `None`; so does any passage if the lookup fails (a citation never depends on it).
+pub fn attach_sections(index: &IndexStore, evidence: &mut [Evidence]) {
+    let ids: Vec<String> = evidence.iter().map(|e| e.chunk_id.clone()).collect();
+    let Ok(found) = index.sections_of_chunks(&ids) else {
+        return;
+    };
+    for item in evidence.iter_mut() {
+        item.section = found.get(&item.chunk_id).map(|section| EvidenceSection {
+            title: section.title.clone(),
+            level: section.level,
+            first_page: section.first_page,
+            last_page: section.last_page,
+        });
+    }
 }
 
 /// Which part of the corpus a search may draw on.
@@ -130,6 +162,15 @@ pub struct SearchOutcome {
     /// the best passage is in meaning. The knowledge base reads it to decide that a reduced search was
     /// too narrow (`knowledge::targeting::search_documents`).
     pub best_vector_score: f32,
+    /// Passages of the scope that have no vector yet (the Analyse stopped before computing it, or is
+    /// still running). They are found by their words only. Non-zero is the machine code `partial_vectors`:
+    /// the answer layer says so in its own words.
+    pub unvectorised_chunks: usize,
+    /// Passages whose stored vector has another length than the question's: they were made by another
+    /// embedding model, and cannot be compared. Non-zero is the machine code `embedding_mismatch`: the
+    /// meaning part of this search is unreliable until the Analyse recomputes the vectors, and the
+    /// answer layer says so instead of searching silently.
+    pub mismatched_chunks: usize,
 }
 
 /// `search_scoped`, reporting how many chunks were scored. Same evidence, same order.
@@ -219,76 +260,103 @@ fn search_scoped_with_hits(
     lexical_hits: &[LexicalHit],
     limits: RetrievalLimits,
 ) -> Result<SearchOutcome, crate::error::AppError> {
-    let all_chunks = match scope {
-        RetrievalScope::WholeFolder => index.all_chunks()?,
-        RetrievalScope::File(relative_path) => index.chunks_for_document(relative_path)?,
-        RetrievalScope::Files(relative_paths) => {
-            let mut chunks = Vec::new();
-            for relative_path in relative_paths {
-                chunks.extend(index.chunks_for_document(relative_path)?);
-            }
-            chunks
-        }
-        RetrievalScope::CurrentFolder(relative_paths) => {
-            let present: std::collections::HashSet<&str> =
-                relative_paths.iter().map(String::as_str).collect();
-            index
-                .all_chunks()?
-                .into_iter()
-                .filter(|chunk| present.contains(chunk.relative_path.as_str()))
-                .collect()
-        }
+    // The ranking reads the vectors of the scope one row at a time and keeps, for each passage that
+    // counts, its id, its score and its size: the text of a passage is read only for the few that are
+    // kept. Same scores, same order, same caps as when every passage was loaded with its text
+    // (`tests/ranking_parity.rs`).
+    let query_length = query_embedding.len();
+    let norm = query_norm(query_embedding);
+    let lexical: std::collections::HashSet<&str> = lexical_hits
+        .iter()
+        .map(|hit| hit.chunk_id.as_str())
+        .collect();
+    let present: std::collections::HashSet<&str> = match scope {
+        RetrievalScope::CurrentFolder(paths) => paths.iter().map(String::as_str).collect(),
+        _ => std::collections::HashSet::new(),
     };
-
-    let chunks_considered = all_chunks.len();
+    let mut scored: Vec<(String, f32, usize)> = Vec::new();
+    let mut chunks_considered = 0usize;
+    let mut unvectorised_chunks = 0usize;
+    let mut mismatched_chunks = 0usize;
     let mut best_vector_score = f32::NEG_INFINITY;
-
-    let mut scored: Vec<Evidence> = Vec::new();
-    for chunk in &all_chunks {
-        let vector_score = cosine_similarity(&chunk.embedding, query_embedding);
-        best_vector_score = best_vector_score.max(vector_score);
-        let lexical_bonus = if lexical_hits
-            .iter()
-            .any(|hit| hit.chunk_id == chunk.chunk_id)
-        {
-            0.2
-        } else {
-            0.0
+    let mut buffer: Vec<f32> = Vec::new();
+    {
+        let mut visit = |chunk_id: &str, path: &str, text_bytes: usize, raw: &[u8]| {
+            if matches!(scope, RetrievalScope::CurrentFolder(_)) && !present.contains(path) {
+                return;
+            }
+            chunks_considered += 1;
+            buffer.clear();
+            buffer.extend(
+                raw.chunks_exact(4)
+                    .map(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])),
+            );
+            if buffer.is_empty() {
+                unvectorised_chunks += 1;
+            } else if buffer.len() != query_length {
+                mismatched_chunks += 1;
+            }
+            let vector_score = cosine_similarity_with_norm(&buffer, query_embedding, norm);
+            best_vector_score = best_vector_score.max(vector_score);
+            let lexical_bonus = if lexical.contains(chunk_id) { 0.2 } else { 0.0 };
+            if vector_score < MIN_VECTOR_SCORE && lexical_bonus == 0.0 {
+                return;
+            }
+            scored.push((
+                chunk_id.to_string(),
+                vector_score + lexical_bonus,
+                text_bytes,
+            ));
         };
-        let score = vector_score + lexical_bonus;
-        if vector_score < MIN_VECTOR_SCORE && lexical_bonus == 0.0 {
+        match scope {
+            RetrievalScope::WholeFolder | RetrievalScope::CurrentFolder(_) => {
+                index.for_each_vector(None, &mut visit)?
+            }
+            RetrievalScope::File(relative_path) => {
+                index.for_each_vector(Some(relative_path), &mut visit)?
+            }
+            RetrievalScope::Files(relative_paths) => {
+                for relative_path in relative_paths {
+                    index.for_each_vector(Some(relative_path), &mut visit)?;
+                }
+            }
+        }
+    }
+
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut chosen: Vec<(String, f32)> = Vec::new();
+    let mut total_chars = 0usize;
+    for (chunk_id, score, text_bytes) in scored {
+        if chosen.len() >= limits.max_chunks {
+            break;
+        }
+        if total_chars + text_bytes > limits.max_chars {
             continue;
         }
-        scored.push(Evidence {
-            chunk_id: chunk.chunk_id.clone(),
-            relative_path: chunk.relative_path.clone(),
+        total_chars += text_bytes;
+        chosen.push((chunk_id, score));
+    }
+    let ids: Vec<String> = chosen.iter().map(|(id, _)| id.clone()).collect();
+    let mut passages = index.passages_by_id(&ids)?;
+    let mut selected: Vec<Evidence> = Vec::with_capacity(chosen.len());
+    for (chunk_id, score) in chosen {
+        let Some(chunk) = passages.remove(&chunk_id) else {
+            continue;
+        };
+        selected.push(Evidence {
+            chunk_id: chunk.chunk_id,
+            relative_path: chunk.relative_path,
             page_number: chunk.page_number,
-            section: chunk.section,
-            text: chunk.text.clone(),
+            ordinal: chunk.section,
+            section: None,
+            text: chunk.text,
             score,
             origin: chunk.origin,
             confidence: chunk.confidence,
         });
     }
-
-    scored.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    let mut selected = Vec::new();
-    let mut total_chars = 0usize;
-    for evidence in scored {
-        if selected.len() >= limits.max_chunks {
-            break;
-        }
-        if total_chars + evidence.text.len() > limits.max_chars {
-            continue;
-        }
-        total_chars += evidence.text.len();
-        selected.push(evidence);
-    }
+    attach_sections(index, &mut selected);
     Ok(SearchOutcome {
         evidence: selected,
         chunks_considered,
@@ -297,6 +365,8 @@ fn search_scoped_with_hits(
         } else {
             0.0
         },
+        unvectorised_chunks,
+        mismatched_chunks,
     })
 }
 
@@ -353,6 +423,8 @@ pub fn search_per_document_counted_with_terms(
     let mut selected: Vec<Evidence> = Vec::new();
     let mut total_chars = 0usize;
     let mut chunks_considered = 0usize;
+    let mut unvectorised_chunks = 0usize;
+    let mut mismatched_chunks = 0usize;
     let mut best_vector_score = 0.0f32;
 
     // The full-text query is the same for every file, so it runs once, over all of them. Run per
@@ -376,6 +448,8 @@ pub fn search_per_document_counted_with_terms(
             limits,
         )?;
         chunks_considered += found.chunks_considered;
+        unvectorised_chunks += found.unvectorised_chunks;
+        mismatched_chunks += found.mismatched_chunks;
         best_vector_score = best_vector_score.max(found.best_vector_score);
         let mut inside = found.evidence;
         // Ranking inside one file can find nothing above the noise floor - a summary question
@@ -401,6 +475,8 @@ pub fn search_per_document_counted_with_terms(
         evidence: selected,
         chunks_considered,
         best_vector_score,
+        unvectorised_chunks,
+        mismatched_chunks,
     })
 }
 
@@ -412,16 +488,23 @@ fn first_chunk_of(
 ) -> Result<Option<Evidence>, crate::error::AppError> {
     let mut chunks = index.chunks_for_document(relative_path)?;
     chunks.sort_by_key(|chunk| (chunk.page_number, chunk.section));
-    Ok(chunks.into_iter().next().map(|chunk| Evidence {
-        chunk_id: chunk.chunk_id,
-        relative_path: chunk.relative_path,
-        page_number: chunk.page_number,
-        section: chunk.section,
-        text: chunk.text,
-        score: 0.0,
-        origin: chunk.origin,
-        confidence: chunk.confidence,
-    }))
+    let mut first: Vec<Evidence> = chunks
+        .into_iter()
+        .take(1)
+        .map(|chunk| Evidence {
+            chunk_id: chunk.chunk_id,
+            relative_path: chunk.relative_path,
+            page_number: chunk.page_number,
+            ordinal: chunk.section,
+            section: None,
+            text: chunk.text,
+            score: 0.0,
+            origin: chunk.origin,
+            confidence: chunk.confidence,
+        })
+        .collect();
+    attach_sections(index, &mut first);
+    Ok(first.pop())
 }
 
 /// How much of the corpus an answer actually rests on.
@@ -478,11 +561,21 @@ pub fn build_context_turn(evidence: &[Evidence]) -> String {
 pub fn format_evidence(evidence: &[Evidence]) -> String {
     let mut text = String::new();
     for (index, item) in evidence.iter().enumerate() {
+        // The section is named when the document has one with a title: the model can then say "in the
+        // section on X" and the reader can find it. A slice of pages has no title and adds nothing.
+        let place = match item
+            .section
+            .as_ref()
+            .filter(|section| !section.title.is_empty())
+        {
+            Some(section) => format!("page {}, section \"{}\"", item.page_number, section.title),
+            None => format!("page {}", item.page_number),
+        };
         text.push_str(&format!(
-            "[{}] {} (page {}):\n{}\n\n",
+            "[{}] {} ({}):\n{}\n\n",
             index + 1,
             item.relative_path,
-            item.page_number,
+            place,
             item.text
         ));
     }
@@ -505,6 +598,7 @@ mod tests {
                 page_number: 1,
                 section: 1,
                 text: text.to_string(),
+                index_text: None,
                 origin: crate::extraction::PageOrigin::TextLayer,
                 confidence: None,
             };
@@ -530,6 +624,7 @@ mod tests {
                     page_number: 1,
                     section: position as u32 + 1,
                     text: text.to_string(),
+                    index_text: None,
                     origin: crate::extraction::PageOrigin::TextLayer,
                     confidence: None,
                 })
@@ -1013,7 +1108,8 @@ mod tests {
             chunk_id: "a#p2#s1".into(),
             relative_path: "inbox/letter.pdf".into(),
             page_number: 2,
-            section: 1,
+            ordinal: 1,
+            section: None,
             text: "HbA1c a 6.8 pourcent".into(),
             score: 0.9,
             origin: PageOrigin::TextLayer,

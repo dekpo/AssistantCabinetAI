@@ -6,7 +6,10 @@
 
 pub mod analysis_scope;
 pub mod cancellation;
+pub mod cards;
 pub mod chunking;
+pub mod chunking_long;
+pub mod cleaning;
 mod commands;
 pub mod conversation;
 pub mod data_folder;
@@ -28,10 +31,12 @@ pub mod knowledge;
 pub mod mixed_answer;
 pub mod number_check;
 pub mod ocr;
+pub mod ocr_resume;
 pub mod raster;
 pub mod retrieval;
 pub mod reveal;
 mod settings;
+pub mod structure;
 pub mod tabular;
 pub mod tabular_answer;
 pub mod template_fill;
@@ -92,6 +97,8 @@ pub fn run() {
             commands::knowledge_reset,
             commands::has_indexed_documents,
             commands::profile_index_status,
+            commands::cancel_analysis,
+            commands::vector_share,
             commands::find_files,
             commands::work_folder_inventory,
             commands::reveal_work_folder,

@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS kb_sources (
 );
 CREATE INDEX IF NOT EXISTS kb_sources_by_content ON kb_sources (domain, content_id);
 
+CREATE TABLE IF NOT EXISTS kb_source_truncated (
+    domain TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    PRIMARY KEY (domain, relative_path)
+);
+
 CREATE TABLE IF NOT EXISTS kb_entity_types (
     type_id TEXT PRIMARY KEY,
     builtin INTEGER NOT NULL DEFAULT 0

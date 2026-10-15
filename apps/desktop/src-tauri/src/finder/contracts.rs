@@ -137,7 +137,11 @@ pub struct FileCard {
 #[serde(rename_all = "camelCase")]
 pub struct Locator {
     pub page: Option<i64>,
-    pub section: Option<i64>,
+    /// The passage's rank inside its page (what this field used to be called "section").
+    pub ordinal: Option<i64>,
+    /// The title of the section of the document the passage starts in, when the document has a
+    /// structure and the section has a title (a slice of pages has none).
+    pub section_label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -150,7 +154,15 @@ pub struct FileHit {
     /// The passage that matched, for the files of the page only.
     pub excerpt: Option<String>,
     pub locator: Option<Locator>,
+    /// Every place where the words matched in this file, in reading order, at most `MAX_LOCATORS`: a long
+    /// document is one hit with all its places, not one hit per passage. For the files of the page only.
+    pub locators: Vec<Locator>,
+    /// How many passages of the file matched, counting those beyond the places kept.
+    pub locators_total: usize,
 }
+
+/// The most places kept for one file.
+pub const MAX_LOCATORS: usize = 20;
 
 /// One value of a filter control and how many files of the result carry it. `label` is the entity's
 /// canonical name for the entity facet.
@@ -222,4 +234,8 @@ pub struct DocumentListing {
     pub business_type: Option<String>,
     pub excerpt: Option<String>,
     pub page: Option<i64>,
+    /// The pages where the words matched, ascending, without repeats (a long document has several).
+    pub pages: Vec<i64>,
+    /// How many passages of the file matched.
+    pub matches_total: usize,
 }

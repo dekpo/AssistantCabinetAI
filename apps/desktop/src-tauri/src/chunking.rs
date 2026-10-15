@@ -12,6 +12,22 @@ use crate::extraction::{ExtractedDocument, PageOrigin};
 const MAX_CHUNK_CHARS: usize = 1_200;
 const MIN_CHUNK_CHARS: usize = 200;
 
+/// A document with more extracted characters than this is "long": it gets the clean-text pass and,
+/// later, the structure-aware chunker. Below it, everything stays as it was (owner decision,
+/// 14 October 2026). Characters, not pages, because a DOCX or a text file has no pages.
+pub const LONG_DOCUMENT_CHARS: usize = 60_000;
+
+pub fn is_long(document: &ExtractedDocument) -> bool {
+    let mut total = 0usize;
+    for page in &document.pages {
+        total += page.text.chars().count();
+        if total > LONG_DOCUMENT_CHARS {
+            return true;
+        }
+    }
+    false
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Chunk {
@@ -21,9 +37,24 @@ pub struct Chunk {
     /// 1-indexed position of the paragraph group inside the page, so two chunks on the same
     /// page remain distinguishable in a citation.
     pub section: u32,
+    /// What is shown and cited.
     pub text: String,
+    /// What is embedded and put in the full-text index when it differs from `text`: the deterministic
+    /// context prefix of a long document (title and section path). Never cited, never shown.
+    #[serde(skip)]
+    pub index_text: Option<String>,
     pub origin: PageOrigin,
     pub confidence: Option<f32>,
+}
+
+/// The lines of a page the chunker works on: blocks, then lines, trimmed, none empty. The structure
+/// module counts paragraphs the same way, so a heading's position and a passage's start agree.
+pub fn paragraphs(text: &str) -> Vec<&str> {
+    text.split("\n\n")
+        .flat_map(|block| block.split('\n'))
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect()
 }
 
 /// Split each page into paragraphs, then group consecutive paragraphs up to `MAX_CHUNK_CHARS`
@@ -32,13 +63,7 @@ pub fn chunk(document: &ExtractedDocument) -> Vec<Chunk> {
     let mut chunks = Vec::new();
 
     for page in &document.pages {
-        let paragraphs: Vec<&str> = page
-            .text
-            .split("\n\n")
-            .flat_map(|block| block.split('\n'))
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .collect();
+        let paragraphs = paragraphs(&page.text);
 
         let mut section: u32 = 0;
         let mut current = String::new();
@@ -81,6 +106,7 @@ fn new_chunk(
         page_number: page.page_number,
         section,
         text: text.to_string(),
+        index_text: None,
         origin: page.origin,
         confidence: page.confidence,
     }

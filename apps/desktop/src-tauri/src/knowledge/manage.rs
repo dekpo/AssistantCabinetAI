@@ -1373,6 +1373,9 @@ pub struct SourceMentions {
     pub source_id: i64,
     pub domain: String,
     pub relative_path: String,
+    /// The source has more names or mentions than its cap: the names listed for it are the most
+    /// confident ones, not all of them.
+    pub truncated: bool,
     pub mentions: Vec<MentionView>,
 }
 
@@ -1644,12 +1647,22 @@ pub fn entity_detail(connection: &Connection, entity_id: i64) -> Result<EntityDe
             }
             match sources.last_mut() {
                 Some(last) if last.source_id == source_id => last.mentions.push(view),
-                _ => sources.push(SourceMentions {
-                    source_id,
-                    domain,
-                    relative_path,
-                    mentions: vec![view],
-                }),
+                _ => {
+                    let truncated: bool = connection
+                        .query_row(
+                            "SELECT EXISTS (SELECT 1 FROM kb_source_truncated WHERE domain = ?1 AND relative_path = ?2)",
+                            rusqlite::params![domain, relative_path],
+                            |row| row.get(0),
+                        )
+                        .unwrap_or(false);
+                    sources.push(SourceMentions {
+                        source_id,
+                        domain,
+                        relative_path,
+                        truncated,
+                        mentions: vec![view],
+                    })
+                }
             }
         }
     }

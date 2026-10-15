@@ -464,7 +464,7 @@ async fn the_key_lives_beside_the_index_and_never_inside_it() {
 
     let texts = every_text_value(&lab.side());
     assert!(
-        texts.iter().any(|text| *text == digest),
+        texts.contains(&digest),
         "hashed with that very key"
     );
     assert!(
@@ -865,7 +865,7 @@ async fn switching_the_knowledge_base_off_forgets_what_a_changed_file_taught_it(
 // --------------------------------------------------------------------- atomicity and degradation
 
 #[tokio::test]
-async fn an_embedding_failure_leaves_no_knowledge_rows_for_that_file() {
+async fn an_embedding_failure_does_not_cost_the_file_its_names() {
     let mut lab = Lab::new();
     lab.write("a-fine.txt", "Rappel : Madame Claire Martin a appelé.\n");
     lab.write("b-stalls.txt", "POISONED Madame Anne Bernard attend.\n");
@@ -880,12 +880,15 @@ async fn an_embedding_failure_leaves_no_knowledge_rows_for_that_file() {
     let summary = lab.analyse().await;
 
     assert_eq!(summary.failed_files.len(), 1);
+    assert_eq!(summary.failed_files[0].path, "b-stalls.txt");
     assert!(entity_named(&lab.side(), "Claire Martin").is_some());
+    // The names are read from the text, which is stored before any vector is asked for: the file whose
+    // vector the server refused is still searchable by words and its people are still in the base.
     assert!(
-        entity_named(&lab.side(), "Anne Bernard").is_none(),
-        "a file that never reached the index teaches the knowledge base nothing"
+        entity_named(&lab.side(), "Anne Bernard").is_some(),
+        "the names do not wait for the vectors"
     );
-    assert_eq!(count(&lab.side(), "kb_sources"), 1);
+    assert_eq!(count(&lab.side(), "kb_sources"), 2);
     clean(&lab);
 }
 

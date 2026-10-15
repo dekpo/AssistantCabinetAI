@@ -18,12 +18,12 @@ use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::data_folder::{self, DataFolder, DataFolderReport};
 use crate::discovery;
 use crate::error::AppError;
+use crate::file_profile;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::FileReferenceResolver;
+use crate::filename_sanitizer;
 use crate::fill_plan;
 use crate::finder::{self, FinderQuery, FinderResult, FinderScope, InventoryFile};
-use crate::file_profile;
-use crate::filename_sanitizer;
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
 use crate::gateway::{ChatTurn, GatewayClient, HealthSnapshot, GROUNDED_TEMPERATURE};
 use crate::index_store::IndexStore;
@@ -65,6 +65,9 @@ pub struct AppState {
     pub gateway: GatewayClient,
     /// Lets `cancel_chat` reach the question being worked on. One at a time.
     pub cancellation: Cancellation,
+    /// Raised by `cancel_analysis`, read between two files and two batches by the pass that is running
+    /// (`indexing::run_cancellable`); lowered when a pass starts.
+    pub analysis_stop: std::sync::atomic::AtomicBool,
     /// What each file in the work folder last hashed to. Lives as long as the application so the
     /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
     /// scan in the folder (`inventory::FileHashCache`).
@@ -95,6 +98,7 @@ impl AppState {
             settings: Mutex::new(Settings::default()),
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
+            analysis_stop: std::sync::atomic::AtomicBool::new(false),
             file_hashes: FileHashCache::new(),
             data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
@@ -266,8 +270,12 @@ pub fn load_app_snapshot(
         settings: stored,
         system_locale: sys_locale::get_locale().unwrap_or_default(),
         settings_path: display(&settings::settings_path(&app)?),
-        suggested_work_folder: suggested_work_folder(home.as_deref()).as_deref().map(display),
-        suggested_data_folder: suggested_data_folder(home.as_deref()).as_deref().map(display),
+        suggested_work_folder: suggested_work_folder(home.as_deref())
+            .as_deref()
+            .map(display),
+        suggested_data_folder: suggested_data_folder(home.as_deref())
+            .as_deref()
+            .map(display),
         warnings,
     })
 }
@@ -436,7 +444,10 @@ pub async fn index_work_folder(
     let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs)
         .ok()
         .map(|context| context.with_own_names(&own_names));
-    let mut summary = indexing::run_with_knowledge(
+    state
+        .analysis_stop
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let mut summary = indexing::run_cancellable(
         &mut index,
         &state.gateway,
         &server_url,
@@ -450,6 +461,11 @@ pub async fn index_work_folder(
             let _ = on_progress.send(progress);
         },
         knowledge.as_mut(),
+        &|| {
+            state
+                .analysis_stop
+                .load(std::sync::atomic::Ordering::SeqCst)
+        },
     )
     .await?;
     if knowledge.is_none() && mode.reads_files() {
@@ -462,6 +478,34 @@ pub async fn index_work_folder(
     summary.rename_failed_files = sanitised.failed;
     log_analysis_timing(&app, &state, &summary);
     Ok(summary)
+}
+
+/// Stop the analysis that is running. It stops between two files or two batches of vectors; what it
+/// wrote stays, and the next one goes on from there. Nothing happens when none is running.
+#[tauri::command]
+pub fn cancel_analysis(state: State<'_, AppState>) {
+    state
+        .analysis_stop
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// How many passages have their meaning vector, out of all of them: one cheap count, so the card can
+/// say "meaning search: 62 %" while it is below 100. It computes nothing.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VectorShare {
+    pub done: usize,
+    pub total: usize,
+}
+
+#[tauri::command]
+pub fn vector_share(app: AppHandle) -> Result<VectorShare, AppError> {
+    let index = open_index(&app)?;
+    let counts = index.vector_counts()?;
+    Ok(VectorShare {
+        done: counts.done,
+        total: counts.total,
+    })
 }
 
 /// Whether each folder's analysis has its file profile, by one cheap lookup, so the interface can say
@@ -738,7 +782,8 @@ fn log_renames(app: &AppHandle, renamed: &[filename_sanitizer::Renamed]) {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| elapsed.as_secs() as i64)
             .unwrap_or(0);
-        let _ = filename_sanitizer::append_log(&directory.join("renamed-files.jsonl"), renamed, now);
+        let _ =
+            filename_sanitizer::append_log(&directory.join("renamed-files.jsonl"), renamed, now);
     }
 }
 
@@ -1642,7 +1687,9 @@ async fn sourced_answer(
             }
             // "How many documents do I have?" is a question about the folder, not a row count of
             // a workbook (KBD-23).
-            if let Some(answer) = mixed_folder_tier(app, state, &question, &scope, on_event, measured)? {
+            if let Some(answer) =
+                mixed_folder_tier(app, state, &question, &scope, on_event, measured)?
+            {
                 return Ok(answer);
             }
             match mixed_data_only_tier(app, state, &question, &scope, &targeting_request, measured)
@@ -2485,11 +2532,21 @@ fn fill_tier(
     }
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
-    let data = DataFolder::discover(Path::new(&data_folder), Some(&index), &state.data_file_hashes)?;
+    let data = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
     measured.inventory_ms += stage.lap_ms();
     let every_row = crate::tabular::question::has_distributive_word(question, &locale);
-    let located =
-        tabular_answer::locate_fill_source(question, &data, &scope.data_mode, &locale, &index, every_row)?;
+    let located = tabular_answer::locate_fill_source(
+        question,
+        &data,
+        &scope.data_mode,
+        &locale,
+        &index,
+        every_row,
+    )?;
     measured.routing_ms += stage.lap_ms();
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
     let Some(source) = located else {
@@ -2501,7 +2558,13 @@ fn fill_tier(
     if templates.is_empty() {
         return Ok(None);
     }
-    let plan = fill_plan::build_plan(templates, &source.file, &source.sheet, &source.table, source.key)?;
+    let plan = fill_plan::build_plan(
+        templates,
+        &source.file,
+        &source.sheet,
+        &source.table,
+        source.key,
+    )?;
     Ok(Some(AskAnswer {
         answer: String::new(),
         sources: Vec::new(),
@@ -2526,7 +2589,14 @@ fn fill_inputs(
     app: &AppHandle,
     state: &AppState,
     request: &fill_plan::FillRequest,
-) -> Result<(std::path::PathBuf, fill_plan::TemplateFile, crate::template_fill::Table), AppError> {
+) -> Result<
+    (
+        std::path::PathBuf,
+        fill_plan::TemplateFile,
+        crate::template_fill::Table,
+    ),
+    AppError,
+> {
     let (work_folder, data_folder, locale) = state.read(|settings| {
         (
             settings.work_folder.clone(),
@@ -2539,9 +2609,13 @@ fn fill_inputs(
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
     let index = open_index(app)?;
     let inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
-    let template =
-        fill_plan::read_template(&inventory, &request.template).ok_or(AppError::FillSourceUnavailable)?;
-    let data = DataFolder::discover(Path::new(&data_folder), Some(&index), &state.data_file_hashes)?;
+    let template = fill_plan::read_template(&inventory, &request.template)
+        .ok_or(AppError::FillSourceUnavailable)?;
+    let data = DataFolder::discover(
+        Path::new(&data_folder),
+        Some(&index),
+        &state.data_file_hashes,
+    )?;
     let (_, table) = tabular_answer::load_fill_table(&data, &request.data_file, &locale, &index)
         .ok_or(AppError::FillSourceUnavailable)?;
     Ok((std::path::PathBuf::from(work_folder), template, table))
@@ -2722,50 +2796,65 @@ async fn mixed_tier(
     // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
     // search held to the document selection - `index` borrowed only in the synchronous stretch
     // right after the embed `.await`, exactly as tier 1's own retrieval already is.
-    let (document_sources, documents_unavailable) = if document_paths.is_empty()
-        || !matches!(index.chunk_count(), Ok(count) if count > 0)
-    {
-        (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence))
-    } else {
-        let search_text = conversation::retrieval_query(question, history);
-        stage.lap_ms();
-        let embedded = state
-            .gateway
-            .embed(&server_url, &embedding_alias, std::slice::from_ref(&search_text))
-            .await;
-        measured.embedding_ms = stage.lap_ms();
-        match embedded {
-            Ok(vectors) => {
-                let query_embedding = vectors.into_iter().next().unwrap_or_default();
-                let searched = targeting::search_documents_within(
-                    &index,
-                    &targeting_plan,
-                    DocumentPlan::WholeFolder {
-                        narrowed: true,
-                        scoped_paths: &document_paths,
-                        present_paths: &document_paths,
-                    },
-                    &search_text,
-                    &query_embedding,
-                    retrieval::RetrievalLimits::for_budget(&budget),
-                );
-                measured.search_ms = stage.lap_ms();
-                match searched {
-                    Ok(found) => {
-                        measured.chunks_considered = found.outcome.chunks_considered;
-                        widened = found.widened;
-                        targeting::note_documents(&index, &targeting_plan, &found, measured);
-                        match found.outcome.evidence.is_empty() {
-                            false => (found.outcome.evidence, None),
-                            true => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence)),
+    let (document_sources, documents_unavailable) =
+        if document_paths.is_empty() || !matches!(index.chunk_count(), Ok(count) if count > 0) {
+            (
+                Vec::new(),
+                Some(mixed_answer::MixedPartUnavailable::NoEvidence),
+            )
+        } else {
+            let search_text = conversation::retrieval_query(question, history);
+            stage.lap_ms();
+            let embedded = state
+                .gateway
+                .embed(
+                    &server_url,
+                    &embedding_alias,
+                    std::slice::from_ref(&search_text),
+                )
+                .await;
+            measured.embedding_ms = stage.lap_ms();
+            match embedded {
+                Ok(vectors) => {
+                    let query_embedding = vectors.into_iter().next().unwrap_or_default();
+                    let searched = targeting::search_documents_within(
+                        &index,
+                        &targeting_plan,
+                        DocumentPlan::WholeFolder {
+                            narrowed: true,
+                            scoped_paths: &document_paths,
+                            present_paths: &document_paths,
+                        },
+                        &search_text,
+                        &query_embedding,
+                        retrieval::RetrievalLimits::for_budget(&budget),
+                    );
+                    measured.search_ms = stage.lap_ms();
+                    match searched {
+                        Ok(found) => {
+                            measured.chunks_considered = found.outcome.chunks_considered;
+                            widened = found.widened;
+                            targeting::note_documents(&index, &targeting_plan, &found, measured);
+                            match found.outcome.evidence.is_empty() {
+                                false => (found.outcome.evidence, None),
+                                true => (
+                                    Vec::new(),
+                                    Some(mixed_answer::MixedPartUnavailable::NoEvidence),
+                                ),
+                            }
                         }
+                        Err(_) => (
+                            Vec::new(),
+                            Some(mixed_answer::MixedPartUnavailable::NoEvidence),
+                        ),
                     }
-                    Err(_) => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::NoEvidence)),
                 }
+                Err(_) => (
+                    Vec::new(),
+                    Some(mixed_answer::MixedPartUnavailable::GatewayUnavailable),
+                ),
             }
-            Err(_) => (Vec::new(), Some(mixed_answer::MixedPartUnavailable::GatewayUnavailable)),
-        }
-    };
+        };
 
     let context = mixed_answer::MixedContext {
         locale: &locale,

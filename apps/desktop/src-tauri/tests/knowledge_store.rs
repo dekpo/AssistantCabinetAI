@@ -115,6 +115,7 @@ fn chunk_for(path: &str, text: &str) -> Chunk {
         relative_path: path.to_string(),
         page_number: 1,
         section: 1,
+        index_text: None,
         text: text.to_string(),
         origin: PageOrigin::TextLayer,
         confidence: None,
@@ -1048,7 +1049,7 @@ async fn a_real_pass_registers_each_document_and_a_second_pass_changes_nothing()
 }
 
 #[tokio::test]
-async fn an_embedding_failure_leaves_no_knowledge_rows_for_that_file() {
+async fn an_embedding_failure_keeps_the_text_and_the_source_of_that_file() {
     let work = tempfile::tempdir().unwrap();
     write_document(work.path(), "a-fine.txt", "Alice Archer wrote a letter.");
     write_document(
@@ -1069,14 +1070,16 @@ async fn an_embedding_failure_leaves_no_knowledge_rows_for_that_file() {
 
     assert_eq!(summary.failed_files.len(), 1);
     let connection = workspace.side_connection();
+    // The text of both files is stored before any vector is asked for, so both are known to the base;
+    // only the vectors of the file the server refuses are missing.
     assert_eq!(
         sources_of(&connection, Domain::Documents),
-        vec!["a-fine.txt"]
+        vec!["a-fine.txt", "b-stalls.txt"]
     );
     assert!(workspace
         .store
         .stored_hash("b-stalls.txt")
         .unwrap()
-        .is_none());
+        .is_some());
     workspace.assert_clean();
 }

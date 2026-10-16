@@ -1,0 +1,15 @@
+{
+ "date": "2026-10-16T10:50:46",
+ "commit": "61c30a5",
+ "dirty": true,
+ "machine": "eliseberthier",
+ "system": "Windows-11-10.0.26300-SP0",
+ "model": "ministral-3:3b",
+ "embed_alias": "assistant-embed",
+ "gateway": "http://192.168.1.83:8080",
+ "seed": 20261016,
+ "book_sha256": "c985587b5840e76ef5d4c50957c68c1f5d7a8b702f339ab28e09d67ce2b93660",
+ "library": 1251,
+ "workbooks": 510,
+ "note": "A model answer is not deterministic: each question is asked once, at the application's own temperature (0.1 for answers from material); a second run can differ."
+}

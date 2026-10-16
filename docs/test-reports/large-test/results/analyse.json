@@ -1,0 +1,228 @@
+{
+  "data": {
+    "cancelled": false,
+    "chunk_count": 0,
+    "empty_files": [
+      "contrats-2026-lot-10.ods",
+      "contrats-2026-lot-18.xlsx",
+      "factures-fournisseurs-2026-t1-edf.ods",
+      "factures-fournisseurs-2026-t1-papeterie-du-lac-sarl.ods",
+      "factures-fournisseurs-2026-t2-swisscom-suisse-sa.xlsx",
+      "factures-fournisseurs-2026-t4-edf.xlsx",
+      "factures-fournisseurs-2026-t4-etude-chappuis-associes.ods",
+      "factures-fournisseurs-2026-t4-imprimerie-du-chablais-sas.ods",
+      "stock-2026-04-consommables.xlsx",
+      "stock-2026-08-bureau.xlsx",
+      "stock-2026-12-pharmacie.ods"
+    ],
+    "failed_files": 0,
+    "indexed_files": 499,
+    "knowledge": {
+      "candidates": 0,
+      "createdNew": 189,
+      "elapsedMs": 6836,
+      "entitiesDetected": 435,
+      "errors": 0,
+      "identifiers": 846,
+      "matchedExisting": 246,
+      "refreshedSources": 1247,
+      "relations": 5494,
+      "semanticColumns": 1154,
+      "truncatedSources": 0,
+      "workbooksAnalysed": 499
+    },
+    "low_confidence_files": 0,
+    "ocr_files": 0,
+    "removed_files": [],
+    "renamed_files": 0,
+    "scanned_files": 510,
+    "timings": {
+      "buildInventoryMs": 19,
+      "chunkMs": 0,
+      "chunksRepeatingEarlierText": 0,
+      "chunksTotal": 0,
+      "embedBatches": 0,
+      "embedMs": 0,
+      "embeddedChars": 0,
+      "extractMs": 0,
+      "filesProcessed": 510,
+      "filesScanned": 510,
+      "hashMs": 0,
+      "ocrMs": 0,
+      "pass": "data",
+      "slowestFiles": [
+        {
+          "chunkMs": 0,
+          "chunks": 0,
+          "embedMs": 0,
+          "extractMs": 0,
+          "ocrMs": 0,
+          "position": 387,
+          "totalMs": 226,
+          "writeMs": 226
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 0,
+          "embedMs": 0,
+          "extractMs": 0,
+          "ocrMs": 0,
+          "position": 278,
+          "totalMs": 97,
+          "writeMs": 96
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 0,
+          "embedMs": 0,
+          "extractMs": 0,
+          "ocrMs": 0,
+          "position": 301,
+          "totalMs": 90,
+          "writeMs": 89
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 0,
+          "embedMs": 0,
+          "extractMs": 0,
+          "ocrMs": 0,
+          "position": 302,
+          "totalMs": 73,
+          "writeMs": 72
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 0,
+          "embedMs": 0,
+          "extractMs": 0,
+          "ocrMs": 0,
+          "position": 272,
+          "totalMs": 64,
+          "writeMs": 63
+        }
+      ],
+      "totalMs": 28441,
+      "writeMs": 8989
+    },
+    "unavailable_capabilities": [],
+    "unchanged_files": 0,
+    "unread_formats": [],
+    "vectors_pending": 0
+  },
+  "data_seconds": 31.8986837,
+  "documents": {
+    "cancelled": false,
+    "chunk_count": 8139,
+    "empty_files": [
+      "laboratoire/2026-02/2026-02-09_resultats-analyses.pdf",
+      "messagerie/2026-09-01_message.pdf",
+      "reunions/2026-01-23_convocation-reunion.pdf"
+    ],
+    "failed_files": 0,
+    "indexed_files": 1244,
+    "knowledge": {
+      "candidates": 132,
+      "createdNew": 396,
+      "elapsedMs": 8679,
+      "entitiesDetected": 396,
+      "errors": 0,
+      "identifiers": 762,
+      "matchedExisting": 0,
+      "refreshedSources": 0,
+      "relations": 0,
+      "semanticColumns": 0,
+      "truncatedSources": 0,
+      "workbooksAnalysed": 0
+    },
+    "low_confidence_files": 2,
+    "ocr_files": 91,
+    "removed_files": [],
+    "renamed_files": 0,
+    "scanned_files": 1247,
+    "timings": {
+      "buildInventoryMs": 0,
+      "chunkMs": 94,
+      "chunksRepeatingEarlierText": 531,
+      "chunksTotal": 8139,
+      "embedBatches": 587,
+      "embedMs": 202338,
+      "embeddedChars": 7393077,
+      "extractMs": 2527,
+      "filesProcessed": 1247,
+      "filesScanned": 1247,
+      "hashMs": 1,
+      "ocrMs": 76044,
+      "pass": "documents",
+      "slowestFiles": [
+        {
+          "chunkMs": 0,
+          "chunks": 1,
+          "embedMs": 0,
+          "extractMs": 37,
+          "ocrMs": 3828,
+          "position": 1198,
+          "totalMs": 3900,
+          "writeMs": 31
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 1,
+          "embedMs": 0,
+          "extractMs": 38,
+          "ocrMs": 3798,
+          "position": 373,
+          "totalMs": 3848,
+          "writeMs": 7
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 1,
+          "embedMs": 0,
+          "extractMs": 36,
+          "ocrMs": 2946,
+          "position": 570,
+          "totalMs": 2990,
+          "writeMs": 4
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 1,
+          "embedMs": 0,
+          "extractMs": 38,
+          "ocrMs": 2702,
+          "position": 441,
+          "totalMs": 2766,
+          "writeMs": 22
+        },
+        {
+          "chunkMs": 0,
+          "chunks": 1,
+          "embedMs": 0,
+          "extractMs": 39,
+          "ocrMs": 2556,
+          "position": 1228,
+          "totalMs": 2626,
+          "writeMs": 28
+        }
+      ],
+      "totalMs": 344986,
+      "writeMs": 19772
+    },
+    "unavailable_capabilities": [],
+    "unchanged_files": 0,
+    "unread_formats": [
+      {
+        "count": 1,
+        "extension": "ppt"
+      }
+    ],
+    "vectors_pending": 0
+  },
+  "documents_seconds": 345.0213238,
+  "embed_alias": "assistant-embed",
+  "failed_files": [],
+  "library": "C:/Users/elise/Documents/CURSOR/AssistantCabinetAI/data/large-test/library",
+  "ocr_engine": true,
+  "renamed": 0
+}

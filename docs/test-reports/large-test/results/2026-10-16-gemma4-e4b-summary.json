@@ -1,0 +1,357 @@
+{
+ "embed_alias": "assistant-embed",
+ "gateway": "http://192.168.1.83:8080",
+ "generate": true,
+ "library": 1251,
+ "model": "gemma4:e4b",
+ "questions": 300,
+ "seconds": 1290.7082897,
+ "temperature": 0.10000000149011612,
+ "date": "2026-10-16T11:52:22",
+ "commit": "61c30a5",
+ "dirty": true,
+ "machine": "eliseberthier",
+ "system": "Windows-11-10.0.26300-SP0",
+ "seed": 20261016,
+ "book_sha256": "c985587b5840e76ef5d4c50957c68c1f5d7a8b702f339ab28e09d67ce2b93660",
+ "workbooks": 510,
+ "note": "A model answer is not deterministic: each question is asked once, at the application's own temperature (0.1 for answers from material); a second run can differ.",
+ "passed": 253,
+ "blocks": {
+  "documents": {
+   "passed": 119,
+   "total": 150
+  },
+  "mixed": {
+   "passed": 34,
+   "total": 50
+  },
+  "spreadsheets": {
+   "passed": 100,
+   "total": 100
+  }
+ },
+ "features": {
+  "D01": {
+   "passed": 8,
+   "total": 8,
+   "name": "fact_from_document"
+  },
+  "D02": {
+   "passed": 4,
+   "total": 10,
+   "name": "lookalike_names"
+  },
+  "D03": {
+   "passed": 11,
+   "total": 11,
+   "name": "identifiers_in_text"
+  },
+  "D04": {
+   "passed": 5,
+   "total": 6,
+   "name": "organisations"
+  },
+  "D05": {
+   "passed": 12,
+   "total": 12,
+   "name": "set_search"
+  },
+  "D06": {
+   "passed": 2,
+   "total": 4,
+   "name": "set_search_identifier"
+  },
+  "D07": {
+   "passed": 2,
+   "total": 2,
+   "name": "rank_by_date"
+  },
+  "D08": {
+   "passed": 6,
+   "total": 6,
+   "name": "folder_questions"
+  },
+  "D09": {
+   "passed": 6,
+   "total": 6,
+   "name": "named_file"
+  },
+  "D10": {
+   "passed": 2,
+   "total": 6,
+   "name": "follow_up"
+  },
+  "D11": {
+   "passed": 8,
+   "total": 8,
+   "name": "absent_information"
+  },
+  "D12": {
+   "passed": 6,
+   "total": 6,
+   "name": "isolation_selection"
+  },
+  "D13": {
+   "passed": 3,
+   "total": 3,
+   "name": "small_selection"
+  },
+  "D14": {
+   "passed": 8,
+   "total": 10,
+   "name": "long_document"
+  },
+  "D15": {
+   "passed": 5,
+   "total": 6,
+   "name": "scanned_document"
+  },
+  "D16": {
+   "passed": 4,
+   "total": 6,
+   "name": "reader_vtt"
+  },
+  "D17": {
+   "passed": 4,
+   "total": 6,
+   "name": "reader_srt"
+  },
+  "D18": {
+   "passed": 6,
+   "total": 6,
+   "name": "reader_rtf"
+  },
+  "D19": {
+   "passed": 6,
+   "total": 6,
+   "name": "reader_eml"
+  },
+  "D20": {
+   "passed": 6,
+   "total": 6,
+   "name": "reader_odt"
+  },
+  "D21": {
+   "passed": 1,
+   "total": 6,
+   "name": "reader_odp"
+  },
+  "D22": {
+   "passed": 2,
+   "total": 6,
+   "name": "reader_pptx"
+  },
+  "D23": {
+   "passed": 2,
+   "total": 4,
+   "name": "amounts"
+  },
+  "M01": {
+   "passed": 14,
+   "total": 18,
+   "name": "entity_link"
+  },
+  "M02": {
+   "passed": 1,
+   "total": 13,
+   "name": "document_against_table"
+  },
+  "M03": {
+   "passed": 8,
+   "total": 8,
+   "name": "routing"
+  },
+  "M04": {
+   "passed": 2,
+   "total": 2,
+   "name": "mixed_folder"
+  },
+  "M05": {
+   "passed": 4,
+   "total": 4,
+   "name": "mixed_set"
+  },
+  "M06": {
+   "passed": 5,
+   "total": 5,
+   "name": "fill_plan"
+  },
+  "T01": {
+   "passed": 8,
+   "total": 8,
+   "name": "structure"
+  },
+  "T02": {
+   "passed": 27,
+   "total": 27,
+   "name": "aggregates"
+  },
+  "T03": {
+   "passed": 6,
+   "total": 6,
+   "name": "filter_value"
+  },
+  "T04": {
+   "passed": 10,
+   "total": 10,
+   "name": "filter_date"
+  },
+  "T05": {
+   "passed": 5,
+   "total": 5,
+   "name": "filter_number"
+  },
+  "T06": {
+   "passed": 12,
+   "total": 12,
+   "name": "groups"
+  },
+  "T07": {
+   "passed": 6,
+   "total": 6,
+   "name": "distinct_values"
+  },
+  "T08": {
+   "passed": 3,
+   "total": 3,
+   "name": "trap_title_row"
+  },
+  "T09": {
+   "passed": 2,
+   "total": 2,
+   "name": "trap_merged_title"
+  },
+  "T10": {
+   "passed": 4,
+   "total": 4,
+   "name": "trap_formula"
+  },
+  "T11": {
+   "passed": 2,
+   "total": 2,
+   "name": "trap_empty_column"
+  },
+  "T12": {
+   "passed": 3,
+   "total": 3,
+   "name": "trap_notes_sheet"
+  },
+  "T13": {
+   "passed": 2,
+   "total": 2,
+   "name": "trap_text_dates"
+  },
+  "T14": {
+   "passed": 3,
+   "total": 3,
+   "name": "trap_locale_numbers"
+  },
+  "T18": {
+   "passed": 2,
+   "total": 2,
+   "name": "which_workbook"
+  },
+  "T19": {
+   "passed": 2,
+   "total": 2,
+   "name": "unknown_or_unselected_file"
+  },
+  "T20": {
+   "passed": 2,
+   "total": 2,
+   "name": "honest_refusals"
+  },
+  "T21": {
+   "passed": 1,
+   "total": 1,
+   "name": "model_plan"
+  }
+ },
+ "formats": {
+  "-": {
+   "passed": 48,
+   "total": 50
+  },
+  "csv": {
+   "passed": 38,
+   "total": 47
+  },
+  "docx": {
+   "passed": 10,
+   "total": 15
+  },
+  "eml": {
+   "passed": 7,
+   "total": 8
+  },
+  "jpg": {
+   "passed": 1,
+   "total": 1
+  },
+  "md": {
+   "passed": 2,
+   "total": 3
+  },
+  "odp": {
+   "passed": 1,
+   "total": 6
+  },
+  "ods": {
+   "passed": 33,
+   "total": 36
+  },
+  "odt": {
+   "passed": 11,
+   "total": 12
+  },
+  "pdf": {
+   "passed": 27,
+   "total": 34
+  },
+  "pptx": {
+   "passed": 2,
+   "total": 6
+  },
+  "rtf": {
+   "passed": 7,
+   "total": 7
+  },
+  "scan-pdf": {
+   "passed": 4,
+   "total": 5
+  },
+  "srt": {
+   "passed": 4,
+   "total": 6
+  },
+  "txt": {
+   "passed": 4,
+   "total": 4
+  },
+  "vtt": {
+   "passed": 4,
+   "total": 6
+  },
+  "xlsx": {
+   "passed": 50,
+   "total": 54
+  }
+ },
+ "refusals": {
+  "correct": 8,
+  "total": 8
+ },
+ "leaks": 2,
+ "wrong_files": 0,
+ "needs_reading": 6,
+ "model_free": {
+  "passed": 137,
+  "total": 149
+ },
+ "median_ms": 3868.7949,
+ "p95_ms": 8790.7911,
+ "median_generate_ms": 4316.215899999999,
+ "p95_generate_ms": 7701.3135999999995,
+ "unverified_numbers": 1
+}

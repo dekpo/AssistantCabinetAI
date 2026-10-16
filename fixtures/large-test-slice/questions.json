@@ -1,0 +1,1253 @@
+[
+ {
+  "id": "D-001",
+  "block": "documents",
+  "feature": "D05",
+  "format": "",
+  "text": "Quels documents parlent de LAMal ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [],
+   "workbooks": []
+  },
+  "expect": {
+   "listing": [
+    "caisses-assurances/suisse/2026-08-12_decompte-helsana-martin-marie.pdf",
+    "caisses-assurances/suisse/2026-05-07_decompte-css.pdf",
+    "caisses-assurances/suisse/2026-10-03_decompte-groupe-mutuel.txt",
+    "caisses-assurances/suisse/2026-03-19_decompte-groupe-mutuel.pdf",
+    "caisses-assurances/suisse/2026-05-23_decompte-helsana-zufferey-stephane.docx",
+    "caisses-assurances/suisse/2026-06-23_decompte-css.pdf"
+   ],
+   "listing_optional": [
+    "caisses-assurances/suisse/2026-05-16_decompte-assura-favre-laurent.pdf"
+   ],
+   "total": 6
+  },
+  "route": [
+   "set_search"
+  ],
+  "scored": {
+   "auto": [
+    "listing",
+    "total",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "D-002",
+  "block": "documents",
+  "feature": "D16",
+  "format": "vtt",
+  "text": "Dans la transcription de la réunion, quel est le montant du bon de commande BC-2026-0400 ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "reunions/enregistrements/2026-05-28_transcription-preparation.vtt"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "value": 4675.5,
+   "sources_any": [
+    "reunions/enregistrements/2026-05-28_transcription-preparation.vtt"
+   ]
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 51,
+  "note": ""
+ },
+ {
+  "id": "D-003",
+  "block": "documents",
+  "feature": "D17",
+  "format": "srt",
+  "text": "Dans la transcription de la réunion, quel est le montant du bon de commande BC-2026-0401 ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "reunions/enregistrements/2026-06-17_transcription-organisation.srt"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "value": 4884.5,
+   "sources_any": [
+    "reunions/enregistrements/2026-06-17_transcription-organisation.srt"
+   ]
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 53,
+  "note": ""
+ },
+ {
+  "id": "D-004",
+  "block": "documents",
+  "feature": "D21",
+  "format": "odp",
+  "text": "Quel est le coût par participant du module MOD-0101 ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "formation/2026-05-11_formation-accueil.odp"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "value": 168.5,
+   "page": 4,
+   "sources_any": [
+    "formation/2026-05-11_formation-accueil.odp"
+   ]
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "sources_any",
+    "page",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 60,
+  "note": ""
+ },
+ {
+  "id": "D-005",
+  "block": "documents",
+  "feature": "D22",
+  "format": "pptx",
+  "text": "Quel est le coût par participant du module MOD-0100 ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "formation/2026-08-18_formation-gestion.pptx"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "value": 46.5,
+   "page": 4,
+   "sources_any": [
+    "formation/2026-08-18_formation-gestion.pptx"
+   ]
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "sources_any",
+    "page",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 55,
+  "note": ""
+ },
+ {
+  "id": "D-006",
+  "block": "documents",
+  "feature": "D14",
+  "format": "pdf",
+  "text": "Auprès de qui la formation à l'hygiène est-elle déclarée ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "documentation/guide-pratique-cabinet.pdf"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "facts": [
+    [
+     "Ordre des médecins de la Haute-Savoie"
+    ]
+   ],
+   "sources_any": [
+    "documentation/guide-pratique-cabinet.pdf"
+   ],
+   "page": 9
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "facts",
+    "sources_any",
+    "page",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 36,
+  "note": "Planted on page 9 of 115."
+ },
+ {
+  "id": "D-007",
+  "block": "documents",
+  "feature": "D09",
+  "format": "eml",
+  "text": "Que dit le fichier 2026-02-11_courrier-endocrinologie.eml ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-02/2026-02-11_courrier-endocrinologie.eml"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "date": "2026-05-12",
+   "sources_all": [
+    "courriers-entrants/2026-02/2026-02-11_courrier-endocrinologie.eml"
+   ]
+  },
+  "route": [
+   "named_file"
+  ],
+  "scored": {
+   "auto": [
+    "date",
+    "sources_all",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 84,
+  "note": ""
+ },
+ {
+  "id": "D-008",
+  "block": "documents",
+  "feature": "D03",
+  "format": "docx",
+  "text": "À qui appartient le numéro AVS 756.0166.5316.48 ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-03/2026-03-29_courrier-orl-girardin-fabienne.docx"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "facts": [
+    [
+     "Girardin"
+    ]
+   ],
+   "sources_any": [
+    "courriers-entrants/2026-03/2026-03-29_courrier-orl-girardin-fabienne.docx"
+   ]
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "facts",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 28,
+  "note": ""
+ },
+ {
+  "id": "D-009",
+  "block": "documents",
+  "feature": "D18",
+  "format": "rtf",
+  "text": "Quel est le taux d'hémoglobine glyquée de Pierre-Alain Oberson dans ses résultats d'analyses ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "laboratoire/2026-06/2026-06-25_resultats-analyses.rtf"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "value": 7.4,
+   "sources_any": [
+    "laboratoire/2026-06/2026-06-25_resultats-analyses.rtf"
+   ],
+   "must_not": []
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 70,
+  "note": ""
+ },
+ {
+  "id": "D-010",
+  "block": "documents",
+  "feature": "D19",
+  "format": "eml",
+  "text": "Quel est le prochain rendez-vous de Vincent Crettenand d'après le courrier du confrère ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-04/2026-04-10_courrier-orl-crettenand-vincent.eml"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "date": "2026-07-09",
+   "sources_any": [
+    "courriers-entrants/2026-04/2026-04-10_courrier-orl-crettenand-vincent.eml"
+   ],
+   "must_not": []
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "date",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 45,
+  "note": ""
+ },
+ {
+  "id": "D-011",
+  "block": "documents",
+  "feature": "D20",
+  "format": "odt",
+  "text": "Quel est le prochain rendez-vous de Marie-Claude Vuilleumier d'après le courrier du confrère ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-09/2026-09-07_courrier-neurologie.odt"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "date": "2026-12-06",
+   "sources_any": [
+    "courriers-entrants/2026-09/2026-09-07_courrier-neurologie.odt"
+   ],
+   "must_not": []
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "date",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 68,
+  "note": ""
+ },
+ {
+  "id": "D-012",
+  "block": "documents",
+  "feature": "D02",
+  "format": "md",
+  "text": "Quel est le prochain rendez-vous de Pierre Thomas d'après le courrier du confrère ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-07/2026-07-26_courrier-rhumatologie-thomas-pierre.md"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "date": "2026-10-24",
+   "sources_any": [
+    "courriers-entrants/2026-07/2026-07-26_courrier-rhumatologie-thomas-pierre.md"
+   ],
+   "must_not": []
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "date",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 58,
+  "note": ""
+ },
+ {
+  "id": "D-013",
+  "block": "documents",
+  "feature": "D01",
+  "format": "pdf",
+  "text": "Quel est le prochain rendez-vous de Yves Brun d'après le courrier du confrère ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-07/2026-07-29_courrier-compte-rendu-brun-yves.pdf"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "date": "2026-10-27",
+   "sources_any": [
+    "courriers-entrants/2026-07/2026-07-29_courrier-compte-rendu-brun-yves.pdf"
+   ],
+   "must_not": []
+  },
+  "route": [
+   "global_retrieval"
+  ],
+  "scored": {
+   "auto": [
+    "date",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 95,
+  "note": ""
+ },
+ {
+  "id": "D-014",
+  "block": "documents",
+  "feature": "D12",
+  "format": "",
+  "text": "Quel est le prochain rendez-vous de Jean-Pierre Dupont d'après le courrier du confrère ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": {
+    "paths": [
+     "administratif/notes/2026-03-04_note-interne-nettoyage.pdf",
+     "caisses-assurances/france/2026-01-15_courrier-cpam69.pdf",
+     "caisses-assurances/france/2026-04-19_courrier-cpam69-martin-luc.pdf",
+     "courriers-entrants/2026-03/2026-03-05_courrier-dermatologie.docx",
+     "courriers-entrants/2026-05/2026-05-20_courrier-dermatologie-girard-frederic.pdf",
+     "courriers-entrants/2026-06/2026-06-06_courrier-neurologie-lucas-roy.pdf",
+     "courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx",
+     "documentation/guide-pratique-cabinet.pdf",
+     "laboratoire/2026-02/2026-02-27_resultats-analyses-chappuis-nathalie.pdf",
+     "patients/courriers/2026-08-24_courrier-patient.pdf",
+     "patients/courriers/2026-09-19_courrier-patient-dupont-jean-pierre.txt",
+     "paul-martin.txt",
+     "pierre-martin.txt"
+    ]
+   },
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [],
+   "workbooks": []
+  },
+  "expect": {
+   "must_not": [
+    "8 mai 2026",
+    "08/05/2026",
+    "08.05.2026"
+   ],
+   "must_not_patterns": [],
+   "route_only": false
+  },
+  "route": [
+   "global_retrieval",
+   "error"
+  ],
+  "scored": {
+   "auto": [
+    "must_not",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "The letter that holds the date is not ticked."
+ },
+ {
+  "id": "D-015",
+  "block": "documents",
+  "feature": "D11",
+  "format": "",
+  "text": "Quel est le prochain rendez-vous de Zénobie Quarante ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "none"
+  },
+  "files": {
+   "documents": [],
+   "workbooks": []
+  },
+  "expect": {
+   "refusal": true,
+   "must_not_patterns": [
+    "\\b\\d{1,2}(?:er)? (?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre) 20\\d\\d\\b"
+   ]
+  },
+  "route": [
+   "global_retrieval",
+   "error",
+   "named_file",
+   "every_document"
+  ],
+  "scored": {
+   "auto": [
+    "refusal",
+    "must_not_patterns",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "T-001",
+  "block": "spreadsheets",
+  "feature": "T01",
+  "format": "ods",
+  "text": "Quelles sont les colonnes du fichier compta-depenses-2026-01-site-1.ods ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-01-site-1.ods"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-01-site-1.ods"
+   ]
+  },
+  "expect": {
+   "columns": [
+    "Date",
+    "Libellé",
+    "Catégorie",
+    "Débit",
+    "Crédit"
+   ]
+  },
+  "route": [
+   "tabular:structural"
+  ],
+  "scored": {
+   "auto": [
+    "columns",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "T-002",
+  "block": "spreadsheets",
+  "feature": "T08",
+  "format": "xlsx",
+  "text": "Quelle est la somme de Montant TTC dans le fichier factures-fournisseurs-2026-t4-pharma-depot-romandie-sa.xlsx ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "factures-fournisseurs-2026-t4-pharma-depot-romandie-sa.xlsx"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "factures-fournisseurs-2026-t4-pharma-depot-romandie-sa.xlsx"
+   ]
+  },
+  "expect": {
+   "value": 10787.93,
+   "tolerance": 0.005
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "the header is on row 3"
+ },
+ {
+  "id": "T-003",
+  "block": "spreadsheets",
+  "feature": "T10",
+  "format": "ods",
+  "text": "Quelle est la somme de Débit dans le fichier compta-depenses-2026-04-site-1.ods ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-04-site-1.ods"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-04-site-1.ods"
+   ]
+  },
+  "expect": {
+   "nudge": "formula_cannot_be_verified"
+  },
+  "route": [
+   "tabular:nudge"
+  ],
+  "scored": {
+   "auto": [
+    "nudge",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "The last row of the column is a SUM formula; the engine will not total a column it cannot verify."
+ },
+ {
+  "id": "T-004",
+  "block": "spreadsheets",
+  "feature": "T12",
+  "format": "xlsx",
+  "text": "Combien de lignes contient le fichier compta-depenses-2026-02-site-1.xlsx ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-02-site-1.xlsx"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-02-site-1.xlsx"
+   ]
+  },
+  "expect": {
+   "nudge": "ambiguous_sheet_name"
+  },
+  "route": [
+   "tabular:nudge"
+  ],
+  "scored": {
+   "auto": [
+    "nudge",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "Two sheets, one of them free text: the engine asks, it does not pick."
+ },
+ {
+  "id": "T-005",
+  "block": "spreadsheets",
+  "feature": "T03",
+  "format": "ods",
+  "text": "Combien de lignes avec Catégorie Charges dans le fichier compta-depenses-2026-01-site-1.ods ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-01-site-1.ods"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-01-site-1.ods"
+   ]
+  },
+  "expect": {
+   "value": 12,
+   "tolerance": 0
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "T-006",
+  "block": "spreadsheets",
+  "feature": "T04",
+  "format": "ods",
+  "text": "Combien de lignes le mardi dans le fichier compta-depenses-2026-01-site-1.ods ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-01-site-1.ods"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-01-site-1.ods"
+   ]
+  },
+  "expect": {
+   "value": 9,
+   "tolerance": 0
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "T-007",
+  "block": "spreadsheets",
+  "feature": "T06",
+  "format": "ods",
+  "text": "Quel Catégorie a le Débit total le plus élevé dans le fichier compta-depenses-2026-01-site-1.ods ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-01-site-1.ods"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-01-site-1.ods"
+   ]
+  },
+  "expect": {
+   "facts": [
+    [
+     "Charges"
+    ]
+   ],
+   "value": 8270.99,
+   "tolerance": 0.005
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "facts",
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "T-008",
+  "block": "spreadsheets",
+  "feature": "T02",
+  "format": "ods",
+  "text": "Quelle est la moyenne de Débit dans le fichier compta-depenses-2026-01-site-1.ods ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "compta-depenses-2026-01-site-1.ods"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "compta-depenses-2026-01-site-1.ods"
+   ]
+  },
+  "expect": {
+   "value": 790.82,
+   "tolerance": 0.01
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "compta-depenses, mean of Débit"
+ },
+ {
+  "id": "T-009",
+  "block": "spreadsheets",
+  "feature": "T02",
+  "format": "xlsx",
+  "text": "Quel est le maximum de Honoraires dans le fichier honoraires-2026-01-dr-helene-marchetti.xlsx ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "honoraires-2026-01-dr-helene-marchetti.xlsx"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "honoraires-2026-01-dr-helene-marchetti.xlsx"
+   ]
+  },
+  "expect": {
+   "value": 60.0,
+   "tolerance": 0.005
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "honoraires, maximum of Honoraires"
+ },
+ {
+  "id": "T-010",
+  "block": "spreadsheets",
+  "feature": "T02",
+  "format": "csv",
+  "text": "Quel est le minimum de Quantité dans le fichier livraisons-2026-03-bureautique-leman-sa.csv ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "none",
+   "workbooks": {
+    "paths": [
+     "livraisons-2026-03-bureautique-leman-sa.csv"
+    ]
+   }
+  },
+  "files": {
+   "documents": [],
+   "workbooks": [
+    "livraisons-2026-03-bureautique-leman-sa.csv"
+   ]
+  },
+  "expect": {
+   "value": 3,
+   "tolerance": 0.005
+  },
+  "route": [
+   "tabular:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": "livraisons, minimum of Quantité"
+ },
+ {
+  "id": "M-001",
+  "block": "mixed",
+  "feature": "M06",
+  "format": "csv",
+  "text": "Rédige un courrier de relance pour chaque facture du fichier factures-fournisseurs-2026-t2-papeterie-du-lac-sarl.csv",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": {
+    "paths": [
+     "factures-fournisseurs-2026-t2-papeterie-du-lac-sarl.csv"
+    ]
+   }
+  },
+  "files": {
+   "documents": [
+    "modeles/modele-relance-facture.txt"
+   ],
+   "workbooks": [
+    "factures-fournisseurs-2026-t2-papeterie-du-lac-sarl.csv"
+   ]
+  },
+  "expect": {
+   "template": "modeles/modele-relance-facture.txt",
+   "data_file": "factures-fournisseurs-2026-t2-papeterie-du-lac-sarl.csv"
+  },
+  "route": [
+   "fill_plan"
+  ],
+  "scored": {
+   "auto": [
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 101,
+  "note": "Nothing is written: the answer is a plan with the template, the table and a preview."
+ },
+ {
+  "id": "M-002",
+  "block": "mixed",
+  "feature": "M04",
+  "format": "",
+  "text": "Combien de documents ai-je ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "all"
+  },
+  "files": {
+   "documents": [],
+   "workbooks": []
+  },
+  "expect": {
+   "count_range": [
+    90,
+    97
+   ]
+  },
+  "route": [
+   "mixed_folder"
+  ],
+  "scored": {
+   "auto": [
+    "count_range",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "M-003",
+  "block": "mixed",
+  "feature": "M05",
+  "format": "",
+  "text": "Quels documents parlent de Genève ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "all"
+  },
+  "files": {
+   "documents": [],
+   "workbooks": []
+  },
+  "expect": {
+   "listing": [
+    "courriers-entrants/2026-07/2026-07-26_courrier-orl.pdf",
+    "laboratoire/2026-09/2026-09-24_resultats-analyses.pdf",
+    "courriers-entrants/2026-06/2026-06-02_courrier-cardiologie-luthi-zoe.docx",
+    "courriers-entrants/2026-04/2026-04-10_courrier-orl-crettenand-vincent.eml",
+    "caisses-assurances/france/2026-01-15_courrier-cpam69.pdf",
+    "courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx",
+    "laboratoire/2026-02/2026-02-27_resultats-analyses-chappuis-nathalie.pdf",
+    "caisses-assurances/suisse/2026-10-03_decompte-groupe-mutuel.txt",
+    "laboratoire/2026-06/2026-06-26_resultats-analyses.docx",
+    "caisses-assurances/suisse/2026-03-19_decompte-groupe-mutuel.pdf",
+    "laboratoire/2026-01/2026-01-10_resultats-analyses-benali-fatima.pdf",
+    "caisses-assurances/suisse/2026-06-23_decompte-css.pdf",
+    "laboratoire/2026-08/2026-08-28_resultats-analyses-bernasconi-luca.pdf",
+    "caisses-assurances/france/2026-07-11_courrier-mgen.md",
+    "laboratoire/2026-08/2026-08-23_resultats-analyses.docx",
+    "courriers-entrants/2026-07/2026-07-29_courrier-compte-rendu-brun-yves.pdf",
+    "courriers-entrants/2026-08/2026-08-12_courrier-orl.eml",
+    "courriers-entrants/2026-01/2026-01-30_courrier-neurologie-girod-ursula.pdf"
+   ],
+   "listing_optional": [
+    "caisses-assurances/suisse/2026-05-16_decompte-assura-favre-laurent.pdf",
+    "scans/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg"
+   ],
+   "total": 18,
+   "workbook_listing": [
+    "patients-ch-liste-cde.csv",
+    "stock-2026-02-bureau.ods"
+   ]
+  },
+  "route": [
+   "mixed_set"
+  ],
+  "scored": {
+   "auto": [
+    "listing",
+    "total",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 0,
+  "note": ""
+ },
+ {
+  "id": "M-004",
+  "block": "mixed",
+  "feature": "M03",
+  "format": "docx",
+  "text": "Quel est le prochain rendez-vous de Jean-Pierre Dupont d'après le courrier du confrère ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": "all"
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-02/2026-02-07_courrier-orl.docx"
+   ],
+   "workbooks": []
+  },
+  "expect": {
+   "date": "2026-05-08",
+   "sources_any": [
+    "courriers-entrants/2026-02/2026-02-07_courrier-orl.docx"
+   ]
+  },
+  "route": [
+   "mixed_tier"
+  ],
+  "scored": {
+   "auto": [
+    "date",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 2,
+  "note": "A question about a letter, with every workbook ticked: the documents answer it."
+ },
+ {
+  "id": "M-005",
+  "block": "mixed",
+  "feature": "M02",
+  "format": "xlsx",
+  "text": "Le total TTC de la facture FAC-2026-014 de MedSupply SA dans le document est-il le même que dans le fichier factures-fournisseurs-2026-t1-medsupply-sa.xlsx ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": {
+    "paths": [
+     "factures-fournisseurs-2026-t1-medsupply-sa.xlsx"
+    ]
+   }
+  },
+  "files": {
+   "documents": [
+    "comptabilite/factures/2026-03-14_facture-medsupply-fac-2026-014.pdf"
+   ],
+   "workbooks": [
+    "factures-fournisseurs-2026-t1-medsupply-sa.xlsx"
+   ]
+  },
+  "expect": {
+   "values": [
+    1109.32,
+    1164.79
+   ],
+   "tolerance": 0.011,
+   "sources_any": [
+    "comptabilite/factures/2026-03-14_facture-medsupply-fac-2026-014.pdf"
+   ]
+  },
+  "route": [
+   "mixed_tier"
+  ],
+  "scored": {
+   "auto": [
+    "values",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 11,
+  "note": ""
+ },
+ {
+  "id": "M-006",
+  "block": "mixed",
+  "feature": "M01",
+  "format": "csv",
+  "text": "D'après le courrier du confrère, quel est le prochain rendez-vous de Mathieu Cuendet, et combien de lignes pour Mathieu Cuendet dans le fichier rendez-vous-2026-05-cabinet-des-lilas.csv ?",
+  "follow_up_of": null,
+  "selection": {
+   "documents": "all",
+   "workbooks": {
+    "paths": [
+     "rendez-vous-2026-05-cabinet-des-lilas.csv"
+    ]
+   }
+  },
+  "files": {
+   "documents": [
+    "courriers-entrants/2026-02/2026-02-03_courrier-rhumatologie-cuendet-mathieu.pdf"
+   ],
+   "workbooks": [
+    "rendez-vous-2026-05-cabinet-des-lilas.csv"
+   ]
+  },
+  "expect": {
+   "date": "2026-05-04",
+   "value": 1,
+   "tolerance": 0,
+   "sources_any": [
+    "courriers-entrants/2026-02/2026-02-03_courrier-rhumatologie-cuendet-mathieu.pdf"
+   ]
+  },
+  "route": [
+   "mixed_tier",
+   "mixed_data_only:value"
+  ],
+  "scored": {
+   "auto": [
+    "value",
+    "date",
+    "sources_any",
+    "route"
+   ],
+   "human": false
+  },
+  "min_tier": 24,
+  "note": ""
+ }
+]

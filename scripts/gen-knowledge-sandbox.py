@@ -6,6 +6,8 @@ No real patient, no real file.
 
     python scripts/gen-knowledge-sandbox.py                       # the versioned core: 200 documents
     python scripts/gen-knowledge-sandbox.py --documents 1000 --out data/knowledge-sandbox-1000
+    python scripts/gen-knowledge-sandbox.py --profile demo --out data/large-test/library   # the large test
+    python scripts/gen-knowledge-sandbox.py --profile demo --slice --out fixtures/large-test-slice
 
 The output is deterministic: the same seed gives the same bytes, and the first N documents of a larger library
 are the N documents of a smaller one (tiers 30, 100, 200, 500, 1000 are prefixes of the same stream).
@@ -31,13 +33,21 @@ DEFAULT_SEED = 20261012
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--documents", type=int, default=200, help="number of documents (default 200, the versioned core)")
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--profile", choices=["default", "demo"], default="default",
+                        help="`demo`: the large test's library (1 000+ readable text documents, 500+ spreadsheets) and its book")
+    parser.add_argument("--slice", action="store_true", help="with `--profile demo`: the small versioned slice")
+    parser.add_argument("--documents", type=int, default=None, help="number of documents (default 200, the versioned core; the demo profile has its own)")
+    parser.add_argument("--seed", type=int, default=None, help="default 20261012; the demo profile 20261016")
     parser.add_argument("--extra-rows", type=int, default=0, help="more rows in the workbooks, for the large libraries")
     parser.add_argument("--out", type=Path, default=ROOT / "fixtures" / "knowledge-sandbox",
                         help="output folder (replaced if it exists)")
     args = parser.parse_args()
-    manifest = build.build(args.out, args.documents, args.seed, args.extra_rows)
+    if args.profile == "demo":
+        from large_test import profile  # noqa: E402
+
+        manifest = profile.build_demo(args.out, args.documents, args.seed or profile.DEFAULT_SEED, args.slice)
+    else:
+        manifest = build.build(args.out, args.documents or 200, args.seed or DEFAULT_SEED, args.extra_rows)
     print(json.dumps(manifest, ensure_ascii=False, indent=1))
 
 

@@ -1,0 +1,56 @@
+Date;Patient;Médecin;Motif;Montant;Caisse
+02/02/2026;DOS SANTOS FERREIRA Maria;Dre Anne-Sophie Vuagniaux;Certificat;85,50;Harmonie
+02/02/2026;GIRARDIN Fabienne;Dr Jean Dupont;Bilan annuel;30,00;CPAM 74
+02/02/2026;MARTIN Claire;Dr Jean Dupont;Renouvellement;100,00;CPAM 74
+03/02/2026;Aïcha N'Diaye;Dre Anne-Sophie Vuagniaux;Suivi;55,00;CPAM 74
+03/02/2026;Yvonne Bugnon;Dr Olivier Favre;Suivi;85,50;CPAM 74
+03/02/2026;Laurence Le Gall;Dr Marc Bersier;Suivi;60,00;Harmonie
+04/02/2026;Marie-Claude Vuilleumier;Dr Hélène Marchetti;Certificat;55,00;CPAM 74
+05/02/2026;CUENDET Mathieu;Dr Pierre Martin;Consultation;100,00;CPAM 74
+05/02/2026;Claire Martin;Dre Anne-Sophie Vuagniaux;Consultation;60,00;Harmonie
+06/02/2026;Nathalie Chappuis;Dr Jean Dupont;Certificat;30,00;Harmonie
+07/02/2026;François Rime;Dr Jean Dupont;Certificat;100,00;Harmonie
+07/02/2026;Laura Denis;Dr Marc Bersier;Bilan annuel;85,50;MGEN
+07/02/2026;DUNAND Noémie;Dr Jean Dupont;Certificat;100,00;MGEN
+07/02/2026;Isabelle Pittet;Dr Paul Martin;Bilan annuel;85,50;MGEN
+09/02/2026;Brigitte Thomas;Dr Marc Bersier;Renouvellement;30,00;Harmonie
+09/02/2026;Véronique Monnier;Dr Olivier Favre;Certificat;100,00;Harmonie
+09/02/2026;Florence Bersier;Dr Olivier Favre;Bilan annuel;55,00;CPAM 74
+09/02/2026;Fabienne Girardin;Dr Marc Bersier;Renouvellement;85,50;MGEN
+09/02/2026;Nathalie Chappuis;Dr Marc Bersier;Consultation;100,00;MGEN
+09/02/2026;Jörg Müller;Dr Pierre Martin;Bilan annuel;55,00;CPAM 74
+10/02/2026;Anne Cherpillod;Dr Olivier Favre;Bilan annuel;60,00;MGEN
+10/02/2026;Véronique Monnier;Dr Marc Bersier;Certificat;55,00;Harmonie
+11/02/2026;Isabelle Pittet;Dr Pierre Martin;Bilan annuel;100,00;Harmonie
+11/02/2026;Maria Dos Santos Ferreira;Dr Jean Dupont;Vaccination;60,00;MGEN
+12/02/2026;David Matthey;Dr Pierre Martin;Bilan annuel;30,00;Harmonie
+13/02/2026;MERMOUD Françoise;Dr Marc Bersier;Consultation;60,00;MGEN
+14/02/2026;Giuseppe D'Amico;Dr Olivier Favre;Vaccination;30,00;MGEN
+14/02/2026;Laura Cuche;Dre Anne-Sophie Vuagniaux;Certificat;85,50;CPAM 74
+14/02/2026;Sophie Rochat;Dr Pierre Martin;Bilan annuel;55,00;CPAM 74
+16/02/2026;ZUFFEREY Stéphane;Dr Olivier Favre;Certificat;100,00;Harmonie
+16/02/2026;Michel Gerber;Dr Hélène Marchetti;Vaccination;30,00;Harmonie
+16/02/2026;PIERRE Thomas;Dr Paul Martin;Consultation;55,00;Harmonie
+16/02/2026;OBERSON Pierre-Alain;Dr Olivier Favre;Renouvellement;30,00;CPAM 74
+16/02/2026;Véronique Monnier;Dr Pierre Martin;Bilan annuel;55,00;Harmonie
+16/02/2026;DÉLÈZE Christelle;Dr Paul Martin;Consultation;30,00;Harmonie
+16/02/2026;LUCAS Roy;Dre Anne-Sophie Vuagniaux;Vaccination;60,00;Harmonie
+18/02/2026;Louise Grandjean;Dr Hélène Marchetti;Suivi;85,50;Harmonie
+18/02/2026;DUPONTET Jean;Dr Marc Bersier;Renouvellement;100,00;CPAM 74
+19/02/2026;Åsa Lindqvist;Dr Jean Dupont;Suivi;60,00;CPAM 74
+19/02/2026;CHAPPUIS Nathalie;Dre Anne-Sophie Vuagniaux;Consultation;30,00;MGEN
+20/02/2026;PYTHON Anne-Sophie;Dr Hélène Marchetti;Renouvellement;60,00;Harmonie
+20/02/2026;Fabienne Girod;Dr Olivier Favre;Suivi;100,00;Harmonie
+20/02/2026;Aurélie Legrand;Dr Marc Bersier;Bilan annuel;85,50;CPAM 74
+21/02/2026;Sophie Berisha;Dr Paul Martin;Certificat;100,00;MGEN
+21/02/2026;PITTET Isabelle;Dr Marc Bersier;Consultation;85,50;Harmonie
+21/02/2026;Julie Gavillet;Dr Paul Martin;Certificat;85,50;CPAM 74
+21/02/2026;Aurélie Vulliet;Dr Marc Bersier;Suivi;85,50;Harmonie
+23/02/2026;Nicolas Blondet;Dr Marc Bersier;Certificat;55,00;CPAM 74
+23/02/2026;Thierry Diallo;Dr Marc Bersier;Certificat;30,00;Harmonie
+23/02/2026;Raphaël Tschopp;Dr Marc Bersier;Bilan annuel;55,00;Harmonie
+24/02/2026;OBERSON Pierre-Alain;Dr Hélène Marchetti;Suivi;30,00;CPAM 74
+26/02/2026;MAURON Christian;Dr Marc Bersier;Bilan annuel;100,00;CPAM 74
+26/02/2026;Laura Denis;Dr Hélène Marchetti;Suivi;100,00;MGEN
+27/02/2026;COLIN Jean-Luc;Dre Anne-Sophie Vuagniaux;Renouvellement;85,50;Harmonie
+28/02/2026;Stéphane Zufferey;Dr Paul Martin;Suivi;85,50;Harmonie

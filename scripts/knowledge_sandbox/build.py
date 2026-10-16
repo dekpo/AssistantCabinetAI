@@ -33,7 +33,7 @@ READABLE = {"pdf", "scan-pdf", "docx", "txt", "md", "jpg", "png"}
 EXTENSION = {
     "xlsx": "xlsx", "csv": "csv",
     "pdf": "pdf", "scan-pdf": "pdf", "docx": "docx", "txt": "txt", "md": "md", "jpg": "jpg", "png": "png",
-    "odt": "odt", "rtf": "rtf", "eml": "eml", "vtt": "vtt", "pptx": "pptx", "odp": "odp", "ppt": "ppt",
+    "odt": "odt", "rtf": "rtf", "eml": "eml", "vtt": "vtt", "srt": "srt", "pptx": "pptx", "odp": "odp", "ppt": "ppt",
 }
 FORMAT_WEIGHTS = {
     "pdf": [("pdf", 72), ("scan-pdf", 7), ("jpg", 5), ("png", 2), ("docx", 8), ("odt", 4), ("rtf", 2)],
@@ -130,6 +130,8 @@ def write_doc(path: Path, doc: D.Doc, fmt: str) -> int:
         W.write_eml(path, doc.headers or {"Subject": doc.title}, doc.paragraphs)
     elif fmt == "vtt":
         W.write_vtt(path, doc.cues)
+    elif fmt == "srt":
+        W.write_srt(path, doc.cues)
     elif fmt == "pptx":
         W.write_pptx(path, doc.title, doc.slides)
     elif fmt == "odp":
@@ -157,6 +159,10 @@ def page_of_needle(doc: D.Doc, sentence: str, lines_per_page: int = 46, width: i
 
 
 class Library:
+    # What a subclass (the `demo` profile) changes; the defaults are what the library always was.
+    READABLE_FORMATS = READABLE
+    KIND_WEIGHTS = None
+
     def __init__(self, out: Path, total: int, seed: int):
         self.out = out
         self.total = total
@@ -256,7 +262,7 @@ class Library:
             "kind": kind,
             "date": doc.date.isoformat(),
             "country": doc.country,
-            "readable": fmt in READABLE,
+            "readable": fmt in self.READABLE_FORMATS,
             "ocr": fmt in ("scan-pdf", "jpg", "png"),
             "pages": pages,
             "tier": tier,
@@ -347,7 +353,7 @@ class Library:
             self.produce(kind, fn, flags)
             self._maybe_long()
         while len(self.records) < self.total:
-            kind, fn, flags = PL.random_spec(self.cast, self.rng_rand, self.next_invoice, self.next_contract)
+            kind, fn, flags = PL.random_spec(self.cast, self.rng_rand, self.next_invoice, self.next_contract, self.KIND_WEIGHTS)
             self.produce(kind, fn, flags)
             self._maybe_long()
 

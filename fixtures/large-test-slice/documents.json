@@ -1,0 +1,6499 @@
+[
+ {
+  "index": 1,
+  "path": "courriers-entrants/2026-07/2026-07-26_courrier-orl.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-07-26",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "homonym",
+  "about": [
+   "p-dupont-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hug",
+    "text": "Hôpitaux universitaires de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-03-07",
+    "text": "026 555 03 07",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-dupont-jean",
+    "text": "Dr Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "Jean Dupont",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-58-02-74-035-168-35",
+    "text": "1 58 02 74 035 168 35",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "Jean Dupont",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "M. Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-dupont-jean",
+    "text": "Dr Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Annemasse",
+   "metformine"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "24 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 2,
+  "path": "courriers-entrants/2026-02/2026-02-07_courrier-orl.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-02-07",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-dupont-jean-pierre"
+  ],
+  "mentions": [
+   {
+    "entity": "o-change",
+    "text": "Centre hospitalier Annecy Genevois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-62-38",
+    "text": "06 39 98 62 38",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean-pierre",
+    "text": "Monsieur Jean-Pierre Dupont",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-71-11-74-240-545-96",
+    "text": "1 71 11 74 240 545 96",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean-pierre",
+    "text": "J.-P. Dupont",
+    "form": "initial_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean-pierre",
+    "text": "M. Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "8 mai 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 3,
+  "path": "laboratoire/2026-01/2026-01-06_resultats-analyses.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "resultats_labo",
+  "date": "2026-01-06",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-dupontet-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-cerballiance",
+    "text": "Cerballiance Alpes",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupontet-jean",
+    "text": "DUPONTET Jean",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-49-01-74-430-269-52",
+    "text": "1 49 01 74 430 269 52",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupontet-jean",
+    "text": "M. Dupontet",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "6,8 %"
+  },
+  "needles": {}
+ },
+ {
+  "index": 4,
+  "path": "patients/courriers/2026-08-09_courrier-patient.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "lettre_patient",
+  "date": "2026-08-09",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-dupont-marie"
+  ],
+  "mentions": [
+   {
+    "entity": "i-01-99-00-99-22",
+    "text": "01 99 00 99 22",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-marie-dupont-mail-example",
+    "text": "marie.dupont@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-marie",
+    "text": "Marie Dupont",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 5,
+  "path": "courriers-entrants/2026-08/2026-08-08_courrier-cardiologie.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-08-08",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "implicit",
+  "about": [
+   "p-dupont-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-annecy",
+    "text": "Clinique Générale d'Annecy",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-14-52",
+    "text": "06 39 98 14 52",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-gaillard-eric",
+    "text": "Dr Éric Gaillard",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "M. Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "M. Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "M. Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-gaillard-eric",
+    "text": "Dr Éric Gaillard",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "6 novembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 6,
+  "path": "messagerie/2026-01-07_message.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "mail",
+  "date": "2026-01-07",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "ambiguous-martin",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Paul Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 7,
+  "path": "reunions/2026-04-16_pv-reunion-cabinet.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "pv_reunion",
+  "date": "2026-04-16",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "hygiène"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 8,
+  "path": "courriers-entrants/2026-10/2026-10-05_courrier-neurologie-martin-marie.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-10-05",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "cross-border",
+  "about": [
+   "p-martin-marie"
+  ],
+  "mentions": [
+   {
+    "entity": "o-change",
+    "text": "Centre hospitalier Annecy Genevois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-62-38",
+    "text": "06 39 98 62 38",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-marie",
+    "text": "Marie Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-75-02-74-354-593-21",
+    "text": "2 75 02 74 354 593 21",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-marie",
+    "text": "Marie Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-marie",
+    "text": "Marie Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-marie",
+    "text": "martin-marie",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "3 janvier 2027"
+  },
+  "needles": {}
+ },
+ {
+  "index": 9,
+  "path": "caisses-assurances/suisse/2026-08-12_decompte-helsana-martin-marie.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-08-12",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-martin-marie"
+  ],
+  "mentions": [
+   {
+    "entity": "o-helsana",
+    "text": "Helsana Assurances SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-marie",
+    "text": "Marie Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-0540-4406-89",
+    "text": "756.0540.4406.89",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-6-456-785-9",
+    "text": "6.456.785-9",
+    "form": "policy",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-marie",
+    "text": "martin-marie",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "CHF 156.03"
+  },
+  "needles": {}
+ },
+ {
+  "index": 10,
+  "path": "caisses-assurances/france/2026-07-31_courrier-cpam74.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-07-31",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-dupont-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-cpam74",
+    "text": "CPAM de la Haute-Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "Jean Dupont",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-58-02-74-035-168-35",
+    "text": "1 58 02 74 035 168 35",
+    "form": "nir",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "indemnités journalières",
+   "Annecy",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "227,37 €"
+  },
+  "needles": {}
+ },
+ {
+  "index": 11,
+  "path": "comptabilite/factures/2026-03-14_facture-medsupply-fac-2026-014.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "facture_fournisseur",
+  "date": "2026-03-14",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "fac-014",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-fac-2026-014",
+    "text": "FAC-2026-014",
+    "form": "invoice",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-ch20-0054-6103-3504-6375-7",
+    "text": "CH20 0054 6103 3504 6375 7",
+    "form": "iban",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "total_ht": "CHF 1'026.20",
+   "total_ttc": "CHF 1'109.32"
+  },
+  "needles": {}
+ },
+ {
+  "index": 12,
+  "path": "comptabilite/factures/2026-05-01_facture-papeterie-lac-fac-2026-014.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "facture_fournisseur",
+  "date": "2026-05-01",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-papeterie-lac",
+    "text": "Papeterie du Lac SARL",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-fac-2026-014",
+    "text": "FAC-2026-014",
+    "form": "invoice",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-fr76-1571-3717-6462-8454-4143-689",
+    "text": "FR76 1571 3717 6462 8454 4143 689",
+    "form": "iban",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "total_ht": "726,50 €",
+   "total_ttc": "871,80 €"
+  },
+  "needles": {}
+ },
+ {
+  "index": 13,
+  "path": "laboratoire/2026-09/2026-09-24_resultats-analyses.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "resultats_labo",
+  "date": "2026-09-24",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-favre-laurent"
+  ],
+  "mentions": [
+   {
+    "entity": "o-unilabs",
+    "text": "Unilabs Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-favre-laurent",
+    "text": "FAVRE Laurent",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-favre-olivier",
+    "text": "Dr Olivier Favre",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-3657-5269-18",
+    "text": "756.3657.5269.18",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-favre-laurent",
+    "text": "M. Favre",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Genève"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "8,4 %",
+   "organism": "Enterococcus faecalis"
+  },
+  "needles": {}
+ },
+ {
+  "index": 14,
+  "path": "courriers-entrants/2026-05/2026-05-18_courrier-rhumatologie.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "lettre_confrere",
+  "date": "2026-05-18",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-fabre-laurence"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-annecy",
+    "text": "Clinique Générale d'Annecy",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-14-52",
+    "text": "06 39 98 14 52",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-gaillard-eric",
+    "text": "Dr Éric Gaillard",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-fabre-laurence",
+    "text": "Laurence Fabre",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-70-08-74-425-711-54",
+    "text": "2 70 08 74 425 711 54",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-fabre-laurence",
+    "text": "Mme Fabre",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-fabre-laurence",
+    "text": "Mme Fabre",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-gaillard-eric",
+    "text": "Dr Éric Gaillard",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "16 août 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 15,
+  "path": "caisses-assurances/suisse/2026-05-07_decompte-css.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-05-07",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-rochat-sophie"
+  ],
+  "mentions": [
+   {
+    "entity": "o-css",
+    "text": "CSS Assurance",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "text": "Sophie Rochat",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-4274-1566-70",
+    "text": "756.4274.1566.70",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-8-735-291-9",
+    "text": "8.735.291-9",
+    "form": "policy",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Lausanne",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "CHF 755.31"
+  },
+  "needles": {}
+ },
+ {
+  "index": 16,
+  "path": "contrats/2026-05-01_contrat-maintenance-bureautique-leman.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "contrat",
+  "date": "2026-05-01",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "i-ctr-2026-0041",
+    "text": "CTR-2026-0041",
+    "form": "contract",
+    "where": "text"
+   },
+   {
+    "entity": "o-bureautique-leman",
+    "text": "Bureautique Léman SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "tacite reconduction",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "annual": "CHF 898.71",
+   "end": "1er mai 2027"
+  },
+  "needles": {}
+ },
+ {
+  "index": 17,
+  "path": "administratif/notes/2026-04-25_note-interne-photocopieuse.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "note_interne",
+  "date": "2026-04-25",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [],
+  "terms": [
+   "photocopieuse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "photocopieuse"
+  },
+  "needles": {}
+ },
+ {
+  "index": 18,
+  "path": "administratif/notes/2026-04-16_note-interne-stock.md",
+  "format": "md",
+  "extension": "md",
+  "kind": "note_interne",
+  "date": "2026-04-16",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "stock"
+  },
+  "needles": {}
+ },
+ {
+  "index": 19,
+  "path": "courriers-entrants/2026-06/2026-06-11_courrier-orl-monnier-veronique.pdf",
+  "format": "scan-pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-06-11",
+  "country": "CH",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 30,
+  "special": "ocr",
+  "about": [
+   "p-monnier-veronique"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hopital-nyon",
+    "text": "Hôpital de Nyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-032-555-68-91",
+    "text": "032 555 68 91",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "text": "Véronique Monnier",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-1503-5908-23",
+    "text": "756.1503.5908.23",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "text": "Mme Monnier",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "text": "Véronique Monnier",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-monnier-veronique",
+    "text": "monnier-veronique",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Nyon",
+   "Annemasse"
+  ],
+  "ocr_pages": [
+   "Compte rendu de consultation, 11 juin 2026\nDr Marc Bersier\nHôpital de Nyon\nGrand-Rue 58, 1260 Nyon\nTél. 032 555 68 91\nDr Hélène Marchetti\n8 rue du Léman, 74100 Annemasse\nNyon, le 11 juin 2026\nObjet : Véronique Monnier, né(e) en 1959, consultation pour un\nbilan endocrinologique.\nN° AVS : 756.1503.5908.23\nChère consœur,\nJ'ai reçu Mme Monnier le 26 mai 2026 pour un bilan\nendocrinologique. L'examen clinique est rassurant et les\nrésultats récents sont conformes à ce qui était attendu. J'ai\ndemandé un contrôle biologique et un courrier de synthèse sera\nadressé à la caisse.\nLe traitement par lévothyroxine est poursuivi à la dose\nhabituelle. Véronique Monnier a été informé(e) des modalités de\nsuivi et du calendrier des prochains rendez-vous.\nN'hésitez pas à me contacter pour toute question. Prochain\nrendez-vous : 9 septembre 2026.\nConfraternellement,\nDr Marc Bersier"
+  ],
+  "ocr_level": 2,
+  "facts": {
+   "next_visit": "9 septembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 20,
+  "path": "scans/2026-10/2026-10-08_courrier-patient.jpg",
+  "format": "jpg",
+  "extension": "jpg",
+  "kind": "lettre_patient",
+  "date": "2026-10-08",
+  "country": "FR",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 30,
+  "special": "ocr",
+  "about": [
+   "p-meunier-veronique"
+  ],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-meunier-veronique",
+    "text": "V. Meunier",
+    "form": "initial_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Thonon-les-Bains",
+   "Annemasse"
+  ],
+  "ocr_pages": [
+   "Demande de copie de dossier\n68 boulevard du Docteur Bouchet, 74200 Thonon-les-Bains\nDr Hélène Marchetti\nCabinet médical des Voirons\n8 rue du Léman, 74100 Annemasse\nObjet : demande de rendez-vous et de copie de mon dossier.\nThonon-les-Bains, le 8 octobre 2026.\nMadame le Docteur,\nJe souhaiterais obtenir un rendez-vous dans le courant du mois\nprochain et recevoir une copie des derniers résultats\nd'analyses. Je me tiens à votre disposition pour toute\nprécision.\nAvec mes salutations distinguées,\nV. Meunier"
+  ],
+  "ocr_level": 0,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 21,
+  "path": "reunions/enregistrements/2026-02-04_transcription-reunion.vtt",
+  "format": "vtt",
+  "extension": "vtt",
+  "kind": "transcription",
+  "date": "2026-02-04",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {},
+  "cues": 5
+ },
+ {
+  "index": 22,
+  "path": "courriers-entrants/2026-04/2026-04-06_courrier-endocrinologie-kowalski-andrzej.odt",
+  "format": "odt",
+  "extension": "odt",
+  "kind": "lettre_confrere",
+  "date": "2026-04-06",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-kowalski-andrzej"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hpps",
+    "text": "Hôpital Privé Pays de Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-42-60",
+    "text": "06 39 98 42 60",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-haddad-karim",
+    "text": "Dr Karim Haddad",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "text": "Andrzej Kowalski",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-60-09-74-325-735-94",
+    "text": "1 60 09 74 325 735 94",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "text": "Andrzej Kowalski",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "text": "M. Kowalski",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-haddad-karim",
+    "text": "Dr Karim Haddad",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-kowalski-andrzej",
+    "text": "kowalski-andrzej",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "5 juillet 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 23,
+  "path": "administratif/procedures/2026-05-12_procedure-hygiene.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "procedure",
+  "date": "2026-05-12",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "hygiène",
+   "lavage des mains"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "hygiene"
+  },
+  "needles": {}
+ },
+ {
+  "index": 24,
+  "path": "courriers-entrants/2026-02/2026-02-03_courrier-rhumatologie-cuendet-mathieu.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-02-03",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-cuendet-mathieu"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-source",
+    "text": "Clinique La Source",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-021-555-13-22",
+    "text": "021 555 13 22",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-cuenoud-philippe",
+    "text": "Dr Philippe Cuénoud",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-cuendet-mathieu",
+    "text": "Mathieu Cuendet",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9534-8318-92",
+    "text": "756.9534.8318.92",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-cuendet-mathieu",
+    "text": "Mathieu Cuendet",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-cuendet-mathieu",
+    "text": "M. Cuendet",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-cuenoud-philippe",
+    "text": "Dr Philippe Cuénoud",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-cuendet-mathieu",
+    "text": "cuendet-mathieu",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Lausanne",
+   "Annemasse",
+   "ramipril"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "4 mai 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 25,
+  "path": "scans/2026-08/2026-08-26_ordonnance.png",
+  "format": "png",
+  "extension": "png",
+  "kind": "ordonnance",
+  "date": "2026-08-26",
+  "country": "CH",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 30,
+  "special": "ocr",
+  "about": [
+   "p-pittet-isabelle"
+  ],
+  "mentions": [
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-pittet-isabelle",
+    "text": "Isabelle Pittet",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annemasse"
+  ],
+  "ocr_pages": [
+   "Ordonnance du 26 août 2026\nCabinet médical des Voirons\nDr Hélène Marchetti, médecine générale\n8 rue du Léman, 74100 Annemasse\nTél. 01 99 00 41 20\nPatient : Isabelle Pittet, né(e) en 1973\nSertraline, un comprimé matin et soir, pendant trois mois.\nParacétamol, un comprimé le soir, renouvelable une fois.\nFait à Annemasse, le 26 août 2026."
+  ],
+  "ocr_level": 1,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 26,
+  "path": "juridique/2026-10-01_courrier-etude-chappuis.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_avocat",
+  "date": "2026-10-01",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "org-surname",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-etude-chappuis",
+    "text": "Étude Chappuis & Associés",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-dos-2026-0057",
+    "text": "DOS-2026-0057",
+    "form": "case",
+    "where": "text"
+   },
+   {
+    "entity": "o-dupont-immobilier",
+    "text": "Dupont Immobilier SA",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Lausanne"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 27,
+  "path": "courriers-entrants/pharmacies/2026-08-02_courrier-pharmacie.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_pharmacie",
+  "date": "2026-08-02",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "org-surname",
+  "about": [
+   "p-dupont-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-pharmacie-dupont",
+    "text": "Pharmacie Dupont",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "Monsieur Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 28,
+  "path": "courriers-entrants/2026-03/2026-03-29_courrier-orl-girardin-fabienne.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-03-29",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-girardin-fabienne"
+  ],
+  "mentions": [
+   {
+    "entity": "o-chuv",
+    "text": "Centre hospitalier universitaire vaudois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-chuv",
+    "text": "CHUV",
+    "form": "acronym",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-62-03",
+    "text": "026 555 62 03",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-girardin-fabienne",
+    "text": "Fabienne Girardin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-0166-5316-48",
+    "text": "756.0166.5316.48",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-girardin-fabienne",
+    "text": "Fabienne Girardin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-girardin-fabienne",
+    "text": "Mme Girardin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-girardin-fabienne",
+    "text": "girardin-fabienne",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Lausanne",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "27 juin 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 29,
+  "path": "courriers-entrants/2026-05/2026-05-20_courrier-dermatologie-girard-frederic.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-05-20",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-girard-frederic"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hcl",
+    "text": "Hospices Civils de Lyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-51-29",
+    "text": "06 39 98 51 29",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-roche-bernard",
+    "text": "Dr Bernard Roche",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-girard-frederic",
+    "text": "GIRARD Frédéric",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-74-05-74-192-474-06",
+    "text": "1 74 05 74 192 474 06",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-girard-frederic",
+    "text": "M. Girard",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-girard-frederic",
+    "text": "M. Girard",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-roche-bernard",
+    "text": "Dr Bernard Roche",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-girard-frederic",
+    "text": "girard-frederic",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Lyon",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "18 août 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 30,
+  "path": "courriers-entrants/2026-07/2026-07-23_courrier-compte-rendu.md",
+  "format": "md",
+  "extension": "md",
+  "kind": "lettre_confrere",
+  "date": "2026-07-23",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 30,
+  "special": "",
+  "about": [
+   "p-lucas-roy"
+  ],
+  "mentions": [
+   {
+    "entity": "o-change",
+    "text": "Centre hospitalier Annecy Genevois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-62-38",
+    "text": "06 39 98 62 38",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-lucas-roy",
+    "text": "Lucas Roy",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-83-02-74-416-219-36",
+    "text": "1 83 02 74 416 219 36",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-lucas-roy",
+    "text": "M. Roy",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-lucas-roy",
+    "text": "M. Roy",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "21 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 31,
+  "path": "courriers-entrants/2026-06/2026-06-06_courrier-neurologie-lucas-roy.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-06-06",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-roy-lucas"
+  ],
+  "mentions": [
+   {
+    "entity": "o-chuv",
+    "text": "Centre hospitalier universitaire vaudois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-62-03",
+    "text": "026 555 62 03",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-roy-lucas",
+    "text": "LUCAS Roy",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-7887-5307-52",
+    "text": "756.7887.5307.52",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-roy-lucas",
+    "text": "M. Lucas",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-roy-lucas",
+    "text": "M. Lucas",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-roy-lucas",
+    "text": "lucas-roy",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Lausanne",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "4 septembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 32,
+  "path": "messagerie/2026-03-28_message.eml",
+  "format": "eml",
+  "extension": "eml",
+  "kind": "mail",
+  "date": "2026-03-28",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 33,
+  "path": "formation/2026-06-25_formation-protection.pptx",
+  "format": "pptx",
+  "extension": "pptx",
+  "kind": "presentation",
+  "date": "2026-06-25",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 3,
+  "tier": 100,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ordre-74",
+    "text": "Ordre des médecins de la Haute-Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ars",
+    "text": "ARS Auvergne-Rhône-Alpes",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 34,
+  "path": "formation/2026-07-29_formation-accueil.odp",
+  "format": "odp",
+  "extension": "odp",
+  "kind": "presentation",
+  "date": "2026-07-29",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 3,
+  "tier": 100,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ordre-74",
+    "text": "Ordre des médecins de la Haute-Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ars",
+    "text": "ARS Auvergne-Rhône-Alpes",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 35,
+  "path": "formation/2026-06-26_formation-gestes.ppt",
+  "format": "ppt",
+  "extension": "ppt",
+  "kind": "presentation",
+  "date": "2026-06-26",
+  "country": "FR",
+  "readable": false,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ordre-74",
+    "text": "Ordre des médecins de la Haute-Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ars",
+    "text": "ARS Auvergne-Rhône-Alpes",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 36,
+  "path": "documentation/guide-pratique-cabinet.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "long",
+  "date": "2026-01-06",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 115,
+  "tier": 100,
+  "special": "long",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-ordre-74",
+    "text": "Ordre des médecins de la Haute-Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "d-rapin-jean-luc",
+    "text": "Pr Jean-Luc Rapin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-hug",
+    "text": "HUG",
+    "form": "acronym",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "aiguilles",
+   "hygiène",
+   "lavage des mains",
+   "armoire à pharmacie",
+   "homonymie",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {
+   "needle_page_12": {
+    "sentence": "La formation à l'hygiène est déclarée auprès de {org}.",
+    "page": 9,
+    "question": "Auprès de qui la formation à l'hygiène est-elle déclarée ?",
+    "contains": [
+     "Ordre des médecins de la Haute-Savoie"
+    ]
+   },
+   "needle_page_42": {
+    "sentence": "Les collecteurs d'aiguilles sont enlevés le jeudi par {org}.",
+    "page": 32,
+    "question": "Quel prestataire enlève les collecteurs d'aiguilles ?",
+    "contains": [
+     "Pharma-Dépôt Romandie SA"
+    ]
+   },
+   "needle_page_87": {
+    "sentence": "Le code de l'armoire à pharmacie est renouvelé chaque premier lundi du mois par {who}.",
+    "page": 66,
+    "question": "Qui renouvelle le code de l'armoire à pharmacie ?",
+    "contains": [
+     "Sandrine Colas"
+    ]
+   },
+   "needle_page_101": {
+    "sentence": "En cas de doute sur une homonymie, le secrétariat appelle {who} avant d'enregistrer le dossier.",
+    "page": 77,
+    "question": "Qui appeler en cas de doute sur une homonymie ?",
+    "contains": [
+     "Marchetti"
+    ]
+   },
+   "needle_page_110": {
+    "sentence": "Le guide a été relu par {who} et par {org}.",
+    "page": 84,
+    "question": "Qui a relu le guide de pratique ?",
+    "contains": [
+     "Rapin"
+    ]
+   }
+  }
+ },
+ {
+  "index": 37,
+  "path": "dupont-jean.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-08-21",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "named-after-person",
+  "about": [
+   "p-dupont-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hopital-nyon",
+    "text": "Hôpital de Nyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-032-555-68-91",
+    "text": "032 555 68 91",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "Jean Dupont",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-58-02-74-035-168-35",
+    "text": "1 58 02 74 035 168 35",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "Jean Dupont",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean",
+    "text": "M. Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Nyon",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "19 novembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 38,
+  "path": "pierre-martin.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "horaires",
+  "date": "2026-08-06",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "named-after-person",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "weekday": "mardi"
+  },
+  "needles": {}
+ },
+ {
+  "index": 39,
+  "path": "paul-martin.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "horaires",
+  "date": "2026-08-24",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "named-after-person",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "weekday": "lundi"
+  },
+  "needles": {}
+ },
+ {
+  "index": 40,
+  "path": "administratif/commandes/2026-04-21_commandes.xlsx",
+  "format": "xlsx",
+  "extension": "xlsx",
+  "kind": "commandes_tableau",
+  "date": "2026-04-21",
+  "country": "FR",
+  "readable": false,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "misplaced-workbook",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-bureautique-leman",
+    "text": "Bureautique Léman SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-bureautique-leman",
+    "text": "Bureautique Léman SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-papeterie-lac",
+    "text": "Papeterie du Lac SARL",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-bureautique-leman",
+    "text": "Bureautique Léman SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-bureautique-leman",
+    "text": "Bureautique Léman SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-medsupply",
+    "text": "MedSupply SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-papeterie-lac",
+    "text": "Papeterie du Lac SARL",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 41,
+  "path": "administratif/commandes/2026-02-06_commandes.csv",
+  "format": "csv",
+  "extension": "csv",
+  "kind": "commandes_tableau",
+  "date": "2026-02-06",
+  "country": "CH",
+  "readable": false,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "misplaced-workbook",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-imprimerie-chablais",
+    "text": "Imprimerie du Chablais SAS",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-imprimerie-chablais",
+    "text": "Imprimerie du Chablais SAS",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-imprimerie-chablais",
+    "text": "Imprimerie du Chablais SAS",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-imprimerie-chablais",
+    "text": "Imprimerie du Chablais SAS",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-pharma-depot",
+    "text": "Pharma-Dépôt Romandie SA",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 42,
+  "path": "administratif/commandes/2026-08-09_commandes.xlsx",
+  "format": "xlsx",
+  "extension": "xlsx",
+  "kind": "commandes_tableau",
+  "date": "2026-08-09",
+  "country": "FR",
+  "readable": false,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "misplaced-workbook",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-sig",
+    "text": "Services industriels de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-sig",
+    "text": "Services industriels de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-edf",
+    "text": "EDF",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-swisscom",
+    "text": "Swisscom (Suisse) SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-swisscom",
+    "text": "Swisscom (Suisse) SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-swisscom",
+    "text": "Swisscom (Suisse) SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-sig",
+    "text": "Services industriels de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-sig",
+    "text": "Services industriels de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-swisscom",
+    "text": "Swisscom (Suisse) SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-sig",
+    "text": "Services industriels de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-sig",
+    "text": "Services industriels de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-edf",
+    "text": "EDF",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 43,
+  "path": "administratif/notes/2026-03-04_note-interne-nettoyage.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "note_interne",
+  "date": "2026-03-04",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "s-cottet",
+    "text": "Mélanie Cottet",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "nettoyage"
+  },
+  "needles": {}
+ },
+ {
+  "index": 44,
+  "path": "courriers-entrants/2026-06/2026-06-02_courrier-cardiologie-luthi-zoe.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-06-02",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-luthi-zoe"
+  ],
+  "mentions": [
+   {
+    "entity": "o-rhne",
+    "text": "Réseau hospitalier neuchâtelois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-03-07",
+    "text": "026 555 03 07",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-dupont-jean",
+    "text": "Dr Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "text": "Madame Zoë Lüthi",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-7273-7593-47",
+    "text": "756.7273.7593.47",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "text": "Mme Lüthi",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "text": "Zoë Lüthi",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-dupont-jean",
+    "text": "Dr Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "text": "luthi-zoe",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Neuchâtel",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "31 août 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 45,
+  "path": "courriers-entrants/2026-04/2026-04-10_courrier-orl-crettenand-vincent.eml",
+  "format": "eml",
+  "extension": "eml",
+  "kind": "lettre_confrere",
+  "date": "2026-04-10",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-g0046"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hopital-nyon",
+    "text": "Hôpital de Nyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-03-07",
+    "text": "026 555 03 07",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-dupont-jean",
+    "text": "Dr Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0046",
+    "text": "Vincent Crettenand",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9783-5378-35",
+    "text": "756.9783.5378.35",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0046",
+    "text": "Vincent Crettenand",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0046",
+    "text": "M. Crettenand",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-dupont-jean",
+    "text": "Dr Jean Dupont",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0046",
+    "text": "crettenand-vincent",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Nyon",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "9 juillet 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 46,
+  "path": "patients/courriers/2026-09-19_courrier-patient-dupont-jean-pierre.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "lettre_patient",
+  "date": "2026-09-19",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-dupont-jean-pierre"
+  ],
+  "mentions": [
+   {
+    "entity": "i-01-99-00-25-04",
+    "text": "01 99 00 25 04",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-jean-pierre-dupont-mail-example",
+    "text": "jean.pierre.dupont@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean-pierre",
+    "text": "DUPONT Jean-Pierre",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-jean-pierre",
+    "text": "dupont-jean-pierre",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 47,
+  "path": "patients/courriers/2026-02-24_courrier-patient.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_patient",
+  "date": "2026-02-24",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-dupontet-jean"
+  ],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupontet-jean",
+    "text": "Jean-Dupontet",
+    "form": "hyphen_error",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Thonon-les-Bains",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 48,
+  "path": "laboratoire/2026-06/2026-06-10_resultats-analyses-dupont-marie.odt",
+  "format": "odt",
+  "extension": "odt",
+  "kind": "resultats_labo",
+  "date": "2026-06-10",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-dupont-marie"
+  ],
+  "mentions": [
+   {
+    "entity": "o-cerballiance",
+    "text": "Cerballiance Alpes",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-marie",
+    "text": "DUPONT Marie",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-haddad-karim",
+    "text": "Dr Karim Haddad",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-62-01-74-280-120-37",
+    "text": "2 62 01 74 280 120 37",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-marie",
+    "text": "Mme Dupont",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-dupont-marie",
+    "text": "dupont-marie",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Candida albicans"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "5,8 %",
+   "organism": "Candida albicans"
+  },
+  "needles": {}
+ },
+ {
+  "index": 49,
+  "path": "courriers-entrants/2026-03/2026-03-21_courrier-rhumatologie-martin-claire.rtf",
+  "format": "rtf",
+  "extension": "rtf",
+  "kind": "lettre_confrere",
+  "date": "2026-03-21",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-martin-claire"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-alpes",
+    "text": "Clinique des Alpes SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-01-99-00-68-99",
+    "text": "01 99 00 68 99",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "Claire Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-88-01-69-019-020-38",
+    "text": "2 88 01 69 019 020 38",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "Mme Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "Mme Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "martin-claire",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Annemasse",
+   "metformine"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "19 juin 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 50,
+  "path": "patients/courriers/2026-08-24_courrier-patient.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_patient",
+  "date": "2026-08-24",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-martin-claire"
+  ],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "MARTIN Claire",
+    "form": "reordered",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Lyon",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 51,
+  "path": "reunions/enregistrements/2026-05-28_transcription-preparation.vtt",
+  "format": "vtt",
+  "extension": "vtt",
+  "kind": "transcription",
+  "date": "2026-05-28",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "long-transcript",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "meeting": "préparation de la semaine",
+   "order_code": "BC-2026-0400",
+   "order_amount": "4 675,50 €",
+   "case_code": "DOS-2026-0700",
+   "case_closing": "29 juillet 2026"
+  },
+  "needles": {},
+  "cues": 319
+ },
+ {
+  "index": 52,
+  "path": "courriers-entrants/2026-03/2026-03-05_courrier-dermatologie.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-03-05",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-martin-claire"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hcl",
+    "text": "Hospices Civils de Lyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-01-99-00-20-21",
+    "text": "01 99 00 20 21",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0308",
+    "text": "Dr Yves Dupuy",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "MARTIN Claire",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-88-01-69-019-020-38",
+    "text": "2 88 01 69 019 020 38",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "Mme Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-claire",
+    "text": "Mme Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0308",
+    "text": "Dr Yves Dupuy",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Lyon",
+   "Annemasse",
+   "metformine"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "3 juin 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 53,
+  "path": "reunions/enregistrements/2026-06-17_transcription-organisation.srt",
+  "format": "srt",
+  "extension": "srt",
+  "kind": "transcription",
+  "date": "2026-06-17",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "long-transcript",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "meeting": "organisation des gardes",
+   "order_code": "BC-2026-0401",
+   "order_amount": "CHF 4'884.50",
+   "case_code": "DOS-2026-0701",
+   "case_closing": "17 juillet 2026"
+  },
+  "needles": {},
+  "cues": 385
+ },
+ {
+  "index": 54,
+  "path": "caisses-assurances/france/2026-04-19_courrier-cpam69-martin-luc.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-04-19",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-martin-luc"
+  ],
+  "mentions": [
+   {
+    "entity": "o-cpam69",
+    "text": "CPAM du Rhône",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-luc",
+    "text": "Luc Martin",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-44-09-74-227-931-33",
+    "text": "1 44 09 74 227 931 33",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-martin-luc",
+    "text": "martin-luc",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "indemnités journalières",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "42,38 €"
+  },
+  "needles": {}
+ },
+ {
+  "index": 55,
+  "path": "formation/2026-08-18_formation-gestion.pptx",
+  "format": "pptx",
+  "extension": "pptx",
+  "kind": "presentation",
+  "date": "2026-08-18",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 9,
+  "tier": 100,
+  "special": "deck",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "Gestion des plaintes",
+   "module": "MOD-0100",
+   "session_date": "4 octobre 2026",
+   "cost_per_person": "46,50 €",
+   "seats": "17",
+   "speaker": "Nadia Bensaïd"
+  },
+  "needles": {}
+ },
+ {
+  "index": 56,
+  "path": "caisses-assurances/suisse/2026-05-16_decompte-assura-favre-laurent.pdf",
+  "format": "scan-pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-05-16",
+  "country": "CH",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-favre-laurent"
+  ],
+  "mentions": [
+   {
+    "entity": "o-assura",
+    "text": "Assura-Basis SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-favre-laurent",
+    "text": "Laurent Favre",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-3657-5269-18",
+    "text": "756.3657.5269.18",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-534-490-2",
+    "text": "1.534.490-2",
+    "form": "policy",
+    "where": "text"
+   },
+   {
+    "entity": "p-favre-laurent",
+    "text": "favre-laurent",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Genève",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [
+   "Décision de prise en charge, 16 mai 2026\nAssura-Basis SA\nService des prestations\nBP 280, 74008 Annecy cedex\nLaurent Favre\nAvenue de la Gare 63, 1201 Genève\nN° AVS : 756.3657.5269.18\nPolice n° 1.534.490-2\nMadame, Monsieur,\nNous avons traité la facture de votre médecin du 21 avril 2026.\nMontant pris en charge : CHF 98.66, après déduction de la\nfranchise annuelle de CHF 1500.00 et de la quote-part de 10 %.\nLe versement sera effectué sur votre compte dans les dix jours.\nCe décompte tient lieu de décision au sens de la LAMal. Une\nopposition est possible dans les 30 jours.\nVeuillez agréer, Madame, Monsieur, l'expression de nos\nsalutations distinguées.\nAssura"
+  ],
+  "ocr_level": 1,
+  "facts": {
+   "amount": "CHF 98.66"
+  },
+  "needles": {}
+ },
+ {
+  "index": 57,
+  "path": "caisses-assurances/france/2026-01-15_courrier-cpam69.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-01-15",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-thomas-pierre"
+  ],
+  "mentions": [
+   {
+    "entity": "o-cpam69",
+    "text": "CPAM du Rhône",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-thomas-pierre",
+    "text": "Thomas Pierre",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-90-02-74-035-293-88",
+    "text": "1 90 02 74 035 293 88",
+    "form": "nir",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "indemnités journalières",
+   "Genève",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "53,55 €"
+  },
+  "needles": {}
+ },
+ {
+  "index": 58,
+  "path": "courriers-entrants/2026-07/2026-07-26_courrier-rhumatologie-thomas-pierre.md",
+  "format": "md",
+  "extension": "md",
+  "kind": "lettre_confrere",
+  "date": "2026-07-26",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-pierre-thomas"
+  ],
+  "mentions": [
+   {
+    "entity": "o-chu-grenoble",
+    "text": "CHU Grenoble Alpes",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-01-99-00-68-99",
+    "text": "01 99 00 68 99",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "text": "Monsieur Pierre Thomas",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-55-12-74-381-897-97",
+    "text": "1 55 12 74 381 897 97",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "text": "P. Thomas",
+    "form": "initial_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "text": "M. Thomas",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Paul Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-pierre-thomas",
+    "text": "thomas-pierre",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "24 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 59,
+  "path": "courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-07-30",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-rochat-sophie"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hug",
+    "text": "Hôpitaux universitaires de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-hug",
+    "text": "HUG",
+    "form": "acronym",
+    "where": "text"
+   },
+   {
+    "entity": "i-032-555-07-60",
+    "text": "032 555 07 60",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0034",
+    "text": "Dre Anne Ibrahimi",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "text": "ROCHAT Sophie",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-4274-1566-70",
+    "text": "756.4274.1566.70",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "text": "Mme Rochat",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-rochat-sophie",
+    "text": "Mme Rochat",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0034",
+    "text": "Dre Anne Ibrahimi",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "28 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 60,
+  "path": "formation/2026-05-11_formation-accueil.odp",
+  "format": "odp",
+  "extension": "odp",
+  "kind": "presentation",
+  "date": "2026-05-11",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 11,
+  "tier": 100,
+  "special": "deck",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "Accueil des patients",
+   "module": "MOD-0101",
+   "session_date": "19 juin 2026",
+   "cost_per_person": "168,50 €",
+   "seats": "10",
+   "speaker": "Hélène Marchetti"
+  },
+  "needles": {}
+ },
+ {
+  "index": 61,
+  "path": "laboratoire/2026-02/2026-02-27_resultats-analyses-chappuis-nathalie.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "resultats_labo",
+  "date": "2026-02-27",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-chappuis-nathalie"
+  ],
+  "mentions": [
+   {
+    "entity": "o-unilabs",
+    "text": "Unilabs Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-chappuis-nathalie",
+    "text": "CHAPPUIS Nathalie",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0094",
+    "text": "Dr Ibrahim Brunner",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-8669-5345-17",
+    "text": "756.8669.5345.17",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-chappuis-nathalie",
+    "text": "Mme Chappuis",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-chappuis-nathalie",
+    "text": "chappuis-nathalie",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "5,6 %"
+  },
+  "needles": {}
+ },
+ {
+  "index": 62,
+  "path": "patients/courriers/2026-08-28_courrier-patient.eml",
+  "format": "eml",
+  "extension": "eml",
+  "kind": "lettre_patient",
+  "date": "2026-08-28",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-maillard-pascal"
+  ],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-maillard-pascal",
+    "text": "Pascal-Maillard",
+    "form": "hyphen_error",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Fribourg",
+   "Morges",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 63,
+  "path": "caisses-assurances/suisse/2026-10-03_decompte-groupe-mutuel.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "courrier_caisse",
+  "date": "2026-10-03",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-bovet-celine"
+  ],
+  "mentions": [
+   {
+    "entity": "o-groupe-mutuel",
+    "text": "Groupe Mutuel",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-bovet-celine",
+    "text": "Céline Bovet",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-1933-7738-89",
+    "text": "756.1933.7738.89",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-6-145-460-9",
+    "text": "6.145.460-9",
+    "form": "policy",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Genève",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "CHF 532.82"
+  },
+  "needles": {}
+ },
+ {
+  "index": 64,
+  "path": "courriers-entrants/2026-07/2026-07-12_courrier-compte-rendu.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-07-12",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-jaccard-alain"
+  ],
+  "mentions": [
+   {
+    "entity": "o-rhne",
+    "text": "Réseau hospitalier neuchâtelois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-rhne",
+    "text": "RHNe",
+    "form": "acronym",
+    "where": "text"
+   },
+   {
+    "entity": "i-022-555-51-74",
+    "text": "022 555 51 74",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0287",
+    "text": "Dr Tomasz Bianchi",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-jaccard-alain",
+    "text": "Alain Jaccard",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9972-0535-66",
+    "text": "756.9972.0535.66",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-jaccard-alain",
+    "text": "M. Jaccard",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-jaccard-alain",
+    "text": "M. Jaccard",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0287",
+    "text": "Dr Tomasz Bianchi",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Neuchâtel",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "10 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 65,
+  "path": "scans/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg",
+  "format": "jpg",
+  "extension": "jpg",
+  "kind": "lettre_confrere",
+  "date": "2026-08-05",
+  "country": "CH",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-deleze-christelle"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hug",
+    "text": "Hôpitaux universitaires de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-024-555-12-03",
+    "text": "024 555 12 03",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0062",
+    "text": "Dr Damien Pillet",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-deleze-christelle",
+    "text": "Christelle Délèze",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9054-0257-19",
+    "text": "756.9054.0257.19",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-deleze-christelle",
+    "text": "Mme Délèze",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-deleze-christelle",
+    "text": "Mme Délèze",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0062",
+    "text": "Dr Damien Pillet",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-deleze-christelle",
+    "text": "deleze-christelle",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Morges",
+   "Annemasse"
+  ],
+  "ocr_pages": [
+   "Compte rendu de consultation, 5 août 2026\nDr Damien Pillet\nHôpitaux universitaires de Genève\nAvenue de Morges 66, 1180 Rolle\nTél. 024 555 12 03\nDr Hélène Marchetti\n8 rue du Léman, 74100 Annemasse\nRolle, le 5 août 2026\nObjet : Christelle Délèze, né(e) en 1979, consultation pour un\nbilan endocrinologique.\nN° AVS : 756.9054.0257.19\nCher confrère,\nJ'ai reçu Mme Délèze le 25 juillet 2026 pour un bilan\nendocrinologique. L'examen clinique est rassurant et les\nrésultats récents sont conformes à ce qui était attendu. J'ai\ndemandé un contrôle biologique et un courrier de synthèse sera\nadressé à la caisse.\nLe traitement par amoxicilline est poursuivi à la dose\nhabituelle. Mme Délèze a été informé(e) des modalités de suivi\net du calendrier des prochains rendez-vous.\nJe vous remercie de votre confiance et reste à votre\ndisposition. Prochain rendez-vous : 3 novembre 2026.\nConfraternellement,\nDr Damien Pillet"
+  ],
+  "ocr_level": 0,
+  "facts": {
+   "next_visit": "3 novembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 66,
+  "path": "laboratoire/2026-06/2026-06-26_resultats-analyses.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "resultats_labo",
+  "date": "2026-06-26",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-crettenand-gregoire"
+  ],
+  "mentions": [
+   {
+    "entity": "o-unilabs",
+    "text": "Unilabs Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-crettenand-gregoire",
+    "text": "CRETTENAND Grégoire",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0062",
+    "text": "Dr Damien Pillet",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-3358-6319-73",
+    "text": "756.3358.6319.73",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-crettenand-gregoire",
+    "text": "M. Crettenand",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Escherichia coli",
+   "Genève"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "5,5 %",
+   "organism": "Escherichia coli"
+  },
+  "needles": {}
+ },
+ {
+  "index": 67,
+  "path": "documentation/manuel-qualite.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "long",
+  "date": "2026-07-01",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "long",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-bureautique-leman",
+    "text": "Bureautique Léman SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-ars",
+    "text": "ARS",
+    "form": "acronym",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "lavage des mains",
+   "chaîne du froid",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {
+   "needle_page_33": {
+    "sentence": "Le contrat de maintenance des copieurs est tenu avec {org}.",
+    "page": 0,
+    "question": "Avec qui est tenu le contrat de maintenance des copieurs ?",
+    "contains": [
+     "Bureautique Léman SA"
+    ]
+   },
+   "needle_page_58": {
+    "sentence": "Les écarts de la chaîne du froid sont signalés à {who}.",
+    "page": 0,
+    "question": "À qui signaler un écart de la chaîne du froid ?",
+    "contains": [
+     "Nadia Bensaïd"
+    ]
+   },
+   "needle_page_95": {
+    "sentence": "Les contrôles annuels des appareils sont réalisés par un organisme agréé, puis transmis à {org}.",
+    "page": 0,
+    "question": "À qui sont transmis les contrôles annuels des appareils ?",
+    "contains": [
+     "ARS"
+    ]
+   }
+  }
+ },
+ {
+  "index": 68,
+  "path": "courriers-entrants/2026-09/2026-09-07_courrier-neurologie.odt",
+  "format": "odt",
+  "extension": "odt",
+  "kind": "lettre_confrere",
+  "date": "2026-09-07",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-vuilleumier-marie-claude"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hopital-nyon",
+    "text": "Hôpital de Nyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-022-555-87-34",
+    "text": "022 555 87 34",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0420",
+    "text": "Dr Claude Monnerat",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-vuilleumier-marie-claude",
+    "text": "Marie-Claude Vuilleumier",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-1243-5023-08",
+    "text": "756.1243.5023.08",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-vuilleumier-marie-claude",
+    "text": "Marie-Claude Vuilleumier",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "p-vuilleumier-marie-claude",
+    "text": "Marie-Claude Vuilleumier",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0420",
+    "text": "Dr Claude Monnerat",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Nyon",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "6 décembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 69,
+  "path": "courriers-entrants/2026-03/2026-03-16_courrier-orl.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-03-16",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-python-jean-claude"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hopital-nyon",
+    "text": "Hôpital de Nyon",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-032-555-68-91",
+    "text": "032 555 68 91",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-python-jean-claude",
+    "text": "Jean-Claude Python",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-4689-6437-65",
+    "text": "756.4689.6437.65",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-python-jean-claude",
+    "text": "M. Python",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-python-jean-claude",
+    "text": "Jean-Claude Python",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Nyon",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "14 juin 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 70,
+  "path": "laboratoire/2026-06/2026-06-25_resultats-analyses.rtf",
+  "format": "rtf",
+  "extension": "rtf",
+  "kind": "resultats_labo",
+  "date": "2026-06-25",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-oberson-pierre-alain"
+  ],
+  "mentions": [
+   {
+    "entity": "o-viollier",
+    "text": "Laboratoire Viollier",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "text": "OBERSON Pierre-Alain",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-bersier-marc",
+    "text": "Dr Marc Bersier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-5450-3683-20",
+    "text": "756.5450.3683.20",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "text": "M. Oberson",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Escherichia coli"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "7,4 %",
+   "organism": "Escherichia coli"
+  },
+  "needles": {}
+ },
+ {
+  "index": 71,
+  "path": "caisses-assurances/suisse/2026-03-19_decompte-groupe-mutuel.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-03-19",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-genoud-anne-laure"
+  ],
+  "mentions": [
+   {
+    "entity": "o-groupe-mutuel",
+    "text": "Groupe Mutuel",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-genoud-anne-laure",
+    "text": "Anne-Laure Genoud",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9869-7740-17",
+    "text": "756.9869.7740.17",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-5-116-759-9",
+    "text": "5.116.759-9",
+    "form": "policy",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Genève",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "CHF 602.58"
+  },
+  "needles": {}
+ },
+ {
+  "index": 72,
+  "path": "patients/courriers/2026-03-22_courrier-patient.eml",
+  "format": "eml",
+  "extension": "eml",
+  "kind": "lettre_patient",
+  "date": "2026-03-22",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-tschopp-raphael"
+  ],
+  "mentions": [
+   {
+    "entity": "i-021-555-26-04",
+    "text": "021 555 26 04",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-raphael-tschopp-mail-example",
+    "text": "raphael.tschopp@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-tschopp-raphael",
+    "text": "Raphaël Tschopp",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 73,
+  "path": "caisses-assurances/suisse/2026-05-23_decompte-helsana-zufferey-stephane.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "courrier_caisse",
+  "date": "2026-05-23",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-zufferey-stephane"
+  ],
+  "mentions": [
+   {
+    "entity": "o-helsana",
+    "text": "Helsana Assurances SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-zufferey-stephane",
+    "text": "Stéphane Zufferey",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-4860-1921-74",
+    "text": "756.4860.1921.74",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-6-698-872-4",
+    "text": "6.698.872-4",
+    "form": "policy",
+    "where": "text"
+   },
+   {
+    "entity": "p-zufferey-stephane",
+    "text": "zufferey-stephane",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "CHF 217.74"
+  },
+  "needles": {}
+ },
+ {
+  "index": 74,
+  "path": "laboratoire/2026-01/2026-01-10_resultats-analyses-benali-fatima.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "resultats_labo",
+  "date": "2026-01-10",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-benali-fatima"
+  ],
+  "mentions": [
+   {
+    "entity": "o-unilabs",
+    "text": "Unilabs Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-benali-fatima",
+    "text": "BENALI Fatima",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0218",
+    "text": "Dre Yvonne Mudry",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-6091-5610-19",
+    "text": "756.6091.5610.19",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-benali-fatima",
+    "text": "Mme Benali",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-benali-fatima",
+    "text": "benali-fatima",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "6,5 %"
+  },
+  "needles": {}
+ },
+ {
+  "index": 75,
+  "path": "patients/courriers/2026-07-31_courrier-patient-el-khoury-mohamed.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "lettre_patient",
+  "date": "2026-07-31",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-el-khoury-mohamed"
+  ],
+  "mentions": [
+   {
+    "entity": "i-01-99-00-42-00",
+    "text": "01 99 00 42 00",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-mohamed-el-khoury-mail-example",
+    "text": "mohamed.el.khoury@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-el-khoury-mohamed",
+    "text": "EL KHOURY Mohamed",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "p-el-khoury-mohamed",
+    "text": "el-khoury-mohamed",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Lyon",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 76,
+  "path": "reunions/enregistrements/2026-09-01_transcription-bilan.vtt",
+  "format": "vtt",
+  "extension": "vtt",
+  "kind": "transcription",
+  "date": "2026-09-01",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "long-transcript",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "meeting": "bilan mensuel",
+   "order_code": "BC-2026-0402",
+   "order_amount": "CHF 4'826.00",
+   "case_code": "DOS-2026-0702",
+   "case_closing": "24 octobre 2026"
+  },
+  "needles": {},
+  "cues": 393
+ },
+ {
+  "index": 77,
+  "path": "reunions/enregistrements/2026-06-20_transcription-preparation.srt",
+  "format": "srt",
+  "extension": "srt",
+  "kind": "transcription",
+  "date": "2026-06-20",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "long-transcript",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "meeting": "préparation de la semaine",
+   "order_code": "BC-2026-0403",
+   "order_amount": "1 507,90 €",
+   "case_code": "DOS-2026-0703",
+   "case_closing": "18 août 2026"
+  },
+  "needles": {},
+  "cues": 300
+ },
+ {
+  "index": 78,
+  "path": "caisses-assurances/suisse/2026-06-23_decompte-css.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "courrier_caisse",
+  "date": "2026-06-23",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-nguyen-thi-lan"
+  ],
+  "mentions": [
+   {
+    "entity": "o-css",
+    "text": "CSS Assurance",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-nguyen-thi-lan",
+    "text": "Thi Lan Nguyen",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-8683-4761-52",
+    "text": "756.8683.4761.52",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "i-5-721-898-7",
+    "text": "5.721.898-7",
+    "form": "policy",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "LAMal",
+   "franchise",
+   "quote-part",
+   "Genève",
+   "Morges",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "CHF 445.47"
+  },
+  "needles": {}
+ },
+ {
+  "index": 79,
+  "path": "formation/2026-01-05_formation-chaine.pptx",
+  "format": "pptx",
+  "extension": "pptx",
+  "kind": "presentation",
+  "date": "2026-01-05",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 9,
+  "tier": 100,
+  "special": "deck",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "chaîne du froid"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "Chaîne du froid",
+   "module": "MOD-0102",
+   "session_date": "3 avril 2026",
+   "cost_per_person": "90,50 €",
+   "seats": "19",
+   "speaker": "Hélène Marchetti"
+  },
+  "needles": {}
+ },
+ {
+  "index": 80,
+  "path": "patients/courriers/2026-06-04_courrier-patient.pdf",
+  "format": "scan-pdf",
+  "extension": "pdf",
+  "kind": "lettre_patient",
+  "date": "2026-06-04",
+  "country": "CH",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-dos-santos-ferreira-maria"
+  ],
+  "mentions": [
+   {
+    "entity": "i-021-555-00-27",
+    "text": "021 555 00 27",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-maria-dos-santos-ferreira-mail-example",
+    "text": "maria.dos.santos.ferreira@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-dos-santos-ferreira-maria",
+    "text": "Maria-Dos Santos Ferreira",
+    "form": "hyphen_error",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Lausanne",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [
+   "Demande de copie de dossier\nRue de Carouge 32, 1003 Lausanne\nTél. 021 555 00 27 — maria.dos.santos.ferreira@mail.example\nDr Hélène Marchetti\nCabinet médical des Voirons\n8 rue du Léman, 74100 Annemasse\nObjet : demande de rendez-vous et de copie de mon dossier.\nLausanne, le 4 juin 2026.\nMadame le Docteur,\nJe souhaiterais obtenir un rendez-vous dans le courant du mois\nprochain et recevoir une copie des derniers résultats\nd'analyses. Je me tiens à votre disposition pour toute\nprécision.\nAvec mes salutations distinguées,\nMaria-Dos Santos Ferreira"
+  ],
+  "ocr_level": 0,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 81,
+  "path": "patients/courriers/2026-06-25_courrier-patient-demirci-ibrahim.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_patient",
+  "date": "2026-06-25",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-demirci-ibrahim"
+  ],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-demirci-ibrahim",
+    "text": "I. Demirci",
+    "form": "initial_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-demirci-ibrahim",
+    "text": "demirci-ibrahim",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 82,
+  "path": "patients/courriers/2026-10-07_courrier-patient.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_patient",
+  "date": "2026-10-07",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-petrovic-elena"
+  ],
+  "mentions": [
+   {
+    "entity": "i-024-555-57-38",
+    "text": "024 555 57 38",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-elena-petrovic-mail-example",
+    "text": "elena.petrovic@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-petrovic-elena",
+    "text": "Elena-Petrović",
+    "form": "hyphen_error",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 83,
+  "path": "courriers-entrants/2026-01/2026-01-07_courrier-cardiologie.odt",
+  "format": "odt",
+  "extension": "odt",
+  "kind": "lettre_confrere",
+  "date": "2026-01-07",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-damico-giuseppe"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-alpes",
+    "text": "Clinique des Alpes SA",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-62-38",
+    "text": "06 39 98 62 38",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "text": "Giuseppe D'Amico",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-50-11-74-373-641-46",
+    "text": "1 50 11 74 373 641 46",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "text": "Giuseppe D'Amico",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "p-damico-giuseppe",
+    "text": "Giuseppe D'Amico",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-pierre",
+    "text": "Dr Pierre Martin",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "7 avril 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 84,
+  "path": "courriers-entrants/2026-02/2026-02-11_courrier-endocrinologie.eml",
+  "format": "eml",
+  "extension": "eml",
+  "kind": "lettre_confrere",
+  "date": "2026-02-11",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-ndiaye-aicha"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hpps",
+    "text": "Hôpital Privé Pays de Savoie",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-31-23",
+    "text": "06 39 98 31 23",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0387",
+    "text": "Dr Pierre-Yves Arnaud",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-ndiaye-aicha",
+    "text": "Aicha N'Diaye",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-95-11-69-073-874-97",
+    "text": "2 95 11 69 073 874 97",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-ndiaye-aicha",
+    "text": "Aicha N'Diaye",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "p-ndiaye-aicha",
+    "text": "Aicha N'Diaye",
+    "form": "no_accent",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0387",
+    "text": "Dr Pierre-Yves Arnaud",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "12 mai 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 85,
+  "path": "patients/courriers/2026-06-12_courrier-patient.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_patient",
+  "date": "2026-06-12",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-obrien-sean"
+  ],
+  "mentions": [
+   {
+    "entity": "i-026-555-59-57",
+    "text": "026 555 59 57",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-sean-o-brien-mail-example",
+    "text": "sean.o.brien@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-obrien-sean",
+    "text": "Sean O'Brien",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 86,
+  "path": "courriers-entrants/2026-04/2026-04-13_courrier-cardiologie-muller-jorg.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-04-13",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-muller-jorg"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hfr",
+    "text": "Hôpital fribourgeois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-021-555-83-71",
+    "text": "021 555 83 71",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0097",
+    "text": "Dr François Queloz",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-muller-jorg",
+    "text": "Jörg Müller",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-6956-3397-08",
+    "text": "756.6956.3397.08",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-muller-jorg",
+    "text": "Jörg Müller",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-muller-jorg",
+    "text": "Jörg Müller",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0097",
+    "text": "Dr François Queloz",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-muller-jorg",
+    "text": "muller-jorg",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Fribourg",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "12 juillet 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 87,
+  "path": "laboratoire/2026-05/2026-05-27_resultats-analyses.png",
+  "format": "png",
+  "extension": "png",
+  "kind": "resultats_labo",
+  "date": "2026-05-27",
+  "country": "CH",
+  "readable": true,
+  "ocr": true,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-hasanovic-anna"
+  ],
+  "mentions": [
+   {
+    "entity": "o-viollier",
+    "text": "Laboratoire Viollier",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-hasanovic-anna",
+    "text": "HASANOVIĆ Anna",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9178-6351-60",
+    "text": "756.9178.6351.60",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-hasanovic-anna",
+    "text": "Mme Hasanović",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [
+   "Résultats d'analyses du 27 mai 2026\nLaboratoire Viollier\nDossier n° 40737\nPatient : HASANOVIĆ Anna\nPrescripteur : Dre Anne-Sophie Vuagniaux\nN° AVS : 756.9178.6351.60\nHémoglobine glyquée : 5,4 %\nCréatinine : 98 µmol/L\nCholestérol total : 6,9 mmol/L\nGlycémie à jeun : 4,3 mmol/L\nRésultats validés le 27 mai 2026 par le laboratoire. Copie à Mme\nHasanović."
+  ],
+  "ocr_level": 0,
+  "facts": {
+   "hba1c": "5,4 %"
+  },
+  "needles": {}
+ },
+ {
+  "index": 88,
+  "path": "laboratoire/2026-08/2026-08-28_resultats-analyses-bernasconi-luca.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "resultats_labo",
+  "date": "2026-08-28",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-bernasconi-luca"
+  ],
+  "mentions": [
+   {
+    "entity": "o-unilabs",
+    "text": "Unilabs Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "text": "BERNASCONI Luca",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-cuenoud-philippe",
+    "text": "Dr Philippe Cuénoud",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-4280-3562-62",
+    "text": "756.4280.3562.62",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "text": "M. Bernasconi",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-bernasconi-luca",
+    "text": "bernasconi-luca",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "5,2 %"
+  },
+  "needles": {}
+ },
+ {
+  "index": 89,
+  "path": "caisses-assurances/france/2026-07-11_courrier-mgen.md",
+  "format": "md",
+  "extension": "md",
+  "kind": "courrier_caisse",
+  "date": "2026-07-11",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-le-gall-laurence"
+  ],
+  "mentions": [
+   {
+    "entity": "o-mgen",
+    "text": "MGEN",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-le-gall-laurence",
+    "text": "Laurence Le Gall",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-2-64-11-74-272-556-97",
+    "text": "2 64 11 74 272 556 97",
+    "form": "nir",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "indemnités journalières",
+   "Genève",
+   "Annecy",
+   "Sion"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "amount": "131,00 €"
+  },
+  "needles": {}
+ },
+ {
+  "index": 90,
+  "path": "courriers-entrants/2026-07/2026-07-17_courrier-cardiologie.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "lettre_confrere",
+  "date": "2026-07-17",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-de-la-fontaine-matthieu"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-annecy",
+    "text": "Clinique Générale d'Annecy",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-06-39-98-42-60",
+    "text": "06 39 98 42 60",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-haddad-karim",
+    "text": "Dr Karim Haddad",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-de-la-fontaine-matthieu",
+    "text": "Matthieu de la Fontaine",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-78-11-73-228-539-49",
+    "text": "1 78 11 73 228 539 49",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-de-la-fontaine-matthieu",
+    "text": "M. de la Fontaine",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-de-la-fontaine-matthieu",
+    "text": "M. de la Fontaine",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-haddad-karim",
+    "text": "Dr Karim Haddad",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Annecy",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "15 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 91,
+  "path": "patients/courriers/2026-09-14_courrier-patient.rtf",
+  "format": "rtf",
+  "extension": "rtf",
+  "kind": "lettre_patient",
+  "date": "2026-09-14",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-daubigne-camille"
+  ],
+  "mentions": [
+   {
+    "entity": "i-06-39-98-32-75",
+    "text": "06 39 98 32 75",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-camille-d-aubigne-mail-example",
+    "text": "camille.d.aubigne@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-daubigne-camille",
+    "text": "C. d'Aubigné",
+    "form": "initial_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 92,
+  "path": "patients/courriers/2026-03-20_courrier-patient-luthi-zoe.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_patient",
+  "date": "2026-03-20",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-luthi-zoe"
+  ],
+  "mentions": [
+   {
+    "entity": "i-027-555-55-67",
+    "text": "027 555 55 67",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "i-zoe-luthi-mail-example",
+    "text": "zoe.luthi@mail.example",
+    "form": "email",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-cabinet-voirons",
+    "text": "Cabinet médical des Voirons",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "text": "Z. Lüthi",
+    "form": "initial_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-luthi-zoe",
+    "text": "luthi-zoe",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Lausanne",
+   "Morges",
+   "Sion",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ },
+ {
+  "index": 93,
+  "path": "formation/2026-02-21_formation-gestes.odp",
+  "format": "odp",
+  "extension": "odp",
+  "kind": "presentation",
+  "date": "2026-02-21",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 8,
+  "tier": 100,
+  "special": "deck",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "topic": "Gestes d'urgence",
+   "module": "MOD-0103",
+   "session_date": "18 avril 2026",
+   "cost_per_person": "380,50 €",
+   "seats": "22",
+   "speaker": "Nadia Bensaïd"
+  },
+  "needles": {}
+ },
+ {
+  "index": 94,
+  "path": "laboratoire/2026-08/2026-08-23_resultats-analyses.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "resultats_labo",
+  "date": "2026-08-23",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-lindqvist-asa"
+  ],
+  "mentions": [
+   {
+    "entity": "o-unilabs",
+    "text": "Unilabs Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-lindqvist-asa",
+    "text": "LINDQVIST Åsa",
+    "form": "reordered",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0314",
+    "text": "Dr Benoît Meylan",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-5968-2573-07",
+    "text": "756.5968.2573.07",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-lindqvist-asa",
+    "text": "Mme Lindqvist",
+    "form": "title_surname",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Staphylococcus aureus",
+   "Genève"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "hba1c": "6,9 %",
+   "organism": "Staphylococcus aureus"
+  },
+  "needles": {}
+ },
+ {
+  "index": 95,
+  "path": "courriers-entrants/2026-07/2026-07-29_courrier-compte-rendu-brun-yves.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-07-29",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-g0365"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hug",
+    "text": "Hôpitaux universitaires de Genève",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-hug",
+    "text": "HUG",
+    "form": "acronym",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-62-03",
+    "text": "026 555 62 03",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0365",
+    "text": "Yves Brun",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-43-01-73-004-817-92",
+    "text": "1 43 01 73 004 817 92",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0365",
+    "text": "Yves Brun",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0365",
+    "text": "Yves Brun",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-vuagniaux-anne-sophie",
+    "text": "Dre Anne-Sophie Vuagniaux",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0365",
+    "text": "brun-yves",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Lausanne",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "27 octobre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 96,
+  "path": "courriers-entrants/2026-08/2026-08-12_courrier-orl.eml",
+  "format": "eml",
+  "extension": "eml",
+  "kind": "lettre_confrere",
+  "date": "2026-08-12",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-lucas-roy"
+  ],
+  "mentions": [
+   {
+    "entity": "o-rhne",
+    "text": "Réseau hospitalier neuchâtelois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-027-555-73-12",
+    "text": "027 555 73 12",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-grandjean-yann",
+    "text": "Dr Yann Grandjean",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-lucas-roy",
+    "text": "Lucas Roy",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-1-83-02-74-416-219-36",
+    "text": "1 83 02 74 416 219 36",
+    "form": "nir",
+    "where": "text"
+   },
+   {
+    "entity": "p-lucas-roy",
+    "text": "M. Roy",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-lucas-roy",
+    "text": "M. Roy",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-grandjean-yann",
+    "text": "Dr Yann Grandjean",
+    "form": "title_full",
+    "where": "text"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Neuchâtel",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "10 novembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 97,
+  "path": "courriers-entrants/2026-08/2026-08-13_courrier-compte-rendu-fellay-dominique.odt",
+  "format": "odt",
+  "extension": "odt",
+  "kind": "lettre_confrere",
+  "date": "2026-08-13",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-g0109"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hopital-valais",
+    "text": "Hôpital du Valais",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-026-555-54-60",
+    "text": "026 555 54 60",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-mottier-sylvain",
+    "text": "Dr Sylvain Mottier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0109",
+    "text": "Dominique Fellay",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-6269-2684-05",
+    "text": "756.6269.2684.05",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0109",
+    "text": "M. Fellay",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0109",
+    "text": "M. Fellay",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "d-mottier-sylvain",
+    "text": "Dr Sylvain Mottier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0109",
+    "text": "fellay-dominique",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Nyon",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "11 novembre 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 98,
+  "path": "courriers-entrants/2026-01/2026-01-30_courrier-neurologie-girod-ursula.pdf",
+  "format": "pdf",
+  "extension": "pdf",
+  "kind": "lettre_confrere",
+  "date": "2026-01-30",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-g0074"
+  ],
+  "mentions": [
+   {
+    "entity": "o-clinique-source",
+    "text": "Clinique La Source",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-021-555-00-08",
+    "text": "021 555 00 08",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-pasquier-sandra",
+    "text": "Dre Sandra Pasquier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0074",
+    "text": "Madame Ursula Girod",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-9346-9567-07",
+    "text": "756.9346.9567.07",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0074",
+    "text": "Mme Girod",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0074",
+    "text": "Ursula Girod",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-pasquier-sandra",
+    "text": "Dre Sandra Pasquier",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-g0074",
+    "text": "girod-ursula",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Genève",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "30 avril 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 99,
+  "path": "courriers-entrants/2026-05/2026-05-09_courrier-rhumatologie-oberson-pierre-alain.docx",
+  "format": "docx",
+  "extension": "docx",
+  "kind": "lettre_confrere",
+  "date": "2026-05-09",
+  "country": "CH",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "",
+  "about": [
+   "p-oberson-pierre-alain"
+  ],
+  "mentions": [
+   {
+    "entity": "o-hfr",
+    "text": "Hôpital fribourgeois",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "o-hfr",
+    "text": "HFR",
+    "form": "acronym",
+    "where": "text"
+   },
+   {
+    "entity": "i-021-555-66-98",
+    "text": "021 555 66 98",
+    "form": "phone",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0100",
+    "text": "Dr Besnik Rossi",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "o-marchetti",
+    "text": "Dr Hélène Marchetti",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "text": "Pierre-Alain Oberson",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "i-756-5450-3683-20",
+    "text": "756.5450.3683.20",
+    "form": "avs",
+    "where": "text"
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "text": "M. Oberson",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "text": "Pierre-Alain Oberson",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-g0100",
+    "text": "Dr Besnik Rossi",
+    "form": "title_full",
+    "where": "text"
+   },
+   {
+    "entity": "p-oberson-pierre-alain",
+    "text": "oberson-pierre-alain",
+    "form": "filename",
+    "where": "filename"
+   }
+  ],
+  "terms": [
+   "Fribourg",
+   "Annemasse"
+  ],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "next_visit": "7 août 2026"
+  },
+  "needles": {}
+ },
+ {
+  "index": 100,
+  "path": "reunions/enregistrements/2026-03-08_transcription-preparation.vtt",
+  "format": "vtt",
+  "extension": "vtt",
+  "kind": "transcription",
+  "date": "2026-03-08",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 100,
+  "special": "long-transcript",
+  "about": [],
+  "mentions": [
+   {
+    "entity": "o-marchetti",
+    "text": "Hélène Marchetti",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "d-martin-paul",
+    "text": "Dr Martin",
+    "form": "title_surname",
+    "where": "text"
+   },
+   {
+    "entity": "s-colas",
+    "text": "Sandrine Colas",
+    "form": "full",
+    "where": "text"
+   },
+   {
+    "entity": "s-bensaid",
+    "text": "Nadia Bensaïd",
+    "form": "full",
+    "where": "text"
+   }
+  ],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {
+   "meeting": "préparation de la semaine",
+   "order_code": "BC-2026-0404",
+   "order_amount": "1 600,90 €",
+   "case_code": "DOS-2026-0704",
+   "case_closing": "3 avril 2026"
+  },
+  "needles": {},
+  "cues": 314
+ },
+ {
+  "index": 101,
+  "path": "modeles/modele-relance-facture.txt",
+  "format": "txt",
+  "extension": "txt",
+  "kind": "modele",
+  "date": "2026-01-05",
+  "country": "FR",
+  "readable": true,
+  "ocr": false,
+  "pages": 1,
+  "tier": 101,
+  "special": "template",
+  "about": [],
+  "mentions": [],
+  "terms": [],
+  "ocr_pages": [],
+  "ocr_level": null,
+  "facts": {},
+  "needles": {}
+ }
+]

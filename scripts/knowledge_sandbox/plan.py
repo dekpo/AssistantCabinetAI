@@ -218,8 +218,10 @@ def _roll(rng: random.Random, table):
     return table[-1][0]
 
 
-def random_spec(cast: Cast, rng: random.Random, next_invoice, next_contract) -> Spec:
-    kind = _roll(rng, KIND_WEIGHTS)
+def random_spec(cast: Cast, rng: random.Random, next_invoice, next_contract, weights=None) -> Spec:
+    """`weights` replaces `KIND_WEIGHTS` (the `demo` profile draws no transcript and no presentation here: it adds
+    its own at fixed positions). The default draws exactly what it always drew."""
+    kind = _roll(rng, weights or KIND_WEIGHTS)
     O = cast.org
     swiss_hospitals = ["hug", "chuv", "clinique-source", "hopital-nyon", "hfr", "rhne", "hopital-valais"]
     french_hospitals = ["change", "chu-grenoble", "hcl", "clinique-annecy", "hpps", "clinique-alpes"]

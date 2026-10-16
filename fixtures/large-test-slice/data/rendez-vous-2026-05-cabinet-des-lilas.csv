@@ -1,0 +1,55 @@
+Date;Patient;Médecin;Motif;Montant;Caisse
+01/05/2026;Fatima Benali;Dr Pierre Martin;Consultation;55,00;MGEN
+01/05/2026;DUCOMMUN Léa;Dre Anne-Sophie Vuagniaux;Bilan annuel;60,00;MGEN
+02/05/2026;DÉLÈZE Christelle;Dr Jean Dupont;Suivi;30,00;CPAM 74
+04/05/2026;FAVRE Marie-Claude;Dr Marc Bersier;Consultation;60,00;MGEN
+04/05/2026;Alexandre Garnier;Dr Jean Dupont;Renouvellement;85,50;CPAM 74
+04/05/2026;Dominique Fabre;Dr Olivier Favre;Vaccination;55,00;MGEN
+05/05/2026;Pierre-Alain Oberson;Dre Anne-Sophie Vuagniaux;Certificat;85,50;CPAM 74
+05/05/2026;Dominique Ducrettet;Dr Hélène Marchetti;Renouvellement;100,00;Harmonie
+05/05/2026;Marie Dupont;Dr Paul Martin;Suivi;100,00;Harmonie
+06/05/2026;Thi Lan Nguyen;Dr Marc Bersier;Bilan annuel;30,00;CPAM 74
+06/05/2026;Maëlle Colin;Dr Paul Martin;Suivi;30,00;Harmonie
+06/05/2026;Jean-Pierre Dupont;Dre Anne-Sophie Vuagniaux;Suivi;85,50;CPAM 74
+06/05/2026;Matthieu de la Fontaine;Dre Anne-Sophie Vuagniaux;Suivi;55,00;MGEN
+07/05/2026;DEMIRCI Ibrahim;Dr Paul Martin;Vaccination;60,00;CPAM 74
+08/05/2026;HUGUENIN Dominique;Dr Hélène Marchetti;Vaccination;100,00;MGEN
+08/05/2026;N'DIAYE Aïcha;Dr Olivier Favre;Consultation;55,00;Harmonie
+08/05/2026;François Jaccard;Dr Olivier Favre;Bilan annuel;60,00;MGEN
+09/05/2026;Marie-Claude Huguenin;Dr Paul Martin;Suivi;55,00;Harmonie
+09/05/2026;David Girod;Dr Marc Bersier;Certificat;55,00;Harmonie
+09/05/2026;Inès Garcia;Dr Olivier Favre;Bilan annuel;60,00;CPAM 74
+09/05/2026;Florence Bersier;Dr Paul Martin;Certificat;55,00;Harmonie
+09/05/2026;Nicolas Girard;Dr Hélène Marchetti;Consultation;100,00;CPAM 74
+11/05/2026;Matthieu de la Fontaine;Dr Olivier Favre;Consultation;55,00;CPAM 74
+12/05/2026;Aurélie Hervé;Dr Paul Martin;Vaccination;60,00;Harmonie
+12/05/2026;EL KHOURY Mohamed;Dr Pierre Martin;Consultation;55,00;MGEN
+12/05/2026;PELLET Laurence;Dr Olivier Favre;Bilan annuel;60,00;CPAM 74
+13/05/2026;Frédéric Girard;Dr Paul Martin;Suivi;55,00;MGEN
+13/05/2026;Luca Bernasconi;Dre Anne-Sophie Vuagniaux;Suivi;85,50;Harmonie
+14/05/2026;O'BRIEN Sean;Dr Paul Martin;Consultation;85,50;MGEN
+15/05/2026;Thomas Pierre;Dr Olivier Favre;Suivi;100,00;MGEN
+16/05/2026;Sean O'Brien;Dr Paul Martin;Certificat;85,50;MGEN
+18/05/2026;DÉLÈZE Christelle;Dr Hélène Marchetti;Consultation;55,00;CPAM 74
+18/05/2026;TSCHOPP Raphaël;Dr Paul Martin;Suivi;85,50;Harmonie
+19/05/2026;Pauline Bovet;Dr Paul Martin;Certificat;85,50;MGEN
+20/05/2026;ROCHAT Sophie;Dr Pierre Martin;Renouvellement;60,00;Harmonie
+20/05/2026;MARTIN Marie;Dr Hélène Marchetti;Renouvellement;55,00;MGEN
+21/05/2026;ROCHAT Sophie;Dr Pierre Martin;Consultation;100,00;CPAM 74
+21/05/2026;Claire Martin;Dr Marc Bersier;Consultation;100,00;CPAM 74
+21/05/2026;Laura Gavillet;Dr Paul Martin;Renouvellement;85,50;CPAM 74
+21/05/2026;Pierre-Yves Zufferey;Dr Marc Bersier;Renouvellement;85,50;MGEN
+22/05/2026;Zoë Lüthi;Dr Pierre Martin;Consultation;30,00;CPAM 74
+23/05/2026;Maxime Girardin;Dr Hélène Marchetti;Certificat;85,50;Harmonie
+23/05/2026;Monique Oberson;Dre Anne-Sophie Vuagniaux;Vaccination;60,00;CPAM 74
+25/05/2026;Anne-Laure Genoud;Dr Marc Bersier;Vaccination;30,00;CPAM 74
+25/05/2026;Olivier Girod;Dr Marc Bersier;Vaccination;85,50;Harmonie
+25/05/2026;VULLIET Aurélie;Dr Paul Martin;Suivi;30,00;MGEN
+25/05/2026;CUENDET Mathieu;Dr Pierre Martin;Consultation;100,00;Harmonie
+25/05/2026;Camille d'Aubigné;Dr Pierre Martin;Suivi;55,00;Harmonie
+26/05/2026;DUPONT Jean-Pierre;Dr Pierre Martin;Certificat;100,00;MGEN
+26/05/2026;Laurence Le Gall;Dr Olivier Favre;Certificat;30,00;Harmonie
+26/05/2026;CHAPPUIS Nathalie;Dr Jean Dupont;Renouvellement;85,50;MGEN
+27/05/2026;Pierre Thomas;Dr Paul Martin;Certificat;30,00;MGEN
+28/05/2026;DUPONT Jean;Dr Jean Dupont;Vaccination;55,00;Harmonie
+28/05/2026;Mathieu Cuendet;Dr Marc Bersier;Consultation;100,00;Harmonie

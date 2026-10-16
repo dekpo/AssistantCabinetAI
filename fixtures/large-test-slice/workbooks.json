@@ -1,0 +1,2043 @@
+[
+ {
+  "path": "rendez-vous-2026-01-cabinet-des-lilas.xlsx",
+  "format": "xlsx",
+  "family": "rendez-vous",
+  "period": "2026-01",
+  "entity": "cabinet des Lilas",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Semaine 1",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 34,
+    "table": true
+   },
+   {
+    "name": "Semaine 2",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 60,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-benali-fatima",
+   "p-bovet-celine",
+   "p-chappuis-nathalie",
+   "p-crettenand-gregoire",
+   "p-cuendet-mathieu",
+   "p-damico-giuseppe",
+   "p-daubigne-camille",
+   "p-de-la-fontaine-matthieu",
+   "p-deleze-christelle",
+   "p-dos-santos-ferreira-maria",
+   "p-dupont-jean-pierre",
+   "p-el-khoury-mohamed",
+   "p-favre-laurent",
+   "p-g0004",
+   "p-g0006",
+   "p-g0008",
+   "p-g0012",
+   "p-g0021",
+   "p-g0024",
+   "p-g0038",
+   "p-g0039",
+   "p-g0048",
+   "p-g0052",
+   "p-g0056",
+   "p-g0074",
+   "p-g0085",
+   "p-g0089",
+   "p-g0090",
+   "p-g0133",
+   "p-g0162",
+   "p-g0171",
+   "p-g0189",
+   "p-g0192",
+   "p-g0196",
+   "p-g0208",
+   "p-g0212",
+   "p-g0216",
+   "p-g0219",
+   "p-g0226",
+   "p-g0237",
+   "p-g0247",
+   "p-g0267",
+   "p-g0273",
+   "p-g0281",
+   "p-g0335",
+   "p-g0356",
+   "p-g0361",
+   "p-g0415",
+   "p-g0418",
+   "p-genoud-anne-laure",
+   "p-girard-frederic",
+   "p-girardin-fabienne",
+   "p-hasanovic-anna",
+   "p-jaccard-alain",
+   "p-le-gall-laurence",
+   "p-lindqvist-asa",
+   "p-luthi-zoe",
+   "p-maillard-pascal",
+   "p-martin-claire",
+   "p-martin-luc",
+   "p-martin-marie",
+   "p-meunier-veronique",
+   "p-monnier-veronique",
+   "p-muller-jorg",
+   "p-nguyen-thi-lan",
+   "p-obrien-sean",
+   "p-petrovic-elena",
+   "p-pierre-thomas",
+   "p-rochat-sophie",
+   "p-roy-lucas",
+   "p-thomas-pierre",
+   "p-tschopp-raphael",
+   "p-zufferey-stephane"
+  ]
+ },
+ {
+  "path": "rendez-vous-2026-02-cabinet-des-lilas.csv",
+  "format": "csv",
+  "family": "rendez-vous",
+  "period": "2026-02",
+  "entity": "cabinet des Lilas",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "utf-8",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Rendez-vous",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 55,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-chappuis-nathalie",
+   "p-cuendet-mathieu",
+   "p-damico-giuseppe",
+   "p-deleze-christelle",
+   "p-dos-santos-ferreira-maria",
+   "p-dupontet-jean",
+   "p-g0002",
+   "p-g0012",
+   "p-g0022",
+   "p-g0036",
+   "p-g0103",
+   "p-g0116",
+   "p-g0147",
+   "p-g0198",
+   "p-g0227",
+   "p-g0245",
+   "p-g0257",
+   "p-g0275",
+   "p-g0279",
+   "p-g0290",
+   "p-g0322",
+   "p-g0333",
+   "p-g0358",
+   "p-g0363",
+   "p-g0364",
+   "p-g0371",
+   "p-g0388",
+   "p-g0408",
+   "p-girardin-fabienne",
+   "p-le-gall-laurence",
+   "p-lindqvist-asa",
+   "p-martin-claire",
+   "p-monnier-veronique",
+   "p-muller-jorg",
+   "p-ndiaye-aicha",
+   "p-oberson-pierre-alain",
+   "p-pittet-isabelle",
+   "p-rochat-sophie",
+   "p-roy-lucas",
+   "p-thomas-pierre",
+   "p-tschopp-raphael",
+   "p-vuilleumier-marie-claude",
+   "p-zufferey-stephane"
+  ]
+ },
+ {
+  "path": "rendez-vous-2026-03-cabinet-des-lilas.xlsx",
+  "format": "xlsx",
+  "family": "rendez-vous",
+  "period": "2026-03",
+  "entity": "cabinet des Lilas",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Semaine 1",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 34,
+    "table": true
+   },
+   {
+    "name": "Semaine 2",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 39,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-bernasconi-luca",
+   "p-crettenand-gregoire",
+   "p-cuendet-mathieu",
+   "p-demirci-ibrahim",
+   "p-dos-santos-ferreira-maria",
+   "p-dupont-jean",
+   "p-dupont-jean-pierre",
+   "p-dupontet-jean",
+   "p-fabre-laurence",
+   "p-favre-laurent",
+   "p-g0006",
+   "p-g0026",
+   "p-g0027",
+   "p-g0036",
+   "p-g0038",
+   "p-g0040",
+   "p-g0046",
+   "p-g0056",
+   "p-g0058",
+   "p-g0074",
+   "p-g0078",
+   "p-g0079",
+   "p-g0099",
+   "p-g0108",
+   "p-g0112",
+   "p-g0113",
+   "p-g0116",
+   "p-g0119",
+   "p-g0125",
+   "p-g0131",
+   "p-g0141",
+   "p-g0157",
+   "p-g0158",
+   "p-g0201",
+   "p-g0210",
+   "p-g0233",
+   "p-g0242",
+   "p-g0280",
+   "p-g0288",
+   "p-g0312",
+   "p-g0334",
+   "p-g0376",
+   "p-g0400",
+   "p-g0413",
+   "p-girard-frederic",
+   "p-hasanovic-anna",
+   "p-jaccard-alain",
+   "p-kowalski-andrzej",
+   "p-le-gall-laurence",
+   "p-lucas-roy",
+   "p-luthi-zoe",
+   "p-martin-marie",
+   "p-monnier-veronique",
+   "p-pierre-thomas",
+   "p-rochat-sophie",
+   "p-thomas-pierre",
+   "p-tschopp-raphael",
+   "p-zufferey-stephane"
+  ]
+ },
+ {
+  "path": "rendez-vous-2026-04-cabinet-des-lilas.ods",
+  "format": "ods",
+  "family": "rendez-vous",
+  "period": "2026-04",
+  "entity": "cabinet des Lilas",
+  "traps": [
+   "title_row",
+   "merged_title"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Semaine 1",
+    "header_row": 3,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 34,
+    "table": true
+   },
+   {
+    "name": "Semaine 2",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 21,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-benali-fatima",
+   "p-bovet-celine",
+   "p-chappuis-nathalie",
+   "p-damico-giuseppe",
+   "p-daubigne-camille",
+   "p-de-la-fontaine-matthieu",
+   "p-deleze-christelle",
+   "p-dupontet-jean",
+   "p-el-khoury-mohamed",
+   "p-favre-laurent",
+   "p-g0012",
+   "p-g0014",
+   "p-g0035",
+   "p-g0046",
+   "p-g0050",
+   "p-g0074",
+   "p-g0083",
+   "p-g0102",
+   "p-g0104",
+   "p-g0108",
+   "p-g0130",
+   "p-g0131",
+   "p-g0141",
+   "p-g0151",
+   "p-g0172",
+   "p-g0190",
+   "p-g0229",
+   "p-g0238",
+   "p-g0274",
+   "p-g0292",
+   "p-g0323",
+   "p-g0328",
+   "p-g0342",
+   "p-g0355",
+   "p-g0356",
+   "p-g0365",
+   "p-g0366",
+   "p-g0411",
+   "p-girardin-fabienne",
+   "p-jaccard-alain",
+   "p-kowalski-andrzej",
+   "p-lindqvist-asa",
+   "p-maillard-pascal",
+   "p-meunier-veronique",
+   "p-nguyen-thi-lan",
+   "p-oberson-pierre-alain",
+   "p-petrovic-elena",
+   "p-roy-lucas"
+  ]
+ },
+ {
+  "path": "rendez-vous-2026-05-cabinet-des-lilas.csv",
+  "format": "csv",
+  "family": "rendez-vous",
+  "period": "2026-05",
+  "entity": "cabinet des Lilas",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Rendez-vous",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 54,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-benali-fatima",
+   "p-bernasconi-luca",
+   "p-chappuis-nathalie",
+   "p-cuendet-mathieu",
+   "p-daubigne-camille",
+   "p-de-la-fontaine-matthieu",
+   "p-deleze-christelle",
+   "p-demirci-ibrahim",
+   "p-dupont-jean",
+   "p-dupont-jean-pierre",
+   "p-dupont-marie",
+   "p-el-khoury-mohamed",
+   "p-g0004",
+   "p-g0033",
+   "p-g0040",
+   "p-g0050",
+   "p-g0058",
+   "p-g0069",
+   "p-g0157",
+   "p-g0163",
+   "p-g0188",
+   "p-g0221",
+   "p-g0227",
+   "p-g0236",
+   "p-g0245",
+   "p-g0289",
+   "p-g0294",
+   "p-g0298",
+   "p-g0303",
+   "p-g0324",
+   "p-g0346",
+   "p-g0353",
+   "p-g0357",
+   "p-g0361",
+   "p-genoud-anne-laure",
+   "p-girard-frederic",
+   "p-le-gall-laurence",
+   "p-luthi-zoe",
+   "p-martin-claire",
+   "p-martin-marie",
+   "p-ndiaye-aicha",
+   "p-nguyen-thi-lan",
+   "p-oberson-pierre-alain",
+   "p-obrien-sean",
+   "p-pierre-thomas",
+   "p-rochat-sophie",
+   "p-thomas-pierre",
+   "p-tschopp-raphael"
+  ]
+ },
+ {
+  "path": "rendez-vous-2026-06-cabinet-des-lilas.xlsx",
+  "format": "xlsx",
+  "family": "rendez-vous",
+  "period": "2026-06",
+  "entity": "cabinet des Lilas",
+  "traps": [
+   "formula_total"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Semaine 1",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 23,
+    "table": true
+   },
+   {
+    "name": "Semaine 2",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 15,
+    "table": true
+   },
+   {
+    "name": "Semaine 3",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 47,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-chappuis-nathalie",
+   "p-cuendet-mathieu",
+   "p-damico-giuseppe",
+   "p-daubigne-camille",
+   "p-demirci-ibrahim",
+   "p-dos-santos-ferreira-maria",
+   "p-dupont-jean",
+   "p-dupont-jean-pierre",
+   "p-dupont-marie",
+   "p-dupontet-jean",
+   "p-fabre-laurence",
+   "p-favre-laurent",
+   "p-g0004",
+   "p-g0015",
+   "p-g0020",
+   "p-g0035",
+   "p-g0036",
+   "p-g0039",
+   "p-g0052",
+   "p-g0072",
+   "p-g0102",
+   "p-g0118",
+   "p-g0138",
+   "p-g0149",
+   "p-g0157",
+   "p-g0161",
+   "p-g0169",
+   "p-g0171",
+   "p-g0174",
+   "p-g0198",
+   "p-g0200",
+   "p-g0208",
+   "p-g0224",
+   "p-g0229",
+   "p-g0251",
+   "p-g0265",
+   "p-g0280",
+   "p-g0290",
+   "p-g0291",
+   "p-g0295",
+   "p-g0299",
+   "p-g0330",
+   "p-g0336",
+   "p-g0353",
+   "p-g0383",
+   "p-g0390",
+   "p-g0395",
+   "p-g0417",
+   "p-genoud-anne-laure",
+   "p-girard-frederic",
+   "p-girardin-fabienne",
+   "p-jaccard-alain",
+   "p-kowalski-andrzej",
+   "p-lindqvist-asa",
+   "p-martin-claire",
+   "p-martin-marie",
+   "p-muller-jorg",
+   "p-ndiaye-aicha",
+   "p-oberson-pierre-alain",
+   "p-pierre-thomas",
+   "p-pittet-isabelle",
+   "p-python-jean-claude",
+   "p-roy-lucas",
+   "p-thomas-pierre",
+   "p-vuilleumier-marie-claude",
+   "p-zufferey-stephane"
+  ]
+ },
+ {
+  "path": "rendez-vous-2026-07-cabinet-des-lilas.ods",
+  "format": "ods",
+  "family": "rendez-vous",
+  "period": "2026-07",
+  "entity": "cabinet des Lilas",
+  "traps": [
+   "empty_column"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Semaine 1",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 23,
+    "table": true
+   },
+   {
+    "name": "Semaine 2",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 53,
+    "table": true
+   },
+   {
+    "name": "Semaine 3",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Médecin",
+     "Motif",
+     "Montant",
+     "Caisse"
+    ],
+    "rows": 39,
+    "table": true
+   }
+  ],
+  "people": [
+   "d-bersier-marc",
+   "d-dupont-jean",
+   "d-favre-olivier",
+   "d-martin-paul",
+   "d-martin-pierre",
+   "d-vuagniaux-anne-sophie",
+   "o-marchetti",
+   "p-benali-fatima",
+   "p-bovet-celine",
+   "p-chappuis-nathalie",
+   "p-cuendet-mathieu",
+   "p-daubigne-camille",
+   "p-de-la-fontaine-matthieu",
+   "p-demirci-ibrahim",
+   "p-dos-santos-ferreira-maria",
+   "p-dupont-jean",
+   "p-dupont-jean-pierre",
+   "p-dupont-marie",
+   "p-dupontet-jean",
+   "p-el-khoury-mohamed",
+   "p-fabre-laurence",
+   "p-favre-laurent",
+   "p-g0011",
+   "p-g0027",
+   "p-g0033",
+   "p-g0042",
+   "p-g0054",
+   "p-g0077",
+   "p-g0086",
+   "p-g0088",
+   "p-g0093",
+   "p-g0102",
+   "p-g0104",
+   "p-g0122",
+   "p-g0143",
+   "p-g0160",
+   "p-g0172",
+   "p-g0174",
+   "p-g0176",
+   "p-g0208",
+   "p-g0221",
+   "p-g0225",
+   "p-g0229",
+   "p-g0235",
+   "p-g0247",
+   "p-g0248",
+   "p-g0249",
+   "p-g0257",
+   "p-g0271",
+   "p-g0292",
+   "p-g0301",
+   "p-g0315",
+   "p-g0319",
+   "p-g0320",
+   "p-g0328",
+   "p-g0329",
+   "p-g0338",
+   "p-g0366",
+   "p-g0382",
+   "p-g0403",
+   "p-g0413",
+   "p-genoud-anne-laure",
+   "p-girard-frederic",
+   "p-girardin-fabienne",
+   "p-hasanovic-anna",
+   "p-jaccard-alain",
+   "p-kowalski-andrzej",
+   "p-le-gall-laurence",
+   "p-lucas-roy",
+   "p-luthi-zoe",
+   "p-meunier-veronique",
+   "p-monnier-veronique",
+   "p-muller-jorg",
+   "p-obrien-sean",
+   "p-petrovic-elena",
+   "p-pierre-thomas",
+   "p-pittet-isabelle",
+   "p-python-jean-claude",
+   "p-rochat-sophie",
+   "p-thomas-pierre",
+   "p-tschopp-raphael",
+   "p-vuilleumier-marie-claude",
+   "p-zufferey-stephane"
+  ]
+ },
+ {
+  "path": "factures-fournisseurs-2026-t1-medsupply-sa.xlsx",
+  "format": "xlsx",
+  "family": "factures-fournisseurs",
+  "period": "2026-t1",
+  "entity": "MedSupply SA",
+  "traps": [
+   "notes_sheet"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Factures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "N° facture",
+     "Libellé",
+     "Montant HT",
+     "TVA",
+     "Montant TTC",
+     "Statut"
+    ],
+    "rows": 1,
+    "table": true
+   },
+   {
+    "name": "Notes",
+    "header_row": 1,
+    "columns": [
+     "Notes"
+    ],
+    "rows": 2,
+    "table": false
+   }
+  ],
+  "people": [
+   "o-medsupply"
+  ]
+ },
+ {
+  "path": "factures-fournisseurs-2026-t2-papeterie-du-lac-sarl.csv",
+  "format": "csv",
+  "family": "factures-fournisseurs",
+  "period": "2026-t2",
+  "entity": "Papeterie du Lac SARL",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Factures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "N° facture",
+     "Libellé",
+     "Montant HT",
+     "TVA",
+     "Montant TTC",
+     "Statut"
+    ],
+    "rows": 1,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-papeterie-lac"
+  ]
+ },
+ {
+  "path": "factures-fournisseurs-2026-t3-bureautique-leman-sa.ods",
+  "format": "ods",
+  "family": "factures-fournisseurs",
+  "period": "2026-t3",
+  "entity": "Bureautique Léman SA",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Factures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "N° facture",
+     "Libellé",
+     "Montant HT",
+     "TVA",
+     "Montant TTC",
+     "Statut"
+    ],
+    "rows": 6,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-bureautique-leman"
+  ]
+ },
+ {
+  "path": "factures-fournisseurs-2026-t4-pharma-depot-romandie-sa.xlsx",
+  "format": "xlsx",
+  "family": "factures-fournisseurs",
+  "period": "2026-t4",
+  "entity": "Pharma-Dépôt Romandie SA",
+  "traps": [
+   "title_row",
+   "text_dates"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Factures",
+    "header_row": 3,
+    "columns": [
+     "Date",
+     "N° facture",
+     "Libellé",
+     "Montant HT",
+     "TVA",
+     "Montant TTC",
+     "Statut"
+    ],
+    "rows": 10,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-pharma-depot"
+  ]
+ },
+ {
+  "path": "factures-fournisseurs-2026-t1-imprimerie-du-chablais-sas.csv",
+  "format": "csv",
+  "family": "factures-fournisseurs",
+  "period": "2026-t1",
+  "entity": "Imprimerie du Chablais SAS",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "utf-8",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Factures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "N° facture",
+     "Libellé",
+     "Montant HT",
+     "TVA",
+     "Montant TTC",
+     "Statut"
+    ],
+    "rows": 6,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-imprimerie-chablais"
+  ]
+ },
+ {
+  "path": "stock-2026-01-consommables.xlsx",
+  "format": "xlsx",
+  "family": "stock",
+  "period": "2026-01",
+  "entity": "consommables",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Stock",
+    "header_row": 1,
+    "columns": [
+     "Article",
+     "Référence",
+     "Quantité",
+     "Stock minimum",
+     "Prix unitaire",
+     "Fournisseur",
+     "Dernière commande"
+    ],
+    "rows": 24,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "stock-2026-02-bureau.ods",
+  "format": "ods",
+  "family": "stock",
+  "period": "2026-02",
+  "entity": "bureau",
+  "traps": [
+   "formula_total"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Stock",
+    "header_row": 1,
+    "columns": [
+     "Article",
+     "Référence",
+     "Quantité",
+     "Stock minimum",
+     "Prix unitaire",
+     "Fournisseur",
+     "Dernière commande"
+    ],
+    "rows": 24,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "stock-2026-03-pharmacie.csv",
+  "format": "csv",
+  "family": "stock",
+  "period": "2026-03",
+  "entity": "pharmacie",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Stock",
+    "header_row": 1,
+    "columns": [
+     "Article",
+     "Référence",
+     "Quantité",
+     "Stock minimum",
+     "Prix unitaire",
+     "Fournisseur",
+     "Dernière commande"
+    ],
+    "rows": 18,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "stock-2026-04-consommables.xlsx",
+  "format": "xlsx",
+  "family": "stock",
+  "period": "2026-04",
+  "entity": "consommables",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Stock",
+    "header_row": 1,
+    "columns": [
+     "Article",
+     "Référence",
+     "Quantité",
+     "Stock minimum",
+     "Prix unitaire",
+     "Fournisseur",
+     "Dernière commande"
+    ],
+    "rows": 24,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "planning-heures-2026-01-accueil.ods",
+  "format": "ods",
+  "family": "planning-heures",
+  "period": "2026-01",
+  "entity": "accueil",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Heures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Collaborateur",
+     "Poste",
+     "Heures"
+    ],
+    "rows": 21,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-marchetti",
+   "s-bensaid",
+   "s-colas",
+   "s-cottet"
+  ]
+ },
+ {
+  "path": "planning-heures-2026-02-soins.xlsx",
+  "format": "xlsx",
+  "family": "planning-heures",
+  "period": "2026-02",
+  "entity": "soins",
+  "traps": [
+   "title_row",
+   "merged_title",
+   "empty_column",
+   "notes_sheet"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Heures",
+    "header_row": 3,
+    "columns": [
+     "Date",
+     "Collaborateur",
+     "Poste",
+     "Heures"
+    ],
+    "rows": 23,
+    "table": true
+   },
+   {
+    "name": "Notes",
+    "header_row": 1,
+    "columns": [
+     "Notes"
+    ],
+    "rows": 2,
+    "table": false
+   }
+  ],
+  "people": [
+   "o-marchetti",
+   "s-bensaid",
+   "s-colas",
+   "s-cottet"
+  ]
+ },
+ {
+  "path": "planning-heures-2026-03-secretariat.csv",
+  "format": "csv",
+  "family": "planning-heures",
+  "period": "2026-03",
+  "entity": "secretariat",
+  "traps": [
+   "swiss_numbers",
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "ch",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Heures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Collaborateur",
+     "Poste",
+     "Heures"
+    ],
+    "rows": 22,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-marchetti",
+   "s-colas",
+   "s-cottet"
+  ]
+ },
+ {
+  "path": "planning-heures-2026-04-accueil.ods",
+  "format": "ods",
+  "family": "planning-heures",
+  "period": "2026-04",
+  "entity": "accueil",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Heures",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Collaborateur",
+     "Poste",
+     "Heures"
+    ],
+    "rows": 25,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-marchetti",
+   "s-bensaid",
+   "s-colas",
+   "s-cottet"
+  ]
+ },
+ {
+  "path": "patients-ch-liste-ab.xlsx",
+  "format": "xlsx",
+  "family": "patients-ch",
+  "period": "liste",
+  "entity": "A-B",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Patients",
+    "header_row": 1,
+    "columns": [
+     "Nom",
+     "Prénom",
+     "Date de naissance",
+     "N° AVS",
+     "Caisse maladie",
+     "Commune",
+     "NPA"
+    ],
+    "rows": 27,
+    "table": true
+   }
+  ],
+  "people": [
+   "p-benali-fatima",
+   "p-bernasconi-luca",
+   "p-bovet-celine",
+   "p-g0026",
+   "p-g0041",
+   "p-g0050",
+   "p-g0057",
+   "p-g0105",
+   "p-g0130",
+   "p-g0149",
+   "p-g0171",
+   "p-g0197",
+   "p-g0213",
+   "p-g0215",
+   "p-g0225",
+   "p-g0227",
+   "p-g0228",
+   "p-g0247",
+   "p-g0268",
+   "p-g0273",
+   "p-g0281",
+   "p-g0296",
+   "p-g0333",
+   "p-g0355",
+   "p-g0370",
+   "p-g0381",
+   "p-g0408"
+  ]
+ },
+ {
+  "path": "patients-ch-liste-cde.csv",
+  "format": "csv",
+  "family": "patients-ch",
+  "period": "liste",
+  "entity": "C-D-E",
+  "traps": [
+   "swiss_numbers",
+   "text_dates"
+  ],
+  "encoding": "utf-8",
+  "numbers": "ch",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Patients",
+    "header_row": 1,
+    "columns": [
+     "Nom",
+     "Prénom",
+     "Date de naissance",
+     "N° AVS",
+     "Caisse maladie",
+     "Commune",
+     "NPA"
+    ],
+    "rows": 50,
+    "table": true
+   }
+  ],
+  "people": [
+   "p-chappuis-nathalie",
+   "p-crettenand-gregoire",
+   "p-cuendet-mathieu",
+   "p-deleze-christelle",
+   "p-demirci-ibrahim",
+   "p-dos-santos-ferreira-maria",
+   "p-g0021",
+   "p-g0036",
+   "p-g0038",
+   "p-g0046",
+   "p-g0047",
+   "p-g0067",
+   "p-g0082",
+   "p-g0106",
+   "p-g0108",
+   "p-g0112",
+   "p-g0113",
+   "p-g0116",
+   "p-g0124",
+   "p-g0137",
+   "p-g0138",
+   "p-g0154",
+   "p-g0160",
+   "p-g0168",
+   "p-g0170",
+   "p-g0173",
+   "p-g0181",
+   "p-g0184",
+   "p-g0186",
+   "p-g0192",
+   "p-g0199",
+   "p-g0216",
+   "p-g0219",
+   "p-g0222",
+   "p-g0233",
+   "p-g0260",
+   "p-g0262",
+   "p-g0280",
+   "p-g0294",
+   "p-g0295",
+   "p-g0300",
+   "p-g0313",
+   "p-g0315",
+   "p-g0340",
+   "p-g0343",
+   "p-g0360",
+   "p-g0367",
+   "p-g0378",
+   "p-g0386",
+   "p-g0416"
+  ]
+ },
+ {
+  "path": "patients-fr-liste-bc.xlsx",
+  "format": "xlsx",
+  "family": "patients-fr",
+  "period": "liste",
+  "entity": "B-C",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Patients",
+    "header_row": 1,
+    "columns": [
+     "nom_patient",
+     "NIR",
+     "Ville",
+     "Code postal",
+     "medecin_traitant"
+    ],
+    "rows": 39,
+    "table": true
+   }
+  ],
+  "people": [
+   "p-g0007",
+   "p-g0015",
+   "p-g0025",
+   "p-g0032",
+   "p-g0035",
+   "p-g0044",
+   "p-g0051",
+   "p-g0058",
+   "p-g0068",
+   "p-g0075",
+   "p-g0089",
+   "p-g0091",
+   "p-g0107",
+   "p-g0131",
+   "p-g0143",
+   "p-g0152",
+   "p-g0177",
+   "p-g0230",
+   "p-g0235",
+   "p-g0239",
+   "p-g0248",
+   "p-g0269",
+   "p-g0272",
+   "p-g0282",
+   "p-g0288",
+   "p-g0307",
+   "p-g0309",
+   "p-g0318",
+   "p-g0320",
+   "p-g0336",
+   "p-g0358",
+   "p-g0362",
+   "p-g0363",
+   "p-g0365",
+   "p-g0372",
+   "p-g0376",
+   "p-g0394",
+   "p-g0396",
+   "p-g0419"
+  ]
+ },
+ {
+  "path": "patients-fr-liste-def.ods",
+  "format": "ods",
+  "family": "patients-fr",
+  "period": "liste",
+  "entity": "D-E-F",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Patients",
+    "header_row": 1,
+    "columns": [
+     "nom_patient",
+     "NIR",
+     "Ville",
+     "Code postal",
+     "medecin_traitant"
+    ],
+    "rows": 42,
+    "table": true
+   }
+  ],
+  "people": [
+   "p-damico-giuseppe",
+   "p-daubigne-camille",
+   "p-de-la-fontaine-matthieu",
+   "p-dupont-jean",
+   "p-dupont-jean-pierre",
+   "p-dupont-marie",
+   "p-dupontet-jean",
+   "p-el-khoury-mohamed",
+   "p-fabre-laurence",
+   "p-g0004",
+   "p-g0014",
+   "p-g0018",
+   "p-g0023",
+   "p-g0049",
+   "p-g0055",
+   "p-g0064",
+   "p-g0085",
+   "p-g0086",
+   "p-g0092",
+   "p-g0145",
+   "p-g0179",
+   "p-g0182",
+   "p-g0254",
+   "p-g0257",
+   "p-g0263",
+   "p-g0274",
+   "p-g0278",
+   "p-g0279",
+   "p-g0291",
+   "p-g0312",
+   "p-g0321",
+   "p-g0329",
+   "p-g0331",
+   "p-g0341",
+   "p-g0344",
+   "p-g0345",
+   "p-g0349",
+   "p-g0357",
+   "p-g0375",
+   "p-g0385",
+   "p-g0388",
+   "p-g0403"
+  ]
+ },
+ {
+  "path": "contrats-2026-lot-1.csv",
+  "format": "csv",
+  "family": "contrats",
+  "period": "2026",
+  "entity": "lot-1",
+  "traps": [
+   "title_row",
+   "swiss_numbers",
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "ch",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Contrats",
+    "header_row": 3,
+    "columns": [
+     "Fournisseur",
+     "Numéro de contrat",
+     "Début",
+     "Fin",
+     "Montant annuel"
+    ],
+    "rows": 1,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-bureautique-leman"
+  ]
+ },
+ {
+  "path": "contrats-2026-lot-2.xlsx",
+  "format": "xlsx",
+  "family": "contrats",
+  "period": "2026",
+  "entity": "lot-2",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Contrats",
+    "header_row": 1,
+    "columns": [
+     "Fournisseur",
+     "Numéro de contrat",
+     "Début",
+     "Fin",
+     "Montant annuel"
+    ],
+    "rows": 1,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-bureautique-leman"
+  ]
+ },
+ {
+  "path": "compta-depenses-2026-01-site-1.ods",
+  "format": "ods",
+  "family": "compta-depenses",
+  "period": "2026-01",
+  "entity": "site-1",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Journal",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Libellé",
+     "Catégorie",
+     "Débit",
+     "Crédit"
+    ],
+    "rows": 30,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "compta-depenses-2026-02-site-1.xlsx",
+  "format": "xlsx",
+  "family": "compta-depenses",
+  "period": "2026-02",
+  "entity": "site-1",
+  "traps": [
+   "notes_sheet"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Journal",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Libellé",
+     "Catégorie",
+     "Débit",
+     "Crédit"
+    ],
+    "rows": 38,
+    "table": true
+   },
+   {
+    "name": "Notes",
+    "header_row": 1,
+    "columns": [
+     "Notes"
+    ],
+    "rows": 2,
+    "table": false
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "compta-depenses-2026-03-site-1.csv",
+  "format": "csv",
+  "family": "compta-depenses",
+  "period": "2026-03",
+  "entity": "site-1",
+  "traps": [
+   "empty_column",
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Journal",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Libellé",
+     "Catégorie",
+     "Débit",
+     "Crédit"
+    ],
+    "rows": 22,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "compta-depenses-2026-04-site-1.ods",
+  "format": "ods",
+  "family": "compta-depenses",
+  "period": "2026-04",
+  "entity": "site-1",
+  "traps": [
+   "formula_total"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Journal",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Libellé",
+     "Catégorie",
+     "Débit",
+     "Crédit"
+    ],
+    "rows": 27,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "honoraires-2026-01-dr-helene-marchetti.xlsx",
+  "format": "xlsx",
+  "family": "honoraires",
+  "period": "2026-01",
+  "entity": "Marchetti",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Honoraires",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Acte",
+     "Honoraires",
+     "Mode de paiement"
+    ],
+    "rows": 34,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "honoraires-2026-02-dr-helene-marchetti.csv",
+  "format": "csv",
+  "family": "honoraires",
+  "period": "2026-02",
+  "entity": "Marchetti",
+  "traps": [
+   "title_row",
+   "text_dates"
+  ],
+  "encoding": "utf-8",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Honoraires",
+    "header_row": 3,
+    "columns": [
+     "Date",
+     "Patient",
+     "Acte",
+     "Honoraires",
+     "Mode de paiement"
+    ],
+    "rows": 15,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "honoraires-2026-03-dr-helene-marchetti.xlsx",
+  "format": "xlsx",
+  "family": "honoraires",
+  "period": "2026-03",
+  "entity": "Marchetti",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Honoraires",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Acte",
+     "Honoraires",
+     "Mode de paiement"
+    ],
+    "rows": 45,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "honoraires-2026-04-dr-helene-marchetti.ods",
+  "format": "ods",
+  "family": "honoraires",
+  "period": "2026-04",
+  "entity": "Marchetti",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Honoraires",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Patient",
+     "Acte",
+     "Honoraires",
+     "Mode de paiement"
+    ],
+    "rows": 27,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "formation-presences-2026-01-module-1.csv",
+  "format": "csv",
+  "family": "formation-presences",
+  "period": "2026-01",
+  "entity": "module-1",
+  "traps": [
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Présences",
+    "header_row": 1,
+    "columns": [
+     "Participant",
+     "Fonction",
+     "Date",
+     "Présent",
+     "Heures"
+    ],
+    "rows": 4,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "formation-presences-2026-02-module-2.xlsx",
+  "format": "xlsx",
+  "family": "formation-presences",
+  "period": "2026-02",
+  "entity": "module-2",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Présences",
+    "header_row": 1,
+    "columns": [
+     "Participant",
+     "Fonction",
+     "Date",
+     "Présent",
+     "Heures"
+    ],
+    "rows": 4,
+    "table": true
+   }
+  ],
+  "people": []
+ },
+ {
+  "path": "livraisons-2026-01-medsupply-sa.ods",
+  "format": "ods",
+  "family": "livraisons",
+  "period": "2026-01",
+  "entity": "MedSupply SA",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Livraisons",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Fournisseur",
+     "Article",
+     "Quantité",
+     "Statut"
+    ],
+    "rows": 32,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-medsupply"
+  ]
+ },
+ {
+  "path": "livraisons-2026-02-papeterie-du-lac-sarl.xlsx",
+  "format": "xlsx",
+  "family": "livraisons",
+  "period": "2026-02",
+  "entity": "Papeterie du Lac SARL",
+  "traps": [
+   "notes_sheet",
+   "text_dates"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Livraisons",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Fournisseur",
+     "Article",
+     "Quantité",
+     "Statut"
+    ],
+    "rows": 13,
+    "table": true
+   },
+   {
+    "name": "Notes",
+    "header_row": 1,
+    "columns": [
+     "Notes"
+    ],
+    "rows": 2,
+    "table": false
+   }
+  ],
+  "people": [
+   "o-papeterie-lac"
+  ]
+ },
+ {
+  "path": "livraisons-2026-03-bureautique-leman-sa.csv",
+  "format": "csv",
+  "family": "livraisons",
+  "period": "2026-03",
+  "entity": "Bureautique Léman SA",
+  "traps": [
+   "title_row",
+   "text_dates"
+  ],
+  "encoding": "cp1252",
+  "numbers": "fr",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Livraisons",
+    "header_row": 3,
+    "columns": [
+     "Date",
+     "Fournisseur",
+     "Article",
+     "Quantité",
+     "Statut"
+    ],
+    "rows": 20,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-bureautique-leman"
+  ]
+ },
+ {
+  "path": "livraisons-2026-04-pharma-depot-romandie-sa.ods",
+  "format": "ods",
+  "family": "livraisons",
+  "period": "2026-04",
+  "entity": "Pharma-Dépôt Romandie SA",
+  "traps": [
+   "empty_column"
+  ],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Livraisons",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Fournisseur",
+     "Article",
+     "Quantité",
+     "Statut"
+    ],
+    "rows": 35,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-pharma-depot"
+  ]
+ },
+ {
+  "path": "livraisons-2026-05-imprimerie-du-chablais-sas.xlsx",
+  "format": "xlsx",
+  "family": "livraisons",
+  "period": "2026-05",
+  "entity": "Imprimerie du Chablais SAS",
+  "traps": [],
+  "encoding": "",
+  "numbers": "",
+  "readable": true,
+  "usable": true,
+  "sheets": [
+   {
+    "name": "Livraisons",
+    "header_row": 1,
+    "columns": [
+     "Date",
+     "Fournisseur",
+     "Article",
+     "Quantité",
+     "Statut"
+    ],
+    "rows": 13,
+    "table": true
+   }
+  ],
+  "people": [
+   "o-imprimerie-chablais"
+  ]
+ }
+]

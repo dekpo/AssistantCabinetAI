@@ -1,0 +1,9 @@
+Objet : Rappel de facture
+
+Bonjour,
+
+Nous n'avons pas encore reçu le règlement de la facture du {{Date}} ({{Libellé}}), d'un montant de {{Montant TTC}}. Son statut est : {{Statut}}.
+
+Nous vous remercions de bien vouloir régulariser cette situation.
+
+Cabinet de groupe des Voirons

@@ -1,0 +1,63 @@
+{
+ "profile": "demo",
+ "slice": true,
+ "seed": 20261016,
+ "documents": 101,
+ "readable_text_documents": 90,
+ "readable_documents": 97,
+ "ocr_documents": 7,
+ "documents_by_format": {
+  "csv": 1,
+  "docx": 15,
+  "eml": 6,
+  "jpg": 2,
+  "md": 4,
+  "odp": 3,
+  "odt": 5,
+  "pdf": 34,
+  "png": 2,
+  "ppt": 1,
+  "pptx": 3,
+  "rtf": 3,
+  "scan-pdf": 3,
+  "srt": 2,
+  "txt": 11,
+  "vtt": 4,
+  "xlsx": 2
+ },
+ "workbooks": 41,
+ "workbooks_by_format": {
+  "csv": 12,
+  "ods": 12,
+  "xlsx": 17
+ },
+ "workbooks_by_family": {
+  "compta-depenses": 4,
+  "contrats": 2,
+  "factures-fournisseurs": 5,
+  "formation-presences": 2,
+  "honoraires": 4,
+  "livraisons": 5,
+  "patients-ch": 2,
+  "patients-fr": 2,
+  "planning-heures": 4,
+  "rendez-vous": 7,
+  "stock": 4
+ },
+ "workbook_traps": {
+  "empty_column": 4,
+  "formula_total": 3,
+  "merged_title": 2,
+  "notes_sheet": 4,
+  "swiss_numbers": 3,
+  "text_dates": 15,
+  "title_row": 6
+ },
+ "questions": 31,
+ "questions_by_block": {
+  "documents": 15,
+  "mixed": 6,
+  "spreadsheets": 10
+ },
+ "generated_by": "scripts/gen-knowledge-sandbox.py --profile demo"
+}

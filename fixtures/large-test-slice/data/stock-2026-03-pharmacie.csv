@@ -1,0 +1,19 @@
+Article;Référence;Quantité;Stock minimum;Prix unitaire;Fournisseur;Dernière commande
+Paracétamol 500;REF-4652;260;100;18,97;Imprimerie du Chablais SAS;05/03/2026
+Désinfectant;REF-2194;115;100;36,37;Imprimerie du Chablais SAS;23/03/2026
+Sérum physiologique;REF-6961;378;20;20,23;Garage Martin & Fils SARL;10/03/2026
+Solution hydroalcoolique;REF-8138;267;100;7,16;Imprimerie du Chablais SAS;18/03/2026
+Vaccin test;REF-2868;162;20;28,13;Orange SA;27/03/2026
+Pansement stérile;REF-3288;283;50;26,20;EDF;16/03/2026
+Paracétamol 500 2;REF-6720;244;20;4,11;Papeterie du Lac SARL;14/03/2026
+Désinfectant 2;REF-8930;342;20;11,22;Papeterie du Lac SARL;10/03/2026
+Sérum physiologique 2;REF-2281;389;20;11,53;Imprimerie du Chablais SAS;28/03/2026
+Solution hydroalcoolique 2;REF-4551;148;20;3,16;Garage Martin & Fils SARL;28/03/2026
+Vaccin test 2;REF-5545;333;50;5,97;Papeterie du Lac SARL;11/03/2026
+Pansement stérile 2;REF-7846;181;20;24,21;Imprimerie du Chablais SAS;28/03/2026
+Paracétamol 500 3;REF-4528;332;100;25,66;Imprimerie du Chablais SAS;02/03/2026
+Désinfectant 3;REF-7504;349;50;20,91;Papeterie du Lac SARL;14/03/2026
+Sérum physiologique 3;REF-4816;306;20;35,38;EDF;23/03/2026
+Solution hydroalcoolique 3;REF-9444;243;20;30,08;Orange SA;10/03/2026
+Vaccin test 3;REF-7561;128;20;0,67;Papeterie du Lac SARL;02/03/2026
+Pansement stérile 3;REF-2713;11;50;7,49;Imprimerie du Chablais SAS;18/03/2026

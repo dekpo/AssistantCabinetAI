@@ -93,6 +93,16 @@ def write_vtt(path: Path, cues: list[tuple[str, str, str, str]]) -> None:
     path.write_text("\n".join(out), encoding="utf-8", newline="\n")
 
 
+def write_srt(path: Path, cues: list[tuple[str, str, str, str]]) -> None:
+    """cues: (start, end, speaker, text) as `00:01:02.500`, written as SubRip: a number, `00:01:02,500 --> ...`,
+    the words (the speaker leads the line, SubRip has no voice tag), a blank line. Windows line ends, as an
+    export from a subtitle editor on Windows has them."""
+    out = []
+    for number, (start, end, speaker, text) in enumerate(cues, start=1):
+        out += [str(number), f"{start.replace('.', ',')} --> {end.replace('.', ',')}", f"{speaker} : {text}", ""]
+    path.write_bytes((chr(13) + chr(10)).join(out).encode("utf-8"))
+
+
 # ------------------------------------------------------------------------------------------------- PDF
 
 

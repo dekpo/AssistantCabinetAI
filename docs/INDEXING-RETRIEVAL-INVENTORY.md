@@ -72,7 +72,7 @@ Status: **done** · **build** (decided, to build) · **measure** (built behind a
 | A model-written context per chunk (contextual retrieval) and generated questions per chunk (doc2query) | M 11, R A4 A7 | later, heavy, started by hand, ideally on the Mac mini |
 | Tantivy in place of FTS5; an ANN index (HNSW) | R C7 H3 | rejected / later (beyond about 100 000 passages) |
 | **Dates and amounts as facts (`ld_facts`)** | S2, owner | deferred to its own session |
-| New readers: ODT, RTF, EML, VTT, ODP, PPTX, ODS (F-20, KBD-30) | owner, 13 Oct | postponed after this work |
+| New readers: ODT, RTF, EML, VTT, ODP, PPTX, ODS (F-20, KBD-30) | owner, 13 Oct | postponed after this work; **to be rebuilt from the restart point of 16 Oct 2026** (`docs/DECISIONS.md`, last section) |
 | Fixes that only serve `auto` (F-17, F-18, F-19) and F-21 (the model's sentence against the engine block) | owner, 12 and 13 Oct | not started |
 | Books of 1 000 pages in the lab | owner, 14 Oct | not for now |
 

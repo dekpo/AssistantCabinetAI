@@ -1254,3 +1254,19 @@ Built, to confirm:
 | Knowledge-base caps | Half as many names and five times as many mentions as passages, floors 500 and 5 000, ceilings 20 000 and 100 000; a source over its cap is marked and the entity sheet says so |
 | Extraction and the executor | `block_in_place` on the multi-threaded runtime (borrowed ports cannot move into `spawn_blocking`), inline on a current-thread runtime |
 
+
+## Restart point of 16 October 2026: everything after `fe15e03` is set aside (owner)
+
+**Decided by the owner on 16 October 2026.** The application restarts from the state of commit `fe15e03` (branch `feat/long-documents-ingestion-search`: the file finder, the long-document ingestion in two speeds, the stop button, the vector share and the located sources). **The work done after it was not satisfactory and is not built on.** It stays in git, unmerged, as a reference to read and never as a base:
+
+| Commit | Branch | What it holds |
+| --- | --- | --- |
+| `4e6a778` | `feat/tab4-note-facts-readers` | lot A: end page of a passage, marked words, coverage line |
+| `1d8a13b` | same | configurable gateway address, optional GPU override, `docs/INSTALL-SERVER.md` |
+| `36366ea` | same (and `search/integration`) | lots B to H: phrase search, pinned identifier, refusal, answer checks, « Passages trouvés », hand-started summaries, finder filters, the reranker service |
+| `d3e8eec` | `feat/tab4-note-facts-readers` | one "to check" note, summary checks, removal of the unused word methods, dates and amounts as facts, the new readers, the approximate-index measure |
+| `3549ac0` | `test/semantic-selection` (local) | selection of the excerpts by meaning |
+
+**Consequences.** (1) Nothing from these commits is merged into the restart line by `git merge` or `git cherry-pick`; a piece is taken back only when the owner asks for it, rebuilt on the restart state and tested there. (2) The first piece taken back is **the readers**: ODT, ODP, PPTX, RTF, EML, VTT, **SRT** (subtitles, added by the owner on 16 October) and ODS on the tabular side (postponed on 13 October, first built on 15 October inside `d3e8eec`); the brief is `docs/SESSION-READERS-RESTART.md` (local handoff). (3) The documents `docs/RETRIEVAL-QUALITY.md` and the tab 3 and 4 sections of this file exist only on the set-aside branches: they are not part of the restart state and must not be quoted as if they were.
+
+**The owner's requests of 16 October 2026 for the readers and the test.** (a) SRT joins the readers (a line per cue with its start time, one cue parser shared with VTT). (b) The human test is a **large, documented, reproducible test**: at least **1 000 text documents and 500 spreadsheet files**, **including every new format** (VTT, SRT, RTF, EML, ODT, ODP, PPTX for documents; ODS with XLSX and CSV for tables); at least **300 questions: 150 on documents, 100 on spreadsheets, 50 mixed** (each needing a document and a spreadsheet together); runnable on **different AI models** with the same library, questions and scoring; and it must **demonstrate every feature of the application** as it stands on the restart state. The library and the question book extend `scripts/gen-knowledge-sandbox.py` through a new profile (the existing outputs stay byte-identical); the library is generated into `data/` (never versioned), a small slice is versioned; results go to `data/large-test/<date>-<model>/`; the protocol is `docs/test-reports/large-test/README.md`. The agent walks it on the 200-document library and the small slice, and runs the full library once.

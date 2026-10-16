@@ -17,24 +17,24 @@ describe("the line of the analysis summary about files that were not read", () =
   it("counts the files and names their formats, in French", () => {
     expect(
       unreadFormatsLines(french, [
-        { extension: "odt", count: 7 },
-        { extension: "rtf", count: 7 },
-        { extension: "eml", count: 2 },
+        { extension: "pages", count: 7 },
+        { extension: "wps", count: 7 },
+        { extension: "msg", count: 2 },
       ]),
     ).toEqual([
-      "16 fichiers n'ont pas été lus : leur format n'est pas pris en charge (7 .odt, 7 .rtf, 2 .eml).",
+      "16 fichiers n'ont pas été lus : leur format n'est pas pris en charge (7 .pages, 7 .wps, 2 .msg).",
     ]);
   });
 
   it("uses the singular for one file", () => {
-    expect(unreadFormatsLines(french, [{ extension: "vtt", count: 1 }])).toEqual([
-      "1 fichier n'a pas été lu : son format n'est pas pris en charge (1 .vtt).",
+    expect(unreadFormatsLines(french, [{ extension: "key", count: 1 }])).toEqual([
+      "1 fichier n'a pas été lu : son format n'est pas pris en charge (1 .key).",
     ]);
   });
 
   it("has an English twin", () => {
-    expect(unreadFormatsLines(english, [{ extension: "odt", count: 3 }])).toEqual([
-      "3 files were not read: their format is not supported (3 .odt).",
+    expect(unreadFormatsLines(english, [{ extension: "pages", count: 3 }])).toEqual([
+      "3 files were not read: their format is not supported (3 .pages).",
     ]);
   });
 });

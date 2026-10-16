@@ -46,6 +46,8 @@ impl ColumnType {
 pub enum TabularFormat {
     Csv,
     Xlsx,
+    /// OpenDocument spreadsheet, read by the same `calamine` adapter as the XLSX.
+    Ods,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -362,7 +362,9 @@ async fn the_six_set_sentences_of_the_final_test_find_their_files_and_nothing_el
         wrong_total += wrong.len();
     }
     println!("six sentences: {found_total} of {expected_total}, wrong files {wrong_total}");
-    assert_eq!(expected_total, 111);
+    // 111 before the readers of the other text formats (RTF, e-mail, ODT, ODP, PPTX, VTT, SRT): six files of
+    // the 200 are in those formats, and the product now reads them, so they are expected and all found.
+    assert_eq!(expected_total, 117);
     assert!(found_total >= 105, "{found_total} of {expected_total}");
     assert_eq!(wrong_total, 0, "no wrong file");
     assert_eq!(

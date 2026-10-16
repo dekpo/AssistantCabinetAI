@@ -195,7 +195,7 @@ async fn a_file_never_analysed_is_found_by_its_name_and_says_what_it_is_not() {
     let lab = Lab::new();
     lab.write("2026-10-01_courrier-dermatologie.pdf", "x");
     lab.write("scan-mercredi.jpg", "x");
-    lab.write("notes.odt", "x");
+    lab.write("notes.pages", "x");
     let files = inventory(lab.work_path());
     let connection = lab.side();
 
@@ -211,8 +211,8 @@ async fn a_file_never_analysed_is_found_by_its_name_and_says_what_it_is_not() {
     assert!(hit.excerpt.is_none());
 
     // A format the product does not read is findable by name and says so.
-    let odt = whole(&connection, Domain::Documents, &files, &query("notes"));
-    assert_eq!(odt.files[0].card.state, "unsupported");
+    let unsupported = whole(&connection, Domain::Documents, &files, &query("notes"));
+    assert_eq!(unsupported.files[0].card.state, "unsupported");
 
     // The coverage states what could not be searched in the text: nothing is analysed here.
     assert_eq!(result.coverage.searched, 0);
@@ -589,7 +589,7 @@ async fn the_coverage_counts_what_could_not_be_searched() {
     lab.write("b-vide.txt", "");
     lab.analyse().await;
     lab.write("c-nouveau.pdf", "x");
-    lab.write("d-notes.odt", "x");
+    lab.write("d-notes.pages", "x");
     let files = inventory(lab.work_path());
     let connection = lab.side();
 
@@ -611,7 +611,7 @@ async fn the_coverage_counts_what_could_not_be_searched() {
     assert_eq!(state_of("a-lettre.txt"), "analysed");
     assert_eq!(state_of("b-vide.txt"), "empty");
     assert_eq!(state_of("c-nouveau.pdf"), "unanalysed");
-    assert_eq!(state_of("d-notes.odt"), "unsupported");
+    assert_eq!(state_of("d-notes.pages"), "unsupported");
     let coverage = &result.coverage;
     assert_eq!(
         (

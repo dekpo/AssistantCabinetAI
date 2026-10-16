@@ -377,8 +377,8 @@ pub fn analyse_with_knowledge(
         rename_failed_files: Vec::new(),
         failed_files: Vec::new(),
         unavailable_capabilities: Vec::new(),
-        // The workbook formats nobody reads (.ods) are a later batch (KBD-30); only the documents
-        // pass reports its unread formats for now.
+        // Every workbook format that is listed here is read (CSV, XLSX, ODS); only the documents
+        // pass reports its unread formats.
         unread_formats: Vec::new(),
         chunk_count: 0,
         timings: Some(timings),
@@ -392,6 +392,7 @@ pub fn analyse_with_knowledge(
 fn format_of(extension: &str) -> TabularFormat {
     match extension {
         "csv" => TabularFormat::Csv,
+        "ods" => TabularFormat::Ods,
         _ => TabularFormat::Xlsx,
     }
 }

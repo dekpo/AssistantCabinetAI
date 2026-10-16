@@ -92,7 +92,17 @@ pub fn extract(
         "docx" => (extract_docx(path)?, false),
         "txt" | "md" => (extract_plain_text(path)?, false),
         "jpg" | "jpeg" | "png" => extract_image(path, &file.relative_path, file.extension.as_str(), ocr, locale)?,
-        _ => return Err(ExtractionError::UnsupportedExtension),
+        other => match crate::readers::read(other, path) {
+            Some(texts) => (
+                texts?
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, text)| native_page(index as u32 + 1, text))
+                    .collect(),
+                false,
+            ),
+            None => return Err(ExtractionError::UnsupportedExtension),
+        },
     };
     let empty = pages.iter().all(|page| page.text.trim().is_empty());
     let used_ocr = pages.iter().any(|page| page.origin == PageOrigin::Ocr);

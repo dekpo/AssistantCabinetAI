@@ -549,12 +549,12 @@ async fn the_analyse_summary_counts_the_files_it_could_not_read_by_format() {
     let mut lab = Lab::new();
     lab.write("lettre.txt", "Un courrier lisible.\n");
     for name in [
-        "a.odt",
-        "b.ODT",
-        "dossier/c.odt",
-        "note.rtf",
-        "mail.eml",
-        "reunion.vtt",
+        "a.pages",
+        "b.PAGES",
+        "dossier/c.pages",
+        "note.wps",
+        "mail.msg",
+        "reunion.key",
     ] {
         lab.write(name, "contenu\n");
     }
@@ -574,10 +574,10 @@ async fn the_analyse_summary_counts_the_files_it_could_not_read_by_format() {
     assert_eq!(
         found,
         [
-            ("odt".to_string(), 3),
-            ("eml".to_string(), 1),
-            ("rtf".to_string(), 1),
-            ("vtt".to_string(), 1),
+            ("pages".to_string(), 3),
+            ("key".to_string(), 1),
+            ("msg".to_string(), 1),
+            ("wps".to_string(), 1),
         ]
     );
     assert_eq!(summary.indexed_files, 1);
@@ -695,8 +695,9 @@ fn the_sandbox_invoices_workbook_named_by_hand_is_counted_whole() {
 }
 
 /// The Analyse summary of the documents on the sandbox, tier by tier: what the user is told about the
-/// files that were not read. The register counts 21 of 200 (7 `.odt`, 7 `.rtf`, 2 `.eml`, 2 `.vtt`, 1
-/// `.odp`, 1 `.pptx`, 1 `.ppt`). `cargo test --release --test knowledge_fix_swiss_first print_the_unread -- --ignored --nocapture`
+/// files that were not read. The register of lot 11 counted 21 of 200 (7 `.odt`, 7 `.rtf`, 2 `.eml`, 2 `.vtt`,
+/// 1 `.odp`, 1 `.pptx`, 1 `.ppt`) when no reader opened those formats; with the readers of 16 October 2026 only
+/// the `.ppt` (an old binary format) is left. `cargo test --release --test knowledge_fix_swiss_first print_the_unread -- --ignored --nocapture`
 #[tokio::test]
 #[ignore]
 async fn print_the_unread_formats_of_the_sandbox_tiers() {
@@ -723,7 +724,7 @@ async fn print_the_unread_formats_of_the_sandbox_tiers() {
             summary.indexed_files
         );
         if tier == 200 {
-            assert_eq!(total, 21, "the register counts 21 unread files of 200");
+            assert_eq!(total, 1, "only the old binary .ppt is left unread, of 200");
         }
     }
 }

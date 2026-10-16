@@ -88,8 +88,8 @@ describe("countPendingDocuments", () => {
   it("leaves the button inactive when only files the pass cannot read are left", () => {
     // The pass never writes a row for these, so they stay "discovered" for ever.
     const files = [
-      fileOfKind("a.odt", "unsupported", "discovered"),
-      fileOfKind("b.vtt", "unsupported", "discovered"),
+      fileOfKind("a.pages", "unsupported", "discovered"),
+      fileOfKind("b.key", "unsupported", "discovered"),
       fileOfKind("c.xlsx", "tabular_candidate", "discovered"),
       fileOfKind("d.png", "image", "failed"),
       fileOfKind("e.txt", "document_text", "indexed"),
@@ -105,7 +105,7 @@ describe("countPendingDocuments", () => {
       fileOfKind("b.pdf", "document_pdf", "pending"),
       fileOfKind("c.docx", "document_office", "discovered"),
       fileOfKind("d.jpg", "image", "pending"),
-      fileOfKind("e.odt", "unsupported", "discovered"),
+      fileOfKind("e.pages", "unsupported", "discovered"),
     ];
 
     expect(countPendingDocuments(files)).toBe(4);

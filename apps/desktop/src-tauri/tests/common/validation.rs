@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use assistant_cabinet_ai_lib::analysis_scope::{AnalysisScope, ScopeEntry, ScopeMode};
 use assistant_cabinet_ai_lib::discovery::is_supported;
+use assistant_cabinet_ai_lib::readers::EXTENSIONS as READERS;
 use assistant_cabinet_ai_lib::folder_questions::{
     route_in_selection, QuestionRoute, Selection as RouterSelection,
 };
@@ -210,11 +211,34 @@ impl Truth {
     pub fn load() -> Self {
         let root = sandbox_root();
         let entities: Vec<EntityTruth> = read(&root, "entities.json");
+        let mut docs: Vec<DocTruth> = read(&root, "documents.json");
+        let mut questions: Vec<QuestionTruth> = read(&root, "questions.json");
+        // The generated truth was written when no reader opened the formats of
+        // `readers::EXTENSIONS` and marks those files unreadable; the files themselves are
+        // unchanged (the published figures stay reproducible). What a build reads is decided here, so
+        // a file the product now reads is expected, not counted as a wrong one.
+        let read_now = |doc: &DocTruth| doc.readable || READERS.contains(&doc.extension.as_str());
+        let readable: BTreeSet<String> = docs
+            .iter()
+            .filter(|doc| read_now(doc))
+            .map(|doc| doc.path.clone())
+            .collect();
+        for doc in &mut docs {
+            doc.readable = readable.contains(&doc.path);
+        }
+        for question in &mut questions {
+            question.relevant_readable = question
+                .relevant_documents
+                .iter()
+                .filter(|path| readable.contains(*path))
+                .cloned()
+                .collect();
+        }
         Self {
-            docs: read(&root, "documents.json"),
+            docs,
             entities: entities.into_iter().map(|e| (e.id.clone(), e)).collect(),
             books: read(&root, "workbooks.json"),
-            questions: read(&root, "questions.json"),
+            questions,
             manifest: read(&root, "manifest.json"),
             root,
         }

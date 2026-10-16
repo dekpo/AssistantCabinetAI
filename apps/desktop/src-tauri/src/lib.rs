@@ -33,6 +33,7 @@ pub mod number_check;
 pub mod ocr;
 pub mod ocr_resume;
 pub mod raster;
+pub mod readers;
 pub mod retrieval;
 pub mod reveal;
 mod settings;

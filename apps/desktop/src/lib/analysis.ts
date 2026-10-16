@@ -56,8 +56,8 @@ const DOCUMENT_KINDS: ReadonlySet<FileRecord["kind"]> = new Set([
 ]);
 
 /**
- * `countPending` for the Documents card: only files the document pass can read. A `.odt`, a
- * `.vtt` or a workbook dropped in that folder never gets an index row, so it stays `discovered`
+ * `countPending` for the Documents card: only files the document pass can read. A `.pages`, a
+ * `.key` or a workbook dropped in that folder never gets an index row, so it stays `discovered`
  * for ever and would keep the button lit with a number analysing can never bring down. Same rule
  * as `WorkFolderInventory::unanalysed_documents` on the Rust side, which feeds the answers'
  * "not analysed" warning - the button and an answer cannot disagree. The Data card keeps

@@ -231,7 +231,7 @@ pub(crate) fn refers_to_a_document(question: &str, locale: &str) -> bool {
 /// True when the question asks for something to be written ("generate the letter", "write a
 /// summary of the invoices"), judged from the locale's own pack, by whole words. Such a question
 /// crosses the sources: the facts come from the table, the writing is the model's.
-pub(crate) fn has_writing_intent(question: &str, locale: &str) -> bool {
+pub fn has_writing_intent(question: &str, locale: &str) -> bool {
     let Some(pack) = pack_for(locale) else {
         return false;
     };
@@ -243,7 +243,7 @@ pub(crate) fn has_writing_intent(question: &str, locale: &str) -> bool {
 
 /// True when the question asks for something for every row or every group ("for each order"),
 /// judged from the locale's own pack, by whole words.
-pub(crate) fn has_distributive_word(question: &str, locale: &str) -> bool {
+pub fn has_distributive_word(question: &str, locale: &str) -> bool {
     let Some(pack) = pack_for(locale) else {
         return false;
     };

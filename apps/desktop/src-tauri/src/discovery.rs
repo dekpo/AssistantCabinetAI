@@ -9,9 +9,12 @@ use std::path::Path;
 use serde::Serialize;
 use walkdir::WalkDir;
 
-/// Extensions this session's extractor understands. `.csv` and `.xlsx` are a later pipeline
-/// (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
-pub const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx", "txt", "md", "jpg", "jpeg", "png"];
+/// Extensions this session's extractor understands: the four it reads itself, the pictures it sends to OCR, and
+/// the ones `readers` opens (subtitles, RTF, e-mail, OpenDocument, PowerPoint). Workbooks (`.csv`, `.xlsx`,
+/// `.ods`) are the tabular pipeline's (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
+pub const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "pdf", "docx", "txt", "md", "jpg", "jpeg", "png", "vtt", "srt", "rtf", "eml", "odt", "odp", "pptx",
+];
 
 /// Whether the document pipeline can extract this extension. Lowercase, without the dot.
 pub fn is_supported(extension: &str) -> bool {
@@ -131,6 +134,13 @@ mod tests {
                 "summary.md"
             ]
         );
+    }
+
+    #[test]
+    fn every_extension_a_reader_opens_is_discovered() {
+        for extension in crate::readers::EXTENSIONS {
+            assert!(is_supported(extension), "{extension}");
+        }
     }
 
     #[test]

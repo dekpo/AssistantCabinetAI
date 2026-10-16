@@ -21,10 +21,10 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FileKind {
-    /// Plain text the extractor reads directly: `.txt`, `.md`.
+    /// Text the extractor reads directly: `.txt`, `.md`, and the subtitles and messages `readers` opens.
     DocumentText,
     DocumentPdf,
-    /// Word Open XML: `.docx`.
+    /// Office documents: Word Open XML (`.docx`), OpenDocument text and presentations, PowerPoint.
     DocumentOffice,
     /// A picture. Its text, if any, is recovered by OCR at ingestion.
     Image,
@@ -42,11 +42,11 @@ impl FileKind {
     /// From the lowercase extension, without the dot. The only place a file's type is decided.
     pub fn from_extension(extension: &str) -> Self {
         match extension {
-            "txt" | "md" => Self::DocumentText,
+            "txt" | "md" | "vtt" | "srt" | "rtf" | "eml" => Self::DocumentText,
             "pdf" => Self::DocumentPdf,
-            "docx" => Self::DocumentOffice,
+            "docx" | "odt" | "odp" | "pptx" => Self::DocumentOffice,
             "jpg" | "jpeg" | "png" => Self::Image,
-            "csv" | "xls" | "xlsx" | "xlsm" => Self::TabularCandidate,
+            "csv" | "xls" | "xlsx" | "xlsm" | "ods" => Self::TabularCandidate,
             "" => Self::Other,
             _ => Self::Unsupported,
         }
@@ -227,6 +227,13 @@ pub fn mime_type_for(extension: &str) -> &'static str {
     match extension {
         "txt" => "text/plain",
         "md" => "text/markdown",
+        "vtt" => "text/vtt",
+        "srt" => "application/x-subrip",
+        "rtf" => "application/rtf",
+        "odt" => "application/vnd.oasis.opendocument.text",
+        "odp" => "application/vnd.oasis.opendocument.presentation",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "eml" => "message/rfc822",
         "pdf" => "application/pdf",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "jpg" | "jpeg" => "image/jpeg",
@@ -234,6 +241,7 @@ pub fn mime_type_for(extension: &str) -> &'static str {
         "csv" => "text/csv",
         "xls" => "application/vnd.ms-excel",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "ods" => "application/vnd.oasis.opendocument.spreadsheet",
         _ => "application/octet-stream",
     }
 }
@@ -254,6 +262,13 @@ mod tests {
     fn an_extension_decides_the_kind() {
         assert_eq!(FileKind::from_extension("pdf"), FileKind::DocumentPdf);
         assert_eq!(FileKind::from_extension("md"), FileKind::DocumentText);
+        assert_eq!(FileKind::from_extension("vtt"), FileKind::DocumentText);
+        assert_eq!(FileKind::from_extension("srt"), FileKind::DocumentText);
+        assert_eq!(FileKind::from_extension("rtf"), FileKind::DocumentText);
+        assert_eq!(FileKind::from_extension("eml"), FileKind::DocumentText);
+        for extension in ["odt", "odp", "pptx"] {
+            assert_eq!(FileKind::from_extension(extension), FileKind::DocumentOffice);
+        }
         assert_eq!(FileKind::from_extension("docx"), FileKind::DocumentOffice);
         assert_eq!(FileKind::from_extension("png"), FileKind::Image);
         assert_eq!(FileKind::from_extension("zip"), FileKind::Unsupported);
@@ -262,7 +277,7 @@ mod tests {
 
     #[test]
     fn a_spreadsheet_is_recognised_without_becoming_a_document() {
-        for extension in ["csv", "xls", "xlsx"] {
+        for extension in ["csv", "xls", "xlsx", "ods"] {
             let kind = FileKind::from_extension(extension);
             assert_eq!(kind, FileKind::TabularCandidate);
             assert!(

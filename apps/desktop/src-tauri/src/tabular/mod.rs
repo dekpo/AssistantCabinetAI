@@ -5,7 +5,7 @@
 //! filesystem -> TabularDataSource -> Workbook -> TabularInventory -> (deterministic analysis, later)
 //! ```
 //!
-//! CSV and XLSX are a first-class source with their own pipeline, never document chunks: this
+//! CSV, XLSX and ODS are a first-class source with their own pipeline, never document chunks: this
 //! module and its adapters never flatten a workbook into text and never touch the document
 //! embedding pipeline. `TabularDataSource` is the only thing the rest of the application knows
 //! about reading a workbook; the CSV and XLSX adapters both implement it and agree on one
@@ -156,9 +156,14 @@ pub fn build_inventory_with_source_rows(
             let (workbook, rows) = csv_adapter::CsvDataSource.open_with_source_rows(path)?;
             (inventory::TabularFormat::Csv, workbook, rows)
         }
-        "xls" | "xlsx" | "xlsm" => {
+        "xls" | "xlsx" | "xlsm" | "ods" => {
             let (workbook, rows) = xlsx_adapter::XlsxDataSource.open_with_source_rows(path)?;
-            (inventory::TabularFormat::Xlsx, workbook, rows)
+            let format = if extension == "ods" {
+                inventory::TabularFormat::Ods
+            } else {
+                inventory::TabularFormat::Xlsx
+            };
+            (format, workbook, rows)
         }
         _ => return Err(TabularError::UnsupportedExtension),
     };
@@ -193,7 +198,7 @@ pub fn load_current(
         .unwrap_or_default();
     let workbook = match extension.as_str() {
         "csv" => csv_adapter::CsvDataSource.open(path)?,
-        "xls" | "xlsx" | "xlsm" => xlsx_adapter::XlsxDataSource.open(path)?,
+        "xls" | "xlsx" | "xlsm" | "ods" => xlsx_adapter::XlsxDataSource.open(path)?,
         _ => return Err(TabularError::UnsupportedExtension),
     };
     Ok((workbook, inventory))

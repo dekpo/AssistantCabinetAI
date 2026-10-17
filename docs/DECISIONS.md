@@ -1353,3 +1353,20 @@ Part 03 of the workspace series (`feat/document-viewer`). Behaviour: `docs/CLIEN
 | Raw stays the default | A `.md` opens as stored, in `TextView`. The switch **Brut** \| **Aperçu** appears only for a file with more than one mode (`previewModes`: today `md` only). The mode lives in `FileViewer`'s state as a typed `PreviewMode`, so part 04 can lift it into a tab; it resets to raw when another file is opened, and scroll is not kept across the switch |
 | The preview is the application's own `Markdown` component, not the library | Owner, 17 October. That component is already the chat's: no `rehype-raw`, and links and images are reduced to their text, so a link cannot navigate the Tauri window and an image cannot cause a request. Checked by rendering to a string in vitest: `[x](https://example.invalid)` gives its text, `![alt](https://example.invalid/x.png)` gives the alt text, a reference link, an autolink and a `file:///` path give no `<a>`, raw `<script>` and `<img>` stay text. `Markdown.tsx` is not changed; the preview adds a wrapper and scoped CSS (larger headings than in a conversation) |
 | Same bounded text as Raw | The preview goes through `prepareViewerText` (500 000 characters, notice). Measured in Node (render only, no DOM): a mixed document takes about 0.3 s at 50 000 characters, 0.5 s at 100 000, 0.9 s at 200 000 and **4.4 to 5.3 s at 500 000**. The bound is kept as specified; a lower preview-only bound (100 000 to 200 000 characters) is proposed to the owner, not applied |
+
+## Taken while building the viewer tabs (17 October 2026)
+
+Part 04 of the workspace series (`feat/document-viewer`). Behaviour: `docs/CLIENT.md`, "The document viewer", "Tabs".
+
+| Subject | Decision |
+| --- | --- |
+| Only the active tab is mounted | No other viewer, canvas or PDFium instance exists. Coming back to a tab **reads the file again** (no byte cache: a file can be 128 MiB). Chosen for libraries of 1 500+ files |
+| Identity | Folder + relative path (`tabId`, NUL-joined), so the same name in both folders gives two tabs. Opening an open file activates it; a different hash replaces the record and drops the remembered view |
+| One way to open | `openFile(folder, record)` in `App`, which calls `openTab`. A cap on the number of tabs would be a change in `openTab` only. **The cap is not decided** (open) |
+| Keys | `tablist` pattern with automatic activation (moving focus activates, since switching is cheap). Left / Right wrap, Home / End. Roving tabindex: only the active tab and its close button are in the Tab order. No shortcut (Ctrl+W...), no reordering, no pinning (open, register item 9) |
+| Closing | The active tab hands over to its right neighbour, else the left one. The last one collapses the centre. **Fermer** left the viewer header (it would have been a second, ambiguous close) |
+| What is remembered | In memory only, never across launches (open, register item 3): scroll as a 0 to 1 ratio, zoom only if the user chose one, sheet, slide (by stepping), Markdown mode. Saved when the tab is left or closed, only if the view had finished restoring, so React's double effect in development cannot overwrite the real state. Reading the store does not consume the entry, for the same reason |
+| Keeping a few viewers alive | Not done (open, register item 2) |
+| Restore | Frame by frame until the scrollable height has been stable for 3 frames, 2 s at most, abandoned at the first wheel, key or pointer input. The scrolling element is found from the browser's own report (overflow and computed style), never by a class of the library |
+| Outside change | One check at window `focus` for **all** open tabs: at most one inventory read per folder that has a tab, the tabs that differ close together and one modal covers the batch. The others stay. A tab whose folder could not be read is left alone. A folder replaced in the settings closes its tabs silently |
+| Title-bar button | Unchanged in meaning: it closes the whole workspace, **every tab at once**. Dropping many tabs with one click may deserve another behaviour (a confirmation, or hiding the centre without closing the tabs). To decide with the owner |

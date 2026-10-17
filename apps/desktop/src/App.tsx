@@ -9,6 +9,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
 import { WorkFolderCard } from "./components/WorkFolderCard";
+import type { TabActions } from "./components/WorkspacePanel";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import {
   addScopeFiles,
@@ -25,7 +26,18 @@ import {
 } from "./lib/ipc";
 import { NO_LAYOUTS } from "./lib/panelLayout";
 import { applyTheme } from "./lib/theme";
-import type { OpenWorkspace, WorkspaceView } from "./lib/workspaceView";
+import { createViewStateStore, type ViewStateStore } from "./lib/viewState";
+import {
+  activateTab,
+  closeTab,
+  closeTabs,
+  idsOfFolder,
+  openTab,
+  tabsOf,
+  viewOf,
+  type TabsState,
+} from "./lib/viewerTabs";
+import type { OpenWorkspace, ViewerFolder, WorkspaceView } from "./lib/workspaceView";
 import { useAppSettings } from "./state/useAppSettings";
 import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
@@ -76,21 +88,53 @@ export default function App() {
   /* The one modal of the viewer: the open file was moved, renamed, deleted or modified outside the
      software. The centre closes with it, and the file can only be shown again after an Analyse. */
   const [outsideNotice, setOutsideNotice] = useState(false);
-  const fileLeft = useCallback(() => {
-    setWorkspace(null);
-    setOutsideNotice(true);
-  }, []);
-  useOutsideChangeGuard(workspace, fileLeft);
-  /* "Open" on a row of either list: the centre shows that file, replacing what it showed. Opening
+  /* What each open tab remembered of its view (scroll, zoom, sheet, slide, Markdown mode). Memory
+     only: dropped with the tab, never stored. */
+  const [viewStates] = useState<ViewStateStore>(createViewStateStore);
+  /* Every change of the open tabs goes through here; a tab list that becomes empty closes the
+     centre, and a change that changes nothing leaves the view (the welcome view too) as it was. */
+  const changeTabs = useCallback(
+    (change: (state: TabsState) => TabsState) =>
+      setWorkspace((current) => {
+        const before = tabsOf(current);
+        const after = change(before);
+        return after === before ? current : viewOf(after);
+      }),
+    [],
+  );
+  /* The one way to open a file, so that a cap on the number of tabs is a change in `openTab` only.
+     "Open" on a row of either list: a file already open is shown again, never duplicated. Opening
      changes no selection and starts no analysis. */
+  const openFile = useCallback(
+    (folder: ViewerFolder, record: FileRecord) =>
+      changeTabs((state) => openTab(state, folder, record)),
+    [changeTabs],
+  );
   const openDocument = useCallback(
-    (record: FileRecord) => openWorkspace({ kind: "file", folder: "documents", record }),
-    [openWorkspace],
+    (record: FileRecord) => openFile("documents", record),
+    [openFile],
   );
-  const openTable = useCallback(
-    (record: FileRecord) => openWorkspace({ kind: "file", folder: "data", record }),
-    [openWorkspace],
+  const openTable = useCallback((record: FileRecord) => openFile("data", record), [openFile]);
+  /* Tabs whose file is no longer as it was opened: closed together, with one modal for all. */
+  const tabsLeft = useCallback(
+    (ids: string[]) => {
+      changeTabs((state) => closeTabs(state, ids));
+      setOutsideNotice(true);
+    },
+    [changeTabs],
   );
+  const tabActions = useMemo<TabActions>(
+    () => ({
+      activate: (id) => changeTabs((state) => activateTab(state, id)),
+      close: (id) => changeTabs((state) => closeTab(state, id)),
+      missing: (id) => tabsLeft([id]),
+    }),
+    [changeTabs, tabsLeft],
+  );
+  const openTabs = useMemo(() => tabsOf(workspace).tabs, [workspace]);
+  useOutsideChangeGuard(openTabs, tabsLeft);
+  /* A closed tab forgets its view, whoever closed it (the user, the guard, a folder change). */
+  useEffect(() => viewStates.retain(openTabs.map((tab) => tab.id)), [openTabs, viewStates]);
   /* Counted up whenever the default widths of the zones must be put back on screen at once. */
   const [layoutRestores, setLayoutRestores] = useState(0);
   /* Suggestions that name somebody are hidden by default: a screen can be seen by whoever waits in
@@ -110,6 +154,16 @@ export default function App() {
   const dataFolder = snapshot?.settings.dataFolder ?? null;
   /* The same rule for the Data Folder: another folder, no workbook chosen. */
   useEffect(() => setDataScope(noDocumentsScope(Date.now())), [dataFolder]);
+  /* The tabs of a folder that was replaced would show another folder's file under the same path:
+     they close, and their view with them. */
+  useEffect(
+    () => changeTabs((state) => closeTabs(state, idsOfFolder(state, "documents"))),
+    [workFolder, changeTabs],
+  );
+  useEffect(
+    () => changeTabs((state) => closeTabs(state, idsOfFolder(state, "data"))),
+    [dataFolder, changeTabs],
+  );
   /* Both lists, joined only when a question is sent (`docs/SELECTION-AND-MEMORY.md`). */
   const chatScope = useMemo(() => combineScopes(scope, dataScope), [scope, dataScope]);
   /* "Add to my selection", under the name picker: the files of a name that is only in analysed
@@ -212,8 +266,8 @@ export default function App() {
             layouts={snapshot.settings.layout}
             onLayoutsChange={(change) => void saveLayout(change)}
             onWorkspaceCollapsed={closeWorkspace}
-            onCloseWorkspace={closeWorkspace}
-            onFileMissing={fileLeft}
+            viewStates={viewStates}
+            tabActions={tabActions}
             restoreNonce={layoutRestores}
             resources={
               <aside className="app__side">

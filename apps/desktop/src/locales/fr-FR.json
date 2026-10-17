@@ -15,7 +15,11 @@
   "viewer": {
     "open": "Ouvrir",
     "openHint": "Afficher ce fichier dans la zone centrale",
-    "close": "Fermer",
+    "tabsLabel": "Fichiers ouverts",
+    "tabTitle": "{path} ({folder})",
+    "closeTab": "Fermer {name}",
+    "folderDocuments": "Dossier des documents",
+    "folderData": "Dossier des Tableaux",
     "loading": "Chargement du fichier…",
     "unsupported": "Ce format ne peut pas être affiché dans le logiciel. Ouvrez ce fichier avec votre propre logiciel.",
     "reveal": "Afficher dans l'explorateur de fichiers",

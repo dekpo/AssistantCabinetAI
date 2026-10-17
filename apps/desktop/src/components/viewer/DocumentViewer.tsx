@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/I18nProvider";
+import type { TabViewState } from "../../lib/viewState";
 import {
   mountDocument,
   visiblePage,
   type MountedViewer,
   type ViewerFormat,
 } from "../../lib/viewerEngine";
+import { useScrollMemory, type ScrollMemory } from "./useScrollMemory";
 import { ViewerControls, type ViewerCapabilities } from "./ViewerControls";
 
 /** The wait after the last resize before the width is fitted again. */
@@ -32,12 +34,33 @@ const IMAGE_ZOOM_MAX = 1.5;
  * - it passes a copy of the bytes, because the library empties the buffer it receives;
  * - after a resize it fits the width again, unless the user chose a zoom (the PDF refits itself).
  */
-export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: ViewerFormat }) {
+export function DocumentViewer({
+  bytes,
+  format,
+  initial,
+  memory,
+  onChange,
+}: {
+  bytes: ArrayBuffer;
+  format: ViewerFormat;
+  /** What the tab remembered (zoom if she chose one, sheet, slide); read once, at mount. */
+  initial: TabViewState;
+  /** The scroll position to restore and to report (`useScrollMemory`). */
+  memory: ScrollMemory;
+  /** Reports a part of the tab's view state as it changes. */
+  onChange: (patch: Partial<TabViewState>) => void;
+}) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<MountedViewer | null>(null);
   /* Set by the user's own zoom buttons: from then on a resize does not undo her choice. */
   const userZoomed = useRef(false);
+  const start = useRef(initial).current;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  /* True once the document is drawn and laid out at its restored zoom, sheet and slide: only then
+     does the scroll position get restored. */
+  const [ready, setReady] = useState(false);
   const [sheetIndex, setSheetIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,15 +84,21 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
     setSlideIndex(0);
     setCurrentPage(1);
     setCapabilities(null);
+    setReady(false);
     setFailed(false);
 
-    const start = () => {
+    const mount = () => {
       started = true;
       mountDocument(host, bytes.slice(0), {
         format,
         height: "100%",
         useWorker: true,
-        onZoom: (value) => setZoom(value),
+        onZoom: (value) => {
+          setZoom(value);
+          if (userZoomed.current) {
+            onChangeRef.current({ zoom: value });
+          }
+        },
       })
         .then((mounted) => {
           if (cancelled) {
@@ -77,8 +106,26 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
             return;
           }
           viewerRef.current = mounted;
-          if (FITS_TO_WIDTH.has(format)) {
+          /* A zoom she chose comes back as it was and the automatic fit is skipped; a document she
+             never zoomed is fitted to the width as usual. */
+          if (start.zoom !== null && typeof mounted.setZoom === "function") {
+            userZoomed.current = true;
+            mounted.setZoom(start.zoom);
+          } else if (FITS_TO_WIDTH.has(format)) {
             mounted.fitWidth?.();
+          }
+          const sheets = Array.isArray(mounted.sheetNames) ? mounted.sheetNames.length : 0;
+          if (0 < start.sheetIndex && start.sheetIndex < sheets) {
+            mounted.setSheet?.(start.sheetIndex);
+            setSheetIndex(start.sheetIndex);
+          }
+          const slides = typeof mounted.slideCount === "number" ? mounted.slideCount : 0;
+          if (0 < start.slideIndex && start.slideIndex < slides && mounted.next !== undefined) {
+            /* The handle has no direct setter: the slide is reached by stepping. */
+            for (let step = 0; step < start.slideIndex; step += 1) {
+              mounted.next();
+            }
+            setSlideIndex(mounted.slideIndex ?? 0);
           }
           setZoom(mounted.zoom ?? null);
           setCapabilities({
@@ -99,6 +146,7 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
                 ? mounted.slideCount
                 : null,
           });
+          setReady(true);
         })
         .catch(() => {
           if (!cancelled) {
@@ -110,7 +158,7 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
     const observer = new ResizeObserver(() => {
       if (!started) {
         if (host.clientWidth > 0) {
-          start();
+          mount();
         }
         return;
       }
@@ -130,7 +178,11 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
       viewerRef.current = null;
       host.replaceChildren();
     };
-  }, [bytes, format]);
+  }, [bytes, format, start]);
+
+  /* The scroll position of the tab: restored once the document is laid out, then recorded. The
+     element that scrolls is looked for inside the host (`findScroller`). */
+  useScrollMemory(hostRef, ready, memory);
 
   const pages = capabilities?.pages ?? null;
   /* The page number of a long document follows the scroll: the library does not report it, so it is
@@ -185,12 +237,15 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
       viewer.setZoom(Math.min(ceiling, Math.max(ZOOM_MIN, next)));
     }
     refreshZoom();
+    onChange({ zoom: viewer.zoom ?? null });
   };
   const zoomIn = () => zoomBy(1);
   const zoomOut = () => zoomBy(-1);
   const chooseSheet = (index: number) => {
     setSheetIndex(index);
     viewerRef.current?.setSheet?.(index);
+    /* Another sheet starts at its top. */
+    onChange({ sheetIndex: index, scrollRatio: 0 });
   };
   const moveSlide = (step: -1 | 1) => {
     const viewer = viewerRef.current;
@@ -200,11 +255,13 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
       viewer?.prev?.();
     }
     setSlideIndex(viewer?.slideIndex ?? 0);
+    onChange({ slideIndex: viewer?.slideIndex ?? 0, scrollRatio: 0 });
   };
   const fit = useCallback(() => {
     userZoomed.current = false;
     viewerRef.current?.fitWidth?.();
     refreshZoom();
+    onChangeRef.current({ zoom: null });
   }, []);
 
   return (

@@ -11,8 +11,9 @@ import {
   layoutToApply,
   storeLayout,
 } from "../lib/panelLayout";
+import type { ViewStateStore } from "../lib/viewState";
 import type { WorkspaceView } from "../lib/workspaceView";
-import { WorkspacePanel } from "./WorkspacePanel";
+import { WorkspacePanel, type TabActions } from "./WorkspacePanel";
 
 /* Pixels, not percentages: below these the content of the zone stops being usable (the two folder
    cards, a readable page, the model selector beside the composer). A number is pixels and a string
@@ -35,8 +36,8 @@ export function AppLayout({
   layouts,
   onLayoutsChange,
   onWorkspaceCollapsed,
-  onCloseWorkspace,
-  onFileMissing,
+  viewStates,
+  tabActions,
   restoreNonce,
 }: {
   resources: ReactNode;
@@ -48,10 +49,10 @@ export function AppLayout({
   onLayoutsChange: (change: (current: PanelLayouts) => PanelLayouts) => void;
   /** The user dragged the workspace closed: `App` forgets its view. */
   onWorkspaceCollapsed: () => void;
-  /** The close button of what the workspace shows. */
-  onCloseWorkspace: () => void;
-  /** The file shown is no longer where it was (stable function). */
-  onFileMissing: () => void;
+  /** What each open tab remembered of its view. */
+  viewStates: ViewStateStore;
+  /** What the tabs of the workspace can ask for: show, close, or report a file that is gone. */
+  tabActions: TabActions;
   /** Changes whenever the default layout must be put back on screen at once. */
   restoreNonce: number;
 }) {
@@ -146,11 +147,7 @@ export function AppLayout({
       >
         <div className="pane__content">
           {workspace === null ? null : (
-            <WorkspacePanel
-              view={workspace}
-              onClose={onCloseWorkspace}
-              onFileMissing={onFileMissing}
-            />
+            <WorkspacePanel view={workspace} viewStates={viewStates} actions={tabActions} />
           )}
         </div>
       </Panel>

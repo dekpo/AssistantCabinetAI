@@ -122,11 +122,37 @@ has an **Ouvrir** button, only on a file that can be selected (`isSelectable`: a
 of its checkbox. A file that is not analysed, unreadable, or a workbook without a real table has no button: a
 `.csv` or `.xlsx` left in the Documents Folder is listed but not analysed, so it cannot be opened from there;
 the Tables Folder is where tables belong. Only analysed files open because an Analyse renames files to clean
-names, so a path known before it can change after it. `WorkspaceView` carries `{ kind: "file", folder, record }`
-(the whole record, with the folder it is relative to); opening another file replaces the current one. The centre
-shows a header (the file's relative path, **Fermer**) and under it the content; **Fermer**, the title-bar button
-and dragging the centre closed all collapse the zone. The title-bar button toggles the welcome view or closes
-whatever is open; it does not reopen the last file.
+names, so a path known before it can change after it. `WorkspaceView` carries
+`{ kind: "files", tabs: OpenFile[], activeId }` (each `OpenFile` is `{ id, folder, record }`: the whole record, with
+the folder it is relative to). Every opening goes through one function in `App`, `openFile(folder, record)`, which
+adds a tab or activates the one that exists (see "Tabs" below). The centre shows the tab strip, then a header (the
+file's relative path) and the content; closing the last tab, the title-bar button and dragging the centre closed
+all collapse the zone. The title-bar button toggles the welcome view or closes whatever is open, **every tab
+included**; it does not reopen the last file.
+
+**Tabs.** Several files can be open at once, one tab each (`src/components/viewer/TabStrip.tsx`, pure logic in
+`src/lib/viewerTabs.ts`). A tab's identity is the folder plus the relative path (`tabId`, joined by a NUL
+character, which cannot occur in either), so the same name in the Documents Folder and in the Tables Folder gives
+two tabs, told apart by the folder's glyph (decorative) and by the folder's name in the tooltip. Opening a file
+that is already open activates its tab and never adds a duplicate; if its content changed meanwhile (another
+hash, after an Analyse) the tab takes the fresh record and forgets its remembered view. The strip is a `tablist`:
+Left and Right move to the neighbour and wrap, Home and End go to the ends, and moving focus activates; only the
+active tab and its close button are in the Tab order. The label is the file name, the tooltip the full path and the
+folder; the strip scrolls sideways and keeps the active tab in view. Closing the active tab activates its right
+neighbour, else the left one; closing the last one collapses the centre. There is **no cap** on the number of tabs
+(open decision), no shortcut, no reordering, no pinning. **Only the active tab is mounted**: no other viewer, canvas
+or PDFium instance exists, which keeps memory flat for a library of thousands of files; the price is that coming
+back to a tab reads the file again (no byte cache).
+
+**What a tab remembers** (`src/lib/viewState.ts`, in memory only, never stored, dropped with the tab or when the
+folder is replaced): the scroll position as a 0 to 1 ratio of the scrollable height (robust to a zoom or a
+resized zone), the zoom only if the user chose one (otherwise the usual fit to width runs again), the sheet of a
+workbook, the slide of a presentation (restored by stepping, the handle has no direct setter) and the Markdown
+mode. The state is kept in a ref while the user works and handed to the store when the tab is left or closed, only if
+the view had finished restoring the previous one; the restore (`useScrollMemory`) sets the position again on every
+frame until the scrollable height has stopped changing, for at most two seconds, and gives way at the first wheel,
+key or pointer input. The element that scrolls is found by what the browser reports (it overflows and its style
+lets it scroll), not by a class of the library.
 
 **Two renderers, chosen from the extension, never from the content** (`src/lib/viewerFormats.ts`):
 
@@ -144,8 +170,9 @@ freezes the window. Only the first part of a large file is decoded. The Raw view
 **Raw | Preview (Markdown).** `previewModes(extension)` in `viewerFormats.ts` lists the modes of a file, raw first:
 `md` gives `["raw", "preview"]`, every other extension `["raw"]`, and the two-button switch
 (`PreviewModeSwitch`, **Brut** | **Aperçu**, `aria-pressed`) is drawn under the header only when there are two. A
-file opens raw. The mode is a typed value (`PreviewMode`) in the state of `FileViewer`, which is keyed by the file,
-so another file starts raw again; scroll position is not kept across the switch. The preview
+file opens raw. The mode is a typed value (`PreviewMode`) in the tab's view state, so a tab comes back in the mode it
+was left in and another file starts raw; the scroll position is not carried across the switch (each mode has its own
+scroll box, a switch starts at the top). The preview
 (`MarkdownPreview`) is the application's own `Markdown` component, the one the chat answers use (`react-markdown`
 and `remark-gfm`, no `rehype-raw`): nothing a file contains can become markup, and a link or an image is reduced to
 its text (the alt text for an image), so the preview can neither navigate the window nor fetch anything. It is

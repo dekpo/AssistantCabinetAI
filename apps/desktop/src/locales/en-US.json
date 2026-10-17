@@ -15,7 +15,11 @@
   "viewer": {
     "open": "Open",
     "openHint": "Show this file in the central zone",
-    "close": "Close",
+    "tabsLabel": "Open files",
+    "tabTitle": "{path} ({folder})",
+    "closeTab": "Close {name}",
+    "folderDocuments": "Documents folder",
+    "folderData": "Tables Folder",
     "loading": "Loading the file…",
     "unsupported": "This format cannot be shown in the software. Open this file with your own software.",
     "reveal": "Show in the file manager",

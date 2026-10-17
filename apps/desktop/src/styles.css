@@ -204,6 +204,102 @@ body {
   overflow: hidden;
 }
 
+/* The tabs of the centre: one strip that scrolls sideways when it overflows, never wraps. */
+.tabs {
+  flex-shrink: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  max-width: 220px;
+  border-right: 1px solid var(--border);
+  color: var(--text-quiet);
+}
+
+.tab:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.tab--active {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab__label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 8px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab--active .tab__label {
+  font-weight: 600;
+}
+
+.tab__name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 6px 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tab__close svg {
+  width: 10px;
+  height: 10px;
+}
+
+.tab__close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.tab__label:focus-visible,
+.tab__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The panel the active tab controls, and the file inside it: both fill the zone under the strip. */
+.viewer__panel,
+.viewer__file {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .viewer__header {
   display: flex;
   align-items: center;

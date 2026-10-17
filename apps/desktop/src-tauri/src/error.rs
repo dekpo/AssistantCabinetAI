@@ -70,6 +70,20 @@ pub enum AppError {
     #[error("work_folder_reveal_failed")]
     WorkFolderRevealFailed,
 
+    /// The viewer asked for a file that is no longer there: renamed, moved or deleted outside the
+    /// application since the last listing. Nothing was read or changed.
+    #[error("viewer_file_missing")]
+    ViewerFileMissing,
+
+    /// The viewer asked for something that is not a plain file of the folder it names: a path
+    /// that could lead elsewhere, a folder, a link, or a file the system would not open.
+    #[error("viewer_file_unreadable")]
+    ViewerFileUnreadable,
+
+    /// The file is larger than the viewer's memory budget (`viewer_source::MAX_VIEWER_BYTES`).
+    #[error("viewer_file_too_large")]
+    ViewerFileTooLarge,
+
     #[error("server_unreachable")]
     ServerUnreachable { url: String },
 
@@ -239,6 +253,9 @@ impl AppError {
             Self::WorkFolderUncNotSupported { .. } => "work_folder_unc_not_supported",
             Self::WorkFolderNotWritable { .. } => "work_folder_not_writable",
             Self::WorkFolderRevealFailed => "work_folder_reveal_failed",
+            Self::ViewerFileMissing => "viewer_file_missing",
+            Self::ViewerFileUnreadable => "viewer_file_unreadable",
+            Self::ViewerFileTooLarge => "viewer_file_too_large",
             Self::ServerUnreachable { .. } => "server_unreachable",
             Self::ServerTimeout { .. } => "server_timeout",
             Self::EmbeddingTimeout => "embedding_timeout",
@@ -294,6 +311,9 @@ impl AppError {
             | Self::DocumentsAndTablesTogether
             | Self::ChatCancelled
             | Self::WorkFolderRevealFailed
+            | Self::ViewerFileMissing
+            | Self::ViewerFileUnreadable
+            | Self::ViewerFileTooLarge
             | Self::FillSourceUnavailable
             | Self::FillNothingToFill
             | Self::FillWriteFailed

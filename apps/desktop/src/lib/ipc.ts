@@ -1135,6 +1135,19 @@ export function revealDataFile(relativePath: string): Promise<void> {
   return invoke<void>("reveal_data_file", { relativePath });
 }
 
+/** The bytes of one file of the Documents Folder, for the viewer to show. A path relative to the
+ * folder, as the inventory lists it. Text files (`txt md srt vtt eml csv`) arrive as UTF-8, every
+ * other file byte for byte; nothing is written, hashed or indexed. Rejects with
+ * `viewer_file_missing`, `viewer_file_unreadable` or `viewer_file_too_large`. */
+export function readWorkFileForViewer(relativePath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_work_file_for_viewer", { relativePath });
+}
+
+/** The Data Folder equivalent of `readWorkFileForViewer`. */
+export function readDataFileForViewer(relativePath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_data_file_for_viewer", { relativePath });
+}
+
 /**
  * The Data Folder's Analyse: clean file names, then every CSV/XLSX parsed on this computer. No
  * embedding and no AI: it is over in moments. Reported in the Documents pass's own shape -

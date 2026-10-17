@@ -48,10 +48,26 @@ pub fn file(root: &Path, relative: &str) -> Result<(), AppError> {
     spawn_file_manager_selecting(&target)
 }
 
-/// The file `relative` names under `root`, or a refusal. Rebuilt component by component, which
-/// both rejects `..`, drive letters and absolute paths and gives Windows the separators Explorer
-/// expects, whichever ones the inventory used.
-fn resolve_inside(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
+/// Why a path from the webview does not name a plain file of a folder. Neutral on purpose: this
+/// module maps every case to its own machine code, the viewer maps them to others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PathRefusal {
+    /// Empty, `..`, a drive letter, an absolute path: anything that is not a relative path of
+    /// plain names.
+    UnsafePath,
+    /// Nothing exists at that path.
+    Missing,
+    /// Something exists, but it is a folder or a link, never followed.
+    NotAPlainFile,
+}
+
+/// The file `relative` names under `root`, or the reason it does not. Rebuilt component by
+/// component, which both rejects `..`, drive letters and absolute paths and gives Windows the
+/// separators Explorer expects, whichever ones the inventory used.
+///
+/// Only the last element is checked for being a link; a link in the middle is for the caller that
+/// reads the file to catch, by comparing canonical paths.
+pub(crate) fn resolve_plain_file(root: &Path, relative: &str) -> Result<PathBuf, PathRefusal> {
     let mut target = root.to_path_buf();
     let mut any = false;
     for component in Path::new(relative).components() {
@@ -60,17 +76,24 @@ fn resolve_inside(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
                 target.push(part);
                 any = true;
             }
-            _ => return Err(AppError::WorkFolderRevealFailed),
+            _ => return Err(PathRefusal::UnsafePath),
         }
     }
-    // A link is refused, not followed: it could lead out of the folder (`discovery`).
-    let is_plain_file = std::fs::symlink_metadata(&target)
-        .map(|metadata| metadata.is_file())
-        .unwrap_or(false);
-    if !any || !is_plain_file {
-        return Err(AppError::WorkFolderRevealFailed);
+    if !any {
+        return Err(PathRefusal::UnsafePath);
     }
-    Ok(target)
+    // A link is refused, not followed: it could lead out of the folder (`discovery`).
+    match std::fs::symlink_metadata(&target) {
+        Ok(metadata) if metadata.is_file() => Ok(target),
+        Ok(_) => Err(PathRefusal::NotAPlainFile),
+        Err(_) => Err(PathRefusal::Missing),
+    }
+}
+
+/// `resolve_plain_file` for showing in the file manager, where every refusal is the same outcome
+/// to her: nothing was shown.
+fn resolve_inside(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
+    resolve_plain_file(root, relative).map_err(|_| AppError::WorkFolderRevealFailed)
 }
 
 /// Windows Explorer.

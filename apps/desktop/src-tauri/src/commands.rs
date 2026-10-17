@@ -55,6 +55,7 @@ use crate::retrieval::{self, Evidence, EvidenceCoverage};
 use crate::reveal;
 use crate::settings::{self, Settings};
 use crate::tabular_answer::{self, TabularAnswer, WorkbookChoice};
+use crate::viewer_source;
 use crate::work_folder::{
     self, display, suggested_data_folder, suggested_work_folder, WorkFolderPolicy,
 };
@@ -649,6 +650,22 @@ pub fn reveal_work_file(state: State<'_, AppState>, relative_path: String) -> Re
     reveal::file(Path::new(&work_folder), &relative_path)
 }
 
+/// The bytes of one file of the Documents Folder, for the viewer to show. A path relative to that
+/// folder and nothing else; the folder comes from settings. Read-only: nothing is written, hashed
+/// or indexed, and the selection of files for the assistant is not touched. Text files come back
+/// as UTF-8, every other file byte for byte. `async` so a large read runs off the main thread.
+#[tauri::command(async)]
+pub fn read_work_file_for_viewer(
+    state: State<'_, AppState>,
+    relative_path: String,
+) -> Result<tauri::ipc::Response, AppError> {
+    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    viewer_source::read(Path::new(&work_folder), &relative_path).map(tauri::ipc::Response::new)
+}
+
 /// Forget everything the index holds, leaving every document in the work folder untouched.
 ///
 /// This is the deliberate way back to "nothing has been analysed yet", and it exists because the
@@ -759,6 +776,20 @@ pub fn reveal_data_file(state: State<'_, AppState>, relative_path: String) -> Re
         return Err(AppError::NoDataFolderSet);
     };
     reveal::file(Path::new(&data_folder), &relative_path)
+}
+
+/// The Data Folder equivalent of `read_work_file_for_viewer`: the bytes of one file of the Data
+/// Folder, a relative path and nothing else, read-only.
+#[tauri::command(async)]
+pub fn read_data_file_for_viewer(
+    state: State<'_, AppState>,
+    relative_path: String,
+) -> Result<tauri::ipc::Response, AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    viewer_source::read(Path::new(&data_folder), &relative_path).map(tauri::ipc::Response::new)
 }
 
 /// Forget every workbook analysis, and nothing else: the Data Folder card's Reset. The documents

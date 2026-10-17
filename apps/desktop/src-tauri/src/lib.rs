@@ -41,6 +41,7 @@ pub mod structure;
 pub mod tabular;
 pub mod tabular_answer;
 pub mod template_fill;
+pub mod viewer_source;
 mod work_folder;
 pub mod work_folder_context;
 
@@ -64,6 +65,7 @@ pub fn run() {
             commands::ensure_suggested_data_folder,
             commands::reveal_data_folder,
             commands::reveal_data_file,
+            commands::read_data_file_for_viewer,
             commands::index_data_folder,
             commands::data_folder_inventory,
             commands::reset_data_index,
@@ -104,6 +106,7 @@ pub fn run() {
             commands::work_folder_inventory,
             commands::reveal_work_folder,
             commands::reveal_work_file,
+            commands::read_work_file_for_viewer,
             commands::reset_index,
             commands::fill_preview,
             commands::fill_generate,

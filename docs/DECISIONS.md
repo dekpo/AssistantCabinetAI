@@ -1326,3 +1326,20 @@ Part 02B of the workspace series (`feat/document-viewer`). The Rust side and the
 | Content security policy | The two narrow additions and the separate `devCsp` described in the privacy document. `capabilities/default.json` unchanged |
 | Notices | `apps/desktop/THIRD-PARTY-NOTICES.md` (shrimp-doc-viewer, `@embedpdf/pdfium` and PDFium, the font's licence). The library's own 708 KB list of the 73 Rust crates compiled into its core is **referenced, not copied**: vendoring it before the first installer is the owner's call |
 | Offline test in a browser engine | **GO**: every supported format opens from the owner's folders in Edge (Chromium 155, the WebView2 engine) under the release policy with module workers, no external request, no violation. The packaged window on WebView2, WKWebView and macOS is still unproven |
+
+## Taken while building the viewer interface (17 October 2026)
+
+Part 02C of the workspace series (`feat/document-viewer`). Behaviour: `docs/CLIENT.md`, "The document viewer".
+
+| Subject | Decision |
+| --- | --- |
+| Who can be opened | Only an analysed file (`isSelectable`), from the sidebar lists of both folders, with an **Ouvrir** button independent of the checkbox. Opening never changes the selection and never analyses. A `.csv` or `.xlsx` in the Documents Folder is listed but not analysed, hence not openable: a limit of the two-folder model, kept (owner, 17 October) |
+| The format map | From the extension, forced, never sniffed. Library: `pdf docx xlsx pptx odt ods odp rtf csv`, and `png jpg jpeg gif bmp webp svg` as `image`. The application's text view: `txt md srt vtt eml`. Unsupported (message plus the reveal action): everything else, `doc xls ppt tiff heic` included, never advertised, never converted |
+| Text is shown by the application, not the library | The library's text engine joins single line breaks (a subtitle's index, timestamp and text on one line; a mail's headers run together). `TextView` shows the characters as stored, CRLF as one break, monospace, wrapping. Bounded at **500 000 characters**, cut at a line end with a visible notice, and only the first part of a large file is decoded |
+| In-memory UTF-8 | Text-like files reach the viewer as UTF-8 from Rust (UTF-16 with a mark, else UTF-8 or Windows-1252). Nothing is rewritten on disk (`AGENTS.md`, rule 3). The 128 MiB cap stands |
+| The library's toolbar is hidden, the controls are the application's | The toolbar's labels are in one fixed language (Chinese) and cannot be changed. It is the first child `div` of the host and sets its own `display`, so one rule with `!important` hides it. Controls are built from the handle members measured in the real window: zoom (own `zoomIn` / `zoomOut`, or a step of 1.25 through `setZoom` for images), `fitWidth`, `pageCount`, `sheetNames` with `setSheet`, `next` / `prev` with `slideCount`. Every label goes through both catalogues and follows the locale at once |
+| Fit to width | Only for pages and pictures (`docx odt odp rtf image`), on opening and after a debounced resize, until the user zooms. Not for grids (an XLSX fitted to a wide zone opened at 255 %). The PDF refits itself. The zone is mounted only once it has a width |
+| Image zoom | A picture grows with its zoom up to 150 % and not beyond (measured), so the application stops its step there instead of letting the number climb |
+| Outside change | One check at window `focus` while a file is open: the inventory of that folder is read again and compared with the opened record (missing, no longer analysed, different hash). The centre closes and one single-button modal appears (`ConfirmDialog` `singleAction`, the two-answer behaviour unchanged). `viewer_file_missing` ends in the same modal. No watcher, no timer |
+| Title-bar button | Unchanged: it toggles the welcome view and closes any open file; it does not reopen the last file. To decide with the owner |
+| The checkpoint | Level 3 of the no-network proof: the 291-page PDF rendered in the real WebView2 window of a release build (`pnpm tauri build --no-bundle`) under the release policy. Wi-Fi off was stated by the owner for the first attempt |

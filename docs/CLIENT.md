@@ -36,7 +36,7 @@ Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 
 separators and the padding come to about 960). Each zone scrolls inside itself.
 
 **The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
-a discriminated union with one kind today, `welcome`) and passes `openWorkspace(view)` and `closeWorkspace()`
+a discriminated union with two kinds today, `welcome` and `file`) and passes `openWorkspace(view)` and `closeWorkspace()`
 around. **The centre is visible exactly while `workspace !== null`.** Nothing is open at launch, so the user sees
 two columns. A new use of the zone (a file viewer, voice notes, a calendar) adds a kind to the union and a case to
 `WorkspacePanel`, and touches nothing else. A button in the title bar (`aria-pressed`) opens the welcome view or
@@ -111,6 +111,66 @@ window of the same product, never Open WebUI.
 Only the name **Assistant Cabinet AI** appears: icon, window title, menus. Not the default Tauri icon, not
 the word Ollama, no Open WebUI banner. Licence notices go in About → Licences. See `docs/MODELS.md` for the
 trademark constraints, which also forbid rebadging Open WebUI as our product.
+
+### The document viewer
+
+An analysed file opens in the centre, inside the window, fully offline. It is display-only: opening a file never
+ticks or unticks a file, never starts an analysis, and touches no extraction, OCR, index, retrieval or provider.
+
+**How a file is opened.** Each row of the two lists in the sidebar (the Documents Folder and the Tables Folder)
+has an **Ouvrir** button, only on a file that can be selected (`isSelectable`: analysed, green dot), independent
+of its checkbox. A file that is not analysed, unreadable, or a workbook without a real table has no button: a
+`.csv` or `.xlsx` left in the Documents Folder is listed but not analysed, so it cannot be opened from there;
+the Tables Folder is where tables belong. Only analysed files open because an Analyse renames files to clean
+names, so a path known before it can change after it. `WorkspaceView` carries `{ kind: "file", folder, record }`
+(the whole record, with the folder it is relative to); opening another file replaces the current one. The centre
+shows a header (the file's relative path, **Fermer**) and under it the content; **Fermer**, the title-bar button
+and dragging the centre closed all collapse the zone. The title-bar button toggles the welcome view or closes
+whatever is open; it does not reopen the last file.
+
+**Two renderers, chosen from the extension, never from the content** (`src/lib/viewerFormats.ts`):
+
+| Extensions | Renderer |
+| --- | --- |
+| `pdf docx xlsx pptx odt ods odp rtf csv` and `png jpg jpeg gif bmp webp svg` | the library `shrimp-doc-viewer`, behind `src/lib/viewerEngine.ts`, its format forced |
+| `txt md srt vtt eml` | the application's own plain text view (`TextView`), line by line as stored, monospace, wrapping, selectable, no Markdown rendering |
+| everything else (`doc xls ppt tiff heic`...) | a message in the user's language and the button **Afficher dans l'explorateur de fichiers** (the existing reveal command) |
+
+The library's text engine is not used: it joins single line breaks, so a subtitle's index, timestamp and text, or
+a mail's headers, would run together. The plain text view decodes UTF-8 with `TextDecoder`, turns CRLF into one
+line break, and shows at most **500 000 characters** (cut at a line end) with a notice, so a very large text never
+freezes the window. Only the first part of a large file is decoded. The Raw view of a Markdown file will reuse it.
+
+**Controls are the application's own, in the interface language.** The library draws a toolbar of its own with
+labels in one fixed language (Chinese); it is hidden by one CSS rule (`display: none !important`, because the
+library sets `display` on the element itself) and these controls replace it. A control exists only where the
+library handle has the matching member, measured in the real window: PDF, DOCX, ODT, ODP, RTF: zoom out, the zoom
+level, zoom in, **Ajuster à la largeur** and the page count; images: the same, with a zoom step of the
+application's own through `setZoom` (a picture grows up to 150 % and not beyond); XLSX and ODS: zoom and a
+**Feuille** selector when there are several sheets (the library's `setSheet`, no remount; a CSV goes through the
+same code and its handle was not probed: the Tables Folder one is in the human test); PPTX: **Précédent**,
+**Suivant** and « Diapositive n sur N », no zoom. Pages and pictures are fitted to the width on opening and after a
+resize (debounced) unless the user chose a zoom; a grid is not fitted (it would open at 200 % and more); the PDF
+refits itself. The viewer is mounted only once the zone has a width (the centre is 0 px wide at its first render),
+destroyed on every replace and on unmount, and given a copy of the bytes (the library empties the buffer it
+receives).
+
+**Accents.** The file is read by Rust (`read_work_file_for_viewer`, `read_data_file_for_viewer`, 128 MiB cap) and
+text-like files (`txt md srt vtt eml csv`) arrive as UTF-8: UTF-16 with a byte-order mark is decoded first,
+otherwise UTF-8 or Windows-1252. The conversion is in memory; the file on disk is never rewritten.
+
+**When the file changed outside the application** (renamed, moved, deleted or edited in the file manager): while a
+file is open, the window's `focus` re-reads the inventory of that file's folder (`useOutsideChangeGuard`, cheap
+thanks to the hash cache) and compares it with the opened record (`outsideChange`: missing, no longer analysed, or
+a different hash). On a difference the centre closes and **one modal** says so, with one button **Compris**
+(`ConfirmDialog` in its `singleAction` variant; Escape and a click outside acknowledge it too). The read command's
+`viewer_file_missing` ends in the same modal. No watcher and no timer: the check happens when the user comes back.
+
+**Limits, accepted.** Italic is never drawn (shown upright) and bold is synthesised; serif and other families fall
+back to one sans font; Chinese, Cyrillic, Arabic and every script outside the Latin subset render blank. Legacy
+binary formats (`doc xls ppt`) are not shown and not converted. An EML shows its raw source, bodies still
+encoded. The PPTX renderer puts one letter per line on the tested files, and the XLSX one truncates long values
+in narrow columns (`10/1/202`): both are the library's, not the application's.
 
 ## The work folder
 

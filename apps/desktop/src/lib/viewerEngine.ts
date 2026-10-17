@@ -53,6 +53,13 @@ export interface MountedViewer {
   zoomIn?(): void;
   zoomOut?(): void;
   fitWidth?(): void;
+  /** XLSX and ODS: switches the sheet without remounting. */
+  setSheet?(index: number): void;
+  /** PPTX: the slides, shown one at a time. */
+  readonly slideCount?: number;
+  readonly slideIndex?: number;
+  next?(): void;
+  prev?(): void;
 }
 
 type LibraryMount = (

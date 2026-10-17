@@ -3,6 +3,7 @@
 /docs/private/
 /docs/SESSION-*.md
 /docs/SESSION-WORKSPACE/
+/docs/SESSION-SPEECH/
 /docs/SESSIONS-DONE/
 
 .env

@@ -4,6 +4,14 @@
     "subtitle": "Aide administrative sur votre ordinateur",
     "loading": "Démarrage..."
   },
+  "workspace": {
+    "toggle": "Espace de travail",
+    "title": "Espace de travail",
+    "welcome": "Cette zone accueillera vos documents ouverts, puis d'autres outils. Pour l'instant elle est vide : le bouton « Espace de travail » de la barre du haut l'affiche ou la masque, et les séparateurs se font glisser pour changer la largeur des zones.",
+    "separatorResources": "Largeur des dossiers",
+    "separatorChat": "Largeur de la conversation",
+    "separatorBetween": "Largeur des dossiers et de la conversation"
+  },
   "actions": {
     "analyze": "Analyser",
     "analyzing": "Analyse",
@@ -401,10 +409,13 @@
     "title": "Réglages",
     "storedAt": "Enregistré dans {path}",
     "reset": "Réinitialiser",
+    "layoutLabel": "Disposition des zones",
+    "layoutDescription": "Remet les dossiers, l'espace de travail et la conversation à leurs largeurs d'origine.",
+    "restoreLayout": "Restaurer la disposition",
     "resetLabel": "Réinitialiser les réglages",
     "resetDescription": "Remet tous les réglages dans leur état d'origine, y compris le choix du dossier des documents.",
     "resetTitle": "Réinitialiser les réglages ?",
-    "resetBody": "Le thème, la langue, l'adresse de l'IA, les modèles, le délai d'attente et le choix du dossier des documents reviendront à leur état d'origine. Vos documents et leur analyse ne sont pas supprimés : il suffira de choisir à nouveau le même dossier pour les retrouver tels quels.",
+    "resetBody": "Le thème, la langue, la disposition des zones, l'adresse de l'IA, les modèles, le délai d'attente et le choix du dossier des documents reviendront à leur état d'origine. Vos documents et leur analyse ne sont pas supprimés : il suffira de choisir à nouveau le même dossier pour les retrouver tels quels.",
     "saved": "Réglages enregistrés",
     "themeLabel": "Apparence",
     "themeLight": "Clair",

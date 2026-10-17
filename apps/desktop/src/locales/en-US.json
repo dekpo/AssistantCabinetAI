@@ -4,6 +4,14 @@
     "subtitle": "Administrative assistance on your computer",
     "loading": "Starting..."
   },
+  "workspace": {
+    "toggle": "Workspace",
+    "title": "Workspace",
+    "welcome": "This area will hold your open documents, then other tools. For now it is empty: the \"Workspace\" button in the top bar shows or hides it, and the separators can be dragged to change the width of the zones.",
+    "separatorResources": "Width of the folders",
+    "separatorChat": "Width of the conversation",
+    "separatorBetween": "Width of the folders and of the conversation"
+  },
   "actions": {
     "analyze": "Analyze",
     "analyzing": "Analyzing",
@@ -401,10 +409,13 @@
     "title": "Settings",
     "storedAt": "Stored in {path}",
     "reset": "Reset",
+    "layoutLabel": "Layout of the zones",
+    "layoutDescription": "Puts the folders, the workspace and the conversation back to their original widths.",
+    "restoreLayout": "Restore the layout",
     "resetLabel": "Reset the settings",
     "resetDescription": "Puts every setting back to how it started, including the choice of documents folder.",
     "resetTitle": "Reset the settings?",
-    "resetBody": "The theme, the language, the AI address, the models, the idle timeout and the choice of documents folder will all go back to how they started. Your documents and their analysis are not deleted: choosing the same folder again finds them exactly as they were.",
+    "resetBody": "The theme, the language, the layout of the zones, the AI address, the models, the idle timeout and the choice of documents folder will all go back to how they started. Your documents and their analysis are not deleted: choosing the same folder again finds them exactly as they were.",
     "saved": "Settings saved",
     "themeLabel": "Appearance",
     "themeLight": "Light",

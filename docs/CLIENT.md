@@ -22,10 +22,44 @@ Reference: [Tauri 2](https://v2.tauri.app/start/), [webview versions](https://v2
 
 One window, one product:
 
-- **left:** the documents folder, then the data folder (files);
+- **left (Resources):** the documents folder, then the data folder (files);
+- **centre (Workspace):** an extensible zone, closed unless something is shown in it (see "Layout" below);
 - **right:** chat, the proposed plan, and Approve / Cancel;
 - **top:** Assistant Cabinet AI;
 - **settings:** light / dark / follow the system, and the language, defaulting to the system choice.
+
+### Layout
+
+The three zones sit in one `react-resizable-panels` v4 group (`Group`, `Panel`, `Separator`; a number is pixels,
+a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 240 (the cards need it),
+Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 1000 (240 + 320 + 340, two
+separators and the padding come to about 960). Each zone scrolls inside itself.
+
+**The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
+a discriminated union with one kind today, `welcome`) and passes `openWorkspace(view)` and `closeWorkspace()`
+around. **The centre is visible exactly while `workspace !== null`.** Nothing is open at launch, so the user sees
+two columns. A new use of the zone (a file viewer, voice notes, a calendar) adds a kind to the union and a case to
+`WorkspacePanel`, and touches nothing else. A button in the title bar (`aria-pressed`) opens the welcome view or
+closes the zone; the user can also close it by dragging it below its minimum or by pressing Enter on a
+separator beside it.
+
+**The workspace panel is always rendered**, collapsed to size 0 when closed, so the group always holds three
+panels and `ChatPanel` keeps its place in the tree: the conversation is never remounted by a resize, an open or a
+close. A closed centre has no limits to grow (`maxSize` 0) and its separator is hidden, so the line that remains
+resizes Resources against Chat.
+
+**Remembered widths.** `settings.json` holds `layout`, two triples `[resources, workspace, chat]` in percent:
+`open` (centre above 0, saved while the centre is open) and `collapsed` (centre exactly 0, saved while it is
+closed), so each state keeps its proportions across closing, reopening and restarting. They are saved only at the
+end of a gesture made by the user (`onLayoutChanged` with `isUserInteraction`), never on each pixel, and never for
+a layout the code applied (opening, restoring, the library correcting itself after a window resize). Rust keeps
+only usable triples (`PanelLayouts::sanitised`, on load and on save). A failed layout save is silent. Settings has
+**Restaurer la disposition**; the settings reset resets the layout with the rest. Both put the default widths on
+screen at once.
+
+**Saves are queued.** `save_settings` replaces the whole file, so `useAppSettings` serialises its saves
+(`src/lib/settingsQueue.ts`): each change is merged into the settings as they stand when its turn comes, a failed
+save does not block the next, and `reset` and the initial load go through the same queue.
 
 Under the folder's buttons sits a **Documents used** disclosure (sprint 2a.7, moved into the sidebar and
 reworked by sprint 2a.8, `docs/SELECTION-AND-MEMORY.md`). Closed, it says **aucun** ⚠, **tous** ⚠ or how many files

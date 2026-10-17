@@ -47,6 +47,7 @@ export function SettingsDialog({
   dataIndexing,
   onUpdate,
   onReset,
+  onRestoreLayout,
   onClose,
   onOpenKnowledge,
 }: {
@@ -65,6 +66,8 @@ export function SettingsDialog({
    * Written as a method rather than `() => Promise<void>` so the literal guard in
    * `src/guards/sources.test.ts` does not read `> Promise <` as a text node. */
   onReset(): Promise<void>;
+  /** Forgets the saved widths of the zones and puts the default ones on screen at once. */
+  onRestoreLayout: () => void;
   onClose: () => void;
   /** Opens the knowledge management dialog, over this one. */
   onOpenKnowledge: () => void;
@@ -459,6 +462,16 @@ export function SettingsDialog({
         />
 
         {saveError === null ? null : <ErrorBanner error={saveError} />}
+
+        <div className="field">
+          <span className="field__label">{t("settings.layoutLabel")}</span>
+          <span className="field__description">{t("settings.layoutDescription")}</span>
+          <div className="field__row">
+            <button type="button" className="button button--compact" onClick={onRestoreLayout}>
+              {t("settings.restoreLayout")}
+            </button>
+          </div>
+        </div>
 
         {/* Last in the panel, under everything it undoes, with a line saying what it costs
             before she reaches the button rather than only once she has pressed it. */}

@@ -16,6 +16,16 @@ export type ThemeChoice = "light" | "dark" | "system";
  */
 export type KnowledgeMode = "off" | "suggest" | "auto";
 
+/** The widths of the three zones, `[resources, workspace, chat]`, in percent of the window. */
+export type PanelTriple = [number, number, number];
+
+/** One remembered triple per state of the centre zone: `open` has a centre above zero, `collapsed`
+ * a centre of exactly zero. `null` when nothing usable is saved. */
+export interface PanelLayouts {
+  open: PanelTriple | null;
+  collapsed: PanelTriple | null;
+}
+
 export interface AppSettings {
   /** Chosen locale, or null on a machine where nothing has been chosen yet. */
   locale: string | null;
@@ -67,6 +77,8 @@ export interface AppSettings {
   /** The user's own names: a property that holds one of them never makes her the author of a file.
    * Edited in `settings.json` for now; the dialog does not show it. */
   ownNames: string[];
+  /** The remembered widths of the three zones of the window. Rust keeps only usable triples. */
+  layout: PanelLayouts;
 }
 
 export interface AppSnapshot {

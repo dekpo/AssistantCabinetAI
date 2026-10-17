@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppLayout } from "./components/AppLayout";
 import { ChatPanel } from "./components/ChatPanel";
 import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
@@ -22,7 +23,9 @@ import {
   type AnalysisScope,
   type OutsideSelection,
 } from "./lib/ipc";
+import { NO_LAYOUTS } from "./lib/panelLayout";
 import { applyTheme } from "./lib/theme";
+import type { OpenWorkspace, WorkspaceView } from "./lib/workspaceView";
 import { useAppSettings } from "./state/useAppSettings";
 import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
@@ -42,7 +45,8 @@ function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boole
 }
 
 export default function App() {
-  const { snapshot, locale, loadError, saveError, reload, update, reset } = useAppSettings();
+  const { snapshot, locale, loadError, saveError, reload, update, saveLayout, reset } =
+    useAppSettings();
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
   );
@@ -62,6 +66,14 @@ export default function App() {
   /* The workbooks, chosen the same way in the Data Folder card and starting from none too. */
   const [dataScope, setDataScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
+  /* What the centre zone of the window shows. The zone is open exactly while this is not null, so
+     anything in the application can open it with `openWorkspace` and close it with
+     `closeWorkspace` (`docs/CLIENT.md`, "Layout"). Nothing is open at launch. */
+  const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
+  const openWorkspace = useCallback<OpenWorkspace>((view) => setWorkspace(view), []);
+  const closeWorkspace = useCallback(() => setWorkspace(null), []);
+  /* Counted up whenever the default widths of the zones must be put back on screen at once. */
+  const [layoutRestores, setLayoutRestores] = useState(0);
   /* Suggestions that name somebody are hidden by default: a screen can be seen by whoever waits in
      the room. The user's own click shows them for this session only; nothing is stored, and the
      setting itself is not changed. */
@@ -182,60 +194,75 @@ export default function App() {
           connection={connection}
           onRefresh={refresh}
           onOpenSettings={() => setSettingsOpen(true)}
+          workspaceOpen={workspace !== null}
+          onToggleWorkspace={() =>
+            workspace === null ? openWorkspace({ kind: "welcome" }) : closeWorkspace()
+          }
         />
         <main className="app__main">
-          <aside className="app__side">
-            <WorkFolderCard
-              workFolder={snapshot.settings.workFolder}
-              suggestedWorkFolder={snapshot.suggestedWorkFolder}
-              onChosen={(path) => void update({ workFolder: path })}
-              indexing={indexing}
-              detail="collapsible"
-              scope={scope}
-              onScopeChange={setScope}
-              scopeLocked={chatBusy}
-              onOpenKnowledge={() => setKnowledgeOpen(true)}
-              suggestions={suggestionsInTheCard}
-            />
-            <DataFolderCard
-              dataFolder={snapshot.settings.dataFolder}
-              suggestedDataFolder={snapshot.suggestedDataFolder}
-              onChosen={(path) => void update({ dataFolder: path })}
-              indexing={dataIndexing}
-              detail="collapsible"
-              scope={dataScope}
-              onScopeChange={setDataScope}
-              scopeLocked={chatBusy}
-              onOpenKnowledge={() => setKnowledgeOpen(true)}
-              suggestions={documentsSelected(chatScope) ? undefined : suggestionsInTheCard}
-            />
-            {snapshot.warnings.map((code) => (
-              <ErrorBanner key={code} error={{ code, data: {} }} />
-            ))}
-            {healthError === null ? null : (
-              <div className="app__pinned">
-                <ErrorBanner error={healthError} onRetry={refresh} />
-              </div>
-            )}
-          </aside>
-          <ChatPanel
-            onFailure={refresh}
-            hasWorkFolder={snapshot.settings.workFolder !== null}
-            scope={chatScope}
-            onBusyChange={setChatBusy}
-            modelAlias={snapshot.settings.modelAlias}
-            aliases={health?.aliases ?? []}
-            indexing={indexing}
-            onModelAliasChange={(alias) => void update({ modelAlias: alias })}
-            showDiagnostics={snapshot.settings.showDiagnostics}
-            copySources={snapshot.settings.copySources}
-            onAddToSelection={(outside) => void addOutsideToSelection(outside)}
-            revealNames={revealNames}
-            onRevealNamesChange={setRevealNames}
-            suggestionsRefresh={suggestionsRefresh}
-            suggestionsEnabled={suggestionsEnabled}
-            requestedQuestion={requestedQuestion}
-            onRequestedQuestionHandled={() => setRequestedQuestion(null)}
+          <AppLayout
+            workspace={workspace}
+            layouts={snapshot.settings.layout}
+            onLayoutsChange={(change) => void saveLayout(change)}
+            onWorkspaceCollapsed={closeWorkspace}
+            restoreNonce={layoutRestores}
+            resources={
+              <aside className="app__side">
+                <WorkFolderCard
+                  workFolder={snapshot.settings.workFolder}
+                  suggestedWorkFolder={snapshot.suggestedWorkFolder}
+                  onChosen={(path) => void update({ workFolder: path })}
+                  indexing={indexing}
+                  detail="collapsible"
+                  scope={scope}
+                  onScopeChange={setScope}
+                  scopeLocked={chatBusy}
+                  onOpenKnowledge={() => setKnowledgeOpen(true)}
+                  suggestions={suggestionsInTheCard}
+                />
+                <DataFolderCard
+                  dataFolder={snapshot.settings.dataFolder}
+                  suggestedDataFolder={snapshot.suggestedDataFolder}
+                  onChosen={(path) => void update({ dataFolder: path })}
+                  indexing={dataIndexing}
+                  detail="collapsible"
+                  scope={dataScope}
+                  onScopeChange={setDataScope}
+                  scopeLocked={chatBusy}
+                  onOpenKnowledge={() => setKnowledgeOpen(true)}
+                  suggestions={documentsSelected(chatScope) ? undefined : suggestionsInTheCard}
+                />
+                {snapshot.warnings.map((code) => (
+                  <ErrorBanner key={code} error={{ code, data: {} }} />
+                ))}
+                {healthError === null ? null : (
+                  <div className="app__pinned">
+                    <ErrorBanner error={healthError} onRetry={refresh} />
+                  </div>
+                )}
+              </aside>
+            }
+            chat={
+              <ChatPanel
+                onFailure={refresh}
+                hasWorkFolder={snapshot.settings.workFolder !== null}
+                scope={chatScope}
+                onBusyChange={setChatBusy}
+                modelAlias={snapshot.settings.modelAlias}
+                aliases={health?.aliases ?? []}
+                indexing={indexing}
+                onModelAliasChange={(alias) => void update({ modelAlias: alias })}
+                showDiagnostics={snapshot.settings.showDiagnostics}
+                copySources={snapshot.settings.copySources}
+                onAddToSelection={(outside) => void addOutsideToSelection(outside)}
+                revealNames={revealNames}
+                onRevealNamesChange={setRevealNames}
+                suggestionsRefresh={suggestionsRefresh}
+                suggestionsEnabled={suggestionsEnabled}
+                requestedQuestion={requestedQuestion}
+                onRequestedQuestionHandled={() => setRequestedQuestion(null)}
+              />
+            }
           />
         </main>
         {settingsOpen ? (
@@ -249,7 +276,14 @@ export default function App() {
             indexing={indexing}
             dataIndexing={dataIndexing}
             onUpdate={(patch) => void update(patch)}
-            onReset={reset}
+            onReset={async () => {
+              await reset();
+              setLayoutRestores((count) => count + 1);
+            }}
+            onRestoreLayout={() => {
+              setLayoutRestores((count) => count + 1);
+              void update({ layout: NO_LAYOUTS });
+            }}
             onClose={() => setSettingsOpen(false)}
             onOpenKnowledge={() => setKnowledgeOpen(true)}
           />

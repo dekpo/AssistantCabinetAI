@@ -1289,3 +1289,17 @@ Branch `feat/new-readers`, cut from `61c30a5`. Eight formats, one at a time, eac
 | Limits | RTF tables come out as tab-separated cells; EML attachments are not read; a password-protected or damaged archive is a parse failure named in the summary; UTF-16 subtitle files are not read; no OCR on the new formats |
 
 The large reproducible test (`docs/test-reports/large-test/README.md`) is built on these readers: a generated library of 1 251 documents and 510 spreadsheets, a book of 300 questions, a runner and a scorer.
+
+## Settled by the resizable three-zone layout (17 October 2026)
+
+Owner decisions of the workspace series, built on `feat/resizable-panels`. Interface and rules: `docs/CLIENT.md`, "Layout".
+
+| Subject | Decision |
+| --- | --- |
+| Library | `react-resizable-panels` **4.14.5**, the v4 API (`Group`, `Panel`, `Separator`). **A number is pixels, a string is a percentage.** Pixel minimums (Resources 240, Workspace 320, Chat 340), percentage defaults (22 / 38 / 40 open, 26 / 0 / 74 closed). No other dependency, no icon library |
+| The centre | An extensible slot: `WorkspaceView | null` held by `App`, `openWorkspace` / `closeWorkspace`. **Collapsed at launch**, its separator hidden while collapsed. The panel is **always rendered** (size 0 when closed) so the chat is never remounted. Visible exactly while a view is held |
+| Window | `minWidth` raised from 900 to **1000**: the three minimums, the separators and the padding need about 960. Height unchanged |
+| Two stored layouts | `settings.json` `layout`: `open` and `collapsed`, each a triple of percentages, the centre above 0 in the first and exactly 0 in the second. Saved only at the end of a gesture the user made, kept valid in Rust (`PanelLayouts::sanitised`) on load **and** on save, reset with the other settings |
+| Settings in Rust, not browser storage | The project uses no `localStorage`; the layout is a convenience that follows the same file, the same sanitising and the same reset as every other setting |
+| Save queue | `save_settings` replaces the whole file, so two saves started from the same copy overwrote each other (it happened at every launch: the locale and the alias self-heal both saved from one snapshot). `useAppSettings` now serialises its saves, merges each change into the settings of its turn, lets a failed save pass, and routes `reset` and the initial load through the same queue. `update` is stable between renders |
+| Library facts confirmed by running it (Edge 1180 and 1000 px wide) | The layout is an object keyed by panel id; `onLayoutChanged(layout, { isUserInteraction })` is called once per gesture; keyboard resizing is 5 % per arrow, Home and End go to the limits, Enter on a separator collapses a collapsible panel beside it, a double click resets to the default size; a panel's limits change **after** the effect that follows a render, so a layout set in the same effect is cut back (it is applied one frame later) |

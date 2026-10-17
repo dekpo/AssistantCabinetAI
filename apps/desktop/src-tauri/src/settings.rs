@@ -75,6 +75,59 @@ pub enum Theme {
     System,
 }
 
+/// The widths of the three zones (resources, workspace, chat) as percentages of the window.
+type PanelTriple = [f64; 3];
+
+/// The remembered widths of the three zones, one triple per state of the centre zone, so closing and
+/// reopening the centre keeps the proportions of each state (`docs/CLIENT.md`, "Layout").
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PanelLayouts {
+    /// Saved while the centre zone is open: its share is greater than zero.
+    #[serde(deserialize_with = "lenient_triple")]
+    pub open: Option<PanelTriple>,
+    /// Saved while the centre zone is collapsed: its share is exactly zero.
+    #[serde(deserialize_with = "lenient_triple")]
+    pub collapsed: Option<PanelTriple>,
+}
+
+/// Anything that is not three numbers reads as "nothing saved", so a hand-edited `layout` can never
+/// make the whole file unreadable. The values themselves are checked by `PanelLayouts::sanitised`.
+fn lenient_triple<'de, D>(deserializer: D) -> Result<Option<PanelTriple>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let Some(items) = value.as_array() else {
+        return Ok(None);
+    };
+    let numbers: Vec<f64> = items.iter().filter_map(serde_json::Value::as_f64).collect();
+    Ok(match numbers.as_slice() {
+        [resources, workspace, chat] if items.len() == 3 => Some([*resources, *workspace, *chat]),
+        _ => None,
+    })
+}
+
+impl PanelLayouts {
+    /// Every unusable triple replaced by `None`: finite values from 0 to 100 adding up to 100 give
+    /// or take 1; an `open` triple has a centre greater than zero, a `collapsed` one exactly zero.
+    /// The pixel minimums of the zones belong to the interface, not to what is stored.
+    pub fn sanitised(&self) -> Self {
+        let usable = |triple: &PanelTriple| {
+            triple
+                .iter()
+                .all(|share| share.is_finite() && (0.0..=100.0).contains(share))
+                && (triple.iter().sum::<f64>() - 100.0).abs() <= 1.0
+        };
+        Self {
+            open: self.open.filter(|triple| usable(triple) && triple[1] > 0.0),
+            collapsed: self
+                .collapsed
+                .filter(|triple| usable(triple) && triple[1] == 0.0),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -151,6 +204,9 @@ pub struct Settings {
     /// document, so a property that holds one of these says nothing about who wrote the file. Edited in
     /// `settings.json` until the settings dialog gets its "Advanced" group; kept clean by `save`.
     pub own_names: Vec<String>,
+    /// The remembered widths of the three zones of the window. A convenience of the interface: kept
+    /// valid by `PanelLayouts::sanitised` on the way in and on the way out.
+    pub layout: PanelLayouts,
 }
 
 impl Default for Settings {
@@ -178,6 +234,7 @@ impl Default for Settings {
             knowledge_hide_names_in_suggestions: true,
             copy_sources: false,
             own_names: Vec::new(),
+            layout: PanelLayouts::default(),
         }
     }
 }
@@ -266,6 +323,8 @@ pub fn load(app: &AppHandle) -> (Settings, Vec<String>) {
         Ok(Ok(mut settings)) => {
             // An id written by an earlier build is shown, and later saved, under its current name.
             settings.knowledge_packs = settings.knowledge_pack_ids();
+            // A hand-edited layout never reaches the webview with a value it cannot use.
+            settings.layout = settings.layout.sanitised();
             (settings, Vec::new())
         }
         _ => (
@@ -296,6 +355,7 @@ pub fn save(
     checked.generated_folder_name = clean_folder_name(&checked.generated_folder_name);
     checked.knowledge_packs = checked.knowledge_pack_ids();
     checked.own_names = clean_own_names(&checked.own_names);
+    checked.layout = checked.layout.sanitised();
     let targeting = checked.targeting_policy();
     checked.knowledge_min_scope_files = targeting.min_scope_files;
     checked.knowledge_max_selectivity = targeting.max_selectivity;
@@ -434,9 +494,15 @@ mod tests {
             knowledge_hide_names_in_suggestions: false,
             copy_sources: true,
             own_names: vec!["Zorglub Metadatus".into()],
+            layout: PanelLayouts {
+                open: Some([20.0, 40.0, 40.0]),
+                collapsed: Some([25.0, 0.0, 75.0]),
+            },
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
+        assert_eq!(json["layout"]["open"][1], 40.0);
+        assert_eq!(json["layout"]["collapsed"][2], 75.0);
         assert_eq!(json["generatedFolderName"], "Courriers");
         assert_eq!(json["showDiagnostics"], true);
         assert_eq!(json["writeTimingLog"], true);
@@ -459,6 +525,100 @@ mod tests {
             json["answerIdleTimeoutSeconds"],
             DEFAULT_ANSWER_IDLE_TIMEOUT_SECONDS
         );
+    }
+
+    #[test]
+    fn a_layout_that_is_usable_is_kept_as_it_is() {
+        let layout = PanelLayouts {
+            open: Some([20.0, 40.0, 40.0]),
+            collapsed: Some([25.0, 0.0, 75.0]),
+        };
+
+        assert_eq!(layout.sanitised(), layout);
+        // Adding up to 100 give or take 1 is accepted: the interface rounds what it hands over.
+        let rounded = PanelLayouts {
+            open: Some([20.4, 39.8, 40.3]),
+            collapsed: None,
+        };
+        assert_eq!(rounded.sanitised(), rounded);
+    }
+
+    #[test]
+    fn a_layout_that_cannot_be_used_is_dropped_triple_by_triple() {
+        for unusable in [
+            [f64::NAN, 40.0, 60.0],
+            [f64::INFINITY, 40.0, 60.0],
+            [-5.0, 45.0, 60.0],
+            [20.0, 40.0, 140.0],
+            [20.0, 40.0, 50.0],
+            [10.0, 10.0, 10.0],
+        ] {
+            let layout = PanelLayouts {
+                open: Some(unusable),
+                collapsed: Some(unusable),
+            };
+            assert_eq!(layout.sanitised(), PanelLayouts::default(), "{unusable:?}");
+        }
+        // The centre decides which state a triple can belong to.
+        let swapped = PanelLayouts {
+            open: Some([25.0, 0.0, 75.0]),
+            collapsed: Some([20.0, 40.0, 40.0]),
+        };
+        assert_eq!(swapped.sanitised(), PanelLayouts::default());
+        // One bad triple does not take the good one with it.
+        let mixed = PanelLayouts {
+            open: Some([f64::NAN, 40.0, 60.0]),
+            collapsed: Some([25.0, 0.0, 75.0]),
+        };
+        assert_eq!(mixed.sanitised().open, None);
+        assert_eq!(mixed.sanitised().collapsed, Some([25.0, 0.0, 75.0]));
+    }
+
+    #[test]
+    fn a_file_without_a_layout_loads_with_nothing_saved() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+
+        assert_eq!(settings.layout, PanelLayouts::default());
+        assert_eq!(Settings::default().layout, PanelLayouts::default());
+    }
+
+    #[test]
+    fn a_layout_survives_a_round_trip_and_is_written_in_camel_case() {
+        let settings = Settings {
+            layout: PanelLayouts {
+                open: Some([22.0, 38.0, 40.0]),
+                collapsed: None,
+            },
+            ..Settings::default()
+        };
+
+        let text = serde_json::to_string(&settings).expect("serialises");
+        let restored: Settings = serde_json::from_str(&text).expect("deserialises");
+
+        assert_eq!(restored.layout, settings.layout);
+        let json: serde_json::Value = serde_json::from_str(&text).expect("json");
+        assert_eq!(json["layout"]["open"][0], 22.0);
+        assert!(json["layout"]["collapsed"].is_null());
+    }
+
+    #[test]
+    fn a_hand_edited_layout_never_makes_the_file_unreadable() {
+        for body in [
+            r#"{"layout":{"open":"wide"}}"#,
+            r#"{"layout":{"open":[1,2]}}"#,
+            r#"{"layout":{"open":[1,2,3,4]}}"#,
+            r#"{"layout":{"open":[1,"x",98]}}"#,
+            r#"{"layout":{"collapsed":null}}"#,
+            r#"{"layout":{}}"#,
+        ] {
+            let settings: Settings = serde_json::from_str(body).expect(body);
+            assert_eq!(
+                settings.layout.sanitised(),
+                PanelLayouts::default(),
+                "{body}"
+            );
+        }
     }
 
     #[test]

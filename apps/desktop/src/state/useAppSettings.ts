@@ -7,7 +7,10 @@ import {
   saveSettings,
   type AppSettings,
   type AppSnapshot,
+  type PanelLayouts,
 } from "../lib/ipc";
+import { sameLayouts } from "../lib/panelLayout";
+import { createSettingsQueue } from "../lib/settingsQueue";
 
 export interface AppSettingsState {
   snapshot: AppSnapshot | null;
@@ -16,7 +19,12 @@ export interface AppSettingsState {
   loadError: AppError | null;
   saveError: AppError | null;
   reload: () => void;
+  /** Stable between renders. Saves are made one after the other, each merged into the settings as
+   * they stand when its turn comes (`lib/settingsQueue.ts`). */
   update: (patch: Partial<AppSettings>) => Promise<void>;
+  /** The widths of the zones, saved at the end of a gesture. A convenience: a failure is not
+   * reported anywhere, and nothing is saved when the layouts did not change. */
+  saveLayout: (change: (current: PanelLayouts) => PanelLayouts) => Promise<void>;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure so
    * the caller can keep its confirmation open rather than closing it over an error. */
   reset: () => Promise<void>;
@@ -26,49 +34,68 @@ export function useAppSettings(): AppSettingsState {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
   const [loadError, setLoadError] = useState<AppError | null>(null);
   const [saveError, setSaveError] = useState<AppError | null>(null);
+  /* One queue for the life of the window. What it stores is shown the moment it is stored. */
+  const [queue] = useState(() =>
+    createSettingsQueue<AppSettings>({
+      save: saveSettings,
+      reset: resetSettings,
+      onStored: (settings) =>
+        setSnapshot((current) => (current === null ? current : { ...current, settings })),
+    }),
+  );
 
+  /* Read in turn with the saves, so a reload cannot slip between two of them. */
   const reload = useCallback(() => {
     setLoadError(null);
-    loadAppSnapshot()
-      .then(setSnapshot)
+    queue
+      .enqueue(async () => {
+        const loaded = await loadAppSnapshot();
+        queue.adopt(loaded.settings);
+        setSnapshot(loaded);
+      })
       .catch((raw: unknown) => setLoadError(normaliseError(raw)));
-  }, []);
+  }, [queue]);
 
   useEffect(reload, [reload]);
 
   const update = useCallback(
     async (patch: Partial<AppSettings>) => {
-      if (snapshot === null) {
-        return;
-      }
       setSaveError(null);
-      const merged = { ...snapshot.settings, ...patch };
       try {
-        const stored = await saveSettings(merged);
-        setSnapshot({ ...snapshot, settings: stored });
+        await queue.update(patch);
       } catch (raw: unknown) {
         setSaveError(normaliseError(raw));
       }
     },
-    [snapshot],
+    [queue],
+  );
+
+  const saveLayout = useCallback(
+    async (change: (current: PanelLayouts) => PanelLayouts) => {
+      try {
+        await queue.update((current) => {
+          const next = change(current.layout);
+          return sameLayouts(next, current.layout) ? null : { layout: next };
+        });
+      } catch {
+        // A layout is a convenience: it is not worth a banner.
+      }
+    },
+    [queue],
   );
 
   /* Not `update` with a hand-built patch: the defaults belong to Rust, which reads some of them
      from the environment. The stored result comes back and replaces what is on screen, so the
      locale falls back to the system's again and the folder card returns to offering one. */
   const reset = useCallback(async () => {
-    if (snapshot === null) {
-      return;
-    }
     setSaveError(null);
     try {
-      const stored = await resetSettings();
-      setSnapshot({ ...snapshot, settings: stored });
+      await queue.reset();
     } catch (raw: unknown) {
       setSaveError(normaliseError(raw));
       throw raw;
     }
-  }, [snapshot]);
+  }, [queue]);
 
   return {
     snapshot,
@@ -77,6 +104,7 @@ export function useAppSettings(): AppSettingsState {
     saveError,
     reload,
     update,
+    saveLayout,
     reset,
   };
 }

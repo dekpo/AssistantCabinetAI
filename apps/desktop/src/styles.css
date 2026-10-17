@@ -108,19 +108,105 @@ body {
 }
 
 .app__main {
-  display: grid;
-  grid-template-columns: minmax(240px, 300px) 1fr;
-  /* One row exactly as tall as the window allows, never as tall as its tallest column: a sidebar
-     with both folder lists open and a connection banner scrolls inside itself instead of making
-     the whole page scroll (HAP-1, UX-2). */
-  grid-template-rows: minmax(0, 1fr);
-  gap: 16px;
+  /* Holds the three-zone group: the padding is here and not on the group, which measures itself. */
   padding: 16px 20px 20px;
   min-height: 0;
   flex: 1;
 }
 
+.app__group {
+  height: 100%;
+  width: 100%;
+}
+
+/* One of the three zones. Each scrolls inside itself, never the whole page (HAP-1, UX-2): a
+   sidebar with both folder lists open and a connection banner scrolls in its own zone. */
+.pane {
+  height: 100%;
+  min-width: 0;
+}
+
+.pane__content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane__content > .chat {
+  flex: 1;
+}
+
+/* The line between two zones: a wide hit area around a 1px line, which shows itself on hover, on
+   keyboard focus and while it is dragged. */
+.pane-separator {
+  position: relative;
+  flex: 0 0 10px;
+  width: 10px;
+  outline: none;
+}
+
+.pane-separator::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border);
+  transition:
+    width 0.1s,
+    background-color 0.1s;
+}
+
+.pane-separator:hover::after,
+.pane-separator[data-separator="active"]::after,
+.pane-separator:focus-visible::after {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.pane-separator--hidden {
+  display: none;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.workspace__title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.workspace__text {
+  margin: 0;
+  color: var(--text-quiet);
+}
+
+/* A button that holds only a glyph, such as the workspace toggle. Pressed (the zone is open) it
+   takes the accent, so its state reads without a word. */
+.button--icon {
+  padding: 6px;
+}
+
+.button--icon[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .app__side {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;

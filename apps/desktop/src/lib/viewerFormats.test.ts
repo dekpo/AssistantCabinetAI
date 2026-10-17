@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewModes, viewerRendererOf } from "./viewerFormats";
+import { previewKind, previewModes, viewerRendererOf } from "./viewerFormats";
 
 describe("previewModes", () => {
   it("offers raw then preview for Markdown, whatever the case or a leading dot", () => {
@@ -7,8 +7,12 @@ describe("previewModes", () => {
     expect(previewModes(".MD")).toStrictEqual(["raw", "preview"]);
   });
 
+  it.each(["eml", "srt", "vtt", ".EML", " Srt "])("offers raw then preview for %j", (extension) => {
+    expect(previewModes(extension)).toStrictEqual(["raw", "preview"]);
+  });
+
   it.each([
-    "txt", "srt", "vtt", "eml", "pdf", "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf", "csv",
+    "txt", "pdf", "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf", "csv",
     "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "doc", "xls", "ppt", "tiff", "", "constructor",
   ])("%j has the raw mode only, so no control is shown", (extension) => {
     expect(previewModes(extension)).toStrictEqual(["raw"]);
@@ -19,6 +23,29 @@ describe("previewModes", () => {
       if (previewModes(extension).includes("preview")) {
         expect(viewerRendererOf(extension).renderer).toBe("text");
       }
+    }
+  });
+});
+
+describe("previewKind", () => {
+  it("draws Markdown as formatting and reads mail and subtitles as plain readable text", () => {
+    expect(previewKind("md")).toBe("markdown");
+    expect(previewKind(".MD")).toBe("markdown");
+    for (const extension of ["eml", "srt", "vtt"]) {
+      expect(previewKind(extension)).toBe("readable");
+    }
+  });
+
+  it.each(["txt", "pdf", "docx", "csv", "png", "doc", "", "constructor"])(
+    "%j has no second mode",
+    (extension) => {
+      expect(previewKind(extension)).toBeNull();
+    },
+  );
+
+  it("agrees with previewModes for every known extension", () => {
+    for (const extension of ["md", "eml", "srt", "vtt", "txt", "pdf", "xlsx", "csv", "svg", "ppt"]) {
+      expect(previewModes(extension).length > 1).toBe(previewKind(extension) !== null);
     }
   });
 });

@@ -17,7 +17,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::error::AppError;
-use crate::readers::decode_text;
+use crate::readers::{self, decode_text};
 use crate::reveal::{resolve_plain_file, PathRefusal};
 
 /// The largest file the viewer accepts: 128 MiB (owner decision, 17 October 2026). The bytes cross
@@ -40,6 +40,21 @@ pub(crate) fn read_with_cap(
     relative: &str,
     max_bytes: u64,
 ) -> Result<Vec<u8>, AppError> {
+    let (target, bytes) = read_stored(root, relative, max_bytes)?;
+    if is_text_like(&target) {
+        Ok(to_utf8(&bytes))
+    } else {
+        Ok(bytes)
+    }
+}
+
+/// The file's bytes exactly as stored, with the path that was read: every check of `read`, none of
+/// its conversion.
+fn read_stored(
+    root: &Path,
+    relative: &str,
+    max_bytes: u64,
+) -> Result<(PathBuf, Vec<u8>), AppError> {
     let target = resolve_plain_file(root, relative).map_err(|refusal| match refusal {
         PathRefusal::Missing => AppError::ViewerFileMissing,
         PathRefusal::UnsafePath | PathRefusal::NotAPlainFile => AppError::ViewerFileUnreadable,
@@ -61,11 +76,44 @@ pub(crate) fn read_with_cap(
         return Err(AppError::ViewerFileTooLarge);
     }
 
-    if is_text_like(&target) {
-        Ok(to_utf8(&bytes))
-    } else {
-        Ok(bytes)
+    Ok((target, bytes))
+}
+
+/// The extensions whose text the readers can give back, as the assistant reads it.
+const READABLE_EXTENSIONS: [&str; 3] = ["eml", "srt", "vtt"];
+
+/// The text of `relative` under `root` as the assistant reads it (`readers::eml`, `srt`, `vtt`),
+/// as UTF-8 bytes. The path checks, the size cap and the codes are the raw read's own. A mail is
+/// handed to its reader as stored, exactly as the indexing does, because the reader decodes the
+/// character set the message declares and bytes already turned into UTF-8 would be decoded twice;
+/// subtitles go through the same UTF-8 conversion as the raw view (UTF-16 included). The readers
+/// are called, never changed, and nothing is written or indexed. A file the reader finds empty
+/// gives no bytes. Any other extension is refused as unreadable.
+pub fn read_readable_text(root: &Path, relative: &str) -> Result<Vec<u8>, AppError> {
+    read_readable_text_with_cap(root, relative, MAX_VIEWER_BYTES)
+}
+
+/// `read_readable_text` with the size cap given, so a test can use a small one.
+pub(crate) fn read_readable_text_with_cap(
+    root: &Path,
+    relative: &str,
+    max_bytes: u64,
+) -> Result<Vec<u8>, AppError> {
+    let extension = Path::new(relative)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !READABLE_EXTENSIONS.contains(&extension.as_str()) {
+        return Err(AppError::ViewerFileUnreadable);
     }
+    let (_, stored) = read_stored(root, relative, max_bytes)?;
+    let text = match extension.as_str() {
+        "eml" => readers::eml::text(&stored),
+        "srt" => readers::srt::text(&decoded(&stored)),
+        _ => readers::vtt::text(&decoded(&stored)),
+    };
+    Ok(text.into_bytes())
 }
 
 /// `target` canonicalised, if it still lies under `root` once every link on the way is resolved.
@@ -95,6 +143,11 @@ fn is_text_like(path: &Path) -> bool {
         .and_then(|extension| extension.to_str())
         .map(|extension| extension.to_ascii_lowercase())
         .is_some_and(|extension| TEXT_LIKE_EXTENSIONS.contains(&extension.as_str()))
+}
+
+/// The text of stored bytes, through the conversion the raw view uses.
+fn decoded(stored: &[u8]) -> String {
+    String::from_utf8_lossy(&to_utf8(stored)).into_owned()
 }
 
 /// UTF-8 bytes for a text file. A UTF-16 byte-order mark comes first: `decode_text` alone would
@@ -366,6 +419,152 @@ mod tests {
         let dir = folder_with("mail.eml", raw);
 
         assert_eq!(read(dir.path(), "mail.eml").expect("reads"), raw);
+    }
+
+    fn readable(name: &str, raw: &[u8]) -> String {
+        let dir = folder_with(name, raw);
+        String::from_utf8(read_readable_text(dir.path(), name).expect("reads")).expect("utf8")
+    }
+
+    #[test]
+    fn a_mail_comes_back_decoded_with_its_header_fields_first() {
+        let raw = b"From: a@example.org\r\nSubject: =?UTF-8?Q?Caf=C3=A9?=\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nBient=C3=B4t, \xC3\xA0 demain.\r\n";
+
+        assert_eq!(
+            readable("mail.eml", raw),
+            "From: a@example.org\nSubject: Caf\u{e9}\n\nBient\u{f4}t, \u{e0} demain."
+        );
+    }
+
+    #[test]
+    fn a_mail_in_a_declared_8_bit_character_set_is_decoded_once() {
+        let raw = b"From: a@example.org\r\nContent-Type: text/plain; charset=iso-8859-1\r\nContent-Transfer-Encoding: 8bit\r\n\r\nCaf\xE9\r\n";
+
+        assert_eq!(
+            readable("mail.eml", raw),
+            "From: a@example.org\n\nCaf\u{e9}"
+        );
+    }
+
+    #[test]
+    fn subtitles_come_back_one_line_per_cue_in_both_formats() {
+        let srt = b"1\n00:00:01,000 --> 00:00:04,000\nCaf\xE9 <i>noir</i>\n\n2\n00:01:05,250 --> 00:01:08,000\nBient\xF4t.\n";
+        let vtt = b"WEBVTT\n\n00:00:01.000 --> 00:00:04.000\n<v Alice>Caf\xC3\xA9</v>\n";
+
+        assert_eq!(
+            readable("clip.srt", srt),
+            "[00:00:01] Caf\u{e9} noir\n[00:01:05] Bient\u{f4}t."
+        );
+        assert_eq!(readable("clip.vtt", vtt), "[00:00:01] Alice: Caf\u{e9}");
+        assert_eq!(readable("CLIP.SRT", srt), readable("clip.srt", srt));
+    }
+
+    #[test]
+    fn utf16_subtitles_are_read_with_their_accents() {
+        let dir = folder_with(
+            "clip.srt",
+            &utf16("1\r\n00:00:01,000 --> 00:00:02,000\r\nCaf\u{e9}\r\n", true),
+        );
+
+        let text = read_readable_text(dir.path(), "clip.srt").expect("reads");
+
+        assert_eq!(
+            String::from_utf8(text).expect("utf8"),
+            "[00:00:01] Caf\u{e9}"
+        );
+    }
+
+    #[test]
+    fn a_file_the_reader_finds_empty_gives_no_bytes() {
+        assert_eq!(readable("none.srt", b"1\nnot a timing line\n"), "");
+        assert_eq!(readable("none.eml", b"no header here"), "");
+    }
+
+    #[test]
+    fn the_readable_text_keeps_the_raw_read_s_guards() {
+        let dir = folder_with("clip.srt", b"1\n00:00:01,000 --> 00:00:02,000\nHi\n");
+
+        assert!(matches!(
+            read_readable_text(dir.path(), "../clip.srt"),
+            Err(AppError::ViewerFileUnreadable)
+        ));
+        assert!(matches!(
+            read_readable_text(dir.path(), "absent.srt"),
+            Err(AppError::ViewerFileMissing)
+        ));
+        assert!(matches!(
+            read_readable_text_with_cap(dir.path(), "clip.srt", 5),
+            Err(AppError::ViewerFileTooLarge)
+        ));
+    }
+
+    #[test]
+    fn a_format_without_a_readable_text_is_refused() {
+        let dir = folder_with("memo.txt", b"hello");
+        std::fs::write(dir.path().join("memo.pdf"), b"hello").expect("writes");
+
+        for name in ["memo.txt", "memo.pdf"] {
+            assert!(
+                matches!(
+                    read_readable_text(dir.path(), name),
+                    Err(AppError::ViewerFileUnreadable)
+                ),
+                "{name}"
+            );
+        }
+    }
+
+    /// Compares the readable text of every `.eml`, `.srt` and `.vtt` of the owner's test folders
+    /// with what the indexing path (`readers::read`) produces. Ignored by default, same two
+    /// variables as the test below; run with `--ignored --nocapture` to see the figures.
+    #[test]
+    #[ignore = "reads the owner's test folders, named by two environment variables"]
+    fn the_readable_text_equals_what_the_indexing_reads() {
+        fn files_under(dir: &Path, found: &mut Vec<PathBuf>) {
+            for entry in std::fs::read_dir(dir).expect("lists").flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    files_under(&path, found);
+                } else {
+                    found.push(path);
+                }
+            }
+        }
+
+        let (mut compared, mut different, mut largest) = (0, 0, 0);
+        for variable in ["VIEWER_TEST_DOCS_FOLDER", "VIEWER_TEST_DATA_FOLDER"] {
+            let root = PathBuf::from(std::env::var(variable).expect(variable));
+            let mut found = Vec::new();
+            files_under(&root, &mut found);
+            for path in found {
+                let extension = path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .map(|extension| extension.to_ascii_lowercase())
+                    .unwrap_or_default();
+                if !READABLE_EXTENSIONS.contains(&extension.as_str()) {
+                    continue;
+                }
+                let relative = path
+                    .strip_prefix(&root)
+                    .expect("inside")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let served = read_readable_text(&root, &relative).expect(&relative);
+                let indexed = readers::read(&extension, &path)
+                    .expect("a reader")
+                    .expect("reads")
+                    .join("\n");
+                compared += 1;
+                largest = largest.max(served.len());
+                if served != indexed.as_bytes() {
+                    different += 1;
+                    println!("DIFFERENT: {relative}");
+                }
+            }
+        }
+        println!("compared: {compared}, different: {different}, largest: {largest} bytes");
+        assert_eq!(different, 0);
     }
 
     /// Reads every file of the owner's two test folders through the real code path, read-only.

@@ -8,12 +8,18 @@ import {
   revealWorkFile,
 } from "../../lib/ipc";
 import { FRESH_VIEW_STATE, type TabViewState } from "../../lib/viewState";
-import { previewModes, viewerRendererOf, type PreviewMode } from "../../lib/viewerFormats";
+import {
+  previewKind,
+  previewModes,
+  viewerRendererOf,
+  type PreviewMode,
+} from "../../lib/viewerFormats";
 import type { OpenFile } from "../../lib/workspaceView";
 import { ErrorBanner } from "../ErrorBanner";
 import { DocumentViewer } from "./DocumentViewer";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { PreviewModeSwitch } from "./PreviewModeSwitch";
+import { ReadableTextView } from "./ReadableTextView";
 import { TextView } from "./TextView";
 import type { ScrollMemory } from "./useScrollMemory";
 
@@ -52,6 +58,7 @@ export function FileViewer({
   const { folder, record } = tab;
   const renderer = useMemo(() => viewerRendererOf(record.extension), [record.extension]);
   const modes = useMemo(() => previewModes(record.extension), [record.extension]);
+  const kind = useMemo(() => previewKind(record.extension), [record.extension]);
   const start = useRef<TabViewState>({
     ...(initialState ?? FRESH_VIEW_STATE),
     mode:
@@ -166,12 +173,20 @@ export function FileViewer({
       </div>
     );
   } else if (renderer.renderer === "text") {
-    body =
-      mode === "preview" && modes.includes("preview") ? (
-        <MarkdownPreview bytes={load.bytes} memory={memory} />
-      ) : (
-        <TextView bytes={load.bytes} memory={memory} />
+    if (mode === "preview" && kind === "markdown") {
+      body = <MarkdownPreview bytes={load.bytes} memory={memory} />;
+    } else if (mode === "preview" && kind === "readable") {
+      body = (
+        <ReadableTextView
+          tab={tab}
+          memory={memory}
+          onMissing={onMissing}
+          revealButton={revealButton}
+        />
       );
+    } else {
+      body = <TextView bytes={load.bytes} memory={memory} />;
+    }
   } else {
     body = (
       <DocumentViewer
@@ -192,8 +207,8 @@ export function FileViewer({
         </h2>
       </header>
       {revealError === null ? null : <ErrorBanner error={revealError} />}
-      {modes.length > 1 && load.state === "ready" ? (
-        <PreviewModeSwitch modes={modes} mode={mode} onChange={changeMode} />
+      {kind !== null && load.state === "ready" ? (
+        <PreviewModeSwitch modes={modes} mode={mode} kind={kind} onChange={changeMode} />
       ) : null}
       <div className="viewer__content">{body}</div>
     </div>

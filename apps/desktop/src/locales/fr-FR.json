@@ -27,6 +27,8 @@
     "modeLabel": "Mode d'affichage",
     "modeRaw": "Brut",
     "modePreview": "Aperçu",
+    "modeReadable": "Texte lu par l'assistant",
+    "readableEmpty": "L'assistant ne trouve aucun texte à lire dans ce fichier.",
     "zoomOut": "Réduire",
     "zoomIn": "Agrandir",
     "zoomLevel": "{percent} %",

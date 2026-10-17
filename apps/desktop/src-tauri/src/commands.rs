@@ -792,6 +792,36 @@ pub fn read_data_file_for_viewer(
     viewer_source::read(Path::new(&data_folder), &relative_path).map(tauri::ipc::Response::new)
 }
 
+/// The text of one mail or subtitle file of the Documents Folder as the assistant reads it, as
+/// UTF-8, for the viewer's readable mode. A path relative to that folder and nothing else;
+/// read-only, like the raw read. A format without a readable text is refused.
+#[tauri::command(async)]
+pub fn read_work_file_readable_text(
+    state: State<'_, AppState>,
+    relative_path: String,
+) -> Result<tauri::ipc::Response, AppError> {
+    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let Some(work_folder) = work_folder else {
+        return Err(AppError::NoWorkFolderSet);
+    };
+    viewer_source::read_readable_text(Path::new(&work_folder), &relative_path)
+        .map(tauri::ipc::Response::new)
+}
+
+/// The Data Folder equivalent of `read_work_file_readable_text`.
+#[tauri::command(async)]
+pub fn read_data_file_readable_text(
+    state: State<'_, AppState>,
+    relative_path: String,
+) -> Result<tauri::ipc::Response, AppError> {
+    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let Some(data_folder) = data_folder else {
+        return Err(AppError::NoDataFolderSet);
+    };
+    viewer_source::read_readable_text(Path::new(&data_folder), &relative_path)
+        .map(tauri::ipc::Response::new)
+}
+
 /// Forget every workbook analysis, and nothing else: the Data Folder card's Reset. The documents
 /// index is left exactly as it is, as `reset_index` leaves the workbooks - two cards, two
 /// independent resets. No file in either folder is touched.

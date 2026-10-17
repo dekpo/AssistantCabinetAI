@@ -27,6 +27,8 @@
     "modeLabel": "Display mode",
     "modeRaw": "Raw",
     "modePreview": "Preview",
+    "modeReadable": "Text read by the assistant",
+    "readableEmpty": "The assistant finds no text to read in this file.",
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
     "zoomLevel": "{percent}%",

@@ -39,16 +39,37 @@ const TEXT_EXTENSIONS: ReadonlySet<string> = new Set(["txt", "md", "srt", "vtt",
  */
 export type PreviewMode = "raw" | "preview";
 
-/** Extensions whose text has a rendered reading besides the raw one. */
-const PREVIEWABLE_EXTENSIONS: ReadonlySet<string> = new Set(["md"]);
+/**
+ * What the second mode of a file is. "markdown": the text drawn as formatting by the application's
+ * own Markdown component. "readable": the text the assistant reads (mail headers and body decoded,
+ * one line per subtitle cue), produced by Rust, shown as plain text.
+ */
+export type PreviewKind = "markdown" | "readable";
+
+/** Extensions that have a second mode besides the raw one, and which. */
+const PREVIEW_KINDS: Readonly<Record<string, PreviewKind>> = {
+  md: "markdown",
+  eml: "readable",
+  srt: "readable",
+  vtt: "readable",
+};
+
+function extensionKey(extension: string): string {
+  return extension.trim().replace(/^\./, "").toLowerCase();
+}
+
+/** The kind of second mode a file has, or `null` when it has only the raw one. */
+export function previewKind(extension: string): PreviewKind | null {
+  const key = extensionKey(extension);
+  return (Object.hasOwn(PREVIEW_KINDS, key) ? PREVIEW_KINDS[key] : undefined) ?? null;
+}
 
 /**
  * The modes a file offers, the default (raw) first. The switch is shown only when there are two or
- * more, so every format without a rendered reading gets no control at all.
+ * more, so every format without a second mode gets no control at all.
  */
 export function previewModes(extension: string): PreviewMode[] {
-  const key = extension.trim().replace(/^\./, "").toLowerCase();
-  return PREVIEWABLE_EXTENSIONS.has(key) ? ["raw", "preview"] : ["raw"];
+  return previewKind(extension) === null ? ["raw"] : ["raw", "preview"];
 }
 
 /**

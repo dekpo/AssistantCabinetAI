@@ -1148,6 +1148,18 @@ export function readDataFileForViewer(relativePath: string): Promise<ArrayBuffer
   return invoke<ArrayBuffer>("read_data_file_for_viewer", { relativePath });
 }
 
+/** The text of one mail or subtitle file (`eml srt vtt`) of the Documents Folder as the assistant
+ * reads it, as UTF-8, for the viewer's readable mode. Read-only; rejects with the codes of
+ * `readWorkFileForViewer`, and with `viewer_file_unreadable` for any other format. */
+export function readWorkFileReadableText(relativePath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_work_file_readable_text", { relativePath });
+}
+
+/** The Data Folder equivalent of `readWorkFileReadableText`. */
+export function readDataFileReadableText(relativePath: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_data_file_readable_text", { relativePath });
+}
+
 /**
  * The Data Folder's Analyse: clean file names, then every CSV/XLSX parsed on this computer. No
  * embedding and no AI: it is over in moments. Reported in the Documents pass's own shape -

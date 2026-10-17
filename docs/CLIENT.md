@@ -180,6 +180,22 @@ its text (the alt text for an image), so the preview can neither navigate the wi
 fed the same bounded text as the raw view (`prepareViewerText`: same decoding, same 500 000-character limit, same
 notice), from the bytes already read, and sits in its own scroll container. `Markdown.tsx` is unchanged.
 
+**Text read by the assistant (`eml`, `srt`, `vtt`).** These three also give `["raw", "preview"]`
+(`previewKind(extension)`: `markdown` for `md`, `readable` for them), and the second button is named for what it
+shows: **Texte lu par l'assistant** instead of **Aperçu**, so it cannot be taken for the original. Raw stays the default and
+stays complete (every header, every timestamp, an encoded body as stored). The second mode shows exactly what the
+assistant indexes, produced by the Rust readers (`readers::eml`, `srt`, `vtt`, unchanged) through two read-only
+commands, `read_work_file_readable_text` and `read_data_file_readable_text` (`viewer_source::read_readable_text`: the
+raw read's path checks, 128 MiB cap and codes; any other extension is refused as `viewer_file_unreadable`). The text
+comes back as UTF-8 bytes and is shown by the same `TextView` (`ReadableTextView`), so the 500 000-character bound,
+the notice and the remembered position are shared. It is read only when the mode is chosen, kept while the view
+stays mounted, and read again when a tab is returned to. A mail is given to its reader as stored (it decodes the
+character set the message declares); subtitles go through the raw view's UTF-8 conversion, UTF-16 included. What
+the view leaves out is what the readers leave out: for a mail, everything but `From`, `To`, `Cc`, `Date`,
+`Subject` and the body (plain text; the HTML with its tags removed only when there is no plain text; attachments are
+not read); for subtitles, the cue number, the end time, formatting tags and cue settings (one line per cue with its
+start time, a WebVTT voice tag shown as `Name:`). A file the reader finds empty shows a sentence, not a blank area.
+
 **Controls are the application's own, in the interface language.** The library draws a toolbar of its own with
 labels in one fixed language (Chinese); it is hidden by one CSS rule (`display: none !important`, because the
 library sets `display` on the element itself) and these controls replace it. A control exists only where the

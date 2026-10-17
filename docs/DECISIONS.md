@@ -1354,6 +1354,20 @@ Part 03 of the workspace series (`feat/document-viewer`). Behaviour: `docs/CLIEN
 | The preview is the application's own `Markdown` component, not the library | Owner, 17 October. That component is already the chat's: no `rehype-raw`, and links and images are reduced to their text, so a link cannot navigate the Tauri window and an image cannot cause a request. Checked by rendering to a string in vitest: `[x](https://example.invalid)` gives its text, `![alt](https://example.invalid/x.png)` gives the alt text, a reference link, an autolink and a `file:///` path give no `<a>`, raw `<script>` and `<img>` stay text. `Markdown.tsx` is not changed; the preview adds a wrapper and scoped CSS (larger headings than in a conversation) |
 | Same bounded text as Raw | The preview goes through `prepareViewerText` (500 000 characters, notice). Measured in Node (render only, no DOM): a mixed document takes about 0.3 s at 50 000 characters, 0.5 s at 100 000, 0.9 s at 200 000 and **4.4 to 5.3 s at 500 000**. The bound is kept as specified; a lower preview-only bound (100 000 to 200 000 characters) is proposed to the owner, not applied |
 
+## Taken while building the readable previews of EML, SRT and VTT (18 October 2026)
+
+Part 05 of the workspace series (`feat/readable-previews`). Behaviour: `docs/CLIENT.md`, "The document viewer".
+
+| Subject | Decision |
+| --- | --- |
+| The second mode shows the readers' text | Owner, 17 October: exactly what the assistant indexes (`readers::eml`, `srt`, `vtt`), not a purpose-built rendering, so there is no second MIME parser to maintain and the user sees what the assistant reads. The readers and the indexing are untouched. The view omits what the readers omit (listed in the client document) |
+| The label | Owner, 17 October: **Texte lu par l'assistant** for these three formats, so the text is not mistaken for the original. `.md` keeps **Aperçu**. The mode value stays `preview` in the tab state; the label depends on `previewKind` |
+| EML scope | Whatever the reader does: no attachment list, no HTML rendering, no new decoding. More is a later decision |
+| Other formats | A separate, later decision. `previewKind` is a table keyed by extension, so another format is one line plus its Rust arm |
+| Why a Rust command | The decoding and the cue parsing live in Rust, so the text cannot be derived from the bytes the webview already holds. Two thin commands, one per root; the text is read when the mode is chosen (one file, on a click) |
+| Mail bytes versus subtitle text | A mail is handed to its reader as stored: the reader decodes the declared character set, and bytes already turned into UTF-8 would be decoded twice (an 8-bit message in ISO-8859-1 would show `Ã©`). Subtitles take the raw view's conversion, which also reads UTF-16, something the indexing path does not do (it would read a UTF-16 subtitle file as Windows-1252, a pre-existing gap, not touched) |
+| Error code | No new code: a format without a readable text is refused as `viewer_file_unreadable` (the webview never asks for one) |
+
 ## Taken while building the viewer tabs (17 October 2026)
 
 Part 04 of the workspace series (`feat/document-viewer`). Behaviour: `docs/CLIENT.md`, "The document viewer", "Tabs".

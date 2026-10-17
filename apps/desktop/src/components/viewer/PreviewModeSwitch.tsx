@@ -1,25 +1,34 @@
 import { useTranslation } from "../../i18n/I18nProvider";
-import type { PreviewMode } from "../../lib/viewerFormats";
+import type { PreviewKind, PreviewMode } from "../../lib/viewerFormats";
 
-const LABEL_KEYS: Readonly<Record<PreviewMode, string>> = {
-  raw: "viewer.modeRaw",
-  preview: "viewer.modePreview",
+const RAW_KEY = "viewer.modeRaw";
+
+/**
+ * The second mode is named for what it shows, so a reading of the text can never be taken for the
+ * original: a rendering of Markdown is a "preview", the text the assistant reads is said to be that.
+ */
+const SECOND_MODE_KEYS: Readonly<Record<PreviewKind, string>> = {
+  markdown: "viewer.modePreview",
+  readable: "viewer.modeReadable",
 };
 
 /**
- * The Raw | Preview switch: two buttons, the pressed one carries the accent. Plain buttons with
+ * The Raw | second-mode switch: two buttons, the pressed one carries the accent. Plain buttons with
  * `aria-pressed` keep it reachable and readable with the keyboard alone.
  */
 export function PreviewModeSwitch({
   modes,
   mode,
+  kind,
   onChange,
 }: {
   modes: readonly PreviewMode[];
   mode: PreviewMode;
+  kind: PreviewKind;
   onChange: (mode: PreviewMode) => void;
 }) {
   const { t } = useTranslation();
+  const labelKey = (entry: PreviewMode) => (entry === "raw" ? RAW_KEY : SECOND_MODE_KEYS[kind]);
 
   return (
     <div className="viewer__controls">
@@ -32,7 +41,7 @@ export function PreviewModeSwitch({
             aria-pressed={entry === mode}
             onClick={() => onChange(entry)}
           >
-            {t(LABEL_KEYS[entry])}
+            {t(labelKey(entry))}
           </button>
         ))}
       </div>

@@ -79,12 +79,18 @@ export default function App() {
   /* The workbooks, chosen the same way in the Data Folder card and starting from none too. */
   const [dataScope, setDataScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
-  /* What the centre zone of the window shows. The zone is open exactly while this is not null, so
-     anything in the application can open it with `openWorkspace` and close it with
-     `closeWorkspace` (`docs/CLIENT.md`, "Layout"). Nothing is open at launch. */
+  /* What the centre zone of the window holds: the open tabs, or the welcome view. Nothing is open at
+     launch. The zone is on screen while this is not null and not hidden: the title-bar button and a
+     drag of the separator only hide it, so the tabs stay open (each keeps its view and comes back
+     as it was), and anything that opens a file shows it again (`docs/CLIENT.md`, "Layout"). */
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
-  const openWorkspace = useCallback<OpenWorkspace>((view) => setWorkspace(view), []);
-  const closeWorkspace = useCallback(() => setWorkspace(null), []);
+  const [workspaceHidden, setWorkspaceHidden] = useState(false);
+  const openWorkspace = useCallback<OpenWorkspace>((view) => {
+    setWorkspace(view);
+    setWorkspaceHidden(false);
+  }, []);
+  const hideWorkspace = useCallback(() => setWorkspaceHidden(true), []);
+  const shownWorkspace = workspaceHidden ? null : workspace;
   /* The one modal of the viewer: the open file was moved, renamed, deleted or modified outside the
      software. The centre closes with it, and the file can only be shown again after an Analyse. */
   const [outsideNotice, setOutsideNotice] = useState(false);
@@ -106,8 +112,10 @@ export default function App() {
      "Open" on a row of either list: a file already open is shown again, never duplicated. Opening
      changes no selection and starts no analysis. */
   const openFile = useCallback(
-    (folder: ViewerFolder, record: FileRecord) =>
-      changeTabs((state) => openTab(state, folder, record)),
+    (folder: ViewerFolder, record: FileRecord) => {
+      changeTabs((state) => openTab(state, folder, record));
+      setWorkspaceHidden(false);
+    },
     [changeTabs],
   );
   const openDocument = useCallback(
@@ -255,17 +263,21 @@ export default function App() {
           connection={connection}
           onRefresh={refresh}
           onOpenSettings={() => setSettingsOpen(true)}
-          workspaceOpen={workspace !== null}
-          onToggleWorkspace={() =>
-            workspace === null ? openWorkspace({ kind: "welcome" }) : closeWorkspace()
-          }
+          workspaceOpen={shownWorkspace !== null}
+          onToggleWorkspace={() => {
+            if (workspace === null) {
+              openWorkspace({ kind: "welcome" });
+            } else {
+              setWorkspaceHidden((hidden) => !hidden);
+            }
+          }}
         />
         <main className="app__main">
           <AppLayout
-            workspace={workspace}
+            workspace={shownWorkspace}
             layouts={snapshot.settings.layout}
             onLayoutsChange={(change) => void saveLayout(change)}
-            onWorkspaceCollapsed={closeWorkspace}
+            onWorkspaceCollapsed={hideWorkspace}
             viewStates={viewStates}
             tabActions={tabActions}
             restoreNonce={layoutRestores}

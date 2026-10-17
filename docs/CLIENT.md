@@ -126,9 +126,10 @@ names, so a path known before it can change after it. `WorkspaceView` carries
 `{ kind: "files", tabs: OpenFile[], activeId }` (each `OpenFile` is `{ id, folder, record }`: the whole record, with
 the folder it is relative to). Every opening goes through one function in `App`, `openFile(folder, record)`, which
 adds a tab or activates the one that exists (see "Tabs" below). The centre shows the tab strip, then a header (the
-file's relative path) and the content; closing the last tab, the title-bar button and dragging the centre closed
-all collapse the zone. The title-bar button toggles the welcome view or closes whatever is open, **every tab
-included**; it does not reopen the last file.
+file's relative path) and the content; closing the last tab collapses the zone. The title-bar button and dragging
+the centre closed only **hide** it: the tabs stay open, nothing is closed, and the button (or opening any file)
+shows them again, each tab coming back as it was left (the viewers are unmounted while hidden and restored from the
+tab's remembered view). With nothing open, the button shows the welcome view.
 
 **Tabs.** Several files can be open at once, one tab each (`src/components/viewer/TabStrip.tsx`, pure logic in
 `src/lib/viewerTabs.ts`). A tab's identity is the folder plus the relative path (`tabId`, joined by a NUL

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/I18nProvider";
+import { pageFromScroll } from "../../lib/viewerPages";
 import type { TabViewState } from "../../lib/viewState";
 import {
   mountDocument,
@@ -7,7 +8,7 @@ import {
   type MountedViewer,
   type ViewerFormat,
 } from "../../lib/viewerEngine";
-import { useScrollMemory, type ScrollMemory } from "./useScrollMemory";
+import { findScroller, useScrollMemory, type ScrollMemory } from "./useScrollMemory";
 import { ViewerControls, type ViewerCapabilities } from "./ViewerControls";
 
 /** The wait after the last resize before the width is fitted again. */
@@ -193,11 +194,20 @@ export function DocumentViewer({
       return;
     }
     let frame = 0;
+    let scroller: HTMLElement | null = null;
     const update = () => {
       frame = 0;
-      const page = visiblePage(host);
-      if (page !== null) {
-        setCurrentPage(page);
+      const exact = visiblePage(host, pages);
+      if (exact !== null) {
+        setCurrentPage(exact);
+        return;
+      }
+      /* No element per page: estimate from where the scrolling element is. */
+      if (scroller === null || !scroller.isConnected) {
+        scroller = findScroller(host);
+      }
+      if (scroller !== null) {
+        setCurrentPage(pageFromScroll(scroller.scrollTop, scroller, pages));
       }
     };
     const schedule = () => {

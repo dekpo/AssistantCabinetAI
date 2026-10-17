@@ -84,13 +84,15 @@ export async function mountDocument(
 }
 
 /**
- * The page being read in a paged document, 1-based, or `null` while the library has drawn none. The
- * library does not report it, so it is read from where its page elements (`.dv-page`, in the order
- * of the document) sit against a line a quarter of the way down the visible zone.
+ * The page being read in a paged document, 1-based, or `null` when the pages cannot be found one by
+ * one. The library does not report it, so it is read from where its page elements (`.dv-page`, in
+ * the order of the document) sit against a line a quarter of the way down the visible zone. That is
+ * trusted only when there is one element per page (`total`): a flowing document (a DOCX measured
+ * with 133 pages) has fewer, and the caller then estimates from the scroll position.
  */
-export function visiblePage(host: HTMLElement): number | null {
+export function visiblePage(host: HTMLElement, total: number): number | null {
   const pages = host.querySelectorAll<HTMLElement>(".dv-page");
-  if (pages.length === 0) {
+  if (pages.length === 0 || pages.length !== total) {
     return null;
   }
   const zone = host.getBoundingClientRect();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageAtLine } from "./viewerPages";
+import { pageAtLine, pageFromScroll } from "./viewerPages";
 
 /** Pages of 100 units, the first one starting at `origin`. */
 const stack = (origin: number) => (index: number) => origin + index * 100;
@@ -36,5 +36,24 @@ describe("pageAtLine", () => {
       ).length;
       expect(pageAtLine(stack(0), 291, line)).toBe(Math.max(1, scan));
     }
+  });
+});
+
+describe("pageFromScroll", () => {
+  const box = { scrollHeight: 133000, clientHeight: 800 };
+
+  it("starts on page 1 and reaches the last page at the bottom", () => {
+    expect(pageFromScroll(0, box, 133)).toBe(1);
+    expect(pageFromScroll(box.scrollHeight - box.clientHeight, box, 133)).toBe(133);
+  });
+
+  it("follows the scroll through the middle", () => {
+    expect(pageFromScroll(66000, box, 133)).toBe(67);
+  });
+
+  it("stays inside 1..total and tolerates an empty box", () => {
+    expect(pageFromScroll(-50, box, 133)).toBe(1);
+    expect(pageFromScroll(999999, box, 133)).toBe(133);
+    expect(pageFromScroll(10, { scrollHeight: 0, clientHeight: 0 }, 133)).toBe(1);
   });
 });

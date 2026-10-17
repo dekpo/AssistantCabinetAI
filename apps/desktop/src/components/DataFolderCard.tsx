@@ -428,6 +428,7 @@ export function DataFolderCard({
                 onScopeChange={onScopeChange}
                 scopeLocked={scopeLocked}
                 onOpen={onOpenFile}
+                onReveal={(path) => void revealFile(path)}
               />
               {passSummary}
             </details>

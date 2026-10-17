@@ -22,3 +22,23 @@ export function pageAtLine(topOf: (index: number) => number, count: number, line
   }
   return found + 1;
 }
+
+/**
+ * An estimate of the page being read when the pages cannot be found one by one (a flowing document
+ * the library paginates only in its count): the line a quarter of the way down the visible zone, as
+ * a share of the whole scrollable height, times the page count. Exact when the pages have the same
+ * height, close otherwise.
+ *
+ * @returns a 1-based page number between 1 and `total`
+ */
+export function pageFromScroll(
+  scrollTop: number,
+  box: { scrollHeight: number; clientHeight: number },
+  total: number,
+): number {
+  if (total < 1 || box.scrollHeight <= 0) {
+    return 1;
+  }
+  const line = scrollTop + box.clientHeight / 4;
+  return Math.min(total, Math.max(1, Math.floor((line / box.scrollHeight) * total) + 1));
+}

@@ -7,6 +7,7 @@ import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
+import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import {
@@ -16,6 +17,7 @@ import {
 } from "./lib/analysisScope";
 import {
   dataFolderInventory,
+  type FileRecord,
   indexDataFolder,
   workFolderInventory,
   type AnalysisScope,
@@ -25,6 +27,7 @@ import { NO_LAYOUTS } from "./lib/panelLayout";
 import { applyTheme } from "./lib/theme";
 import type { OpenWorkspace, WorkspaceView } from "./lib/workspaceView";
 import { useAppSettings } from "./state/useAppSettings";
+import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
 
@@ -70,6 +73,24 @@ export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
   const openWorkspace = useCallback<OpenWorkspace>((view) => setWorkspace(view), []);
   const closeWorkspace = useCallback(() => setWorkspace(null), []);
+  /* The one modal of the viewer: the open file was moved, renamed, deleted or modified outside the
+     software. The centre closes with it, and the file can only be shown again after an Analyse. */
+  const [outsideNotice, setOutsideNotice] = useState(false);
+  const fileLeft = useCallback(() => {
+    setWorkspace(null);
+    setOutsideNotice(true);
+  }, []);
+  useOutsideChangeGuard(workspace, fileLeft);
+  /* "Open" on a row of either list: the centre shows that file, replacing what it showed. Opening
+     changes no selection and starts no analysis. */
+  const openDocument = useCallback(
+    (record: FileRecord) => openWorkspace({ kind: "file", folder: "documents", record }),
+    [openWorkspace],
+  );
+  const openTable = useCallback(
+    (record: FileRecord) => openWorkspace({ kind: "file", folder: "data", record }),
+    [openWorkspace],
+  );
   /* Counted up whenever the default widths of the zones must be put back on screen at once. */
   const [layoutRestores, setLayoutRestores] = useState(0);
   /* Suggestions that name somebody are hidden by default: a screen can be seen by whoever waits in
@@ -191,6 +212,8 @@ export default function App() {
             layouts={snapshot.settings.layout}
             onLayoutsChange={(change) => void saveLayout(change)}
             onWorkspaceCollapsed={closeWorkspace}
+            onCloseWorkspace={closeWorkspace}
+            onFileMissing={fileLeft}
             restoreNonce={layoutRestores}
             resources={
               <aside className="app__side">
@@ -204,6 +227,7 @@ export default function App() {
                   onScopeChange={setScope}
                   scopeLocked={chatBusy}
                   onOpenKnowledge={() => setKnowledgeOpen(true)}
+                  onOpenFile={openDocument}
                 />
                 <DataFolderCard
                   dataFolder={snapshot.settings.dataFolder}
@@ -215,6 +239,7 @@ export default function App() {
                   onScopeChange={setDataScope}
                   scopeLocked={chatBusy}
                   onOpenKnowledge={() => setKnowledgeOpen(true)}
+                  onOpenFile={openTable}
                 />
                 {snapshot.warnings.map((code) => (
                   <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -271,6 +296,9 @@ export default function App() {
             onClose={() => setSettingsOpen(false)}
             onOpenKnowledge={() => setKnowledgeOpen(true)}
           />
+        ) : null}
+        {outsideNotice ? (
+          <OutsideChangeNotice onAcknowledge={() => setOutsideNotice(false)} />
         ) : null}
         {knowledgeOpen ? (
           <KnowledgeDialog

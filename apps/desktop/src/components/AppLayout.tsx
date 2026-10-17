@@ -35,6 +35,8 @@ export function AppLayout({
   layouts,
   onLayoutsChange,
   onWorkspaceCollapsed,
+  onCloseWorkspace,
+  onFileMissing,
   restoreNonce,
 }: {
   resources: ReactNode;
@@ -46,6 +48,10 @@ export function AppLayout({
   onLayoutsChange: (change: (current: PanelLayouts) => PanelLayouts) => void;
   /** The user dragged the workspace closed: `App` forgets its view. */
   onWorkspaceCollapsed: () => void;
+  /** The close button of what the workspace shows. */
+  onCloseWorkspace: () => void;
+  /** The file shown is no longer where it was (stable function). */
+  onFileMissing: () => void;
   /** Changes whenever the default layout must be put back on screen at once. */
   restoreNonce: number;
 }) {
@@ -139,7 +145,13 @@ export function AppLayout({
         maxSize={centreOpen ? "70%" : 0}
       >
         <div className="pane__content">
-          {workspace === null ? null : <WorkspacePanel view={workspace} />}
+          {workspace === null ? null : (
+            <WorkspacePanel
+              view={workspace}
+              onClose={onCloseWorkspace}
+              onFileMissing={onFileMissing}
+            />
+          )}
         </div>
       </Panel>
       <Separator

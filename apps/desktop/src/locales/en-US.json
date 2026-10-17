@@ -12,6 +12,29 @@
     "separatorChat": "Width of the conversation",
     "separatorBetween": "Width of the folders and of the conversation"
   },
+  "viewer": {
+    "open": "Open",
+    "openHint": "Show this file in the central zone",
+    "close": "Close",
+    "loading": "Loading the file…",
+    "unsupported": "This format cannot be shown in the software. Open this file with your own software.",
+    "reveal": "Show in the file manager",
+    "controls": "Display controls",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomLevel": "{percent}%",
+    "fitWidth": "Fit to width",
+    "sheet": "Sheet",
+    "pageOne": "page",
+    "pageMany": "pages",
+    "textTruncated": "Only the first {shown} characters are shown. Open this file with your own software to read all of it.",
+    "outsideChangeTitle": "File changed outside the software",
+    "outsideChangeBody": "The file on screen was moved, renamed, deleted or modified outside the software. It was closed. Analyse the folder again to be able to show it.",
+    "outsideChangeConfirm": "Understood",
+    "previousSlide": "Previous",
+    "nextSlide": "Next",
+    "slideOf": "Slide {index} of {count}"
+  },
   "actions": {
     "analyze": "Analyze",
     "analyzing": "Analyzing",
@@ -534,7 +557,8 @@
     "knowledge_name_invalid": "This name cannot be kept: it is empty, too long, or only a title.",
     "knowledge_name_taken": "An entity of this type already has this name. Nothing was changed.",
     "knowledge_operation_refused": "This operation is not possible here: nothing was changed.",
-    "knowledge_nothing_to_undo": "Nothing to undo right now."
+    "knowledge_nothing_to_undo": "Nothing to undo right now.",
+    "viewer_render_failed": "This file could not be shown: its content does not match its format, or it is damaged. Nothing was changed."
   },
   "tabularAnswer": {
     "rowOne": "row",

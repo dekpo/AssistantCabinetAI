@@ -157,6 +157,7 @@ export function FileList({
   onScopeChange,
   scopeLocked = false,
   onReveal,
+  onOpen,
   selectionBase,
 }: {
   files: FileRecord[];
@@ -166,6 +167,9 @@ export function FileList({
   statusLabel: (file: FileRecord) => string;
   /** When given, each row ends with a "See" button that shows the file in the file manager. */
   onReveal?: (relativePath: string) => void;
+  /** When given, each analysed file ends with an "Open" button that shows it in the centre zone.
+   * Independent of the checkbox: opening never changes the selection and never analyses. */
+  onOpen?: (file: FileRecord) => void;
   /** When given, each usable file gets a checkbox: the listing doubles as the choice of the files
    * the conversation may rely on. Choosing one copies nothing. */
   scope?: AnalysisScope;
@@ -209,6 +213,16 @@ export function FileList({
                 {dot}
                 {name}
               </>
+            )}
+            {onOpen === undefined || !isSelectable(file) ? null : (
+              <button
+                type="button"
+                className="button button--compact inventory__see"
+                title={t("viewer.openHint")}
+                onClick={() => onOpen(file)}
+              >
+                {t("viewer.open")}
+              </button>
             )}
             {onReveal === undefined ? null : (
               <button

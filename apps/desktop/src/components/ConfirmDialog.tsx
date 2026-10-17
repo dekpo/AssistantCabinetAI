@@ -20,6 +20,7 @@ export function ConfirmDialog({
   body,
   confirmLabel,
   destructive = false,
+  singleAction = false,
   busy = false,
   onConfirm,
   onCancel,
@@ -29,18 +30,23 @@ export function ConfirmDialog({
   confirmLabel: string;
   /** Marks the confirming button as the one that throws something away. */
   destructive?: boolean;
+  /** One button that acknowledges a notice, no cancel: Escape and a click outside answer it too. */
+  singleAction?: boolean;
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const { t } = useTranslation();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  /* A notice has nothing to refuse, so leaving it any way is acknowledging it. */
+  const dismiss = singleAction ? onConfirm : onCancel;
 
   /* Focus lands on the safe answer, not the destructive one: a stray Enter left over from the
      click that opened this must not be the thing that empties the index. */
   useEffect(() => {
-    cancelRef.current?.focus();
-  }, []);
+    (singleAction ? confirmRef : cancelRef).current?.focus();
+  }, [singleAction]);
 
   /* Escape is how every other dismissible surface in this window closes, and a confirmation the
      keyboard cannot refuse is a trap. Bound on the document because the backdrop is not always
@@ -48,15 +54,15 @@ export function ConfirmDialog({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) {
-        onCancel();
+        dismiss();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [busy, onCancel]);
+  }, [busy, dismiss]);
 
   return (
-    <div className="confirm__backdrop" onMouseDown={() => (busy ? undefined : onCancel())}>
+    <div className="confirm__backdrop" onMouseDown={() => (busy ? undefined : dismiss())}>
       {/* The click that chose an answer must not also count as a click on the backdrop. */}
       <div
         className="confirm"
@@ -68,17 +74,20 @@ export function ConfirmDialog({
         <h2 className="confirm__title">{title}</h2>
         <p className="confirm__body">{body}</p>
         <div className="confirm__actions">
+          {singleAction ? null : (
+            <button
+              type="button"
+              ref={cancelRef}
+              className="button button--compact"
+              disabled={busy}
+              onClick={onCancel}
+            >
+              {t("actions.cancel")}
+            </button>
+          )}
           <button
             type="button"
-            ref={cancelRef}
-            className="button button--compact"
-            disabled={busy}
-            onClick={onCancel}
-          >
-            {t("actions.cancel")}
-          </button>
-          <button
-            type="button"
+            ref={confirmRef}
             className={
               destructive
                 ? "button button--compact button--destructive"

@@ -72,6 +72,7 @@ export function WorkFolderCard({
   onScopeChange,
   scopeLocked = false,
   onOpenKnowledge,
+  onOpenFile,
 }: {
   workFolder: string | null;
   suggestedWorkFolder: string | null;
@@ -93,6 +94,8 @@ export function WorkFolderCard({
   /** Opens the knowledge management dialog; the link under the summary shows only when the
    * knowledge base took part in the pass. */
   onOpenKnowledge?: () => void;
+  /** Shows an analysed file in the centre zone (an "Open" button on its row). */
+  onOpenFile?: (file: FileRecord) => void;
 }) {
   const { t } = useTranslation();
   const [error, setError] = useState<AppError | null>(null);
@@ -577,6 +580,7 @@ export function WorkFolderCard({
                 scope={scope}
                 onScopeChange={onScopeChange}
                 scopeLocked={scopeLocked}
+                onOpen={onOpenFile}
               />
               {passSummary}
             </details>

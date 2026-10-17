@@ -194,6 +194,149 @@ body {
   color: var(--text-quiet);
 }
 
+/* The centre zone showing a file: a header, the display controls, and the content that scrolls on its
+   own. No padding of its own, so the viewer can use the whole zone. */
+.workspace--file {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.viewer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.viewer__name {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer__content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.viewer__zoom,
+.viewer__pages {
+  color: var(--text-quiet);
+}
+
+.viewer__sheet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The box the library draws into. It is sized by the zone, never by what the library puts inside. */
+.viewer__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.viewer__host {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+/* The library draws a toolbar of its own, with labels in one fixed language. It is the first child
+   of the host (the PDF has none: its first child is the stage); the application's own controls
+   replace it. The library sets `display` on the element itself, hence `!important`. */
+.viewer__host > div:first-child:not(.dv-stage) {
+  display: none !important;
+}
+
+.viewer__message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 16px;
+  background: var(--panel);
+  color: var(--text-quiet);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* A message with an action under it, standing alone in the content area. */
+.viewer__message--block {
+  position: static;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.viewer__message--block p {
+  margin: 0;
+  max-width: 44ch;
+}
+
+.viewer__textview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer__notice {
+  margin: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-quiet);
+  font-size: 12px;
+}
+
+/* The characters as stored: monospace, one stored line break is one line, long lines wrap. */
+.viewer__text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 /* A button that holds only a glyph, such as the workspace toggle. Pressed (the zone is open) it
    takes the accent, so its state reads without a word. */
 .button--icon {

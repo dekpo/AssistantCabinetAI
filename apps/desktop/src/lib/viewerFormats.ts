@@ -34,6 +34,24 @@ const LIBRARY_FORMATS: Readonly<Record<string, ViewerFormat>> = {
 const TEXT_EXTENSIONS: ReadonlySet<string> = new Set(["txt", "md", "srt", "vtt", "eml"]);
 
 /**
+ * How a file can be looked at. "raw" is the characters as stored, the default and the only mode of
+ * most formats; "preview" is a rendered reading of them. A typed value so a later tab can hold it.
+ */
+export type PreviewMode = "raw" | "preview";
+
+/** Extensions whose text has a rendered reading besides the raw one. */
+const PREVIEWABLE_EXTENSIONS: ReadonlySet<string> = new Set(["md"]);
+
+/**
+ * The modes a file offers, the default (raw) first. The switch is shown only when there are two or
+ * more, so every format without a rendered reading gets no control at all.
+ */
+export function previewModes(extension: string): PreviewMode[] {
+  const key = extension.trim().replace(/^\./, "").toLowerCase();
+  return PREVIEWABLE_EXTENSIONS.has(key) ? ["raw", "preview"] : ["raw"];
+}
+
+/**
  * `extension` is the one `FileRecord` carries (lowercase, no dot); case and a leading dot are
  * tolerated. Everything else is unsupported, the legacy binary formats (`doc`, `xls`, `ppt`) and
  * `tiff` and `heic` included: they are never advertised and never converted.

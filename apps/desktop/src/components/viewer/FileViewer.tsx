@@ -7,10 +7,12 @@ import {
   revealDataFile,
   revealWorkFile,
 } from "../../lib/ipc";
-import { viewerRendererOf } from "../../lib/viewerFormats";
+import { previewModes, viewerRendererOf, type PreviewMode } from "../../lib/viewerFormats";
 import type { FileView } from "../../lib/workspaceView";
 import { ErrorBanner } from "../ErrorBanner";
 import { DocumentViewer } from "./DocumentViewer";
+import { MarkdownPreview } from "./MarkdownPreview";
+import { PreviewModeSwitch } from "./PreviewModeSwitch";
 import { TextView } from "./TextView";
 
 type Load =
@@ -37,6 +39,9 @@ export function FileViewer({
   const { t } = useTranslation();
   const { folder, record } = view;
   const renderer = useMemo(() => viewerRendererOf(record.extension), [record.extension]);
+  const modes = useMemo(() => previewModes(record.extension), [record.extension]);
+  /* Per open file: this component is keyed by the file, so another file starts at raw again. */
+  const [mode, setMode] = useState<PreviewMode>("raw");
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [revealError, setRevealError] = useState<AppError | null>(null);
   const readable = renderer.renderer !== "unsupported";
@@ -106,7 +111,12 @@ export function FileViewer({
       </div>
     );
   } else if (renderer.renderer === "text") {
-    body = <TextView bytes={load.bytes} />;
+    body =
+      mode === "preview" && modes.includes("preview") ? (
+        <MarkdownPreview bytes={load.bytes} />
+      ) : (
+        <TextView bytes={load.bytes} />
+      );
   } else {
     body = <DocumentViewer bytes={load.bytes} format={renderer.format} />;
   }
@@ -122,6 +132,9 @@ export function FileViewer({
         </button>
       </header>
       {revealError === null ? null : <ErrorBanner error={revealError} />}
+      {modes.length > 1 && load.state === "ready" ? (
+        <PreviewModeSwitch modes={modes} mode={mode} onChange={setMode} />
+      ) : null}
       <div className="viewer__content">{body}</div>
     </section>
   );

@@ -337,6 +337,61 @@ body {
   user-select: text;
 }
 
+/* The Raw | Preview switch: two joined buttons, the pressed one in the accent. */
+.viewer__modes {
+  display: inline-flex;
+}
+
+.viewer__mode {
+  border-radius: 0;
+}
+
+.viewer__mode:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.viewer__mode:last-child {
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+}
+
+.viewer__mode[aria-pressed="true"] {
+  position: relative;
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.viewer__mode:focus-visible {
+  position: relative;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The rendered Markdown: its own scroll container, the chat's spacing rules reused through
+   `message__body--markdown`. Headings are told apart by size here, unlike in a conversation. */
+.viewer__preview {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+  overflow: auto;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.viewer__preview .message__body--markdown h1 {
+  font-size: 1.5em;
+}
+
+.viewer__preview .message__body--markdown h2 {
+  font-size: 1.3em;
+}
+
+.viewer__preview .message__body--markdown h3 {
+  font-size: 1.15em;
+}
+
 /* A button that holds only a glyph, such as the workspace toggle. Pressed (the zone is open) it
    takes the accent, so its state reads without a word. */
 .button--icon {

@@ -133,13 +133,24 @@ whatever is open; it does not reopen the last file.
 | Extensions | Renderer |
 | --- | --- |
 | `pdf docx xlsx pptx odt ods odp rtf csv` and `png jpg jpeg gif bmp webp svg` | the library `shrimp-doc-viewer`, behind `src/lib/viewerEngine.ts`, its format forced |
-| `txt md srt vtt eml` | the application's own plain text view (`TextView`), line by line as stored, monospace, wrapping, selectable, no Markdown rendering |
+| `txt md srt vtt eml` | the application's own plain text view (`TextView`), line by line as stored, monospace, wrapping, selectable, no Markdown rendering (a Markdown file can also be switched to a rendered preview, below) |
 | everything else (`doc xls ppt tiff heic`...) | a message in the user's language and the button **Afficher dans l'explorateur de fichiers** (the existing reveal command) |
 
 The library's text engine is not used: it joins single line breaks, so a subtitle's index, timestamp and text, or
 a mail's headers, would run together. The plain text view decodes UTF-8 with `TextDecoder`, turns CRLF into one
 line break, and shows at most **500 000 characters** (cut at a line end) with a notice, so a very large text never
-freezes the window. Only the first part of a large file is decoded. The Raw view of a Markdown file will reuse it.
+freezes the window. Only the first part of a large file is decoded. The Raw view of a Markdown file reuses it.
+
+**Raw | Preview (Markdown).** `previewModes(extension)` in `viewerFormats.ts` lists the modes of a file, raw first:
+`md` gives `["raw", "preview"]`, every other extension `["raw"]`, and the two-button switch
+(`PreviewModeSwitch`, **Brut** | **Aperçu**, `aria-pressed`) is drawn under the header only when there are two. A
+file opens raw. The mode is a typed value (`PreviewMode`) in the state of `FileViewer`, which is keyed by the file,
+so another file starts raw again; scroll position is not kept across the switch. The preview
+(`MarkdownPreview`) is the application's own `Markdown` component, the one the chat answers use (`react-markdown`
+and `remark-gfm`, no `rehype-raw`): nothing a file contains can become markup, and a link or an image is reduced to
+its text (the alt text for an image), so the preview can neither navigate the window nor fetch anything. It is
+fed the same bounded text as the raw view (`prepareViewerText`: same decoding, same 500 000-character limit, same
+notice), from the bytes already read, and sits in its own scroll container. `Markdown.tsx` is unchanged.
 
 **Controls are the application's own, in the interface language.** The library draws a toolbar of its own with
 labels in one fixed language (Chinese); it is hidden by one CSS rule (`display: none !important`, because the

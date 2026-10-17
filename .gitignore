@@ -2,6 +2,8 @@
 # Only personal context and tab handoffs stay local.
 /docs/private/
 /docs/SESSION-*.md
+/docs/SESSION-WORKSPACE/
+/docs/SESSIONS-DONE/
 
 .env
 .env.*

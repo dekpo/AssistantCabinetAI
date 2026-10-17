@@ -29,6 +29,9 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+      shrimp-doc-viewer:
+        specifier: 0.5.0
+        version: 0.5.0
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2.9.0
@@ -139,6 +142,9 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@embedpdf/pdfium@2.15.1':
+    resolution: {integrity: sha512-qDH4gEkGSQT0iM+07Hpm3LyvoB7PEFbW3Qyk6+LPkEYLJYfHagkHM1OzYlDq2EDOhJRguykTkzdMOT3/w27x5Q==}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -1035,6 +1041,9 @@ packages:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
 
+  shrimp-doc-viewer@0.5.0:
+    resolution: {integrity: sha512-bFs47GkPJ+AEALv4eSnTsE92d1HoCWNRTObfwOohk0lltDjw1w8/cWcq9ZPaCuswETgKkXQDEVAgMwfoxuxoyA==}
+
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
@@ -1326,6 +1335,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@embedpdf/pdfium@2.15.1': {}
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
@@ -2333,6 +2344,10 @@ snapshots:
   scheduler@0.28.0: {}
 
   semver@6.3.1: {}
+
+  shrimp-doc-viewer@0.5.0:
+    dependencies:
+      '@embedpdf/pdfium': 2.15.1
 
   siginfo@2.0.0: {}
 

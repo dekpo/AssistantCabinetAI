@@ -1,0 +1,1445 @@
+PART 0
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>robocopy "%APPDATA%\com.assistantcabinetai.desktop" "%USERPROFILE%\acai-backup\roaming" /E /NFL /NDL /NJH /NJS
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>robocopy "%LOCALAPPDATA%\com.assistantcabinetai.desktop" "%USERPROFILE%\acai-backup\local" /E /NFL /NDL /NJH /NJS 
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>python scripts\large_test\cli.py generate
+{
+ "profile": "demo",
+ "slice": false,
+ "seed": 20261016,
+ "documents": 1251,
+ "readable_text_documents": 1153,
+ "readable_documents": 1247,
+ "ocr_documents": 94,
+ "documents_by_format": {
+  "csv": 1,
+  "docx": 196,
+  "eml": 104,
+  "jpg": 27,
+  "md": 41,
+  "odp": 40,
+  "odt": 78,
+  "pdf": 374,
+  "png": 14,
+  "ppt": 1,
+  "pptx": 53,
+  "rtf": 65,
+  "scan-pdf": 53,
+  "srt": 52,
+  "txt": 97,
+  "vtt": 53,
+  "xlsx": 2
+ },
+ "workbooks": 510,
+ "workbooks_by_format": {
+  "csv": 153,
+  "ods": 153,
+  "xlsx": 204
+ },
+ "workbooks_by_family": {
+  "compta-depenses": 55,
+  "contrats": 20,
+  "factures-fournisseurs": 60,
+  "formation-presences": 25,
+  "honoraires": 45,
+  "livraisons": 65,
+  "patients-ch": 30,
+  "patients-fr": 30,
+  "planning-heures": 45,
+  "rendez-vous": 90,
+  "stock": 45
+ },
+ "workbook_traps": {
+  "empty_column": 46,
+  "formula_total": 31,
+  "merged_title": 30,
+  "notes_sheet": 51,
+  "swiss_numbers": 51,
+  "text_dates": 193,
+  "title_row": 73
+ },
+ "questions": 300,
+ "questions_by_block": {
+  "documents": 150,
+  "mixed": 50,
+  "spreadsheets": 100
+ },
+ "generated_by": "scripts/gen-knowledge-sandbox.py --profile demo"
+}
+generated in 17 s: C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\data\large-test\library
+
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>robocopy "C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\data\large-test\library\documents" "%USERPROFILE%\AssistantCabinetAI-test\Docs" /E /NFL /NDL /NJH /NJS
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI>robocopy "C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\data\large-test\library\data" "%USERPROFILE%\AssistantCabinetAI-test\Data" /E /NFL /NDL /NJH /NJS
+
+C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\apps\desktop>pnpm tauri dev
+$ tauri "dev"
+     Running BeforeDevCommand (`pnpm dev`)
+$ vite
+
+  VITE v7.3.6  ready in 596 ms
+
+  ➜  Local:   http://localhost:1420/
+  ➜  Network: use --host to expose
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching C:\Users\elise\Documents\CURSOR\AssistantCabinetAI\apps\desktop\src-tauri for changes...
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running `target\debug\assistant-cabinet-ai.exe`
+
+PART A
+
+A1 et A2 fait
+
+A3 
+Dossier des documents -> Analyser -> 9 minutes 9 secondes -> c'est long il faudrait un pourcentage de progression et/ou un temps restant avec un affichage des fichiers en cours d'analyse
+
+Tu dis: La barre indique « Lecture des documents » puis « Recherche par sens : x % » -> je ne vois pas cette information mais ce n'est pas une information importante ni utile il faut la retirer d'autre-part cette fonctionnalité n'a pas l'air d'être fonctionnelle
+
+A4
+1251 fichiers, 1244 analysés , 3 illisibles .
+91 fichiers lus par reconnaissance de texte.
+2 fichiers trop peu lisibles pour être indexés.
+1 fichier n'a pas été lu : son format n'est pas pris en charge (1 .ppt).
+396 personnes et organisations repérées, dont 0 déjà connue.
+762 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+
+A5
+Dossier des données -> Analyser -> 1 minutes 2 secondes -> c'est rapide mais pas en un instant là aussi un pourcentage de progression et/ou un temps restant avec un affichage des fichiers en cours d'analyse serait bienvenue
+
+A6
+510 fichiers, 499 analysés , 11 illisibles .
+510 tableurs lus sur cet ordinateur, sans l'IA : les tableurs s'analysent en un instant.
+435 personnes et organisations repérées, dont 263 déjà connues.
+846 identifiants repérés (adresses e-mail, numéros de facture, IBAN...).
+1154 colonnes de tableur reconnues (personnes, organisations, identifiants...) dans 499 tableurs lus.
+5494 liens lus entre deux colonnes d'un tableur.
+1247 documents déjà analysés relus pour y repérer les noms, sans solliciter l'IA.
+
+PART B
+
+B0 -> Tous les documents sélectionnés
+
+B0b -> Conversation vide
+
+B1 -> Clic bouton Combien de documents ai-je ?
+Vous: Combien de documents ai-je ?
+Assistant: 1244 fichiers ont été analysés.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B2
+Vous: Combien de fichiers y a-t-il dans le dossier ?
+Assistant: Votre dossier de documents contient 1251 fichiers.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B3
+Vous: Quel est le dernier courrier reçu ?
+Assistant: Parmi 339 fichiers lisibles dont le nom contient « courrier », le plus récent est le premier de cette liste :
+- scans/2026-10/2026-10-09_courrier-neurologie-dupont-jean-pierre.png — 2026-10-09 (date au début du nom du fichier)
+- courriers-entrants/2026-10/2026-10-08_courrier-rhumatologie.pdf — 2026-10-08 (date écrite en tête du document)
+- scans/2026-10/2026-10-08_courrier-patient.jpg — 2026-10-08 (date écrite en tête du document)
+- caisses-assurances/france/2026-10-07_courrier-cpam69.pdf — 2026-10-07 (date au début du nom du fichier)
+- courriers-entrants/2026-10/2026-10-07_courrier-compte-rendu.pdf — 2026-10-07 (date écrite en tête du document)
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B4
+Vous: Quels documents parlent de LAMal ?
+Assistant: Recherche du mot « LAMal » : 97 fichiers dans les documents sélectionnés.
+Seul le mot lui-même est cherché : un synonyme ou une autre forme du mot ne serait pas trouvé.
+- caisses-assurances/suisse/2026-01-07_demande-remboursement-luthi-zoe.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-01-08_decompte-css.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. CSS
+- caisses-assurances/suisse/2026-01-14_decompte-css.odt (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. CSS
+- caisses-assurances/suisse/2026-01-17_decompte-css.eml (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. CSS
+- caisses-assurances/suisse/2026-01-17_demande-remboursement-jaccard-alain.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-01-31_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-05_decompte-suva.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. SUVA
+- caisses-assurances/suisse/2026-02-07_decompte-assura.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Assura
+- caisses-assurances/suisse/2026-02-09_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-13_decompte-suva-python-monique.odt (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. SUVA
+- caisses-assurances/suisse/2026-02-22_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-24_demande-remboursement-pillet-maelle.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-01_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-15_demande-remboursement.rtf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-16_decompte-suva.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. SUVA
+- caisses-assurances/suisse/2026-03-21_demande-remboursement.odt (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-21_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-25_demande-remboursement-bersier-valentine.rtf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-29_decompte-helsana.odt (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Helsana
+- caisses-assurances/suisse/2026-04-05_demande-remboursement-dafflon-hans-peter.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-06_demande-remboursement-berisha-sophie.txt (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-07_decompte-groupe-mutuel-monnerat-david.eml (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Groupe Mutuel
+- caisses-assurances/suisse/2026-04-16_demande-remboursement-rochat-sophie.jpg (page 1)
+  Extrait : e bien voulo 1a rembourser selon ma couverture LAMal. Je précise que ma I…IMP“MHÛ….
+- caisses-assurances/suisse/2026-04-17_demande-remboursement-cherpillod-anne.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-18_decompte-swica-bochud-jacqueline.rtf (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.SWICA
+- caisses-assurances/suisse/2026-04-21_decompte-css.jpg (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. css
+- caisses-assurances/suisse/2026-04-25_decompte-swica.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. SWICA
+- caisses-assurances/suisse/2026-04-25_demande-remboursement-lindqvist-asa.txt (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-29_demande-remboursement.eml (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-05-08_demande-remboursement.eml (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-05-13_demande-remboursement-lavanchy-raphael.rtf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-05-23_decompte-css.eml (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. CSS
+- caisses-assurances/suisse/2026-05-23_decompte-helsana-zufferey-stephane.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Helsana
+- caisses-assurances/suisse/2026-05-25_decompte-suva-genoud-anne-laure.txt (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. SUVA
+- caisses-assurances/suisse/2026-05-29_decompte-css.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. CSS
+- caisses-assurances/suisse/2026-05-30_decompte-assura.txt (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Assura
+- caisses-assurances/suisse/2026-06-02_demande-remboursement-rochat-rosemarie.eml (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-06-03_demande-remboursement-lindqvist-asa.rtf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-06-04_demande-remboursement-comte-laura.odt (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-06-06_decompte-sanitas-maillard-pascal.rtf (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.Sanitas
+- caisses-assurances/suisse/2026-06-07_demande-remboursement.docx (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-06-10_decompte-assura.jpg (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une o©pposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Assura
+- caisses-assurances/suisse/2026-06-14_decompte-swica-chappuis-nathalie.rtf (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.SWICA
+- caisses-assurances/suisse/2026-06-23_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-06-24_decompte-sanitas-o-brien-sean.eml (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Sanitas
+- caisses-assurances/suisse/2026-06-28_decompte-helsana-bovet-pauline.docx (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Helsana
+- caisses-assurances/suisse/2026-07-02_demande-remboursement.pdf (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-07-03_demande-remboursement.docx (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-07-12_decompte-sanitas.txt (page 1)
+  Extrait : tient lieu de décision au sens de la LAMal. Une opposition est possible dans les 30 jours. Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées. Sanitas
+- caisses-assurances/suisse/2026-07-14_demande-remboursement-bersier-valentine.docx (page 1)
+  Extrait : de bien vouloir la rembourser selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+47 fichiers de plus, sans extrait :
+- caisses-assurances/suisse/2026-07-16_demande-remboursement-tschopp-raphael.rtf
+- caisses-assurances/suisse/2026-07-18_decompte-suva-petrovic-elena.txt
+- caisses-assurances/suisse/2026-08-26_demande-remboursement.docx
+- caisses-assurances/suisse/2026-08-30_decompte-groupe-mutuel-oberson-dominique.odt
+- caisses-assurances/suisse/2026-09-01_demande-remboursement-vuilleumier-marie-claude.eml
+- caisses-assurances/suisse/2026-09-09_decompte-assura.docx
+- caisses-assurances/suisse/2026-09-18_decompte-assura.rtf
+- caisses-assurances/suisse/2026-09-19_decompte-sanitas.txt
+- caisses-assurances/suisse/2026-09-27_decompte-helsana.odt
+- caisses-assurances/suisse/2026-10-03_decompte-css.docx
+- caisses-assurances/suisse/2026-10-03_decompte-groupe-mutuel.txt
+- caisses-assurances/suisse/2026-10-03_decompte-helsana.rtf
+- caisses-assurances/suisse/2026-10-08_decompte-css.eml
+- scans/2026-02/2026-02-17_demande-remboursement-lindqvist-asa.pdf
+- scans/2026-07/2026-07-16_decompte-css.pdf
+- caisses-assurances/suisse/2026-01-06_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-01-07_decompte-helsana-favre-laurent.pdf
+- caisses-assurances/suisse/2026-01-12_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-01-21_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-01-24_decompte-assura.pdf
+- caisses-assurances/suisse/2026-02-07_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-02-14_decompte-assura.pdf
+- caisses-assurances/suisse/2026-02-21_decompte-swica-rochat-sophie.pdf
+- caisses-assurances/suisse/2026-02-23_decompte-assura.pdf
+- caisses-assurances/suisse/2026-02-27_decompte-css.pdf
+- caisses-assurances/suisse/2026-03-19_decompte-groupe-mutuel.pdf
+- caisses-assurances/suisse/2026-03-23_decompte-suva.pdf
+- caisses-assurances/suisse/2026-03-24_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-03-26_decompte-suva.pdf
+- caisses-assurances/suisse/2026-03-30_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-04-26_decompte-groupe-mutuel-humair-catherine.pdf
+- caisses-assurances/suisse/2026-05-01_decompte-swica.pdf
+- caisses-assurances/suisse/2026-05-07_decompte-css.pdf
+- caisses-assurances/suisse/2026-05-13_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-05-16_decompte-swica-benali-fatima.pdf
+- caisses-assurances/suisse/2026-05-31_decompte-swica.pdf
+- caisses-assurances/suisse/2026-06-23_decompte-css.pdf
+- caisses-assurances/suisse/2026-07-12_decompte-css.pdf
+- caisses-assurances/suisse/2026-07-17_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-07-21_decompte-css-maillard-pascal.pdf
+- caisses-assurances/suisse/2026-07-27_decompte-groupe-mutuel.pdf
+- caisses-assurances/suisse/2026-08-01_decompte-suva.pdf
+- caisses-assurances/suisse/2026-08-12_decompte-helsana-martin-marie.pdf
+- caisses-assurances/suisse/2026-08-20_decompte-css.pdf
+- caisses-assurances/suisse/2026-08-27_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-09-16_decompte-css.pdf
+- caisses-assurances/suisse/2026-09-18_decompte-assura.pdf
+Sans texte lisible, donc non cherchés : 7 fichiers.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B5
+Vous: Quels documents mentionnent franchise ?
+Assistant: Recherche du mot « franchise » : 99 fichiers dans les documents sélectionnés.
+Seul le mot lui-même est cherché : un synonyme ou une autre forme du mot ne serait pas trouvé.
+- caisses-assurances/suisse/2026-01-06_decompte-sanitas.pdf (page 1)
+  Extrait : charge : CHF 593.48, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-07_decompte-helsana-favre-laurent.pdf (page 1)
+  Extrait : charge : CHF 454.16, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-07_demande-remboursement-luthi-zoe.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-01-08_decompte-css.docx (page 1)
+  Extrait : charge : CHF 670.69, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-12_decompte-sanitas.pdf (page 1)
+  Extrait : charge : CHF 165.04, après déduction de la franchise annuelle de CHF 300.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-14_decompte-css.odt (page 1)
+  Extrait : charge : CHF 660.81, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-17_decompte-css.eml (page 1)
+  Extrait : charge : CHF 594.66, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-17_demande-remboursement-jaccard-alain.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-01-21_decompte-helsana.pdf (page 1)
+  Extrait : charge : CHF 586.33, après déduction de la franchise annuelle de CHF 1000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-24_decompte-assura.pdf (page 1)
+  Extrait : charge : CHF 207.10, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-01-31_demande-remboursement.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-05_decompte-suva.docx (page 1)
+  Extrait : charge : CHF 706.12, après déduction de la franchise annuelle de CHF 1500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-07_decompte-assura.docx (page 1)
+  Extrait : charge : CHF 354.79, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-07_decompte-helsana.pdf (page 1)
+  Extrait : charge : CHF 678.00, après déduction de la franchise annuelle de CHF 300.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-09_demande-remboursement.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-13_decompte-suva-python-monique.odt (page 1)
+  Extrait : charge : CHF 232.54, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-14_decompte-assura.pdf (page 1)
+  Extrait : charge : CHF 303.60, après déduction de la franchise annuelle de CHF 2000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-21_decompte-swica-rochat-sophie.pdf (page 1)
+  Extrait : charge : CHF 683.53, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-22_demande-remboursement.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-23_decompte-assura.pdf (page 1)
+  Extrait : charge : CHF 652.70, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-02-24_demande-remboursement-pillet-maelle.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-02-27_decompte-css.pdf (page 1)
+  Extrait : charge : CHF 495.92, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-01_demande-remboursement.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-15_demande-remboursement.rtf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-16_decompte-suva.docx (page 1)
+  Extrait : charge : CHF 644.33, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-19_decompte-groupe-mutuel.pdf (page 1)
+  Extrait : charge : CHF 602.58, après déduction de la franchise annuelle de CHF 1000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-21_demande-remboursement.odt (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-21_demande-remboursement.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-23_decompte-suva.pdf (page 1)
+  Extrait : charge : CHF 185.61, après déduction de la franchise annuelle de CHF 300.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-24_decompte-helsana.pdf (page 1)
+  Extrait : charge : CHF 925.96, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-25_demande-remboursement-bersier-valentine.rtf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-03-26_decompte-suva.pdf (page 1)
+  Extrait : charge : CHF 938.70, après déduction de la franchise annuelle de CHF 2500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-29_decompte-helsana.odt (page 1)
+  Extrait : charge : CHF 472.65, après déduction de la franchise annuelle de CHF 2000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-03-30_decompte-sanitas.pdf (page 1)
+  Extrait : charge : CHF 371.14, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-04-05_demande-remboursement-dafflon-hans-peter.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-06_demande-remboursement-berisha-sophie.txt (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-07_decompte-groupe-mutuel-monnerat-david.eml (page 1)
+  Extrait : charge : CHF 746.69, après déduction de la franchise annuelle de CHF 1500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-04-17_demande-remboursement-cherpillod-anne.pdf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-18_decompte-swica-bochud-jacqueline.rtf (page 1)
+  Extrait : charge : CHF 86.78, après déduction de la franchise annuelle de CHF 1000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-04-21_decompte-css.jpg (page 1)
+  Extrait : charge : CHF 260.58, après déduction de la franchise annuelle de CHF 2500.00 et de \|a quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-04-25_decompte-swica.docx (page 1)
+  Extrait : charge : CHF 488.10, après déduction de la franchise annuelle de CHF 2000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-04-25_demande-remboursement-lindqvist-asa.txt (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-04-26_decompte-groupe-mutuel-humair-catherine.pdf (page 1)
+  Extrait : charge : CHF 545.18, après déduction de la franchise annuelle de CHF 300.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-04-29_demande-remboursement.eml (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-05-01_decompte-swica.pdf (page 1)
+  Extrait : charge : CHF 843.48, après déduction de la franchise annuelle de CHF 1500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-05-07_decompte-css.pdf (page 1)
+  Extrait : charge : CHF 755.31, après déduction de la franchise annuelle de CHF 500.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-05-08_demande-remboursement.eml (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-05-13_decompte-helsana.pdf (page 1)
+  Extrait : charge : CHF 909.47, après déduction de la franchise annuelle de CHF 1000.00 et de la quote-part de 10 %. Le versement sera effectué sur votre compte dans
+- caisses-assurances/suisse/2026-05-13_demande-remboursement-lavanchy-raphael.rtf (page 1)
+  Extrait : selon ma couverture LAMal. Je précise que ma franchise a déjà été entamée cette année.
+- caisses-assurances/suisse/2026-05-16_decompte-assura-favre-laurent.pdf (page 1)
+  Extrait : charge : CHF 98.66, après déduction de la franchise annuelle de CHF 1500.00 et de la quote-part de 10 %, Le versement sera effectué sur votre compte dans
+49 fichiers de plus, sans extrait :
+- caisses-assurances/suisse/2026-05-16_decompte-swica-benali-fatima.pdf
+- caisses-assurances/suisse/2026-05-23_decompte-css.eml
+- caisses-assurances/suisse/2026-05-23_decompte-helsana-zufferey-stephane.docx
+- caisses-assurances/suisse/2026-05-25_decompte-suva-genoud-anne-laure.txt
+- caisses-assurances/suisse/2026-05-29_decompte-css.docx
+- caisses-assurances/suisse/2026-05-30_decompte-assura.txt
+- caisses-assurances/suisse/2026-05-31_decompte-swica.pdf
+- caisses-assurances/suisse/2026-06-01_demande-remboursement-genoud-brigitte.pdf
+- caisses-assurances/suisse/2026-06-02_demande-remboursement-rochat-rosemarie.eml
+- caisses-assurances/suisse/2026-06-03_demande-remboursement-lindqvist-asa.rtf
+- caisses-assurances/suisse/2026-06-04_demande-remboursement-comte-laura.odt
+- caisses-assurances/suisse/2026-06-06_decompte-sanitas-maillard-pascal.rtf
+- caisses-assurances/suisse/2026-06-07_demande-remboursement.docx
+- caisses-assurances/suisse/2026-06-10_decompte-assura.jpg
+- caisses-assurances/suisse/2026-06-14_decompte-swica-chappuis-nathalie.rtf
+- caisses-assurances/suisse/2026-06-23_decompte-css.pdf
+- caisses-assurances/suisse/2026-06-23_demande-remboursement.pdf
+- caisses-assurances/suisse/2026-06-24_decompte-sanitas-o-brien-sean.eml
+- caisses-assurances/suisse/2026-06-28_decompte-helsana-bovet-pauline.docx
+- caisses-assurances/suisse/2026-07-02_demande-remboursement.pdf
+- caisses-assurances/suisse/2026-07-03_demande-remboursement.docx
+- caisses-assurances/suisse/2026-07-12_decompte-css.pdf
+- caisses-assurances/suisse/2026-07-12_decompte-sanitas.txt
+- caisses-assurances/suisse/2026-07-14_demande-remboursement-bersier-valentine.docx
+- caisses-assurances/suisse/2026-07-16_demande-remboursement-tschopp-raphael.rtf
+- caisses-assurances/suisse/2026-07-17_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-07-18_decompte-suva-petrovic-elena.txt
+- caisses-assurances/suisse/2026-07-21_decompte-css-maillard-pascal.pdf
+- caisses-assurances/suisse/2026-07-27_decompte-groupe-mutuel.pdf
+- caisses-assurances/suisse/2026-08-01_decompte-suva.pdf
+- caisses-assurances/suisse/2026-08-12_decompte-helsana-martin-marie.pdf
+- caisses-assurances/suisse/2026-08-20_decompte-css.pdf
+- caisses-assurances/suisse/2026-08-26_demande-remboursement.docx
+- caisses-assurances/suisse/2026-08-27_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-08-30_decompte-groupe-mutuel-oberson-dominique.odt
+- caisses-assurances/suisse/2026-09-01_demande-remboursement-vuilleumier-marie-claude.eml
+- caisses-assurances/suisse/2026-09-09_decompte-assura.docx
+- caisses-assurances/suisse/2026-09-16_decompte-css.pdf
+- caisses-assurances/suisse/2026-09-18_decompte-assura.pdf
+- caisses-assurances/suisse/2026-09-18_decompte-assura.rtf
+- caisses-assurances/suisse/2026-09-19_decompte-sanitas.txt
+- caisses-assurances/suisse/2026-09-27_decompte-helsana.odt
+- caisses-assurances/suisse/2026-10-03_decompte-css.docx
+- caisses-assurances/suisse/2026-10-03_decompte-groupe-mutuel.txt
+- caisses-assurances/suisse/2026-10-03_decompte-helsana.rtf
+- caisses-assurances/suisse/2026-10-08_decompte-css.eml
+- scans/2026-02/2026-02-17_demande-remboursement-lindqvist-asa.pdf
+- scans/2026-03/2026-03-23_decompte-groupe-mutuel-zufferey-stephane.png
+- scans/2026-07/2026-07-16_decompte-css.pdf
+Sans texte lisible, donc non cherchés : 7 fichiers.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B6
+Vous: Quels documents contiennent 101047437907802 ?
+Assistant: Recherche du numéro « 101047437907802 », quelle que soit sa présentation : 1 fichier dans les documents sélectionnés.
+- caisses-assurances/france/2026-07-02_courrier-mgen.pdf
+Sans texte lisible, donc non cherchés : 7 fichiers.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+B7
+Vous: Quel est le prochain rendez-vous de Jean Dupontet d'après le courrier du confrère ?
+Assistant: Extrait de **courriers-entrants/2026-05/2026-05-20_courrier-compte-rendu-dupontet-jean.docx** (page 1) :
+**Prochain rendez-vous : 18 août 2026.**
+Généré par ministral-3:3b en 2s
+Sources :
+- dupont-jean.pdf, page 1
+- courriers-entrants/2026-07/2026-07-26_courrier-orl.pdf, page 1
+- courriers-entrants/2026-06/2026-06-29_courrier-dermatologie-crettenand-claude.pdf, page 1
+- courriers-entrants/2026-01/2026-01-26_courrier-neurologie-pillet-maelle.pdf, page 1
+- courriers-entrants/2026-03/2026-03-11_courrier-orl-favre-laurent.pdf, page 1
+- courriers-entrants/2026-05/2026-05-20_courrier-compte-rendu-dupontet-jean.docx, page 1
+- courriers-entrants/2026-04/2026-04-02_courrier-dermatologie-ducommun-francois.eml, page 1
+- patients/courriers/2026-02-24_courrier-patient.pdf, page 1
+- courriers-entrants/2026-08/2026-08-30_courrier-cardiologie-dubois-jean-francois.pdf, page 1
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-04/2026-04-10_courrier-orl-crettenand-vincent.eml, page 1
+- courriers-entrants/2026-05/2026-05-19_courrier-neurologie-lucas-roy.pdf, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-rhumatologie-bernasconi-luca.pdf, page 1
+- laboratoire/2026-01/2026-01-06_resultats-analyses.pdf, page 1
+
+B8 
+Vous: Quel est le montant de la facture d'honoraires de Marie-Claire Rappaz ?
+Assistant: Extrait de **patients/honoraires/2026-02-21_note-honoraires.docx (page 1)** :
+**60,00 €** pour la consultation du 21 février 2026.
+Généré par ministral-3:3b en 5s
+Sources :
+- patients/honoraires/2026-02-21_note-honoraires.docx, page 1
+- caisses-assurances/suisse/2026-05-08_demande-remboursement.eml, page 1
+- laboratoire/2026-04/2026-04-28_resultats-analyses-2.pdf, page 1
+- patients/ordonnances/2026-08-07_ordonnance.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf, page 1
+- patients/courriers/2026-05-26_courrier-patient.pdf, page 1
+- laboratoire/2026-10/2026-10-05_resultats-analyses.rtf, page 1
+- caisses-assurances/suisse/2026-09-01_demande-remboursement-vuilleumier-marie-claude.eml, page 1
+- caisses-assurances/france/2026-09-10_courrier-harmonie.odt, page 1
+- laboratoire/2026-04/2026-04-09_resultats-analyses.docx, page 1
+- laboratoire/2026-03/2026-03-21_resultats-analyses.pdf, page 1
+- caisses-assurances/suisse/2026-08-12_decompte-helsana-martin-marie.pdf, page 1
+- courriers-entrants/2026-05/2026-05-06_courrier-rhumatologie-dafflon-marie-claire.pdf, page 1
+- laboratoire/2026-02/2026-02-19_resultats-analyses.md, page 1
+
+B9
+Vous: À qui appartient le numéro AVS 756.0029.3590.44 ?
+Assistant: Extrait de **courriers-entrants/2026-07/2026-07-21_courrier-rhumatologie.docx (page 1)**.
+Le numéro **AVS 756.0029.3590.44** appartient à **Jérémie Perrenoud**.
+Généré par ministral-3:3b en 6s
+Sources :
+- documentation/recueil-procedures.pdf, pages 34, 155, 184, 189, section : Chapitre 42 — Facturation ; Chapitre 34 — Facturation ; Chapitre 41 — Donnees ; Chapitre 8 — Facturation
+- documentation/guide-pratique-cabinet.pdf, pages 59, 74, 78, 89, section : Chapitre 17 — Materiel ; Chapitre 20 — Accueil ; Chapitre 13 — Facturation
+- documentation/protocole-soins.docx, page 1, section : Chapitre 5 — Urgences
+- documentation/manuel-qualite.docx, page 1, section : Chapitre 14 — Urgences
+- documentation/manuel-formation.docx, page 1, section : Chapitre 16 — Materiel
+- comptabilite/factures/2026-03-29_facture-swisscom-fac-2026-155.docx, page 1
+- documentation/annuaire-conventions.pdf, page 279, section : Chapitre 61 — Urgences
+- courriers-entrants/2026-07/2026-07-21_courrier-rhumatologie.docx, page 1
+
+B10
+Vous: Quel est le total hors taxes de la facture FAC-2026-114 ?
+Assistant: Extrait **comptabilite/factures/2026-06-05_facture-garage-martin-fac-2026-114.pdf**, page 1 :
+**Total HT : 727,50 €**
+Généré par ministral-3:3b en 5s
+Sources :
+- comptabilite/factures/2026-02-19_facture-edf-fac-2026-204.rtf, page 1
+- comptabilite/factures/2026-09-13_facture-imprimerie-chablais-fac-2026-117.docx, page 1
+- comptabilite/factures/2026-06-05_facture-garage-martin-fac-2026-114.pdf, page 1
+- comptabilite/factures/2026-01-29_facture-imprimerie-chablais-fac-2026-146.pdf, page 1
+- comptabilite/factures/2026-05-11_facture-imprimerie-chablais-fac-2026-185.pdf, page 1
+- comptabilite/factures/2026-02-27_facture-orange-fac-2026-126.pdf, page 1
+- comptabilite/factures/2026-06-07_facture-imprimerie-chablais-fac-2026-183.pdf, page 1
+- comptabilite/factures/2026-06-08_facture-garage-martin-fac-2026-178.odt, page 1
+- comptabilite/factures/2026-08-30_facture-orange-fac-2026-163.docx, page 1
+- comptabilite/factures/2026-08-09_facture-edf-fac-2026-189.docx, page 1
+- comptabilite/factures/2026-05-21_facture-edf-fac-2026-211.odt, page 1
+- comptabilite/factures/2026-01-05_facture-orange-fac-2026-175.docx, page 1
+- comptabilite/factures/2026-04-01_facture-garage-martin-fac-2026-171.eml, page 1
+- comptabilite/factures/2026-07-27_facture-orange-fac-2026-177.pdf, page 1
+
+B11
+Vous: Dans la transcription de la réunion, quel est le montant du bon de commande BC-2026-0400 ?
+Assistant: Extrait **reunions/enregistrements/2026-05-28_transcription-preparation.vtt** (page 1) :
+**Montant du bon de commande BC-2026-0400 : 4 675,50 €**
+Généré par ministral-3:3b en 6s
+Sources :
+- reunions/enregistrements/2026-06-06_transcription-point.srt, page 1
+- reunions/enregistrements/2026-03-08_transcription-preparation.vtt, page 1
+- scans/2026-01/2026-01-18_pv-reunion-cabinet.pdf, page 1 (lu par reconnaissance de texte)
+- reunions/enregistrements/2026-07-13_transcription-point.vtt, page 1
+- reunions/enregistrements/2026-09-19_transcription-revue.srt, page 1
+- reunions/enregistrements/2026-05-28_transcription-preparation.vtt, page 1
+- reunions/enregistrements/2026-08-07_transcription-point.vtt, page 1
+- reunions/enregistrements/2026-03-16_transcription-revue.vtt, page 1
+- reunions/enregistrements/2026-05-30_transcription-point.srt, page 1
+- reunions/enregistrements/2026-03-29_transcription-revue.vtt, page 1
+- reunions/2026-02-04_pv-reunion-cabinet.pdf, page 1
+- reunions/enregistrements/2026-01-22_transcription-point.vtt, page 1
+- reunions/2026-02-14_pv-reunion-cabinet.docx, page 1
+- courriers-entrants/2026-08/2026-08-31_courrier-dermatologie-martin-luc.md, page 1
+
+B12
+Vous: Dans la transcription de la réunion, quel est le montant du bon de commande BC-2026-0401 ?
+Assistant: Extrait de **reunions/enregistrements/2026-06-17_transcription-organisation.srt** (page 1) :
+- Montant du bon de commande **BC-2026-0401** : **CHF 4'884.50**.
+Généré par ministral-3:3b en 7s
+Sources :
+- scans/2026-01/2026-01-18_pv-reunion-cabinet.pdf, page 1 (lu par reconnaissance de texte)
+- reunions/enregistrements/2026-03-08_transcription-preparation.vtt, page 1
+- reunions/enregistrements/2026-06-06_transcription-point.srt, page 1
+- reunions/enregistrements/2026-07-13_transcription-point.vtt, page 1
+- reunions/enregistrements/2026-09-19_transcription-revue.srt, page 1
+- reunions/enregistrements/2026-08-07_transcription-point.vtt, page 1
+- reunions/enregistrements/2026-03-16_transcription-revue.vtt, page 1
+- reunions/2026-02-04_pv-reunion-cabinet.pdf, page 1
+- reunions/enregistrements/2026-05-30_transcription-point.srt, page 1
+- reunions/enregistrements/2026-06-17_transcription-organisation.srt, page 1
+- reunions/2026-02-14_pv-reunion-cabinet.docx, page 1
+- reunions/enregistrements/2026-03-29_transcription-revue.vtt, page 1
+- reunions/enregistrements/2026-01-22_transcription-point.vtt, page 1
+- scans/2026-02/2026-02-04_convocation-reunion.png, page 1 (lu par reconnaissance de texte)
+
+B13
+Vous: Quel est le taux d'hémoglobine glyquée de Thierry Baumann dans ses résultats d'analyses ?
+Assistant: Extrait : laboratoire/2026-09/2026-09-19_resultats-analyses.rtf (page 1)
+**Taux d'hémoglobine glyquée : 5,5 %**
+Généré par ministral-3:3b en 5s
+Sources :
+- laboratoire/2026-09/2026-09-19_resultats-analyses.rtf, page 1
+- laboratoire/2026-04/2026-04-09_resultats-analyses-roy-lucas.odt, page 1
+- laboratoire/2026-02/2026-02-27_resultats-analyses-chappuis-nathalie.pdf, page 1
+- laboratoire/2026-03/2026-03-19_resultats-analyses-lucas-roy.pdf, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-07/2026-07-06_resultats-analyses-huguenin-yves.rtf, page 1
+- laboratoire/2026-03/2026-03-11_resultats-analyses.pdf, page 1
+- laboratoire/2026-03/2026-03-05_resultats-analyses.docx, page 1
+- laboratoire/2026-01/2026-01-21_resultats-analyses-crettenand-gregoire.odt, page 1
+- laboratoire/2026-03/2026-03-24_resultats-analyses-genoud-anne-laure.rtf, page 1
+- laboratoire/2026-05/2026-05-09_resultats-analyses.rtf, page 1
+- laboratoire/2026-10/2026-10-05_resultats-analyses.rtf, page 1
+- laboratoire/2026-05/2026-05-09_resultats-analyses.docx, page 1
+- laboratoire/2026-01/2026-01-10_resultats-analyses-benali-fatima.pdf, page 1
+- laboratoire/2026-02/2026-02-20_resultats-analyses-petrovic-elena.odt, page 1
+
+B14
+Vous: Quel montant a été pris en charge pour David Monnerat d'après le décompte de sa caisse ?
+Assistant: Extrait de **caisses-assurances/suisse/2026-04-07_decompte-groupe-mutuel-monnerat-david.eml** (page 1) :
+- Montant pris en charge : **CHF 746,69**.
+Généré par ministral-3:3b en 5s
+Sources :
+- caisses-assurances/suisse/2026-04-07_decompte-groupe-mutuel-monnerat-david.eml, page 1
+- caisses-assurances/suisse/2026-01-06_decompte-sanitas.pdf, page 1
+- caisses-assurances/suisse/2026-06-06_decompte-sanitas-maillard-pascal.rtf, page 1
+- caisses-assurances/suisse/2026-08-01_decompte-suva.pdf, page 1
+- caisses-assurances/suisse/2026-02-13_decompte-suva-python-monique.odt, page 1
+- caisses-assurances/suisse/2026-02-27_decompte-css.pdf, page 1
+- caisses-assurances/suisse/2026-07-21_decompte-css-maillard-pascal.pdf, page 1
+- caisses-assurances/suisse/2026-04-18_decompte-swica-bochud-jacqueline.rtf, page 1
+- caisses-assurances/suisse/2026-09-18_decompte-assura.rtf, page 1
+- caisses-assurances/suisse/2026-03-23_decompte-suva.pdf, page 1
+- caisses-assurances/suisse/2026-10-03_decompte-helsana.rtf, page 1
+- caisses-assurances/suisse/2026-06-14_decompte-swica-chappuis-nathalie.rtf, page 1
+- caisses-assurances/suisse/2026-07-18_decompte-suva-petrovic-elena.txt, page 1
+- caisses-assurances/suisse/2026-03-16_decompte-suva.docx, page 1
+
+B15
+Vous: Combien de jours d'arrêt figurent dans le certificat de Roy Lucas ?
+Assistant: Extrait : patients/certificats/2026-04-02_arret-travail.odt (page 1)
+**10 jours** d'arrêt.
+Généré par ministral-3:3b en 4s
+Sources :
+- patients/certificats/2026-04-02_arret-travail.odt, page 1
+- patients/certificats/2026-06-08_arret-travail-pierre-thomas.rtf, page 1
+- patients/certificats/2026-02-13_arret-travail-lopez-hugo.docx, page 1
+- patients/certificats/2026-02-04_arret-travail-demirci-ibrahim.pdf, page 1
+- patients/certificats/2026-08-04_arret-travail.rtf, page 1
+- patients/certificats/2026-02-13_arret-travail-pittet-isabelle.odt, page 1
+- patients/certificats/2026-02-17_arret-travail-muller-jorg.pdf, page 1
+- patients/certificats/2026-04-06_arret-travail.txt, page 1
+- patients/certificats/2026-02-11_arret-travail.docx, page 1
+- patients/certificats/2026-02-05_arret-travail.pdf, page 1
+- patients/certificats/2026-01-13_arret-travail-dupont-marie.txt, page 1
+- patients/certificats/2026-01-30_arret-travail.pdf, page 1
+- patients/certificats/2026-01-28_arret-travail-martin-marie.pdf, page 1
+- patients/certificats/2026-03-12_arret-travail-petrovic-elena.pdf, page 1 (lu par reconnaissance de texte)
+
+B16
+Vous: Qui est l'intervenant du module MOD-0105 ?
+Assistant: Extrait de **formation/2026-06-12_formation-gestion.odp (page 1)** :
+Intervenant : Dr Martin.
+Généré par ministral-3:3b en 8s
+Sources :
+- formation/2026-06-12_formation-gestion.odp, pages 1, 2
+- formation/2026-02-11_formation-securite.odp, page 1
+- formation/2026-04-27_formation-securite.pptx, page 1
+- formation/2026-06-26_formation-securite.pptx, page 1
+- formation/2026-08-02_formation-securite.pptx, page 1
+- formation/2026-07-30_formation-securite.odp, page 1
+- formation/2026-05-17_formation-securite.pptx, page 1
+- formation/2026-04-04_formation-securite.odp, page 1
+- formation/2026-07-31_formation-securite.odp, page 1
+- formation/2026-03-22_formation-securite.odp, page 1
+- formation/2026-05-11_formation-securite.odp, page 1
+- formation/2026-07-04_formation-securite.odp, page 1
+- formation/2026-07-27_formation-securite.pptx, page 1
+
+B17
+Vous: À quelle date a lieu la session du module MOD-0102 ?
+Assistant: - **Formation "Chaîne du froid" (MOD-0102)** :
+  - **10 avril 2026** (extrait : *formation/2026-01-21_formation-chaine.odp*, page 3)
+  - **3 avril 2026** (extrait : *formation/2026-01-05_formation-chaine.pptx*, page 3)
+  - **7 avril 2026** (extrait : *formation/2026-02-04_formation-chaine.pptx*, page 3)
+  - **4 mars 2026** (extrait : *formation/2026-02-15_formation-chaine.odp*, page 3) → *hors module MOD-0102* (pas mentionné dans le titre du fichier).
+**Réponse** :
+Les dates des sessions du module **MOD-0102** sont :
+- **10 avril 2026**
+- **3 avril 2026**
+- **7 avril 2026**.
+Généré par ministral-3:3b en 3s
+Sources :
+- formation/2026-01-05_formation-chaine.pptx, pages 1, 2, 3
+- formation/2026-01-30_formation-gestes.pptx, page 3
+- formation/2026-01-21_formation-accueil.odp, page 3
+- formation/2026-01-21_formation-chaine.odp, page 3
+- formation/2026-02-11_formation-securite.odp, page 3
+- formation/2026-02-12_formation-gestes-2.pptx, page 3
+- formation/2026-01-21_formation-hygiene.pptx, page 3
+- formation/2026-02-12_formation-gestes.pptx, page 3
+- formation/2026-02-04_formation-chaine.pptx, page 3
+- formation/2026-02-15_formation-chaine.odp, page 3
+- formation/2026-01-07_formation-chaine.odp, page 3
+- formation/2026-01-10_formation-gestes.pptx, page 3
+
+B18
+Vous: Que dit le fichier 2026-01-26_courrier-rhumatologie-o-brien-sean.txt ?
+Assistant: - Date de la consultation : **26 janvier 2026**.
+- Médecin concerné : **Dr Ibrahim Brunner**.
+- Hôpital : **Hôpital de Nyon** (adresse : Route de Chancy 75, 1260 Nyon).
+- Patient : **Sean O'Brien**, né en **1968**.
+- Numéro AVS : **756.3931.1286.16**.
+- Objectif de la consultation : **bilan neurologique**.
+- Résultat de l’examen clinique : **rassurant**.
+- Traitement en cours : **amlodipine** (à la dose habituelle).
+- Prochain rendez-vous : **26 avril 2026**.
+- Action demandée : **contrôle biologique** et **courrier de synthèse** à la caisse.
+Généré par ministral-3:3b en 3s
+Sources :
+- courriers-entrants/2026-01/2026-01-26_courrier-rhumatologie-o-brien-sean.txt, page 1
+
+B19
+Vous: Auprès de qui la formation à l'hygiène est-elle déclarée ?
+Assistant: Extrait de **documentation/guide-pratique-cabinet.pdf (page 9, section "Chapitre 2 — Hygiène")** :
+*"La formation à l'hygiène est déclarée auprès de Ordre des médecins de la Haute-Savoie."*
+Généré par ministral-3:3b en 2s
+Sources :
+- formation/2026-06-10_formation-hygiene.odp, page 1
+- formation/2026-07-13_formation-hygiene.odp, page 1
+- formation/2026-09-19_formation-hygiene.odp, page 1
+- formation/2026-04-22_formation-hygiene.odp, page 1
+- formation/2026-06-23_formation-hygiene.odp, page 1
+- formation/2026-07-02_formation-hygiene.pptx, page 1
+- formation/2026-07-15_formation-hygiene.odp, page 1
+- formation/2026-01-21_formation-hygiene.pptx, page 1
+- formation/2026-09-29_formation-hygiene.pptx, page 1
+- formation/2026-08-06_formation-hygiene.odp, page 1
+- formation/2026-07-16_formation-hygiene.odp, page 1
+- documentation/guide-pratique-cabinet.pdf, page 9, section : Chapitre 2 — Hygiene
+- reunions/2026-03-15_pv-reunion-cabinet.docx, page 1
+- reunions/2026-02-27_pv-reunion-cabinet.pdf, page 1
+
+B20
+Vous: Quel est le prochain rendez-vous de Christelle Délèze d'après le courrier du confrère ?
+Assistant: Extrait de **courriers-entrants/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg** (page 1) :
+- Prochain rendez-vous : **3 novembre 2026**.
+Généré par ministral-3:3b en 3s
+Sources :
+- scans/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-09/2026-09-28_courrier-orl.docx, page 1
+- courriers-entrants/2026-06/2026-06-10_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx, page 1
+- courriers-entrants/2026-07/2026-07-24_courrier-neurologie.txt, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-orl.pdf, page 1
+- courriers-entrants/2026-01/2026-01-10_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-18_courrier-neurologie-menoud-raphael.docx, page 1
+- patients/certificats/2026-09-20_arret-travail.eml, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-endocrinologie-bersier-michel.eml, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-rhumatologie-bernasconi-luca.pdf, page 1
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-07/2026-07-06_resultats-analyses.odt, page 1
+
+B21
+Vous: Quel est le prochain rendez-vous de Christelle Délèze d'après le courrier du confrère ?
+Assistant: Extrait de **courriers-entrants/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg** (page 1) :
+- Prochain rendez-vous : **3 novembre 2026**.
+Généré par ministral-3:3b en 2s
+Sources :
+- scans/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-09/2026-09-28_courrier-orl.docx, page 1
+- courriers-entrants/2026-06/2026-06-10_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx, page 1
+- courriers-entrants/2026-07/2026-07-24_courrier-neurologie.txt, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-orl.pdf, page 1
+- courriers-entrants/2026-01/2026-01-10_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-18_courrier-neurologie-menoud-raphael.docx, page 1
+- patients/certificats/2026-09-20_arret-travail.eml, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-endocrinologie-bersier-michel.eml, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-rhumatologie-bernasconi-luca.pdf, page 1
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-07/2026-07-06_resultats-analyses.odt, page 1
+
+B21
+Vous: Et son prochain rendez-vous d'après le courrier du confrère ?
+Assistant: Extrait de **courriers-entrants/2026-07/2026-07-14_courrier-cardiologie.txt** (page 1) :
+- Prochain rendez-vous : **12 octobre 2026**.
+Extrait de **courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx** (page 1) :
+- Prochain rendez-vous : **28 octobre 2026**.
+**Pas de courrier trouvé pour Christelle Délèze.**
+Généré par ministral-3:3b en 4s
+Sources :
+- courriers-entrants/2026-09/2026-09-28_courrier-orl.docx, page 1
+- courriers-entrants/2026-01/2026-01-10_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-24_courrier-neurologie.txt, page 1
+- courriers-entrants/2026-07/2026-07-14_courrier-cardiologie.txt, page 1
+- courriers-entrants/2026-01/2026-01-18_courrier-neurologie-menoud-raphael.docx, page 1
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-03/2026-03-11_courrier-neurologie-dupont-jean-pierre.docx, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-orl.pdf, page 1
+- courriers-entrants/2026-09/2026-09-16_courrier-neurologie.rtf, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-endocrinologie-bersier-michel.eml, page 1
+- courriers-entrants/2026-06/2026-06-10_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx, page 1
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-07/2026-07-07_courrier-rhumatologie-bernasconi-luca.pdf, page 1
+
+B21 -> Note que l'app est juste le fichier 2026-07-09_courrier-endocrinologie.pdf concerne Mme Rappaz voir la question test ci-dessous l'app est correcte
+Vous: Quel est le prochain rendez-vous de Mme Rappaz d'après le courrier du confrère ?
+Assistant: - Extrait **courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf** (page 1)
+  - Prochain rendez-vous : **7 octobre 2026**.
+Généré par ministral-3:3b en 4s
+Sources :
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx, page 1
+- courriers-entrants/2026-09/2026-09-28_courrier-orl.docx, page 1
+- courriers-entrants/2026-07/2026-07-14_courrier-cardiologie.txt, page 1
+- courriers-entrants/2026-07/2026-07-24_courrier-neurologie.txt, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-orl.pdf, page 1
+- laboratoire/2026-04/2026-04-28_resultats-analyses-2.pdf, page 1
+- courriers-entrants/2026-01/2026-01-10_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-18_courrier-neurologie-menoud-raphael.docx, page 1
+- courriers-entrants/2026-07/2026-07-20_courrier-endocrinologie-bersier-michel.eml, page 1
+- courriers-entrants/2026-06/2026-06-10_courrier-cardiologie.pdf, page 1
+- courriers-entrants/2026-07/2026-07-07_courrier-rhumatologie-bernasconi-luca.pdf, page 1
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf, page 1 (lu par reconnaissance de texte)
+- laboratoire/2026-10/2026-10-05_resultats-analyses.rtf, page 1
+
+B22
+Vous: Quel est le prochain rendez-vous de Zénobie Quarante ?
+Assistant: Aucun extrait ne mentionne un nom ou une demande de rendez-vous portant le nom de **Zénobie Quarante**.
+Généré par ministral-3:3b en 3s
+Sources :
+- patients/courriers/2026-09-23_courrier-patient.txt, page 1
+- patients/courriers/2026-07-05_courrier-patient-n-diaye-aicha.pdf, page 1
+- patients/courriers/2026-08-21_courrier-patient.docx, page 1
+- patients/courriers/2026-08-28_courrier-patient.eml, page 1
+- patients/courriers/2026-07-07_courrier-patient-martin-marie.docx, page 1
+- patients/courriers/2026-04-14_courrier-patient.docx, page 1
+- patients/courriers/2026-07-04_courrier-patient-martin-claire.docx, page 1
+- patients/courriers/2026-08-24_courrier-patient.pdf, page 1
+- patients/courriers/2026-01-15_courrier-patient.pdf, page 1
+- patients/courriers/2026-08-14_courrier-patient-crettenand-gregoire.rtf, page 1
+- patients/courriers/2026-03-13_courrier-patient.rtf, page 1
+- patients/courriers/2026-06-25_courrier-patient-demirci-ibrahim.docx, page 1
+- patients/courriers/2026-01-16_courrier-patient.pdf, page 1
+- patients/courriers/2026-03-12_courrier-patient.docx, page 1
+
+B23
+Vous: Quel est le prochain rendez-vous de Hyacinthe Vaudroz ?
+Assistant: Aucun extrait ne mentionne un nom ou une demande de Hyacinthe Vaudroz.
+Je n’ai pas trouvé de correspondance liée à cette personne.
+Généré par ministral-3:3b en 3s
+Sources :
+- patients/courriers/2026-08-21_courrier-patient.docx, page 1
+- patients/courriers/2026-07-07_courrier-patient-martin-marie.docx, page 1
+- patients/courriers/2026-09-23_courrier-patient.txt, page 1
+- patients/courriers/2026-07-05_courrier-patient-n-diaye-aicha.pdf, page 1
+- patients/courriers/2026-07-04_courrier-patient-martin-claire.docx, page 1
+- patients/courriers/2026-08-24_courrier-patient.pdf, page 1
+- patients/courriers/2026-03-13_courrier-patient.rtf, page 1
+- patients/courriers/2026-08-14_courrier-patient-crettenand-gregoire.rtf, page 1
+- patients/courriers/2026-08-28_courrier-patient.eml, page 1
+- patients/courriers/2026-06-25_courrier-patient-demirci-ibrahim.docx, page 1
+- patients/courriers/2026-04-14_courrier-patient.docx, page 1
+- patients/courriers/2026-01-15_courrier-patient.pdf, page 1
+- patients/courriers/2026-03-12_courrier-patient.docx, page 1
+- patients/courriers/2026-01-16_courrier-patient.pdf, page 1
+
+PART C1 à C11 (dans la même conversation)
+Vous: Quelles sont les colonnes du fichier compta-depenses-2026-01-site-1.xlsx ?
+Assistant: Colonnes de la feuille Journal : Date, Libellé, Catégorie, Débit, Crédit.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- compta-depenses-2026-01-site-1.xlsx, feuille Journal
+
+Vous: Quelle est la moyenne de Débit dans le fichier compta-depenses-2026-04-site-1.ods ?
+Assistant: Moyenne de Débit : **983,844615**.
+Calculé sur 13 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- compta-depenses-2026-04-site-1.ods, feuille Journal, colonne Débit
+
+Vous: Quel est le maximum de Montant TTC dans le fichier factures-fournisseurs-2026-t3-imprimerie-du-chablais-sas.xlsx ?
+Assistant: Plus grande valeur de Montant TTC : **1 461,85**.
+Calculé sur 10 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- factures-fournisseurs-2026-t3-imprimerie-du-chablais-sas.xlsx, feuille Factures, colonne Montant TTC
+
+Vous: Combien de lignes avec Catégorie Frais généraux dans le fichier compta-depenses-2026-01-site-1.xlsx ?
+Assistant: Nombre de lignes : **17**.
+Calculé sur 17 lignes.
+Compris comme : Catégorie = Frais généraux.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- compta-depenses-2026-01-site-1.xlsx, feuille Journal
+
+Vous: Combien de lignes le mardi dans le fichier compta-depenses-2026-01-site-1.xlsx ?
+Assistant: Nombre de lignes : **9**.
+Calculé sur 9 lignes.
+Compris comme : Date un mardi.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- compta-depenses-2026-01-site-1.xlsx, feuille Journal
+
+Vous: Quel Catégorie a le Débit total le plus élevé dans le fichier compta-depenses-2026-01-site-1.xlsx ?
+Assistant: Plus grand total de Débit par Catégorie : **Charges**, avec **11 822,12**.
+Il s'agit du total par Catégorie, additionné sur toutes les lignes, pas de la plus grande ligne isolée.
+Les premiers, sur 3 groupes en tout :
+- Charges : 11 822,12
+- Frais généraux : 11 265,93
+- Recettes : 10 917,16
+Calculé sur 40 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- compta-depenses-2026-01-site-1.xlsx, feuille Journal, colonne Débit
+
+Vous: Quelle est la somme de Honoraires dans le fichier honoraires-2026-07-dr-helene-marchetti.csv ?
+Assistant: Somme de Honoraires : **1 088,5**.
+Calculé sur 29 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- honoraires-2026-07-dr-helene-marchetti.csv, feuille honoraires-2026-07-dr-helene-marchetti, colonne Honoraires
+
+Vous: Quelle est la somme de Débit dans le fichier compta-depenses-2026-06-site-1.xlsx ?
+Assistant: Cette colonne de compta-depenses-2026-06-site-1.xlsx contient des formules : leur résultat ne peut pas être vérifié, il n'est donc pas calculé.
+Colonne concernée : Débit.
+Ses colonnes sont : Date, Libellé, column_3, Catégorie, Débit, Crédit.
+Essayez de demander une somme, un minimum, un maximum, un nombre de lignes, la liste des valeurs d'une colonne, ou le groupe qui a le plus grand total.
+Par exemple : « Quelle est la somme de Crédit ? »
+Ou : « Quel(le) Date a le plus de Crédit ? »
+Réponse calculée depuis votre dossier des données, sans l'IA.
+
+Vous: Combien de lignes contient le fichier compta-depenses-2026-08-site-1.xlsx ?
+Assistant: compta-depenses-2026-08-site-1.xlsx contient plusieurs feuilles : précisez laquelle dans la question.
+Ses feuilles sont : Journal, Notes.
+Essayez de demander une somme, un minimum, un maximum, un nombre de lignes, la liste des valeurs d'une colonne, ou le groupe qui a le plus grand total.
+Votre question précédente n'a pas pu être calculée non plus : nommez exactement l'une des colonnes ci-dessus.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+
+Vous: Quelle est la somme de Débit dans le fichier compta-depenses-2026-02-site-1.csv ?
+Assistant: Somme de Débit : **27 884,57**.
+Calculé sur 31 lignes.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Sources :
+- compta-depenses-2026-02-site-1.csv, feuille compta-depenses-2026-02-site-1, colonne Débit
+
+Vous: Quelle est la somme de Montant ?
+Assistant: Plusieurs tableurs sont sélectionnés. Lequel voulez-vous ? Nommez-le dans la question :
+- rendez-vous-2026-01-cabinet-de-morges.ods
+- rendez-vous-2026-01-cabinet-de-nyon.csv
+- rendez-vous-2026-01-cabinet-de-thonon.csv
+- rendez-vous-2026-01-cabinet-de-vevey.xlsx
+- rendez-vous-2026-01-cabinet-des-lilas-2.xlsx
+- rendez-vous-2026-01-cabinet-des-lilas.xlsx
+- rendez-vous-2026-01-cabinet-du-parc.csv
+- rendez-vous-2026-01-cabinet-du-parc.xlsx
+- rendez-vous-2026-02-cabinet-de-morges.xlsx
+- rendez-vous-2026-02-cabinet-de-nyon.xlsx
+- rendez-vous-2026-02-cabinet-de-thonon.ods
+- rendez-vous-2026-02-cabinet-de-vevey.csv
+- rendez-vous-2026-02-cabinet-des-lilas.csv
+- rendez-vous-2026-02-cabinet-des-lilas.ods
+- rendez-vous-2026-02-cabinet-du-parc.ods
+- rendez-vous-2026-02-cabinet-du-parc.xlsx
+- rendez-vous-2026-03-cabinet-de-morges.csv
+- rendez-vous-2026-03-cabinet-de-nyon.ods
+- rendez-vous-2026-03-cabinet-de-thonon.xlsx
+- rendez-vous-2026-03-cabinet-de-vevey.xlsx
+- rendez-vous-2026-03-cabinet-des-lilas.csv
+- rendez-vous-2026-03-cabinet-des-lilas.xlsx
+- rendez-vous-2026-03-cabinet-du-parc.csv
+- rendez-vous-2026-03-cabinet-du-parc.ods
+- rendez-vous-2026-04-cabinet-de-morges.ods
+- rendez-vous-2026-04-cabinet-de-nyon.xlsx
+- rendez-vous-2026-04-cabinet-de-thonon.csv
+- rendez-vous-2026-04-cabinet-de-vevey.ods
+- rendez-vous-2026-04-cabinet-des-lilas.ods
+- rendez-vous-2026-04-cabinet-des-lilas.xlsx
+- rendez-vous-2026-04-cabinet-du-parc-2.xlsx
+- rendez-vous-2026-04-cabinet-du-parc.xlsx
+- rendez-vous-2026-05-cabinet-de-morges.xlsx
+- rendez-vous-2026-05-cabinet-de-nyon.csv
+- rendez-vous-2026-05-cabinet-de-thonon.xlsx
+- rendez-vous-2026-05-cabinet-de-vevey.csv
+- rendez-vous-2026-05-cabinet-des-lilas.csv
+- rendez-vous-2026-05-cabinet-des-lilas.ods
+- rendez-vous-2026-05-cabinet-du-parc.csv
+- rendez-vous-2026-05-cabinet-du-parc.ods
+- rendez-vous-2026-06-cabinet-de-morges.csv
+- rendez-vous-2026-06-cabinet-de-nyon.ods
+- rendez-vous-2026-06-cabinet-de-thonon.ods
+- rendez-vous-2026-06-cabinet-de-vevey.xlsx
+- rendez-vous-2026-06-cabinet-des-lilas-2.xlsx
+- rendez-vous-2026-06-cabinet-des-lilas.xlsx
+- rendez-vous-2026-06-cabinet-du-parc.ods
+- rendez-vous-2026-06-cabinet-du-parc.xlsx
+- rendez-vous-2026-07-cabinet-de-morges.xlsx
+- rendez-vous-2026-07-cabinet-de-nyon.xlsx
+- rendez-vous-2026-07-cabinet-de-thonon.csv
+- rendez-vous-2026-07-cabinet-de-vevey.ods
+- rendez-vous-2026-07-cabinet-des-lilas.csv
+- rendez-vous-2026-07-cabinet-des-lilas.ods
+- rendez-vous-2026-07-cabinet-du-parc.csv
+- rendez-vous-2026-08-cabinet-de-morges.ods
+- rendez-vous-2026-08-cabinet-de-nyon.csv
+- rendez-vous-2026-08-cabinet-de-thonon.xlsx
+- rendez-vous-2026-08-cabinet-de-vevey.xlsx
+- rendez-vous-2026-08-cabinet-des-lilas.ods
+- rendez-vous-2026-08-cabinet-des-lilas.xlsx
+- rendez-vous-2026-08-cabinet-du-parc.ods
+- rendez-vous-2026-09-cabinet-de-morges.csv
+- rendez-vous-2026-09-cabinet-de-nyon.xlsx
+- rendez-vous-2026-09-cabinet-de-thonon.ods
+- rendez-vous-2026-09-cabinet-de-vevey.csv
+- rendez-vous-2026-09-cabinet-des-lilas.csv
+- rendez-vous-2026-09-cabinet-des-lilas.xlsx
+- rendez-vous-2026-09-cabinet-du-parc.xlsx
+- rendez-vous-2026-10-cabinet-de-morges.xlsx
+- rendez-vous-2026-10-cabinet-de-nyon.ods
+- rendez-vous-2026-10-cabinet-de-thonon.xlsx
+- rendez-vous-2026-10-cabinet-de-vevey.ods
+- rendez-vous-2026-10-cabinet-des-lilas.csv
+- rendez-vous-2026-10-cabinet-des-lilas.ods
+- rendez-vous-2026-10-cabinet-du-parc.csv
+- rendez-vous-2026-11-cabinet-de-morges.ods
+- rendez-vous-2026-11-cabinet-de-nyon.csv
+- rendez-vous-2026-11-cabinet-de-thonon.csv
+- rendez-vous-2026-11-cabinet-de-vevey.xlsx
+- rendez-vous-2026-11-cabinet-des-lilas-2.xlsx
+- rendez-vous-2026-11-cabinet-des-lilas.xlsx
+- rendez-vous-2026-11-cabinet-du-parc.xlsx
+- rendez-vous-2026-12-cabinet-de-morges.xlsx
+- rendez-vous-2026-12-cabinet-de-nyon.xlsx
+- rendez-vous-2026-12-cabinet-de-thonon.ods
+- rendez-vous-2026-12-cabinet-de-vevey.csv
+- rendez-vous-2026-12-cabinet-des-lilas.csv
+- rendez-vous-2026-12-cabinet-des-lilas.ods
+- rendez-vous-2026-12-cabinet-du-parc.ods
+Réponse calculée depuis votre dossier des données, sans l'IA.
+
+PART D
+D1 à D5
+Vous: Combien de documents ai-je ?
+Assistant: 1244 fichiers ont été analysés.
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+Vous: Quels documents parlent de Genève ?
+Assistant: **Documents**
+Recherche du mot « Genève » : 177 fichiers dans les documents sélectionnés.
+« Genève » est reconnu comme Genève : les fichiers qui lui sont liés sont listés avec ceux qui écrivent l'un de ses noms.
+Seul le mot lui-même est cherché : un synonyme ou une autre forme du mot ne serait pas trouvé.
+- comptabilite/factures/2026-04-14_facture-sig-fac-2026-142.txt (page 1)
+  Extrait : Facture FAC-2026-142 Services industriels de Genève Rue du Lac 58 Facture n° FAC-2026-142 Date : 14 avril 2026 Client : Cabinet médical des Voirons, 8 rue du Léman,
+- comptabilite/factures/2026-04-17_facture-sig-fac-2026-194.pdf (page 1)
+  Extrait : Facture FAC-2026-194 Services industriels de Genève Avenue de la Gare 22 Facture n° FAC-2026-194 Date : 17 avril 2026 Client : Cabinet médical des Voirons, 8 rue du
+- comptabilite/factures/2026-05-08_facture-sig-fac-2026-207.docx (page 1)
+  Extrait : Facture FAC-2026-207 Services industriels de Genève Rue de l'Hôpital 15 Facture n° FAC-2026-207 Date : 8 mai 2026 Client : Cabinet médical des Voirons, 8 rue du Léman,
+- comptabilite/factures/2026-06-25_facture-sig-fac-2026-149.docx (page 1)
+  Extrait : Facture FAC-2026-149 Services industriels de Genève Avenue de la Gare 10 Facture n° FAC-2026-149 Date : 25 juin 2026 Client : Cabinet médical des Voirons, 8 rue du
+- comptabilite/factures/2026-07-01_facture-sig-fac-2026-152.txt (page 1)
+  Extrait : Facture FAC-2026-152 Services industriels de Genève Place de la Palud 45 Facture n° FAC-2026-152 Date : 1er juillet 2026 Client : Cabinet médical des Voirons, 8 rue du
+- comptabilite/factures/2026-07-23_facture-sig-fac-2026-166.odt (page 1)
+  Extrait : Facture FAC-2026-166 Services industriels de Genève Avenue de Morges 28 Facture n° FAC-2026-166 Date : 23 juillet 2026 Client : Cabinet médical des Voirons, 8 rue du Léman,
+- comptabilite/factures/2026-07-31_facture-sig-fac-2026-169.pdf (page 1)
+  Extrait : Facture FAC-2026-169 Services industriels de Genève Rue de Carouge 13 Facture n° FAC-2026-169 Date : 31 juillet 2026 Client : Cabinet médical des Voirons, 8 rue du Léman,
+- contrats/2026-02-14_contrat-maintenance-sig.pdf
+- contrats/2026-06-26_contrat-nettoyage-sig.eml (page 1)
+  Extrait : nettoyage CONTRAT N° CTR-2026-0163 Entre Services industriels de Genève et Cabinet médical des Voirons, représenté par Dr Hélène Marchetti. Article 1 — Objet. Le prestataire assure nettoyage des
+- courriers-entrants/2026-05/2026-05-04_courrier-neurologie-tschopp-agnes.pdf (page 1)
+  Extrait : mai 2026 Pr Jean-Luc Rapin Hôpitaux universitaires de Genève Avenue de Cour 73, 1003 Lausanne Tél. 027 555 27 42 Dr Hélène Marchetti 8 rue du Léman, 74100
+- courriers-entrants/2026-05/2026-05-23_courrier-compte-rendu.eml (page 1)
+  Extrait : mai 2026 Dr Jean Dupont Hôpitaux universitaires de Genève (HUG) Avenue de Cour 74, 1201 Genève Tél. 026 555 03 07 Dr Hélène Marchetti 8 rue du Léman,
+- courriers-entrants/2026-06/2026-06-01_courrier-neurologie-jaccard-beatrice.md (page 1)
+  Extrait : juin 2026 Dr Christophe Jeanneret Hôpitaux universitaires de Genève Rue du Lac 11, 1228 Plan-les-Ouates Tél. 027 555 37 59 Dr Hélène Marchetti 8 rue du Léman, 74100
+- courriers-entrants/2026-06/2026-06-16_courrier-endocrinologie.pdf (page 1)
+  Extrait : juin 2026 Dre Jacqueline Dubuis Hôpitaux universitaires de Genève (HUG) Route de Chancy 36, 1110 Morges Tél. 027 555 06 75 Dr Hélène Marchetti 8 rue du Léman,
+- courriers-entrants/2026-07/2026-07-07_courrier-rhumatologie-bernasconi-luca.pdf (page 1)
+  Extrait : juillet 2026 Pr Jean-Luc Rapin Hôpitaux universitaires de Genève (HUG) Avenue de Cour 73, 1003 Lausanne Tél. 027 555 27 42 Dr Hélène Marchetti 8 rue du Léman,
+- courriers-entrants/2026-07/2026-07-20_courrier-endocrinologie-bersier-michel.eml (page 1)
+  Extrait : juillet 2026 Dr Olivier Favre Hôpitaux universitaires de Genève (HUG) Chemin des Vignes 53, 1201 Genève Tél. 021 555 96 56 Dr Hélène Marchetti 8 rue du Léman,
+- courriers-entrants/2026-07/2026-07-26_courrier-orl.pdf (page 1)
+  Extrait : juillet 2026 Dr Jean Dupont Hôpitaux universitaires de Genève Avenue de Cour 74, 1201 Genève Tél. 026 555 03 07 Dr Hélène Marchetti 8 rue du Léman, 74100
+- courriers-entrants/2026-07/2026-07-29_courrier-compte-rendu-brun-yves.pdf (page 1)
+  Extrait : juillet 2026 Dre Anne-Sophie Vuagniaux Hôpitaux universitaires de Genève (HUG) Rue de Bourg 35, 1003 Lausanne Tél. 026 555 62 03 Dr Hélène Marchetti 8 rue du Léman,
+- courriers-entrants/2026-07/2026-07-30_courrier-dermatologie.docx (page 1)
+  Extrait : juillet 2026 Dre Anne Ibrahimi Hôpitaux universitaires de Genève (HUG) Chemin de la Source 13, 2740 Moutier Tél. 032 555 07 60 Dr Hélène Marchetti 8 rue du
+- courriers-entrants/2026-09/2026-09-26_courrier-neurologie.docx (page 1)
+  Extrait : septembre 2026 Dr Hélène Progin Hôpitaux universitaires de Genève Rue de Carouge 13, 3960 Sierre Tél. 027 555 31 91 Dr Hélène Marchetti 8 rue du Léman, 74100
+- patients/courriers/2026-01-15_courrier-patient.pdf (page 1)
+  Extrait : copie de dossier Avenue de Morges 44, 1201 Genève Dr Hélène Marchetti Cabinet médical des Voirons 8 rue du Léman, 74100 Annemasse Objet : demande de rendez-vous et
+- patients/courriers/2026-02-20_courrier-patient.pdf (page 1)
+  Extrait : Demande de copie de dossier Grand-Rue 17, 1201 Genève Tél. 021 555 68 08 — marie.laure.dafflon@mail.example Dr Hélène Marchetti Cabinet médical des Voirons 8 rue du Léman, 74100
+- patients/courriers/2026-09-28_courrier-patient.pdf (page 1)
+  Extrait : copie de dossier Avenue de Morges 44, 1201 Genève Dr Hélène Marchetti Cabinet médical des Voirons 8 rue du Léman, 74100 Annemasse Objet : demande de rendez-vous et
+- administratif/rapports/2026-02-23_rapport-activite.odt (page 1)
+  Extrait : 23 %. Les échanges avec Hôpitaux universitaires de Genève, Centre hospitalier Annecy Genevois et CPAM de la Haute-Savoie restent les plus fréquents. Projets de l'année : renouvellement du
+- administratif/rapports/2026-04-10_rapport-activite.rtf (page 1)
+  Extrait : 27 %. Les échanges avec Hôpitaux universitaires de Genève, Centre hospitalier Annecy Genevois et CPAM de la Haute-Savoie restent les plus fréquents. Projets de l'année : renouvellement du
+- administratif/rapports/2026-05-22_rapport-activite.md (page 1)
+  Extrait : 27 %. Les échanges avec Hôpitaux universitaires de Genève, Centre hospitalier Annecy Genevois et CPAM de la Haute-Savoie restent les plus fréquents. Projets de l'année : renouvellement du
+- administratif/rapports/2026-09-19_rapport-activite.txt (page 1)
+  Extrait : 24 %. Les échanges avec Hôpitaux universitaires de Genève, Centre hospitalier Annecy Genevois et CPAM de la Haute-Savoie restent les plus fréquents. Projets de l'année : renouvellement du
+- administratif/rapports/2026-10-07_rapport-activite.rtf (page 1)
+  Extrait : 27 %. Les échanges avec Hôpitaux universitaires de Genève, Centre hospitalier Annecy Genevois et CPAM de la Haute-Savoie restent les plus fréquents. Projets de l'année : renouvellement du
+- caisses-assurances/france/2026-01-15_courrier-cpam69.pdf (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Thomas Pierre 15 impasse des Lilas, 74000 Annecy N° de sécurité sociale : 1 90 02 74 035
+- caisses-assurances/france/2026-01-24_courrier-cpam74.eml (page 1)
+  Extrait : Haute-Savoie Service des prestations Case postale 2323, 1211 Genève 2 Manon Vuagnoux 73 quai du Paquier, 74400 Chamonix-Mont-Blanc N° de sécurité sociale : 2 68 09 74 235
+- caisses-assurances/france/2026-01-25_courrier-cpam74.pdf (page 1)
+  Extrait : 74008 Annecy cedex Pauline Picard 45 route de Genève, 74400 Chamonix-Mont-Blanc N° de sécurité sociale : 2 84 11 74 310 002 83 Madame, Monsieur, Votre dossier n°
+- caisses-assurances/france/2026-01-26_courrier-harmonie.txt (page 1)
+  Extrait : Mutuelle Service des prestations Case postale 2323, 1211 Genève 2 Pierre Thomas 43 rue Pasteur, 74600 Seynod N° de sécurité sociale : 1 55 12 74 381 897
+- caisses-assurances/france/2026-01-29_courrier-cpam69-faure-remi.txt (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Rémi Faure 24 impasse des Lilas, 01220 Divonne-les-Bains N° de sécurité sociale : 1 58 12 01 059
+- caisses-assurances/france/2026-03-06_courrier-mgen.md (page 1)
+  Extrait : MGEN Service des prestations Case postale 2323, 1211 Genève 2 Dominique Ducrettet 27 impasse des Lilas, 25000 Besançon N° de sécurité sociale : 2 54 10 25 286
+- caisses-assurances/france/2026-03-25_courrier-mgen.docx (page 1)
+  Extrait : MGEN Service des prestations Case postale 2323, 1211 Genève 2 Aïcha N'Diaye 44 impasse des Lilas, 69100 Villeurbanne N° de sécurité sociale : 2 95 11 69 073
+- caisses-assurances/france/2026-04-04_courrier-cpam69.pdf (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Catherine Vuagnoux 21 avenue de la Gare, 74100 Annemasse N° de sécurité sociale : 2 78 11 74
+- caisses-assurances/france/2026-04-06_courrier-cpam74-haddad-justine.docx (page 1)
+  Extrait : Haute-Savoie Service des prestations Case postale 2323, 1211 Genève 2 Justine Haddad 35 rue Jean-Jaurès, 74130 Bonneville N° de sécurité sociale : 2 93 04 74 038 012
+- caisses-assurances/france/2026-04-11_courrier-cpam74.pdf (page 1)
+  Extrait : Haute-Savoie Service des prestations Case postale 2323, 1211 Genève 2 Aurélie Legrand 32 chemin des Vignes, 01100 Oyonnax N° de sécurité sociale : 2 76 02 01 097
+- caisses-assurances/france/2026-05-01_courrier-cpam74-fabre-alexandre.pdf (page 1)
+  Extrait : Haute-Savoie Service des prestations Case postale 2323, 1211 Genève 2 Alexandre Fabre 33 rue Pasteur, 01000 Bourg-en-Bresse N° de sécurité sociale : 1 68 03 01 419 148
+- caisses-assurances/france/2026-05-03_courrier-harmonie.odt (page 1)
+  Extrait : Mutuelle Service des prestations Case postale 2323, 1211 Genève 2 Laurence Fabre 34 rue Jean-Jaurès, 74000 Annecy N° de sécurité sociale : 2 70 08 74 425 711
+- caisses-assurances/france/2026-06-17_courrier-cpam69-martin-claire.odt (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Claire Martin 14 chemin des Vignes, 69003 Lyon N° de sécurité sociale : 2 88 01 69 019
+- caisses-assurances/france/2026-07-02_courrier-mgen.pdf (page 1)
+  Extrait : 74008 Annecy cedex Michel Gerber 70 route de Genève, 74500 Évian-les-Bains N° de sécurité sociale : 1 01 04 74 379 078 02 Madame, Monsieur, Votre dossier n°
+- caisses-assurances/france/2026-07-11_courrier-mgen.md (page 1)
+  Extrait : MGEN Service des prestations Case postale 2323, 1211 Genève 2 Laurence Le Gall 4 chemin des Vignes, 74000 Annecy N° de sécurité sociale : 2 64 11 74
+- caisses-assurances/france/2026-07-23_courrier-cpam69.odt (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Dominique Ducrettet 27 impasse des Lilas, 25000 Besançon N° de sécurité sociale : 2 54 10 25 286
+- caisses-assurances/france/2026-07-29_courrier-harmonie.jpg (page 1)
+  Extrait : Mutuelle Service des prestations Case postale 2323, 1211 Genève 2 Mohamed E! Khoury 69 rue du Léman, 69003 Lyon N° de sécurité sociale : 1 77 08 69
+- caisses-assurances/france/2026-08-17_courrier-mgen-dupont-jean-pierre.md (page 1)
+  Extrait : MGEN Service des prestations Case postale 2323, 1211 Genève 2 Jean-Pierre Dupont 78 rue Jean-Jaurès, 74300 Cluses N° de sécurité sociale : 1 71 11 74 240 545
+- caisses-assurances/france/2026-08-31_courrier-cpam69-girard-nathalie.eml (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Nathalie Girard 16 rue du Léman, 01100 Oyonnax N° de sécurité sociale : 2 63 10 01 446
+- caisses-assurances/france/2026-09-01_courrier-harmonie.rtf (page 1)
+  Extrait : 2026 Harmonie MutuelleService des prestationsCase postale 2323, 1211 Genève 2 Aïcha N'Diaye44 impasse des Lilas, 69100 Villeurbanne N° de sécurité sociale : 2 95 11 69 073 874
+- caisses-assurances/france/2026-09-04_courrier-cpam69.pdf (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Océane Dumont 9 avenue des Alpes, 74200 Thonon-les-Bains N° de sécurité sociale : 2 99 06 74 428
+- caisses-assurances/france/2026-09-14_courrier-cpam69.txt (page 1)
+  Extrait : Rhône Service des prestations Case postale 2323, 1211 Genève 2 Jean Dupont 79 quai du Paquier, 74100 Annemasse N° de sécurité sociale : 1 58 02 74 035
+- caisses-assurances/france/2026-09-18_courrier-harmonie.md (page 1)
+  Extrait : Mutuelle Service des prestations Case postale 2323, 1211 Genève 2 Thierry Thomas 42 avenue des Alpes, 38000 Grenoble N° de sécurité sociale : 1 90 05 38 021
+127 fichiers de plus, sans extrait :
+- caisses-assurances/france/2026-09-23_courrier-cpam69-lefevre-jean.rtf
+- caisses-assurances/france/2026-10-04_courrier-cpam69.pdf
+- caisses-assurances/france/2026-10-07_courrier-cpam69.pdf
+- caisses-assurances/suisse/2026-01-06_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-01-07_decompte-helsana-favre-laurent.pdf
+- caisses-assurances/suisse/2026-01-08_decompte-css.docx
+- caisses-assurances/suisse/2026-01-14_decompte-css.odt
+- caisses-assurances/suisse/2026-01-17_decompte-css.eml
+- caisses-assurances/suisse/2026-01-21_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-01-24_decompte-assura.pdf
+- caisses-assurances/suisse/2026-02-05_decompte-suva.docx
+- caisses-assurances/suisse/2026-02-07_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-02-14_decompte-assura.pdf
+- caisses-assurances/suisse/2026-02-21_decompte-swica-rochat-sophie.pdf
+- caisses-assurances/suisse/2026-02-23_decompte-assura.pdf
+- caisses-assurances/suisse/2026-03-16_decompte-suva.docx
+- caisses-assurances/suisse/2026-03-19_decompte-groupe-mutuel.pdf
+- caisses-assurances/suisse/2026-03-24_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-03-26_decompte-suva.pdf
+- caisses-assurances/suisse/2026-03-29_decompte-helsana.odt
+- caisses-assurances/suisse/2026-03-30_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-04-18_decompte-swica-bochud-jacqueline.rtf
+- caisses-assurances/suisse/2026-04-21_decompte-css.jpg
+- caisses-assurances/suisse/2026-04-25_decompte-swica.docx
+- caisses-assurances/suisse/2026-04-26_decompte-groupe-mutuel-humair-catherine.pdf
+- caisses-assurances/suisse/2026-05-01_decompte-swica.pdf
+- caisses-assurances/suisse/2026-05-13_decompte-helsana.pdf
+- caisses-assurances/suisse/2026-05-16_decompte-assura-favre-laurent.pdf
+- caisses-assurances/suisse/2026-05-23_decompte-css.eml
+- caisses-assurances/suisse/2026-05-25_decompte-suva-genoud-anne-laure.txt
+- caisses-assurances/suisse/2026-06-06_decompte-sanitas-maillard-pascal.rtf
+- caisses-assurances/suisse/2026-06-10_decompte-assura.jpg
+- caisses-assurances/suisse/2026-06-23_decompte-css.pdf
+- caisses-assurances/suisse/2026-06-28_decompte-helsana-bovet-pauline.docx
+- caisses-assurances/suisse/2026-07-12_decompte-css.pdf
+- caisses-assurances/suisse/2026-07-12_decompte-sanitas.txt
+- caisses-assurances/suisse/2026-07-17_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-07-18_decompte-suva-petrovic-elena.txt
+- caisses-assurances/suisse/2026-08-20_decompte-css.pdf
+- caisses-assurances/suisse/2026-08-27_decompte-sanitas.pdf
+- caisses-assurances/suisse/2026-08-30_decompte-groupe-mutuel-oberson-dominique.odt
+- caisses-assurances/suisse/2026-09-18_decompte-assura.pdf
+- caisses-assurances/suisse/2026-09-18_decompte-assura.rtf
+- caisses-assurances/suisse/2026-10-03_decompte-css.docx
+- caisses-assurances/suisse/2026-10-03_decompte-groupe-mutuel.txt
+- comptabilite/factures/2026-05-21_facture-edf-fac-2026-211.odt
+- comptabilite/factures/2026-07-19_facture-garage-martin-fac-2026-151.txt
+- courriers-entrants/2026-01/2026-01-11_courrier-compte-rendu-zufferey-pierre-yves.pdf
+- courriers-entrants/2026-01/2026-01-16_courrier-rhumatologie.md
+- courriers-entrants/2026-01/2026-01-18_courrier-neurologie-menoud-raphael.docx
+- courriers-entrants/2026-01/2026-01-26_courrier-neurologie-pillet-maelle.pdf
+- courriers-entrants/2026-01/2026-01-30_courrier-neurologie-girod-ursula.pdf
+- courriers-entrants/2026-02/2026-02-08_courrier-dermatologie-fellay-dominique.docx
+- courriers-entrants/2026-03/2026-03-11_courrier-orl-favre-laurent.pdf
+- courriers-entrants/2026-03/2026-03-13_courrier-neurologie.pdf
+- courriers-entrants/2026-03/2026-03-19_courrier-cardiologie-berthoud-christine.pdf
+- courriers-entrants/2026-03/2026-03-22_courrier-endocrinologie.pdf
+- courriers-entrants/2026-03/2026-03-24_courrier-endocrinologie-pellet-gerard.pdf
+- courriers-entrants/2026-03/2026-03-27_courrier-endocrinologie.eml
+- courriers-entrants/2026-04/2026-04-02_courrier-dermatologie-ducommun-francois.eml
+- courriers-entrants/2026-04/2026-04-10_courrier-orl-crettenand-vincent.eml
+- courriers-entrants/2026-04/2026-04-19_courrier-cardiologie.rtf
+- courriers-entrants/2026-05/2026-05-06_courrier-rhumatologie-dafflon-marie-claire.pdf
+- courriers-entrants/2026-05/2026-05-19_courrier-neurologie-lucas-roy.pdf
+- courriers-entrants/2026-06/2026-06-02_courrier-cardiologie-luthi-zoe.docx
+- courriers-entrants/2026-06/2026-06-04_courrier-cardiologie-lindqvist-asa.docx
+- courriers-entrants/2026-06/2026-06-18_courrier-cardiologie-chevalley-gerard.txt
+- courriers-entrants/2026-06/2026-06-23_courrier-neurologie-pereira-elodie.pdf
+- courriers-entrants/2026-06/2026-06-29_courrier-dermatologie-crettenand-claude.pdf
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf
+- courriers-entrants/2026-07/2026-07-13_courrier-endocrinologie-fellay-dominique.pdf
+- courriers-entrants/2026-07/2026-07-21_courrier-rhumatologie.docx
+- courriers-entrants/2026-07/2026-07-24_courrier-neurologie.txt
+- courriers-entrants/2026-07/2026-07-24_courrier-orl-dupont-jean-pierre.pdf
+- courriers-entrants/2026-07/2026-07-29_courrier-compte-rendu.pdf
+- courriers-entrants/2026-08/2026-08-08_courrier-dermatologie.pdf
+- courriers-entrants/2026-08/2026-08-12_courrier-orl.eml
+- courriers-entrants/2026-08/2026-08-17_courrier-compte-rendu.txt
+- courriers-entrants/2026-10/2026-10-02_courrier-endocrinologie.txt
+- laboratoire/2026-01/2026-01-10_resultats-analyses-benali-fatima.pdf
+- laboratoire/2026-01/2026-01-12_resultats-analyses.docx
+- laboratoire/2026-02/2026-02-02_resultats-analyses-hasanovic-anna.docx
+- laboratoire/2026-02/2026-02-07_resultats-analyses-fellay-dominique.pdf
+- laboratoire/2026-02/2026-02-20_resultats-analyses.odt
+- laboratoire/2026-02/2026-02-27_resultats-analyses-chappuis-nathalie.pdf
+- laboratoire/2026-03/2026-03-11_resultats-analyses.pdf
+- laboratoire/2026-03/2026-03-24_resultats-analyses-pittet-isabelle.txt
+- laboratoire/2026-03/2026-03-28_resultats-analyses.jpg
+- laboratoire/2026-04/2026-04-15_resultats-analyses.docx
+- laboratoire/2026-04/2026-04-18_resultats-analyses-gavillet-julie.txt
+- laboratoire/2026-04/2026-04-28_resultats-analyses-2.pdf
+- laboratoire/2026-04/2026-04-28_resultats-analyses.pdf
+- laboratoire/2026-05/2026-05-20_resultats-analyses.eml
+- laboratoire/2026-05/2026-05-28_resultats-analyses-rochat-sophie.docx
+- laboratoire/2026-05/2026-05-30_resultats-analyses-favre-laurent.pdf
+- laboratoire/2026-06/2026-06-04_resultats-analyses.eml
+- laboratoire/2026-06/2026-06-07_resultats-analyses-pittet-isabelle.odt
+- laboratoire/2026-06/2026-06-11_resultats-analyses.pdf
+- laboratoire/2026-06/2026-06-15_resultats-analyses-chappuis-nathalie.pdf
+- laboratoire/2026-06/2026-06-26_resultats-analyses.docx
+- laboratoire/2026-06/2026-06-28_resultats-analyses.eml
+- laboratoire/2026-07/2026-07-08_resultats-analyses.pdf
+- laboratoire/2026-07/2026-07-11_resultats-analyses-petrovic-elena.eml
+- laboratoire/2026-07/2026-07-27_resultats-analyses-pillet-maelle.docx
+- laboratoire/2026-08/2026-08-06_resultats-analyses-gavillet-daniel.pdf
+- laboratoire/2026-08/2026-08-23_resultats-analyses.docx
+- laboratoire/2026-08/2026-08-24_resultats-analyses.pdf
+- laboratoire/2026-08/2026-08-25_resultats-analyses-chappuis-nathalie.docx
+- laboratoire/2026-08/2026-08-26_resultats-analyses.pdf
+- laboratoire/2026-08/2026-08-28_resultats-analyses-bernasconi-luca.pdf
+- laboratoire/2026-09/2026-09-03_resultats-analyses-cattin-blaise.pdf
+- laboratoire/2026-09/2026-09-11_resultats-analyses.jpg
+- laboratoire/2026-09/2026-09-24_resultats-analyses.pdf
+- laboratoire/2026-09/2026-09-25_resultats-analyses.odt
+- patients/courriers/2026-05-25_courrier-patient.eml
+- scans/2026-03/2026-03-23_decompte-groupe-mutuel-zufferey-stephane.png
+- scans/2026-05/2026-05-08_courrier-patient.jpg
+- scans/2026-06/2026-06-12_courrier-compte-rendu.pdf
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf
+- scans/2026-07/2026-07-08_courrier-compte-rendu-cuenoud-margaux.pdf
+- scans/2026-07/2026-07-16_decompte-css.pdf
+- scans/2026-07/2026-07-19_resultats-analyses.png
+- scans/2026-07/2026-07-21_resultats-analyses.jpg
+- scans/2026-08/2026-08-05_courrier-orl-deleze-christelle.jpg
+- scans/2026-08/2026-08-17_courrier-cpam74.pdf
+- scans/2026-09/2026-09-18_courrier-cpam74-durand-christian.pdf
+- documentation/annuaire-conventions.pdf
+Sans texte lisible, donc non cherchés : 7 fichiers.
+**Tableurs** (mots des cellules, des en-têtes et des noms)
+Recherche du mot « Genève » : 43 fichiers dans les tableurs sélectionnés.
+« Genève » est reconnu comme Genève : les fichiers qui lui sont liés sont listés avec ceux qui écrivent l'un de ses noms.
+Seul le mot lui-même est cherché : un synonyme ou une autre forme du mot ne serait pas trouvé.
+- factures-fournisseurs-2026-t2-services-industriels-de-geneve.csv
+- factures-fournisseurs-2026-t3-services-industriels-de-geneve.csv
+- factures-fournisseurs-2026-t3-services-industriels-de-geneve.xlsx
+- factures-fournisseurs-2026-t4-services-industriels-de-geneve.xlsx
+- livraisons-2026-01-services-industriels-de-geneve.xlsx
+- livraisons-2026-09-services-industriels-de-geneve.ods
+- livraisons-2026-10-services-industriels-de-geneve.ods
+- livraisons-2026-11-services-industriels-de-geneve.ods
+- livraisons-2026-12-services-industriels-de-geneve.xlsx
+- contrats-2026-lot-12.csv
+- contrats-2026-lot-15.csv
+- contrats-2026-lot-3.xlsx
+- contrats-2026-lot-6.xlsx
+- contrats-2026-lot-9.csv
+- patients-ch-liste-abc.ods
+- patients-ch-liste-abcd.ods
+- patients-ch-liste-cd.xlsx
+- patients-ch-liste-cde.csv
+- patients-ch-liste-cdef.csv
+- patients-ch-liste-ef.xlsx
+- patients-ch-liste-efg.csv
+- patients-ch-liste-efgh.xlsx
+- patients-ch-liste-gh.ods
+- patients-ch-liste-ghi.ods
+- patients-ch-liste-ghij.ods
+- patients-ch-liste-klmn.xlsx
+- patients-ch-liste-mn.ods
+- patients-ch-liste-mno.ods
+- patients-ch-liste-qrst.csv
+- patients-ch-liste-st.ods
+- patients-ch-liste-stu.xlsx
+- stock-2026-02-bureau-2.xlsx
+- stock-2026-02-bureau.csv
+- stock-2026-02-bureau.ods
+- stock-2026-02-bureau.xlsx
+- stock-2026-05-bureau-2.csv
+- stock-2026-05-bureau.csv
+- stock-2026-08-bureau-2.ods
+- stock-2026-08-bureau.csv
+- stock-2026-08-bureau.ods
+- stock-2026-11-bureau-2.xlsx
+- stock-2026-11-bureau.csv
+- stock-2026-11-bureau.xlsx
+Réponse établie depuis votre dossier de documents, sans l'IA.
+
+Vous: Quel est le prochain rendez-vous de Pierre Thomas d'après le courrier du confrère ?
+Assistant: **Extrait [1]**
+Prochain rendez-vous : **24 octobre 2026**.
+Généré par ministral-3:3b en 4s
+Cette question ne portait sur aucune de vos tables.
+Sources :
+- courriers-entrants/2026-07/2026-07-26_courrier-rhumatologie-thomas-pierre.md, page 1
+- courriers-entrants/2026-07/2026-07-23_courrier-compte-rendu.md, page 1
+- courriers-entrants/2026-01/2026-01-26_courrier-rhumatologie-marchand-oceane.txt, page 1
+- courriers-entrants/2026-08/2026-08-13_courrier-endocrinologie-girard-nathalie.docx, page 1
+- courriers-entrants/2026-04/2026-04-14_courrier-cardiologie-brunet-sylvie.md, page 1
+- courriers-entrants/2026-06/2026-06-25_courrier-dermatologie.odt, page 1
+- courriers-entrants/2026-06/2026-06-08_courrier-endocrinologie.odt, page 1
+- courriers-entrants/2026-09/2026-09-03_courrier-endocrinologie-denis-david.eml, page 1
+- courriers-entrants/2026-03/2026-03-03_courrier-endocrinologie-le-gall-laurence.pdf, page 1
+
+Vous: Quel est le prochain rendez-vous de Alain Jaccard d'après le courrier du confrère ?
+Assistant: **Extrait [1]**
+Prochain rendez-vous : **10 octobre 2026**.
+Généré par ministral-3:3b en 5s
+Cette question ne portait sur aucune de vos tables.
+Sources :
+- courriers-entrants/2026-07/2026-07-12_courrier-compte-rendu.pdf, page 1
+- courriers-entrants/2026-06/2026-06-01_courrier-neurologie-jaccard-beatrice.md, page 1
+- caisses-assurances/suisse/2026-07-02_demande-remboursement.pdf, page 1
+- caisses-assurances/suisse/2026-01-17_demande-remboursement-jaccard-alain.pdf, page 1
+- patients/honoraires/2026-01-20_note-honoraires-jaccard-alain.docx, page 1
+- patients/honoraires/2026-02-06_note-honoraires.pdf, page 1
+- courriers-entrants/2026-07/2026-07-09_courrier-endocrinologie.pdf, page 1
+- scans/2026-06/2026-06-15_courrier-compte-rendu-muller-jorg.pdf, page 1 (lu par reconnaissance de texte)
+- courriers-entrants/2026-01/2026-01-10_courrier-endocrinologie.pdf, page 1
+- courriers-entrants/2026-01/2026-01-18_courrier-neurologie-menoud-raphael.docx, page 1
+- caisses-assurances/suisse/2026-02-07_decompte-helsana.pdf, page 1
+- courriers-entrants/2026-07/2026-07-24_courrier-neurologie.txt, page 1
+
+Vous: Rédige un courrier de relance pour chaque facture du fichier factures-fournisseurs-2026-t1-bureautique-leman-sa.xlsx
+Assistant: **Extrait [1]**
+Facture **FAC-2026-202** – Échéance : **14 mars 2026**
+Courrier de relance modèle :
+Objet : **Facture impayée – FAC-2026-202**
+Madame, Monsieur,
+Veuillez trouver ci-joint la facture **FAC-2026-202** pour **CHF 73,83**, échéance le **14 mars 2026**.
+Merci de régulariser ce paiement sans délai pour éviter des frais supplémentaires.
+Cordialement,
+Bureautique Léman SA
+---
+**Extrait [2]**
+Facture **FAC-2026-192** – Échéance : **28 juin 2026**
+Courrier de relance modèle :
+Objet : **Facture impayée – FAC-2026-192**
+Madame, Monsieur,
+Votre facture **FAC-2026-192** (CHF 547,42) est due depuis **28 juin 2026**. Merci de régulariser le paiement avant le **14 juillet 2026**.
+Précisez les modalités si besoin.
+Cordialement,
+Bureautique Léman SA
+---
+**Extrait [3]**
+Facture **FAC-2026-174** – Échéance : **30 mai 2026**
+Courrier de relance modèle :
+Objet : **Facture impayée – FAC-2026-174**
+Madame, Monsieur,
+Votre facture **FAC-2026-174** (CHF 478,02) est due depuis **30 mai 2026**. Paiement avant le **14 juin 2026** pour éviter des pénalités.
+Détails joints.
+Cordialement,
+Bureautique Léman SA
+---
+**Extrait [4]**
+Facture **FAC-2026-195** – Échéance : **28 juin 2026**
+Courrier de relance modèle :
+Objet : **Facture impayée – FAC-2026-195**
+Madame, Monsieur,
+Facture **FAC-2026-195** (CHF 445,37) non encore réglée. Paiement avant le **14 juillet 2026**.
+Précisez les modalités de paiement.
+Cordialement,
+Bureautique Léman SA
+---
+**Extrait [5]**
+Facture **FAC-2026-130** – Échéance : **24 septembre 2026**
+Courrier de relance modèle :
+Objet : **Facture impayée – FAC-2026-130**
+Madame, Monsieur,
+Votre facture **FAC-2026-130** (CHF 191,66) est due depuis **24 septembre 2026**. Paiement avant le **14 octobre 2026**.
+Détails en pièce jointe.
+Cordialement,
+Bureautique Léman SA
+---
+**Extrait [6]**
+Facture **FAC-2026-154** – Échéance : **30 octobre 2026**
+Courrier de relance modèle :
+Objet : **Facture impayée – FAC-2026-154**
+Madame, Monsieur,
+Facture **FAC-2026-154** (CHF 339,54) non réglée. Paiement avant le **14 novembre 2026**.
+Précisez les modalités.
+Cordialement,
+Bureautique Léman SA
+---
+**Factures non trouvées dans les extraits** :
+- Aucun document ne mentionne une facture **fournisseurs-2026-t1-bureautique-leman-sa.xlsx** dans les extraits fournis.
+- Aucune date ou numéro de facture ne correspond à ce fichier spécifique.
+Généré par ministral-3:3b en 21s
+Cette question ne portait sur aucune de vos tables.
+Sources :
+- comptabilite/factures/2026-02-12_facture-bureautique-leman-fac-2026-202.pdf, page 1 (lu par reconnaissance de texte)
+- comptabilite/factures/2026-05-29_facture-bureautique-leman-fac-2026-192.docx, page 1
+- comptabilite/factures/2026-04-30_facture-bureautique-leman-fac-2026-174.pdf, page 1
+- comptabilite/factures/2026-05-29_facture-bureautique-leman-fac-2026-195.docx, page 1
+- comptabilite/factures/2026-08-25_facture-bureautique-leman-fac-2026-130.pdf, page 1
+- comptabilite/factures/2026-09-30_facture-bureautique-leman-fac-2026-154.docx, page 1
+- comptabilite/devis/2026-03-18_devis-bureautique-leman.odt, page 1
+- comptabilite/devis/2026-03-10_devis-bureautique-leman.pdf, page 1
+- comptabilite/devis/2026-09-03_devis-bureautique-leman.docx, page 1
+- comptabilite/devis/2026-01-23_devis-bureautique-leman.jpg, page 1 (lu par reconnaissance de texte)
+- comptabilite/devis/2026-06-19_devis-bureautique-leman.pdf, page 1
+- comptabilite/devis/2026-09-21_devis-bureautique-leman.txt, page 1
+- contrats/2026-09-06_contrat-nettoyage-bureautique-leman.pdf, page 1
+- contrats/2026-05-01_contrat-maintenance-bureautique-leman.docx, page 1
+
+
+D5 refaite mais à noter TRES IMPORTANT la formulation est la bonne mais la sélection doit être faite exclusivement sur les fichiers pour le "publipostage"
+Voir le Screenshot joint les fichiers modeles/modele-relance-facture.txt et factures-fournisseurs-2026-t1-bureautique-leman-sa.xlsx sont les seuls sélectionnés et ça marche.
+Vous: Rédige un courrier de relance pour chaque facture du fichier factures-fournisseurs-2026-t1-bureautique-leman-sa.xlsx
+Assistant: J'ai trouvé le modèle « modeles/modele-relance-facture.txt » et les lignes du tableau à y insérer. Vérifiez la correspondance des champs et l'aperçu : rien n'est écrit tant que vous n'avez pas validé.
+Réponse calculée depuis votre dossier des données, sans l'IA.
+Aucune IA n'a lu vos données : le courrier est rempli par le programme, sur cet ordinateur.

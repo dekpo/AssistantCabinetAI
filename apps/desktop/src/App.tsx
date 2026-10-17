@@ -6,14 +6,12 @@ import { ErrorBanner } from "./components/ErrorBanner";
 import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
-import { SuggestionChips } from "./components/SuggestionChips";
 import { TitleBar } from "./components/TitleBar";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import {
   addScopeFiles,
   combineScopes,
-  documentsSelected,
   noDocumentsScope,
 } from "./lib/analysisScope";
 import {
@@ -133,18 +131,6 @@ export default function App() {
     snapshot?.settings.locale,
   ].join("-");
   const suggestionsEnabled = !indexing.running && !dataIndexing.running;
-  const suggestionsInTheCard = (
-    <SuggestionChips
-      compact
-      scope={chatScope}
-      revealNames={revealNames}
-      onRevealNamesChange={setRevealNames}
-      refresh={suggestionsRefresh}
-      enabled={suggestionsEnabled}
-      disabled={chatBusy}
-      onAsk={(text) => setRequestedQuestion({ text, nonce: Date.now() })}
-    />
-  );
   const theme = snapshot?.settings.theme ?? "system";
   const localeIsStored = snapshot !== null && snapshot.settings.locale !== null;
 
@@ -218,7 +204,6 @@ export default function App() {
                   onScopeChange={setScope}
                   scopeLocked={chatBusy}
                   onOpenKnowledge={() => setKnowledgeOpen(true)}
-                  suggestions={suggestionsInTheCard}
                 />
                 <DataFolderCard
                   dataFolder={snapshot.settings.dataFolder}
@@ -230,7 +215,6 @@ export default function App() {
                   onScopeChange={setDataScope}
                   scopeLocked={chatBusy}
                   onOpenKnowledge={() => setKnowledgeOpen(true)}
-                  suggestions={documentsSelected(chatScope) ? undefined : suggestionsInTheCard}
                 />
                 {snapshot.warnings.map((code) => (
                   <ErrorBanner key={code} error={{ code, data: {} }} />

@@ -24,8 +24,8 @@ describe("an internal name a model repeated", () => {
     for (const variant of ["WORK_FOLDER_CONTEXT", "WORK FOLDER CONTEXT", "work_folder_context", "Work Folder Context"]) {
       expect(localiseInternalNames(`See ${variant}.`, english)).toBe("See Documents folder.");
     }
-    expect(localiseInternalNames("Table résultats : 1 450", french)).toBe("Dossier des données : 1 450");
-    expect(localiseInternalNames("From the Table results block", english)).toBe("From the Data folder block");
+    expect(localiseInternalNames("Table résultats : 1 450", french)).toBe("Dossier des Tableaux : 1 450");
+    expect(localiseInternalNames("From the Table results block", english)).toBe("From the Tables Folder block");
     expect(localiseInternalNames("In the Document excerpts", english)).toBe("In the Documents folder");
   });
 

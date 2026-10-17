@@ -550,6 +550,9 @@ body {
 }
 
 .chat {
+  /* The chat measures itself, not the window: its keyboard hint goes when the zone is narrow
+     (`@container` below), whatever the other zones take. */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -593,22 +596,31 @@ body {
   height: 16px;
 }
 
+/* Centred vertically, read from the left like the conversation, and no wider than an answer. */
 .messages--empty {
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  text-align: center;
+  text-align: left;
   color: var(--text-quiet);
 }
 
+.messages--empty > * {
+  max-width: 78%;
+}
+
+/* The size of the "Suggestions" title below it. */
 .empty__title {
   margin: 0;
-  font-size: 16px;
+  font-size: 0.95em;
   color: var(--text);
 }
 
 .empty__body {
-  margin: 4px 0 0;
-  max-width: 34em;
+  margin: 0;
+}
+
+.empty__title + .empty__body {
+  margin-top: 4px;
 }
 
 .message {
@@ -927,6 +939,14 @@ body {
   gap: 6px;
 }
 
+/* Too narrow for the hint beside the model choice and the send button: it would wrap onto
+   several lines and push the box up. */
+@container (max-width: 700px) {
+  .composer__hint {
+    display: none;
+  }
+}
+
 .key-glyph {
   width: 18px;
   height: 15px;
@@ -935,7 +955,6 @@ body {
 }
 
 .composer__hint,
-.disclaimer,
 .dialog__note {
   color: var(--text-quiet);
   font-size: 12px;
@@ -1834,11 +1853,13 @@ body {
 .suggestions {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 6px;
-  max-width: 40em;
+  /* Half the chat, so a button never runs across the whole column; a narrow chat keeps buttons
+     wide enough to read (about 20em) rather than squeezing them to a sliver. */
+  width: max(50%, min(100%, 20em));
   margin-top: 16px;
-  text-align: center;
+  text-align: left;
 }
 
 .suggestions--compact {
@@ -1856,7 +1877,6 @@ body {
 
 .suggestions__intro {
   margin: 0;
-  font-size: 0.85em;
 }
 
 .suggestions__list {
@@ -1892,14 +1912,13 @@ body {
   cursor: default;
 }
 
+/* The sentence, then its button on the line below. */
 .suggestions__names {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 4px 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   margin: 0;
-  font-size: 0.85em;
 }
 
 /* The sheet of a name, over the window like a confirmation but wider. */

@@ -143,17 +143,14 @@ export function ChatPanel({
   };
 
   const hint = (
-    <>
-      <p className="composer__hint">
-        <span>{t("chat.keyboardHintSend")}</span>
-        <KeyGlyph name="enter" />
-        <span>,</span>
-        <span>{t("chat.keyboardHintBreak")}</span>
-        <KeyGlyph name="shift" />
-        <KeyGlyph name="enter" />
-      </p>
-      <p className="disclaimer">{t("chat.disclaimer")}</p>
-    </>
+    <p className="composer__hint">
+      <span>{t("chat.keyboardHintSend")}</span>
+      <KeyGlyph name="enter" />
+      <span>,</span>
+      <span>{t("chat.keyboardHintBreak")}</span>
+      <KeyGlyph name="shift" />
+      <KeyGlyph name="enter" />
+    </p>
   );
 
   return (

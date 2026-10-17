@@ -49,7 +49,7 @@ describe("what is written under an answer", () => {
   it("names the data folder for a table answer given inside a mixed question", () => {
     const lines = annotationLines(french, "fr-FR", entry({ deterministic: true, mixed: true }));
     expect(lines).toEqual([french("chat.deterministicData")]);
-    expect(french("chat.deterministicData")).toContain("dossier des données");
+    expect(french("chat.deterministicData")).toContain("dossier des tableaux");
   });
 
   it("says a figure the model stated is in none of the excerpts", () => {

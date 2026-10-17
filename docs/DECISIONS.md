@@ -1303,3 +1303,12 @@ Owner decisions of the workspace series, built on `feat/resizable-panels`. Inter
 | Settings in Rust, not browser storage | The project uses no `localStorage`; the layout is a convenience that follows the same file, the same sanitising and the same reset as every other setting |
 | Save queue | `save_settings` replaces the whole file, so two saves started from the same copy overwrote each other (it happened at every launch: the locale and the alias self-heal both saved from one snapshot). `useAppSettings` now serialises its saves, merges each change into the settings of its turn, lets a failed save pass, and routes `reset` and the initial load through the same queue. `update` is stable between renders |
 | Library facts confirmed by running it (Edge 1180 and 1000 px wide) | The layout is an object keyed by panel id; `onLayoutChanged(layout, { isUserInteraction })` is called once per gesture; keyboard resizing is 5 % per arrow, Home and End go to the limits, Enter on a separator collapses a collapsible panel beside it, a double click resets to the default size; a panel's limits change **after** the effect that follows a render, so a layout set in the same effect is cut back (it is applied one frame later) |
+
+## Interface adjustments made with the layout work (17 October 2026, owner)
+
+| Subject | Decision |
+| --- | --- |
+| Suggested questions | Shown **only in the empty conversation**. The folder cards no longer draw them (the `suggestions` prop of both cards was removed); the chat's own block is unchanged |
+| Name of the second folder | The interface and the chat call it **« Dossier des Tableaux » / « Tables Folder »** (catalogues only: `names.dataFolder`, `dataFolder.title` and the sentences that name it; the model-facing text and every internal name are unchanged, `localiseInternalNames` reads the catalogue). The words « Données utilisées » and « data list » still say data |
+| Disclaimer | The sentence under the box moved to the subtitle under the product name (« Vérifiez les réponses : la médecin reste seule décideuse. »); the keyboard hint under the box is hidden when the chat zone is narrower than 700 px (container query on the chat) |
+| Empty conversation | Left-aligned, vertically centred, no wider than an answer (78 %); title the size of « Suggestions », body text the size of an answer, no blank line between its two sentences, the show/hide names button the size of the conversation buttons |

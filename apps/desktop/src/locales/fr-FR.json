@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Assistant Cabinet AI",
-    "subtitle": "Aide administrative sur votre ordinateur",
+    "subtitle": "Aide administrative sur votre ordinateur. Vérifiez les réponses : la médecin reste seule décideuse.",
     "loading": "Démarrage..."
   },
   "workspace": {
@@ -84,12 +84,11 @@
     "scrollToBottom": "Aller au dernier message",
     "keyboardHintSend": "Entrée envoie",
     "keyboardHintBreak": "Maj Entrée retour à la ligne",
-    "disclaimer": "Aide administrative. Vérifiez toujours la réponse : la médecin reste seule décideuse.",
     "clearTitle": "Effacer cette conversation ?",
     "clearBody": "Toutes les questions et réponses affichées seront oubliées. Vos documents et leur analyse ne sont pas concernés.",
     "sourceItemSheet": "{path}, feuille {sheet}",
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
-    "deterministicData": "Réponse calculée depuis votre dossier des données, sans l'IA.",
+    "deterministicData": "Réponse calculée depuis votre dossier des tableaux, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
     "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",
     "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
@@ -192,7 +191,7 @@
     "documentsFolder": "Dossier des documents",
     "excerptOne": "extrait",
     "excerptMany": "extraits",
-    "dataFolder": "Dossier des données"
+    "dataFolder": "Dossier des Tableaux"
   },
   "analysis": {
     "knowledge": {
@@ -274,7 +273,7 @@
     "filesMany": "fichiers"
   },
   "dataFolder": {
-    "title": "Dossier des données",
+    "title": "Dossier des Tableaux",
     "descriptionFull": "Le dossier des tableurs : CSV, XLSX. Choisissez un dossier dédié, jamais un dossier recopié vers un service en ligne. Les tableurs sont lus sur cet ordinateur, sans l'IA.",
     "none": "Aucun dossier choisi pour le moment",
     "suggestionLabel": "Suggestion :",
@@ -344,7 +343,7 @@
       "document_pdf": "document PDF",
       "document_office": "document Word",
       "image": "image",
-      "tabular_candidate": "tableur, à placer dans le dossier des données",
+      "tabular_candidate": "tableur, à placer dans le dossier des tableaux",
       "unsupported": "format non pris en charge",
       "other": "fichier sans extension"
     },
@@ -484,8 +483,8 @@
     "scope_unavailable": "Les documents choisis pour cette conversation sont absents ou ont été modifiés. Choisissez-les à nouveau.",
     "internal_error": "L'IA a rencontré un problème inattendu. Réessayez ; si cela persiste, notez l'heure et signalez-le.",
     "no_work_folder_set": "Choisissez un dossier de documents avant de poser une question sur vos documents.",
-    "no_data_folder_set": "Choisissez d'abord un dossier de données, dans le panneau de gauche.",
-    "data_folder_no_longer_allowed": "Votre dossier de données ne respecte plus les règles de sécurité, le plus souvent parce qu'un service en ligne le recopie désormais. Choisissez-le à nouveau.",
+    "no_data_folder_set": "Choisissez d'abord le dossier des tableaux, dans le panneau de gauche.",
+    "data_folder_no_longer_allowed": "Votre dossier des tableaux ne respecte plus les règles de sécurité, le plus souvent parce qu'un service en ligne le recopie désormais. Choisissez-le à nouveau.",
     "invalid_request": "L'IA a refusé la demande car elle était mal formée. Merci de le signaler.",
     "model_alias_not_allowed": "Le profil {requested} n'est pas proposé par cette IA. Choisissez-en un autre dans les réglages.",
     "ocr_failed": "Cette page n'a pas pu être lue par la reconnaissance ({path}, page {page}).",
@@ -590,12 +589,12 @@
     "nudgeAgain": "Votre question précédente n'a pas pu être calculée non plus : nommez exactement l'une des colonnes ci-dessus.",
     "nudgeAgainValue": "Votre question précédente n'a pas pu être calculée non plus : vérifiez que la valeur est écrite exactement comme dans le fichier.",
     "unreadable": "{file} n'a pas pu être lu comme un tableau : il ne contient aucune feuille exploitable, rien n'en est donc calculé.",
-    "notAnalysed": "{file} n'a pas encore été analysé. Lancez l'analyse du dossier des données, puis posez la question à nouveau.",
+    "notAnalysed": "{file} n'a pas encore été analysé. Lancez l'analyse du dossier des tableaux, puis posez la question à nouveau.",
     "whichWorkbook": "Plusieurs tableurs sont sélectionnés. Lequel voulez-vous ? Nommez-le dans la question :",
     "ambiguous": "Plusieurs tableurs correspondent à {query}. Lequel voulez-vous ?",
-    "notSelected": "{query} se trouve dans votre dossier des données mais n'est pas sélectionné pour cette conversation. Cochez-le dans la liste des données pour l'utiliser.",
-    "noMatch": "Aucun fichier nommé {query} ne se trouve dans votre dossier des données.",
-    "noUsableTable": "Aucun tableur de votre dossier des données ne contient de tableau exploitable. Lancez l'analyse, ou ajoutez un fichier CSV ou XLSX.",
+    "notSelected": "{query} se trouve dans votre dossier des tableaux mais n'est pas sélectionné pour cette conversation. Cochez-le dans la liste des données pour l'utiliser.",
+    "noMatch": "Aucun fichier nommé {query} ne se trouve dans votre dossier des tableaux.",
+    "noUsableTable": "Aucun tableur de votre dossier des tableaux ne contient de tableau exploitable. Lancez l'analyse, ou ajoutez un fichier CSV ou XLSX.",
     "nudgeExampleGroup": "Ou : « Quel(le) {group} a le plus de {column} ? »",
     "largestGroup": "Plus grand total de {column} par {group} : **{leader}**, avec **{value}**.",
     "largestGroupTie": "Égalité pour le plus grand total de {column} par {group} : **{leaders}**, avec **{value}** chacun.",

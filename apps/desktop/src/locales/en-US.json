@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Assistant Cabinet AI",
-    "subtitle": "Administrative assistance on your computer",
+    "subtitle": "Administrative assistance on your computer. Check the answers: the practitioner remains the sole decision maker.",
     "loading": "Starting..."
   },
   "workspace": {
@@ -84,12 +84,11 @@
     "scrollToBottom": "Go to the latest message",
     "keyboardHintSend": "Enter sends",
     "keyboardHintBreak": "Shift Enter new line",
-    "disclaimer": "Administrative assistance. Always check the answer: the practitioner remains the sole decision maker.",
     "clearTitle": "Clear this conversation?",
     "clearBody": "Every question and answer on screen will be forgotten. Your documents and their analysis are not affected.",
     "sourceItemSheet": "{path}, sheet {sheet}",
     "sourceItemSheetColumn": "{path}, sheet {sheet}, column {column}",
-    "deterministicData": "Answer computed from your data folder, without the AI.",
+    "deterministicData": "Answer computed from your tables folder, without the AI.",
     "documentsNotNeeded": "Answered from your tables; the selected documents were not needed.",
     "unverifiedNumber": "The figure “{number}” appears in none of the excerpts used, nor in your question: check it in your documents.",
     "mixedComputedTitle": "Computed from your data (by the engine, not by the AI):",
@@ -192,7 +191,7 @@
     "documentsFolder": "Documents folder",
     "excerptOne": "excerpt",
     "excerptMany": "excerpts",
-    "dataFolder": "Data folder"
+    "dataFolder": "Tables Folder"
   },
   "analysis": {
     "knowledge": {
@@ -274,7 +273,7 @@
     "filesMany": "files"
   },
   "dataFolder": {
-    "title": "Data folder",
+    "title": "Tables Folder",
     "descriptionFull": "The folder for spreadsheets: CSV, XLSX. Choose a dedicated folder, never one copied to an online service. Spreadsheets are read on this computer, without the AI.",
     "none": "No folder chosen yet",
     "suggestionLabel": "Suggested:",
@@ -344,7 +343,7 @@
       "document_pdf": "PDF document",
       "document_office": "Word document",
       "image": "image",
-      "tabular_candidate": "spreadsheet, belongs in the data folder",
+      "tabular_candidate": "spreadsheet, belongs in the tables folder",
       "unsupported": "format not handled",
       "other": "file with no extension"
     },
@@ -484,8 +483,8 @@
     "scope_unavailable": "The documents you chose for this conversation are missing or have changed. Choose them again.",
     "internal_error": "The AI ran into an unexpected problem. Try again; if it persists, note the time and report it.",
     "no_work_folder_set": "Choose a documents folder before asking a question about your documents.",
-    "no_data_folder_set": "Choose a data folder first, in the left-hand panel.",
-    "data_folder_no_longer_allowed": "Your data folder no longer meets the safety rules, most often because a cloud service now copies it. Choose it again.",
+    "no_data_folder_set": "Choose the tables folder first, in the left-hand panel.",
+    "data_folder_no_longer_allowed": "Your tables folder no longer meets the safety rules, most often because a cloud service now copies it. Choose it again.",
     "invalid_request": "The AI refused the request because it was malformed. Please report it.",
     "model_alias_not_allowed": "The profile {requested} is not offered by this AI. Choose another one in the settings.",
     "ocr_failed": "This page could not be read by recognition ({path}, page {page}).",
@@ -590,12 +589,12 @@
     "nudgeAgain": "Your previous question could not be computed either: name one of the columns above exactly.",
     "nudgeAgainValue": "Your previous question could not be computed either: check that the value is spelled exactly as it appears in the file.",
     "unreadable": "{file} could not be read as a table: it holds no usable sheet, so nothing is computed from it.",
-    "notAnalysed": "{file} has not been analysed yet. Run the data folder analysis, then ask again.",
+    "notAnalysed": "{file} has not been analysed yet. Run the tables folder analysis, then ask again.",
     "whichWorkbook": "Several spreadsheets are selected. Which one do you mean? Name it in the question:",
     "ambiguous": "Several spreadsheets match {query}. Which one do you mean?",
-    "notSelected": "{query} is in your data folder but is not selected for this conversation. Tick it in the data list to use it.",
-    "noMatch": "No file named {query} is in your data folder.",
-    "noUsableTable": "No spreadsheet in your data folder holds a usable table. Run the analysis, or add a CSV or XLSX file.",
+    "notSelected": "{query} is in your tables folder but is not selected for this conversation. Tick it in the data list to use it.",
+    "noMatch": "No file named {query} is in your tables folder.",
+    "noUsableTable": "No spreadsheet in your tables folder holds a usable table. Run the analysis, or add a CSV or XLSX file.",
     "nudgeExampleGroup": "Or: “Which {group} has the highest total {column}?”",
     "largestGroup": "Largest total {column} by {group}: **{leader}**, with **{value}**.",
     "largestGroupTie": "Tie for the largest total {column} by {group}: **{leaders}**, with **{value}** each.",

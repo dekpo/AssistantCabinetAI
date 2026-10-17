@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/I18nProvider";
-import { mountDocument, type MountedViewer, type ViewerFormat } from "../../lib/viewerEngine";
+import {
+  mountDocument,
+  visiblePage,
+  type MountedViewer,
+  type ViewerFormat,
+} from "../../lib/viewerEngine";
 import { ViewerControls, type ViewerCapabilities } from "./ViewerControls";
 
 /** The wait after the last resize before the width is fitted again. */
@@ -35,6 +40,10 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
   const userZoomed = useRef(false);
   const [sheetIndex, setSheetIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  /* Set while a paged document is on screen: reads the page again (after a zoom, which moves the pages
+     without a scroll). */
+  const refreshPage = useRef<() => void>(() => undefined);
   const [capabilities, setCapabilities] = useState<ViewerCapabilities | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
@@ -50,6 +59,7 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
     userZoomed.current = false;
     setSheetIndex(0);
     setSlideIndex(0);
+    setCurrentPage(1);
     setCapabilities(null);
     setFailed(false);
 
@@ -122,7 +132,43 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
     };
   }, [bytes, format]);
 
-  const refreshZoom = () => setZoom(viewerRef.current?.zoom ?? null);
+  const pages = capabilities?.pages ?? null;
+  /* The page number of a long document follows the scroll: the library does not report it, so it is
+     read from where the pages sit, at most once per frame. */
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || pages === null || pages < 2) {
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const page = visiblePage(host);
+      if (page !== null) {
+        setCurrentPage(page);
+      }
+    };
+    const schedule = () => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(update);
+      }
+    };
+    /* A scroll does not bubble, so it is listened to while it goes down to the scrolling element. */
+    host.addEventListener("scroll", schedule, true);
+    refreshPage.current = schedule;
+    schedule();
+    return () => {
+      host.removeEventListener("scroll", schedule, true);
+      cancelAnimationFrame(frame);
+      refreshPage.current = () => undefined;
+    };
+  }, [pages]);
+
+  const refreshZoom = () => {
+    setZoom(viewerRef.current?.zoom ?? null);
+    /* The pages move once the library has applied the zoom. */
+    window.setTimeout(() => refreshPage.current(), 150);
+  };
   /* Through the handle's own step when it has one, otherwise one step of ours through `setZoom`. */
   const zoomBy = (direction: 1 | -1) => {
     const viewer = viewerRef.current;
@@ -169,6 +215,7 @@ export function DocumentViewer({ bytes, format }: { bytes: ArrayBuffer; format: 
           zoom={zoom}
           sheetIndex={sheetIndex}
           slideIndex={slideIndex}
+          currentPage={currentPage}
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onFit={fit}

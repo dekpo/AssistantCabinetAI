@@ -21,6 +21,7 @@ export function ViewerControls({
   zoom,
   sheetIndex,
   slideIndex,
+  currentPage,
   onZoomIn,
   onZoomOut,
   onFit,
@@ -31,6 +32,8 @@ export function ViewerControls({
   zoom: number | null;
   sheetIndex: number;
   slideIndex: number;
+  /** The page being read, 1-based. */
+  currentPage: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
@@ -115,7 +118,9 @@ export function ViewerControls({
       )}
       {pages === null ? null : (
         <span className="viewer__pages">
-          {counted(pages, t("viewer.pageOne"), t("viewer.pageMany"))}
+          {pages > 1
+            ? t("viewer.pageOf", { current: Math.min(currentPage, pages), total: pages })
+            : counted(pages, t("viewer.pageOne"), t("viewer.pageMany"))}
         </span>
       )}
     </div>

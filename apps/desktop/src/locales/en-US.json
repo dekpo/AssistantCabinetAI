@@ -27,6 +27,7 @@
     "sheet": "Sheet",
     "pageOne": "page",
     "pageMany": "pages",
+    "pageOf": "{current} / {total}",
     "textTruncated": "Only the first {shown} characters are shown. Open this file with your own software to read all of it.",
     "outsideChangeTitle": "File changed outside the software",
     "outsideChangeBody": "The file on screen was moved, renamed, deleted or modified outside the software. It was closed. Analyse the folder again to be able to show it.",

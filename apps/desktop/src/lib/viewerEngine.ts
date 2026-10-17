@@ -1,4 +1,5 @@
 import regularFontUrl from "../assets/fonts/NotoSans-Regular.ttf?url";
+import { pageAtLine } from "./viewerPages";
 
 /**
  * The one place that talks to the document viewer library (`shrimp-doc-viewer`). Nothing else may
@@ -80,4 +81,19 @@ export async function mountDocument(
   const library = await import("shrimp-doc-viewer");
   const mount = library.mount as unknown as LibraryMount;
   return mount(host, bytes, { ...options, fontUrl: regularFontUrl });
+}
+
+/**
+ * The page being read in a paged document, 1-based, or `null` while the library has drawn none. The
+ * library does not report it, so it is read from where its page elements (`.dv-page`, in the order
+ * of the document) sit against a line a quarter of the way down the visible zone.
+ */
+export function visiblePage(host: HTMLElement): number | null {
+  const pages = host.querySelectorAll<HTMLElement>(".dv-page");
+  if (pages.length === 0) {
+    return null;
+  }
+  const zone = host.getBoundingClientRect();
+  const line = zone.top + zone.height / 4;
+  return pageAtLine((index) => pages[index]?.getBoundingClientRect().top ?? 0, pages.length, line);
 }

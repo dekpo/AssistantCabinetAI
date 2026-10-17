@@ -145,7 +145,9 @@ freezes the window. Only the first part of a large file is decoded. The Raw view
 labels in one fixed language (Chinese); it is hidden by one CSS rule (`display: none !important`, because the
 library sets `display` on the element itself) and these controls replace it. A control exists only where the
 library handle has the matching member, measured in the real window: PDF, DOCX, ODT, ODP, RTF: zoom out, the zoom
-level, zoom in, **Ajuster à la largeur** and the page count; images: the same, with a zoom step of the
+level, zoom in, **Ajuster à la largeur** and the page count (« 1 page », or « x / N » once there are several,
+language-neutral, following the scroll: the library does not report the page, so it is read from where its page
+elements sit against a line a quarter of the way down the zone, `visiblePage` in the adapter); images: the same, with a zoom step of the
 application's own through `setZoom` (a picture grows up to 150 % and not beyond); XLSX and ODS: zoom and a
 **Feuille** selector when there are several sheets (the library's `setSheet`, no remount; a CSV goes through the
 same code and its handle was not probed: the Tables Folder one is in the human test); PPTX: **Précédent**,

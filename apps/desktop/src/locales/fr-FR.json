@@ -27,6 +27,7 @@
     "sheet": "Feuille",
     "pageOne": "page",
     "pageMany": "pages",
+    "pageOf": "{current} / {total}",
     "textTruncated": "Seuls les {shown} premiers caractères sont affichés. Ouvrez ce fichier avec votre propre logiciel pour le lire en entier.",
     "outsideChangeTitle": "Fichier modifié en dehors du logiciel",
     "outsideChangeBody": "Le fichier affiché a été déplacé, renommé, supprimé ou modifié en dehors du logiciel. Il a été fermé. Analysez à nouveau le dossier pour pouvoir l'afficher.",

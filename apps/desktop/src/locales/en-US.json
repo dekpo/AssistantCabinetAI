@@ -502,6 +502,70 @@
     "manageKnowledgeDescription": "See what the base found and where it comes from, add a name, merge, split or delete an entity, or reset the base.",
     "manageKnowledge": "Manage…"
   },
+  "speech": {
+    "groupLabel": "Voice",
+    "enabledLabel": "Use the voice",
+    "enabledDescription": "Dictation in the conversation and reading answers aloud. Sound and text stay on this computer.",
+    "dictationLabel": "Dictation in the conversation",
+    "readAloudLabel": "Read answers aloud",
+    "notesLabel": "Voice notes",
+    "notesDescription": "The Notes section. It has its own switch and works without the voice switch above.",
+    "modelLabel": "Speech recognition model",
+    "model": {
+      "missing": "Not installed.",
+      "present": "Ready.",
+      "corrupt": "Damaged: it must be installed again."
+    },
+    "install": {
+      "action": "Install",
+      "notYet": "Installing the model is not available yet in this version.",
+      "source": "The model is downloaded only when you press Install, from {address}."
+    },
+    "statusLoading": "Reading the state of the voice.",
+    "statusFailed": "The state of the voice could not be read.",
+    "featureProblem": "{feature}: {reason}",
+    "microphone": {
+      "unsupported": "This window cannot use the microphone.",
+      "denied": "The microphone is blocked. Allow it in the system settings, then try again.",
+      "missing": "No microphone was found.",
+      "failed": "The microphone could not be started."
+    },
+    "session": {
+      "microphoneBusy": "The microphone is already in use.",
+      "recording": "A recording is in progress. Finish it first."
+    },
+    "languageLabel": "Voice language",
+    "languageDescription": "Used for dictation, reading aloud and voice commands.",
+    "languageFollow": "Same as the interface",
+    "dictationCapLabel": "Longest dictation in the conversation",
+    "dictationCapDescription": "A dictation stops by itself after this time.",
+    "noteCapLabel": "Longest dictation of a note",
+    "noteCapDescription": "A note dictation stops by itself after this time.",
+    "secondsUnit": "seconds",
+    "engineLabel": "Reading engine",
+    "engine": {
+      "auto": "Automatic",
+      "piper": "Piper, on this computer",
+      "system": "System voices, only if they work on this computer"
+    },
+    "voiceLabel": "Reading voice",
+    "voice": {
+      "auto": "First voice of the language",
+      "option": "{gender} ({id})"
+    },
+    "gender": {
+      "female": "Female voice",
+      "male": "Male voice",
+      "mixed": "Several voices"
+    },
+    "rateLabel": "Reading speed",
+    "rateDescription": "1 is the natural speed of the voice.",
+    "readAloudSoon": "Reading aloud is not available yet in this version.",
+    "notesFolderLabel": "Notes folder name",
+    "notesFolderDescription": "A folder inside the documents folder, where saved notes are written.",
+    "notesCommandsLabel": "Voice commands in notes",
+    "notesCommandsDescription": "Spoken punctuation, title, subtitle, new line, new paragraph and new note."
+  },
   "errorBanner": {
     "title": "This did not work"
   },

@@ -8,9 +8,11 @@ import {
   type AppSettings,
   type AppSnapshot,
   type PanelLayouts,
+  type SpeechSettings,
 } from "../lib/ipc";
 import { sameLayouts } from "../lib/panelLayout";
 import { createSettingsQueue } from "../lib/settingsQueue";
+import { speechPatch } from "../lib/speechSave";
 
 export interface AppSettingsState {
   snapshot: AppSnapshot | null;
@@ -25,6 +27,10 @@ export interface AppSettingsState {
   /** The widths of the zones, saved at the end of a gesture. A convenience: a failure is not
    * reported anywhere, and nothing is saved when the layouts did not change. */
   saveLayout: (change: (current: PanelLayouts) => PanelLayouts) => Promise<void>;
+  /** One change to the nested `speech` settings, applied to them as they stand when its turn
+   * comes: `update({ speech })` would replace the whole block with a possibly stale copy. A
+   * failure is reported like `update`'s. */
+  saveSpeech: (change: (current: SpeechSettings) => SpeechSettings) => Promise<void>;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure so
    * the caller can keep its confirmation open rather than closing it over an error. */
   reset: () => Promise<void>;
@@ -84,6 +90,18 @@ export function useAppSettings(): AppSettingsState {
     [queue],
   );
 
+  const saveSpeech = useCallback(
+    async (change: (current: SpeechSettings) => SpeechSettings) => {
+      setSaveError(null);
+      try {
+        await queue.update((current) => speechPatch(current, change));
+      } catch (raw: unknown) {
+        setSaveError(normaliseError(raw));
+      }
+    },
+    [queue],
+  );
+
   /* Not `update` with a hand-built patch: the defaults belong to Rust, which reads some of them
      from the environment. The stored result comes back and replaces what is on screen, so the
      locale falls back to the system's again and the folder card returns to offering one. */
@@ -105,6 +123,7 @@ export function useAppSettings(): AppSettingsState {
     reload,
     update,
     saveLayout,
+    saveSpeech,
     reset,
   };
 }

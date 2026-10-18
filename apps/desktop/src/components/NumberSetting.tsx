@@ -14,6 +14,7 @@ export function NumberSetting({
   max,
   step,
   unit,
+  disabled = false,
   commit,
 }: {
   label: string;
@@ -24,6 +25,8 @@ export function NumberSetting({
   max: number;
   step: number;
   unit?: string;
+  /** Shown but not editable, for a setting whose feature does not exist yet. */
+  disabled?: boolean;
   commit: (typed: string) => string;
 }) {
   const [draft, setDraft] = useState(value);
@@ -46,6 +49,7 @@ export function NumberSetting({
           max={max}
           step={step}
           value={draft}
+          disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={() => {
             if (draft.trim() !== value) {

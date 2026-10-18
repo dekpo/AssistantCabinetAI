@@ -12,8 +12,9 @@ use super::settings::SpeechSettings;
 use crate::error::AppError;
 use crate::settings::{Settings, DEFAULT_LOCALE};
 
-/// The state of a model on disk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// The state of a model on disk. Serialised as `missing`, `present` or `corrupt`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ModelState {
     #[default]
     Missing,
@@ -72,6 +73,9 @@ pub struct SpeechStatus {
     /// The locale speech works in: the override if set, else the interface locale.
     pub locale: String,
     pub features: Features,
+    /// The speech-to-text model on disk, whatever the switches say: with the master switch off the
+    /// dictation reason is `speech_unavailable`, which would hide a missing or corrupt model.
+    pub stt_model: ModelState,
     /// The language table, so the override list comes from Rust.
     pub languages: Vec<LanguageInfo>,
 }
@@ -97,6 +101,7 @@ pub fn compute(settings: &Settings, probes: &Probes) -> SpeechStatus {
             notes: notes(settings),
         },
         locale,
+        stt_model: probes.stt_model,
         languages: languages::table(),
     }
 }

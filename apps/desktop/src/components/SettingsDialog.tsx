@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
-import type { AppSettings, KnowledgeMode, ThemeChoice } from "../lib/ipc";
+import type { AppSettings, KnowledgeMode, SpeechSettings, ThemeChoice } from "../lib/ipc";
 import {
   boundedNumber,
   fractionFromPercentDraft,
@@ -19,6 +19,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { DataFolderCard } from "./DataFolderCard";
 import { ErrorBanner } from "./ErrorBanner";
 import { NumberSetting } from "./NumberSetting";
+import { SpeechSettingsBlock } from "./SpeechSettings";
 import { WorkFolderCard } from "./WorkFolderCard";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
@@ -46,6 +47,7 @@ export function SettingsDialog({
   indexing,
   dataIndexing,
   onUpdate,
+  onSaveSpeech,
   onReset,
   onRestoreLayout,
   onClose,
@@ -62,6 +64,8 @@ export function SettingsDialog({
   /** The Data Folder's pass, the same one its sidebar card starts. */
   dataIndexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
+  /** One change to the nested voice settings, applied to them as they stand when its turn comes. */
+  onSaveSpeech: (change: (current: SpeechSettings) => SpeechSettings) => void;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure.
    * Written as a method rather than `() => Promise<void>` so the literal guard in
    * `src/guards/sources.test.ts` does not read `> Promise <` as a text node. */
@@ -327,6 +331,10 @@ export function SettingsDialog({
           </label>
           <span className="field__description">{t("settings.copySourcesDescription")}</span>
         </div>
+
+        {/* The voice: switches, speech model, language, caps, reading and notes. Its own block, beside
+            the advanced one below. */}
+        <SpeechSettingsBlock settings={settings} onSave={onSaveSpeech} />
 
         {/* The thresholds of the narrowing, the measurement switches and the developer panel, kept
             apart under one heading. None changes what an answer says; the thresholds change which

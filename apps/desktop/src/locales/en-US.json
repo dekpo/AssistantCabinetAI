@@ -607,6 +607,18 @@
       "analysing": "An analysis is running: this may take longer.",
       "nothingHeard": "Nothing was understood. Try again."
     },
+    "repair": {
+      "label": "Name suggestions",
+      "suggest": "{heard} → {display}",
+      "ask": "{heard}: which name?",
+      "accept": "Replace",
+      "acceptLabel": "Replace {heard} with {display}",
+      "ignore": "Ignore",
+      "ignoreLabel": "Ignore the suggestion for {heard}",
+      "hiddenOne": "{count} name suggestion is hidden.",
+      "hiddenMany": "{count} name suggestions are hidden.",
+      "show": "Show names"
+    },
     "microphone": {
       "unsupported": "This window cannot use the microphone.",
       "denied": "The microphone is blocked. Allow it in the system settings, then try again.",

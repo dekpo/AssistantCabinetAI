@@ -324,6 +324,7 @@ impl WorkerSttProvider {
                 audio_ms,
                 processing_ms,
                 engine_id: self.spec.id.clone(),
+                case_reliable: self.spec.cased_output,
             }),
             Response::Failed { kind, .. } => Err(map_failure(kind)),
             Response::Loaded { .. } => Err(AppError::SpeechEngineFailed),

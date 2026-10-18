@@ -16,7 +16,9 @@ import { EntityChips } from "./EntityChips";
 import { EntityPicker } from "./EntityPicker";
 import { DictationStatus } from "./DictationStatus";
 import { MicButton } from "./MicButton";
+import { RepairChips } from "./RepairChips";
 import type { DictationBridge } from "../speech/useDictation";
+import type { RepairBridge } from "../speech/useRepairSuggestions";
 
 /** The id the box names as the list it controls. */
 const PICKER_LIST_ID = "entity-picker";
@@ -48,6 +50,7 @@ export function Composer({
   onAddToSelection,
   onOpenCard,
   dictation,
+  repair,
 }: {
   /** No documents folder is chosen yet. This is a practice assistant, not a chatbot: nothing is
    * asked until there is a folder, even an empty one (`docs/SELECTION-AND-MEMORY.md`). */
@@ -75,6 +78,8 @@ export function Composer({
   onOpenCard: (entity: { entityId: number; display: string }) => void;
   /** The microphone of the box. Absent (voice off): no microphone and no line under the box. */
   dictation?: DictationBridge;
+  /** Name suggestions for the words just dictated. Absent (voice off): nothing is drawn. */
+  repair?: RepairBridge;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -221,6 +226,7 @@ export function Composer({
         />
       ) : null}
       {dictation === undefined ? null : <DictationStatus dictation={dictation} />}
+      {repair === undefined ? null : <RepairChips repair={repair} />}
       <div className="composer__footer">
         <div className="composer__footnotes">{hint}</div>
         <div className="composer__actions">

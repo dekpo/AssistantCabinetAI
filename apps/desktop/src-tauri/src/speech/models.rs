@@ -58,6 +58,10 @@ pub struct ModelSpec {
     pub source: String,
     pub archive: ArchiveSpec,
     pub files: Vec<FileSpec>,
+    /// Whether an STT engine writes capitals where a name has them. A name repair trusts a capital
+    /// only then. Absent means no.
+    #[serde(default, rename = "casedOutput")]
+    pub cased_output: bool,
 }
 
 #[derive(Debug, Deserialize)]

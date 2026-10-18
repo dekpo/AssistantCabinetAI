@@ -63,6 +63,7 @@ mod tests {
             audio_ms: 4_200,
             processing_ms: 610,
             engine_id: "engine-x".into(),
+            case_reliable: true,
         }
     }
 

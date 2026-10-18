@@ -22,6 +22,8 @@
 //!   process. The protocol is one file shared by source with the worker crate
 //!   (`apps/speech-worker`); the provider starts the worker on the first dictation, ends it after an
 //!   idle delay and kills it on a cancel; the console window module owns the one platform detail.
+//! * [`repair`]: shapes the name suggestions that follow a dictation (read only, selection only, names
+//!   withheld while the setting hides them) over `knowledge::repair`.
 //! * [`models`], [`model_download`]: the compiled-in manifest of the models, what is on disk, and the
 //!   one file of the module that touches the network, on an explicit user action only.
 //! * [`speakable`] and its `speakable_*` files: turns an answer into segments a voice can speak,
@@ -35,6 +37,7 @@ pub mod model_download;
 pub mod models;
 pub mod notes;
 pub mod output_guard;
+pub mod repair;
 pub mod service;
 pub mod settings;
 pub mod speakable;

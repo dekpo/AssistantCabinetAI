@@ -15,6 +15,7 @@ import {
 import { canUndo } from "./insertion";
 import { speechCancel, speechTranscribe } from "./ipc";
 import { dialogIsOpen } from "./output/ReadAloudContext";
+import type { RepairSource } from "./repairChips";
 import { useVoiceSession } from "./VoiceSessionContext";
 
 /**
@@ -26,6 +27,9 @@ export interface DictationBridge {
   error: DictationNote | null;
   /** The last insertion, while the box still holds it (so the Undo and the notes under it are true). */
   result: DictationResult | null;
+  /** The words of the last dictation, kept after the box was edited (unlike `result`), for the name
+   * suggestions. Null before the first one. */
+  heard: RepairSource | null;
   /** A caret position to restore in the box once it holds `text`. */
   caret: { position: number; nonce: number; text: string } | null;
   /** Whether the button may be pressed. */
@@ -128,6 +132,21 @@ export function useDictation(inputs: Inputs): DictationBridge | undefined {
     return () => document.removeEventListener("keydown", onKey);
   }, [snapshot.phase, dictation]);
 
+  const lastResult = snapshot.result;
+  const heard = useMemo<RepairSource | null>(
+    () =>
+      lastResult === null
+        ? null
+        : {
+            id: lastResult,
+            words: lastResult.insertion.words,
+            start: lastResult.insertion.start,
+            draft: lastResult.insertion.text,
+            caseReliable: lastResult.caseReliable,
+          },
+    [lastResult],
+  );
+
   const level = useMemo(
     () => ({ get: dictation.getLevel, subscribe: dictation.subscribeLevel }),
     [dictation],
@@ -146,6 +165,7 @@ export function useDictation(inputs: Inputs): DictationBridge | undefined {
     phase,
     error: snapshot.error,
     result,
+    heard,
     caret: snapshot.caret,
     disabled: phase === "unavailable" || (blocked && !isUnderway(phase)),
     reasonKey,

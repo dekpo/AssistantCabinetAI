@@ -39,6 +39,7 @@ const heard = (text: string): SpeechTranscript => ({
   audioMs: 3000,
   processingMs: 400,
   engineId: "fake",
+  caseReliable: true,
 });
 
 /** A recorder the test drives by hand: it settles `start` and `stop` when told to. */
@@ -165,6 +166,8 @@ describe("the states of a dictation", () => {
     expect(world.draft.value).toBe("Voir Marie Martin, 3 fois le 12 demain");
     expect(snapshot.result?.numbers).toBe(2);
     expect(snapshot.result?.clipped).toBe(true);
+    expect(snapshot.result?.engineId).toBe("fake");
+    expect(snapshot.result?.caseReliable).toBe(true);
     expect(snapshot.caret?.position).toBe("Voir Marie Martin, 3 fois le 12".length);
     expect(snapshot.caret?.text).toBe(world.draft.value);
   });

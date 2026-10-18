@@ -557,6 +557,7 @@ impl SpeechToTextProvider for AnswersAfterStop {
             audio_ms: 2_000,
             processing_ms: 1,
             engine_id: "late".into(),
+            case_reliable: true,
         })
     }
 }
@@ -709,6 +710,7 @@ fn a_timing_line_names_the_engine_and_the_numbers_but_never_the_text() {
         audio_ms: 4_200,
         processing_ms: 610,
         engine_id: "engine-x".into(),
+        case_reliable: true,
     };
     let line = service::timing_line(&result);
 

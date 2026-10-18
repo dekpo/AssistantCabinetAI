@@ -133,6 +133,7 @@ impl SpeechToTextProvider for FakeProvider {
                     / u64::from(SAMPLE_RATE_HZ),
                 processing_ms: started.elapsed().as_millis() as u64,
                 engine_id: FAKE_ENGINE_ID.to_string(),
+                case_reliable: true,
             }),
             Step::Fail => Err(AppError::SpeechEngineFailed),
             Step::Panic => panic!("scripted panic of the fake provider"),

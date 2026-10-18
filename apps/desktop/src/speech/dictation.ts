@@ -49,6 +49,9 @@ export interface DictationResult {
   insertion: Insertion;
   numbers: number;
   clipped: boolean;
+  /** The engine that heard the words, and whether it writes capitals where a name has them. */
+  engineId: string;
+  caseReliable: boolean;
 }
 
 export interface DictationSnapshot {
@@ -241,7 +244,13 @@ export function createDictation(deps: DictationDeps): Dictation {
       return;
     }
     deps.setDraft(insertion.text);
-    const result: DictationResult = { insertion, numbers: countNumbers(transcript.text), clipped };
+    const result: DictationResult = {
+      insertion,
+      numbers: countNumbers(transcript.text),
+      clipped,
+      engineId: transcript.engineId,
+      caseReliable: transcript.caseReliable,
+    };
     const caret = caretAt(insertion.caret, insertion.text);
     settle();
     publish({ phase: "done", error: null, result, caret });

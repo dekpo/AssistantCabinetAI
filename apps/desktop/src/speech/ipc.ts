@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import type { CombinedScope } from "../lib/ipc";
 
 /**
  * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`,
@@ -102,6 +103,9 @@ export interface SpeechTranscript {
   audioMs: number;
   processingMs: number;
   engineId: string;
+  /** Whether the engine writes capitals where a name has them (a property of the engine, read by
+   * Rust from the model manifest): a name repair trusts a capital only if it does. */
+  caseReliable: boolean;
 }
 
 /**
@@ -180,4 +184,42 @@ export type ReadingItem =
  */
 export function speechPrepareReading(parts: ReadingPart[], locale: string): Promise<ReadingItem[]> {
   return invoke<ReadingItem[]>("speech_prepare_reading", { parts, locale });
+}
+
+/** One name the selection holds, offered in place of the words heard. */
+export interface RepairChoice {
+  entityId: number;
+  display: string;
+}
+
+/** Words of a transcript that probably meant a name of the selection. `start` and `end` count
+ * UTF-16 units of the transcript sent, which is how a JavaScript string is sliced. `suggest`: one
+ * strong candidate; `ask`: several or a weak one, the user picks. */
+export interface RepairProposal {
+  start: number;
+  end: number;
+  heard: string;
+  action: "suggest" | "ask";
+  candidates: RepairChoice[];
+}
+
+/** `hiddenCount` is the number of proposals Rust left out because the setting hides names and the
+ * user has not asked to see them: the names themselves never reached the window. */
+export interface RepairSet {
+  proposals: RepairProposal[];
+  hiddenCount: number;
+}
+
+/**
+ * Proposals to repair the names of a transcript, read against the files of the current selection
+ * (`speech_repair_names`). A read: no model, no write to the knowledge base, nothing is changed in
+ * the text. Empty when the knowledge base is off or on any failure.
+ */
+export function speechRepairNames(
+  transcript: string,
+  scope: CombinedScope,
+  caseReliable: boolean,
+  revealNames: boolean,
+): Promise<RepairSet> {
+  return invoke<RepairSet>("speech_repair_names", { transcript, scope, caseReliable, revealNames });
 }

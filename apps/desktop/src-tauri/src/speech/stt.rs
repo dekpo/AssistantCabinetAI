@@ -55,6 +55,9 @@ pub struct SttResult {
     /// Time the engine spent, in milliseconds.
     pub processing_ms: u64,
     pub engine_id: String,
+    /// Whether this engine writes capitals where a name has them (a property of the engine, from its
+    /// manifest row), so that a name repair may trust a capital.
+    pub case_reliable: bool,
 }
 
 /// A speech-to-text engine. Blocking: the service runs it off the interface thread, with a time

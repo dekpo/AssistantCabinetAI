@@ -11,6 +11,15 @@ describe("putting the words of a dictation in the box", () => {
     expect(result?.caret).toBe(15);
   });
 
+  it("says where the words begin and what they are, for the name suggestions", () => {
+    const draft = "Bonjour,docteur";
+    const result = insertTranscript(draft, "  Dupond  ", at(draft, 8));
+
+    expect(result?.words).toBe("Dupond");
+    expect(result?.start).toBe("Bonjour, ".length);
+    expect(result?.text.slice(result.start, result.start + result.words.length)).toBe("Dupond");
+  });
+
   it("replaces the selection when the box is the one the recording started from", () => {
     const draft = "Le rendez-vous de XXX est confirmé";
     const result = insertTranscript(draft, "Marie Martin", at(draft, 18, 21));

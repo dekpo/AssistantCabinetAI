@@ -2664,3 +2664,33 @@ body {
   border-radius: 999px;
   font-size: 11px;
 }
+
+/* The name suggestions that follow a dictation, under the question box. */
+.repair {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.repair__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.repair__item,
+.repair__hidden {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.repair__text {
+  color: var(--text-quiet);
+}

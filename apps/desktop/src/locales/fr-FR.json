@@ -607,6 +607,18 @@
       "analysing": "Une analyse est en cours : cela peut prendre plus de temps.",
       "nothingHeard": "Rien n'a été compris. Réessayez."
     },
+    "repair": {
+      "label": "Suggestions de noms",
+      "suggest": "{heard} → {display}",
+      "ask": "{heard} : quel nom ?",
+      "accept": "Remplacer",
+      "acceptLabel": "Remplacer {heard} par {display}",
+      "ignore": "Ignorer",
+      "ignoreLabel": "Ignorer la suggestion pour {heard}",
+      "hiddenOne": "{count} suggestion de nom est masquée.",
+      "hiddenMany": "{count} suggestions de noms sont masquées.",
+      "show": "Afficher les noms"
+    },
     "microphone": {
       "unsupported": "Cette fenêtre ne peut pas utiliser le microphone.",
       "denied": "Le microphone est bloqué. Autorisez-le dans les réglages du système, puis réessayez.",

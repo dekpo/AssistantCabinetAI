@@ -116,6 +116,8 @@ pub fn run() {
             commands::fill_preview,
             commands::fill_generate,
             speech_commands::speech_status,
+            speech_commands::notes_preview,
+            speech_commands::notes_save,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

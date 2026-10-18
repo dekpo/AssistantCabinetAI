@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * The speech commands of Rust. Only `speech_status` exists so far; the audio goes to Rust as a raw
- * body in a later phase, and the language always comes from Rust (settings and language table),
+ * The speech commands of Rust: `speech_status`, `notes_preview` and `notes_save` so far; the audio
+ * goes to Rust as a raw body in a later phase, and the language always comes from Rust (settings and language table),
  * never from the webview.
  */
 
@@ -50,4 +50,43 @@ export interface SpeechStatus {
 /** What each speech feature can do right now. Reads settings and probes, starts nothing. */
 export function speechStatus(): Promise<SpeechStatus> {
   return invoke<SpeechStatus>("speech_status");
+}
+
+/** The extension of a saved note. Markdown unless the user chose plain text. */
+export type NoteFormat = "md" | "txt";
+
+/** One note as the user reviewed it. Never a path: Rust derives the folder and the file name. */
+export interface NoteDraft {
+  /** What the user typed for the name; may be empty (the file is then named by its time alone). */
+  name: string;
+  text: string;
+  format?: NoteFormat;
+}
+
+/** A note file as it would be written (preview) or was written (save). */
+export interface NoteFile {
+  /** Relative to the documents folder, forward-slash separated: the key the index uses. */
+  relativePath: string;
+  fileName: string;
+  bytes: number;
+  chars: number;
+  lines: number;
+}
+
+/**
+ * The files a save of these notes would write, with the names they would get. Writes nothing.
+ * Refusals are machine codes: `notes_folder_unavailable`, `notes_name_invalid`, `notes_too_large`,
+ * `notes_too_many`.
+ */
+export function notesPreview(drafts: NoteDraft[]): Promise<NoteFile[]> {
+  return invoke<NoteFile[]>("notes_preview", { drafts });
+}
+
+/**
+ * Writes the reviewed notes as new files, all or none. It does not analyse them: the caller runs
+ * the Analyse pass afterwards, and a failure of that pass is `notes_analysis_failed`, never an
+ * undo of the save.
+ */
+export function notesSave(drafts: NoteDraft[]): Promise<NoteFile[]> {
+  return invoke<NoteFile[]>("notes_save", { drafts });
 }

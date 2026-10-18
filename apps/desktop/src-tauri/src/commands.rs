@@ -226,7 +226,7 @@ fn knowledge_context(
 
 /// Built from what the platform reports rather than from written paths, so the same rules hold on
 /// Windows and on macOS.
-fn work_folder_policy(app: &AppHandle) -> WorkFolderPolicy {
+pub(crate) fn work_folder_policy(app: &AppHandle) -> WorkFolderPolicy {
     let paths = app.path();
     let personal = [
         paths.document_dir(),

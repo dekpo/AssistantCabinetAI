@@ -9,6 +9,7 @@ const SPEECH_CODES = [
   "speech_engine_missing",
   "speech_model_missing",
   "speech_model_corrupt",
+  "speech_model_download_failed",
   "speech_audio_too_short",
   "speech_audio_too_quiet",
   "speech_audio_too_long",

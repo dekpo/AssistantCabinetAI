@@ -1,13 +1,15 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 /**
- * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`
- * and `speech_cancel`. The audio goes to Rust as a raw body, and the language and the cap on the
+ * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`,
+ * `speech_cancel` and the three of the model (`speech_model_install`, `speech_model_verify` and
+ * `speech_model_cancel`). The audio goes to Rust as a raw body, and the language and the cap on the
  * length always come from Rust (settings and language table), never from the webview.
  */
 
-/** The speech-to-text model on disk. */
-export type ModelState = "missing" | "present" | "corrupt";
+/** The speech-to-text model on disk. `unverified`: every file is there but none was checked yet (a
+ * model placed by hand); Verify checks it. */
+export type ModelState = "missing" | "unverified" | "present" | "corrupt";
 
 /** Whether one feature can run; `reason` is null or the machine code of the first obstacle
  * (`speech_unavailable`, `speech_locale_unsupported`, `speech_engine_missing`,
@@ -120,4 +122,33 @@ export function speechTranscribe(
 /** Stops the transcription in progress, if any. Resolves to whether there was one. */
 export function speechCancel(): Promise<boolean> {
   return invoke<boolean>("speech_cancel");
+}
+
+/** How far the install of the model has got. `download` runs first, then `unpack`. */
+export interface ModelProgress {
+  phase: "download" | "unpack";
+  doneBytes: number;
+  totalBytes: number;
+}
+
+/**
+ * Downloads and installs the speech model. Only a button calls it. Progress arrives on the channel;
+ * refusals are machine codes: `speech_model_download_failed` (its data carries the folder where the
+ * files can be placed by hand), `speech_model_corrupt`, `speech_cancelled`, `speech_busy`.
+ */
+export function speechModelInstall(onProgress: (progress: ModelProgress) => void): Promise<void> {
+  const channel = new Channel<ModelProgress>();
+  channel.onmessage = onProgress;
+  return invoke<void>("speech_model_install", { onProgress: channel });
+}
+
+/** Checks the files in the model folder against the pinned digests; this is how a model placed by
+ * hand becomes usable. Refusals: `speech_model_missing`, `speech_model_corrupt`, `speech_cancelled`. */
+export function speechModelVerify(): Promise<void> {
+  return invoke<void>("speech_model_verify");
+}
+
+/** Stops the install or the verify in progress, if any. Resolves to whether there was one. */
+export function speechModelCancel(): Promise<boolean> {
+  return invoke<boolean>("speech_model_cancel");
 }

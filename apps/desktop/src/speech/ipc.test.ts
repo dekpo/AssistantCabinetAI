@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", () => ({ Channel: class {}, invoke: vi.fn() }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { speechCancel, speechTranscribe } from "./ipc";
+import {
+  speechCancel,
+  speechModelCancel,
+  speechModelInstall,
+  speechModelVerify,
+  speechTranscribe,
+} from "./ipc";
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
@@ -51,5 +57,35 @@ describe("the transcription bridge", () => {
     await expect(speechCancel()).resolves.toBe(true);
 
     expect(vi.mocked(invoke).mock.calls).toStrictEqual([["speech_cancel"]]);
+  });
+});
+
+describe("the model bridge", () => {
+  it("hands the progress channel to Rust and forwards what arrives on it", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const seen: unknown[] = [];
+
+    await speechModelInstall((progress) => seen.push(progress));
+
+    const [command, arguments_] = vi.mocked(invoke).mock.calls[0] as [
+      string,
+      { onProgress: { onmessage: (progress: unknown) => void } },
+    ];
+    expect(command).toBe("speech_model_install");
+    expect(Object.keys(arguments_)).toStrictEqual(["onProgress"]);
+    arguments_.onProgress.onmessage({ phase: "download", doneBytes: 10, totalBytes: 20 });
+    expect(seen).toStrictEqual([{ phase: "download", doneBytes: 10, totalBytes: 20 }]);
+  });
+
+  it("asks for the check and the stop without sending a path, an address or a digest", async () => {
+    vi.mocked(invoke).mockResolvedValue(true);
+
+    await speechModelVerify();
+    await speechModelCancel();
+
+    expect(vi.mocked(invoke).mock.calls).toStrictEqual([
+      ["speech_model_verify"],
+      ["speech_model_cancel"],
+    ]);
   });
 });

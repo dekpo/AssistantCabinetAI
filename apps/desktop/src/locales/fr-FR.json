@@ -575,10 +575,16 @@
     "model": {
       "missing": "Non installé.",
       "present": "Prêt.",
-      "corrupt": "Endommagé : il faut le réinstaller."
+      "corrupt": "Endommagé : il faut le réinstaller.",
+      "unverified": "Fichiers trouvés, pas encore vérifiés. Appuyez sur Vérifier."
     },
     "install": {
       "action": "Installer",
+      "verifyAction": "Vérifier",
+      "cancel": "Annuler",
+      "downloading": "Téléchargement : {percent} %",
+      "unpacking": "Préparation des fichiers : {percent} %",
+      "verifying": "Vérification des fichiers…",
       "notYet": "L'installation du modèle n'est pas encore disponible dans cette version.",
       "source": "Le modèle n'est téléchargé que lorsque vous appuyez sur Installer, depuis {address}."
     },
@@ -689,6 +695,7 @@
     "speech_engine_missing": "Le composant vocal n'est pas installé sur cet ordinateur. La saisie au clavier fonctionne toujours.",
     "speech_model_missing": "Les fichiers vocaux ne sont pas encore sur cet ordinateur. Installez-les depuis les réglages ; la saisie au clavier fonctionne toujours.",
     "speech_model_corrupt": "Les fichiers vocaux de cet ordinateur sont abîmés et n'ont pas été utilisés. Installez-les à nouveau depuis les réglages.",
+    "speech_model_download_failed": "Les fichiers vocaux n'ont pas pu être téléchargés. Si votre logiciel de sécurité bloque le téléchargement, copiez les quatre fichiers à la main dans le dossier {folder}, puis appuyez sur Vérifier dans les réglages.",
     "speech_audio_too_short": "L'enregistrement est trop court. Parlez un peu plus longtemps, puis réessayez.",
     "speech_audio_too_quiet": "L'enregistrement est trop faible pour être compris. Vérifiez votre microphone et réessayez.",
     "speech_audio_too_long": "L'enregistrement dépasse la limite fixée dans les réglages. Il n'a pas été transcrit.",

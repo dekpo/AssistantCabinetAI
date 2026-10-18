@@ -126,9 +126,20 @@ One JSON object per line, in both directions; stderr carries nothing but a numer
 ```
 
 Operations: `load`, `transcribe` (STT worker), `synthesize` (TTS worker), `unload`, `shutdown`. There is **no
-cancel message**: cancel is the kill of section 3.1 (phase 3b may add a message for a queued request if it finds a use
-and reports it). A worker contains no network code. Text reaches a worker through stdin, never a command line
-(a command line is visible to other processes of the same user). The worker returns codes, never prose.
+cancel message**: cancel is the kill of section 3.1 (phase 3b found no use for one and added none). A worker contains no
+network code. Text reaches a worker through stdin, never a command line (a command line is visible to other processes of
+the same user). The worker returns codes, never prose.
+
+**As built by phase 3b (the STT worker; this wins over the sketch above).** The whole protocol is one file,
+`speech/worker_protocol.rs`, compiled by the application and included by path into the worker crate, so the two sides cannot
+drift apart. Requests are tagged by `op`: `load` (`id`, `threads`, `files` = the four full paths `encoder`, `decoder`, `joiner`,
+`tokens`, named by the application's manifest, never by the worker), `transcribe` (`id`, `wav_path`, `language`), `shutdown`
+(`id`, answered by nothing: the process ends). `unload` is not a message: after the idle delay the application sends `shutdown`,
+because ending the process is the only way to give back all the memory of the runtime. Answers are tagged by `status`:
+`loaded` (`load_ms`), `transcribed` (`text`, `audio_ms`, `processing_ms`) or `failed` (`kind`: `model_missing`,
+`model_corrupt`, `audio_invalid`, `engine_failed`, `bad_request`). A line on the worker's standard output that is not an answer
+is skipped, never logged: sherpa-onnx itself writes lines there (for example when it resamples a clip). The worker's standard
+error is not read and goes nowhere. Closing the worker's standard input ends it, which is how it dies with the application.
 
 ### 3.4 Module layout
 
@@ -212,7 +223,8 @@ catalogues (`errors.<code>`), enforced by `apps/desktop/src/guards/sources.test.
 | `speech_unavailable` | Speech disabled, or the feature is off for this machine (the reason is in `speech_status`) |
 | `speech_engine_missing` | The worker executable was not found |
 | `speech_model_missing` | The model files are absent |
-| `speech_model_corrupt` | A downloaded or side-loaded file does not match its pinned SHA-256 |
+| `speech_model_corrupt` | A downloaded or side-loaded file does not match its pinned size or SHA-256 |
+| `speech_model_download_failed` | The download or a write failed; its data carries the model's folder, where the files can be placed by hand, then Verify (phase 3b) |
 | `speech_audio_too_short` | Under 0.4 s: refused before any engine call |
 | `speech_audio_too_quiet` | Below the silence floor: refused before any engine call |
 | `speech_audio_too_long` | Over the cap of the setting |
@@ -232,7 +244,9 @@ catalogues (`errors.<code>`), enforced by `apps/desktop/src/guards/sources.test.
 | `notes_write_failed` | A write failed (the partial file is removed) |
 | `notes_analysis_failed` | The Analyse failed after a successful save; the save is never undone |
 
-Phase 3b adds the codes the model download needs (candidate: `speech_download_failed`), each with both sentences.
+Phase 3b added `speech_model_download_failed`, with both sentences. The model state of `speech_status` has a fourth value,
+`unverified` (every file there with its pinned size, none hashed yet: a model placed by hand); dictation then reports
+`speech_model_missing` and the settings offer Verify.
 
 ## 7. Flows
 
@@ -375,6 +389,15 @@ here uses `rustls-tls`, which does not read the Windows certificate store): the 
 hand in the models folder, then "Verify"). The error of a failed download says so. The gateway's shared HTTP client is not
 changed. Every pulled model needs its licence row (section 10) before it is proposed.
 
+**As built by phase 3b.** The models live in `<app local data>/speech-models/<model id>/`. The manifest pins the size and the
+SHA-256 of the zip and of each of the four files; the download hashes while it writes, unpacks only the four names of the
+manifest (never a path taken from the zip) into a staging folder, hashes each file, writes the marker `.verified` (a digest of
+the manifest row) and replaces the model's folder. Looking at the state costs a few `stat` calls (sizes and the marker); only
+Install and Verify hash. Uploaded to `https://assistantcabinet.ai/models/speech/`: `parakeet-tdt-0.6b-v3-int8.zip`, 478,123,854
+bytes, SHA-256 `3781ca818590747c1ff244a8193b541ba8ea32506253832aa1a19ced0645883e`, holding the four files flat (the report lists
+their sizes and digests). The fetch script for the native libraries is `scripts/fetch-speech-resources.sh` (and `.ps1`), the
+build and the espeak check `scripts/build-speech-worker.sh` (and `.ps1`).
+
 ## 10. Licences
 
 Policy: `docs/MODELS.md`, "Licence policy" (Apache 2.0 or MIT, owner decision of 7 October 2026) is the policy of the **chat
@@ -427,6 +450,7 @@ engine.
 | Feature | What SpeechLab measured (owner's laptop) | Label |
 |---|---|---|
 | Dictation, Parakeet TDT v3 int8 | 1.6 to 1.9 GB resident; 7 to 10 busy cores although 4 threads are requested; cold load about 2 s; real-time factor about 0.10 (about 10 times faster than real time); a 5 s sentence in about 0.5 s; word error rate 2.3 % overall, 2.1 % in French, one speaker; 487 MB model download | measured |
+| Dictation, the worker of phase 3b on the same laptop (18 Oct 2026, release build, 4 threads requested) | worker process alone: 733 MB resident after the model load, 857 MB peak after decoding (commit 864 MB); cold load 2.2 s (2.5 s and, once with a cold file cache, 4.3 s); a 10 s clip in 0.9 to 1.1 s, about 7 busy cores; the cancel of a decode returns in 0.6 s and leaves no process; 18.6 MB executable, no `espeak` in it | measured |
 | Read-aloud, Piper voices (siwis, ljspeech, libritts_r) | 200 to 300 MB resident; about 67 to 82 MB on disk; real-time factor 0.045 to 0.064; cold load 0.8 to 1.3 s | measured |
 | Read-aloud, Coqui css10 | 231 MB resident; 67 MB on disk; needs the number rewriting for digits | measured |
 | Notes | Dictation figures, for the whole length of the note: the model stays loaded (idle unload about 120 s), so a 30 min note holds 1.6 to 1.9 GB resident throughout; during a decode the machine is busy, including during an Analyse | measured (derived) |
@@ -445,7 +469,7 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 | Invariant (from the decisions) | Named test (suggested; the phase names the final one) | Phase |
 |---|---|---|
 | Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio` | 3 |
-| No network from the module except the model download file | `speech_module_has_no_http_client_outside_model_download` (source scan); the offline proof at the gate | 3, 13 |
+| No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`; the offline proof at the gate | 3, 3b, 13 |
 | A transcript only fills a text box | `dictation_never_calls_send` | 5 |
 | Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
 | Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `kb_off_gives_no_repair` | 6 |
@@ -453,9 +477,9 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 | Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |
 | Any failure degrades to the typed app | `missing_engine_reports_unavailable_and_typed_app_still_works` | 2, 3 |
-| Cancel at every stage | `cancelling_a_transcription_kills_the_child_and_removes_the_temp_audio`, the dictation state machine tests | 3b, 5 |
+| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, the dictation state machine tests | 3b, 5 |
 | One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests | 3, 4 |
-| Workers die with the app | `a_worker_is_killed_when_its_handle_is_dropped` | 3b |
+| Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it` | 3b |
 | Nothing heavy at launch | `launch_starts_no_speech_work` | 2 |
 | Voice off changes nothing (D13) | `voice_off_leaves_the_existing_components_unchanged` (baseline render tests written before the first edit of phase 2) | 2, 11 |
 | Language contract | the existing `sources.test.ts` and `catalogues.test.ts` guards; `a_locale_without_a_pack_answers_speech_locale_unsupported` | every phase |
@@ -495,10 +519,12 @@ Smallest useful paths: dictation 01, 02, 03, 04b, 05b, 08, then 09; read-aloud 0
 
 Spikes the phases must answer and report: **S1** the static worklet under the Content Security Policy, in dev and in a release
 build (phase 4); **S2** raw request body for the WAV (answered: `tauri::ipc::Request` with `InvokeBody::Raw`, proven in
-SpeechLab); **S3** a `tauri.windows.conf.json` overlay declaring the sidecar on Windows only (phase 3b); **S4** the owner lists the
+SpeechLab); **S3** a `tauri.windows.conf.json` overlay declaring the sidecar on Windows only (phase 3b; answered 18 Oct 2026: yes, the overlay is read on Windows, a missing sidecar named in it stops `tauri-build` with "resource path ... doesn't exist"; the build script does not watch a newly created overlay, so `build.rs` must be touched once; not added, because the check also fails every CI run that has not staged the worker; macOS ignoring it is Tauri's documented behaviour and waits for the Mac); **S4** the owner lists the
 voices of the webview and speaks a French and an English paragraph with the firewall blocking the application (phase 8);
-**S5** a spawned worker flashing a console window on Windows (phase 3b; the creation flag belongs in a paired platform module,
-never in `worker_stt.rs`).
+**S5** a spawned worker flashing a console window on Windows (phase 3b; answered 18 Oct 2026: a console program started by a
+`windows_subsystem = "windows"` program without a flag gets a console window of its own, measured with `GetConsoleWindow`;
+with `CREATE_NO_WINDOW` it gets none. The flag is in `speech/console_window.rs`, a paired platform module, never in
+`worker_stt.rs`; the Tesseract spawn in `ocr/tesseract.rs` sets no flag and has the same flash, reported and not fixed).
 
 Packaging: there is no installer wiring for any sidecar yet (`tauri.conf.json` has no `externalBin` or `resources`; the Tesseract
 block waits in `src-tauri/binaries/README.md`). Packaging the workers is the same unresolved item as packaging Tesseract: phase 13
@@ -516,7 +542,7 @@ For the owner. **Answered on 18 October 2026:** the owner confirmed point 1 expl
 | 4 | Where exactly the model archives are hosted (the path under `https://assistantcabinet.ai/models/speech/`) | The path is the setting `speechModelsUrl`; she corrects it if needed; phases 3b and 9 hand her the file names and hashes |
 | 5 | Baseline tests of phase 2: inline expectations in one new test file (recommended) or vitest snapshot files (new committed files)? | Inline expectations: the repository has no snapshot tests |
 | 6 | Add `pulldown-cmark` (phase 7) or write a line-based Markdown stripper? | A small line-based stripper; no new crate |
-| 7 | Edit `.github/workflows/ci.yml` to add a `cargo check --no-default-features` step for the worker crate? | Ask in phase 3b; the sherpa download is too heavy for the runners |
+| 7 | Edit `.github/workflows/ci.yml` to add a `cargo check --no-default-features` step for the worker crate? | Asked in phase 3b, not edited: it waits for her answer. The check was run locally and passes (`cargo check --no-default-features --offline` in `apps/speech-worker`); the sherpa download is too heavy for the runners |
 | 8 | Read the KB `spoken_form` of names of the selection in read-aloud (phase 7 second step) | Left out unless she asks |
 | 9 | Whether css10 really is a male voice | Her ear, phase 9; only the label key changes |
 | 10 | The new workstation's measurements and the acceptance budgets (SpeechLab's Q-08) | Section 11 estimates stay labelled until measured |

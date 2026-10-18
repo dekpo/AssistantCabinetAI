@@ -248,6 +248,11 @@ pub enum AppError {
     #[error("speech_model_corrupt")]
     SpeechModelCorrupt,
 
+    /// The speech model could not be downloaded, or a file of it could not be written. `folder` is
+    /// the model's folder on this machine, where the four files can be placed by hand.
+    #[error("speech_model_download_failed")]
+    SpeechModelDownloadFailed { folder: String },
+
     /// The recording is too short to hold a sentence. Refused before any engine runs.
     #[error("speech_audio_too_short")]
     SpeechAudioTooShort,
@@ -383,6 +388,7 @@ impl AppError {
             Self::SpeechEngineMissing => "speech_engine_missing",
             Self::SpeechModelMissing => "speech_model_missing",
             Self::SpeechModelCorrupt => "speech_model_corrupt",
+            Self::SpeechModelDownloadFailed { .. } => "speech_model_download_failed",
             Self::SpeechAudioTooShort => "speech_audio_too_short",
             Self::SpeechAudioTooQuiet => "speech_audio_too_quiet",
             Self::SpeechAudioTooLong => "speech_audio_too_long",
@@ -459,6 +465,7 @@ impl AppError {
             | Self::NotesWriteFailed
             | Self::NotesAnalysisFailed => json!({}),
             Self::SpeechLocaleUnsupported { locale } => json!({ "locale": locale }),
+            Self::SpeechModelDownloadFailed { folder } => json!({ "folder": folder }),
             Self::KnowledgePackInvalid { pack, path } => json!({ "pack": pack, "path": path }),
             Self::FillTemplateUnreadable { path } => json!({ "path": path }),
             Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),

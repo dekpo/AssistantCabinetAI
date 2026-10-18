@@ -15,11 +15,20 @@
 //!   that survives a job, written only on the user's click, and it needs no engine and no audio.
 //! * [`stt`], [`service`], [`wav`], [`temp_audio`], [`output_guard`]: the speech-to-text contract
 //!   and everything around the engine. The service runs a job (one at a time, cancellable, under a
-//!   time limit); the clip lives in a private temporary folder for that job only. There is no
-//!   engine yet: without a provider the service answers `speech_engine_missing`, and the scripted
-//!   fake of the tests is never built by a command.
+//!   time limit); the clip lives in a private temporary folder for that job only. Without a worker
+//!   executable the service answers `speech_engine_missing`; the scripted fake of the tests is
+//!   never built by a command.
+//! * [`worker_protocol`], [`worker_stt`], [`console_window`]: the speech-to-text engine, out of
+//!   process. The protocol is one file shared by source with the worker crate
+//!   (`apps/speech-worker`); the provider starts the worker on the first dictation, ends it after an
+//!   idle delay and kills it on a cancel; the console window module owns the one platform detail.
+//! * [`models`], [`model_download`]: the compiled-in manifest of the models, what is on disk, and the
+//!   one file of the module that touches the network, on an explicit user action only.
 
+pub mod console_window;
 pub mod languages;
+pub mod model_download;
+pub mod models;
 pub mod notes;
 pub mod output_guard;
 pub mod service;
@@ -28,15 +37,25 @@ pub mod status;
 pub mod stt;
 pub mod temp_audio;
 pub mod wav;
+pub mod worker_protocol;
+pub mod worker_stt;
 
 #[cfg(test)]
 mod fake;
+#[cfg(test)]
+mod model_download_tests;
+#[cfg(test)]
+mod models_tests;
 #[cfg(test)]
 mod notes_tests;
 #[cfg(test)]
 mod stt_tests;
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod worker_stt_tests;
 
 /// Shortest cap of one chat dictation, in seconds. Below this a recording is hardly a sentence.
 pub const MIN_DICTATION_SECONDS: u32 = 10;

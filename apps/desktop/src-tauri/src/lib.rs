@@ -120,6 +120,9 @@ pub fn run() {
             speech_commands::notes_save,
             speech_commands::speech_transcribe,
             speech_commands::speech_cancel,
+            speech_commands::speech_model_install,
+            speech_commands::speech_model_verify,
+            speech_commands::speech_model_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

@@ -51,9 +51,9 @@ export function modelStatusKey(model: ModelState): string {
   return `speech.model.${model}`;
 }
 
-/** Whether the pieces behind the Install button exist. The download and the engine arrive with the
- * speech-to-text worker; the flag moves to true in that phase and the button then works. */
-export const INSTALL_AVAILABLE = false;
+/** Whether the pieces behind the Install button exist: the download, the check of the files and the
+ * speech-to-text worker. They arrived with the worker phase, so the button works. */
+export const INSTALL_AVAILABLE = true;
 
 /** Whether the read-aloud engine and voices exist. They arrive with the read-aloud button, and the
  * controls stay shown but disabled until then. */

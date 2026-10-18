@@ -744,10 +744,13 @@ fn the_port_the_guard_and_the_parser_open_no_connection_process_or_thread() {
     }
 }
 
+/// The one file of the module that may touch the network.
+const NETWORK_FILE: &str = "model_download.rs";
+
 #[test]
 fn no_http_client_exists_in_the_speech_module() {
-    // The model download of phase 3b is the one network file of the module, and it is named by the
-    // phase that adds it. Until then no file of the module may even name a client.
+    // The model download is the one network file of the module (decision D5): it alone may name an
+    // HTTP client, and no other file may even name one.
     let folder = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("speech");
@@ -755,6 +758,17 @@ fn no_http_client_exists_in_the_speech_module() {
     for entry in fs::read_dir(&folder).expect("folder reads").flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if !name.ends_with(".rs") || name.ends_with("tests.rs") {
+            continue;
+        }
+        if name == NETWORK_FILE {
+            let text = fs::read_to_string(entry.path()).expect("source reads");
+            assert!(
+                text.contains("reqwest"),
+                "the download file lost its client"
+            );
+            for token in ["ureq", "hyper", "isahc", "surf::", "std::net", "TcpStream"] {
+                assert!(!text.contains(token), "{name} uses {token}");
+            }
             continue;
         }
         let text = fs::read_to_string(entry.path()).expect("source reads");
@@ -778,11 +792,13 @@ fn no_http_client_exists_in_the_speech_module() {
 }
 
 #[test]
-fn only_the_tests_build_the_fake_and_the_application_has_no_engine_yet() {
+fn only_the_tests_build_the_fake_and_the_application_builds_the_worker_engine() {
     let commands = source("speech_commands.rs");
     for token in ["fake", "Fake", "SpeechService::new", "Some(Arc"] {
         assert!(!commands.contains(token), "speech_commands.rs uses {token}");
     }
+    assert!(commands.contains("SpeechService::with_provider"));
+    assert!(commands.contains("WorkerSttProvider::new"));
     let module = source("speech/mod.rs").replace("\r\n", "\n");
     assert!(module.contains("#[cfg(test)]\nmod fake;"));
 
@@ -806,6 +822,16 @@ fn the_commands_are_registered_and_read_a_raw_body_without_a_setup_hook() {
     assert!(!lib.contains(".setup("), "a setup hook would run at launch");
     assert!(lib.contains("speech_commands::speech_transcribe"));
     assert!(lib.contains("speech_commands::speech_cancel"));
+    for command in [
+        "speech_model_install",
+        "speech_model_verify",
+        "speech_model_cancel",
+    ] {
+        assert!(
+            lib.contains(&format!("speech_commands::{command}")),
+            "{command} is not registered"
+        );
+    }
     assert!(lib.contains(".manage(speech_commands::SpeechState::new())"));
 
     let commands = source("speech_commands.rs");

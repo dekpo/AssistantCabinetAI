@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * The speech commands of Rust: `speech_status`, `notes_preview` and `notes_save` so far; the audio
- * goes to Rust as a raw body in a later phase, and the language always comes from Rust (settings and language table),
- * never from the webview.
+ * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`
+ * and `speech_cancel`. The audio goes to Rust as a raw body, and the language and the cap on the
+ * length always come from Rust (settings and language table), never from the webview.
  */
 
 /** The speech-to-text model on disk. */
@@ -89,4 +89,35 @@ export function notesPreview(drafts: NoteDraft[]): Promise<NoteFile[]> {
  */
 export function notesSave(drafts: NoteDraft[]): Promise<NoteFile[]> {
   return invoke<NoteFile[]>("notes_save", { drafts });
+}
+
+/** What a clip is for. It decides the cap on its length, which Rust reads from the settings. */
+export type SpeechPurpose = "dictation" | "note";
+
+/** What the engine heard, and how long it took. The text only fills a text box. */
+export interface SpeechTranscript {
+  text: string;
+  audioMs: number;
+  processingMs: number;
+  engineId: string;
+}
+
+/**
+ * Transcribes one clip: `wav` is the file `encodeWav` wrote and nothing else (a raw request body,
+ * not JSON); the purpose travels as a header. Refusals are machine codes: `speech_unavailable`,
+ * `speech_locale_unsupported`, `speech_engine_missing`, `speech_model_missing`,
+ * `speech_model_corrupt`, `speech_busy`, `speech_audio_invalid`, `speech_audio_too_short`,
+ * `speech_audio_too_quiet`, `speech_audio_too_long`, `speech_cancelled`, `speech_timeout`,
+ * `speech_engine_failed`, `speech_output_rejected`.
+ */
+export function speechTranscribe(
+  wav: Uint8Array,
+  purpose: SpeechPurpose = "dictation",
+): Promise<SpeechTranscript> {
+  return invoke<SpeechTranscript>("speech_transcribe", wav, { headers: { purpose } });
+}
+
+/** Stops the transcription in progress, if any. Resolves to whether there was one. */
+export function speechCancel(): Promise<boolean> {
+  return invoke<boolean>("speech_cancel");
 }

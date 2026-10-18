@@ -1426,7 +1426,8 @@ every stage. One speech job at a time. Workers die with the app. Nothing heavy s
 of D9. Read-aloud reads the two "which side could not be established" lines of a mixed question (not their `not_asked_about` variants, not
 `documentsNotNeeded`). The Parakeet CC BY 4.0 attribution text and the licence rows are in `docs/SPEECH.md`, "Licences".
 
-**Open, with a recommended default** (`docs/SPEECH.md`, "Open points"): the licences of the voices against the free-licence policy (read here
-as settled by D3), the licence of the application's own code and the credits view, the GPL-3.0 position of espeak-ng inside a separate TTS
+**Points settled on 18 October 2026** (`docs/SPEECH.md`, "Open points"): the owner confirmed that D3 settles the voice licences against the
+free-licence policy and accepted the recommended default of every other point. Still waiting for a measurement or her ear, not a decision: the
+gender of css10 and the new workstation's measurements. The points settled by default are: the licences of the voices, the licence of the application's own code and the credits view, the GPL-3.0 position of espeak-ng inside a separate TTS
 executable, the exact hosting path, the form of the baseline tests, a Markdown crate for read-aloud, a CI step for the worker crate, the KB
 spoken forms in read-aloud, the gender of css10, and the new workstation's measurements.

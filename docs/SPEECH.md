@@ -379,7 +379,7 @@ changed. Every pulled model needs its licence row (section 10) before it is prop
 
 Policy: `docs/MODELS.md`, "Licence policy" (Apache 2.0 or MIT, owner decision of 7 October 2026) is the policy of the **chat
 model families**. For speech, the owner's decisions D2 and D3 name each model and voice and are the explicit decision for
-them; the rule stays for every other model. See "Open points", item 1.
+them; the rule stays for every other model. See "Open points", item 1 (confirmed by the owner, 18 October 2026).
 
 `models/LICENSES.md` is under `/models/` in `.claudeignore` and was not read, so its columns are not guessed. The rows below
 are the text to paste into it (the owner pastes it; columns suggested: model or component, role, licence, source, obligation,
@@ -506,7 +506,7 @@ coordinates with that track and invents no second mechanism. Until then voice wo
 
 ## 14. Open points
 
-For the owner. Each has a recommended default that the work follows until she answers.
+For the owner. **Answered on 18 October 2026:** the owner confirmed point 1 explicitly and accepted every other recommended default (including the choices of phase 1: no `cancel` message in the worker protocol, kill instead; roadmap steps V-A to V-F). The defaults below are therefore the working decisions; a point is reopened only by the owner. Points 9 and 10 still wait for a measurement or her ear, not for a decision.
 
 | # | Point | Recommended default |
 |---|---|---|

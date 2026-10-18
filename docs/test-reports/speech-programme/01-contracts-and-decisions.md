@@ -40,8 +40,8 @@ end of `docs/SPEECH.md`, section 15). Nothing in SpeechLab was modified.
 ## Things you should look at
 
 1. **The voice licences.** The free-licence policy of `docs/MODELS.md` names Apache 2.0 and MIT; Coqui css10 is BSD-3-Clause, `libritts_r`
-   CC BY 4.0, `siwis` rated `review`. I wrote D3 as the explicit decision for those voices and kept the policy for chat models. **Please
-   confirm** (open point 1).
+   CC BY 4.0, `siwis` rated `review`. I wrote D3 as the explicit decision for those voices and kept the policy for chat models. **Confirmed by the
+   owner, 18 October 2026** (open point 1).
 2. **The Parakeet attribution text** is my wording of the CC BY 4.0 duties (credit, licence link, indication of changes: int8 and ONNX
    conversion). I did not read the model card (no network used); phase 3b checks the wording when the model is pulled.
 3. **The minimum and recommended computers** in "Minimum configuration" are **estimates** (labelled), reasoned from the laptop's figures,

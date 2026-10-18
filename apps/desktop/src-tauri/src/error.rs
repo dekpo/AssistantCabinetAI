@@ -231,6 +231,96 @@ pub enum AppError {
     /// ours, never document text. The knowledge base stays inactive; nothing else is affected.
     #[error("knowledge_pack_invalid")]
     KnowledgePackInvalid { pack: String, path: String },
+
+    /// Speech is switched off, or this feature is. The reason is in `speech_status`.
+    #[error("speech_unavailable")]
+    SpeechUnavailable,
+
+    /// The speech worker executable was not found.
+    #[error("speech_engine_missing")]
+    SpeechEngineMissing,
+
+    /// The model files of the speech engine are not on this machine.
+    #[error("speech_model_missing")]
+    SpeechModelMissing,
+
+    /// A model file does not match its pinned SHA-256.
+    #[error("speech_model_corrupt")]
+    SpeechModelCorrupt,
+
+    /// The recording is too short to hold a sentence. Refused before any engine runs.
+    #[error("speech_audio_too_short")]
+    SpeechAudioTooShort,
+
+    /// The recording is too quiet to be speech. Refused before any engine runs.
+    #[error("speech_audio_too_quiet")]
+    SpeechAudioTooQuiet,
+
+    /// The recording is longer than the cap of the setting.
+    #[error("speech_audio_too_long")]
+    SpeechAudioTooLong,
+
+    /// The audio is not in the format the engine takes.
+    #[error("speech_audio_invalid")]
+    SpeechAudioInvalid,
+
+    /// Another speech job is running. One at a time.
+    #[error("speech_busy")]
+    SpeechBusy,
+
+    /// The user stopped the job. Not a failure.
+    #[error("speech_cancelled")]
+    SpeechCancelled,
+
+    /// The engine took longer than its deadline and was stopped.
+    #[error("speech_timeout")]
+    SpeechTimeout,
+
+    /// The worker failed. The typed application is unaffected.
+    #[error("speech_engine_failed")]
+    SpeechEngineFailed,
+
+    /// The language is not in the speech language table, is only planned, or lacks the capability
+    /// the feature needs. `locale` is a BCP 47 tag, not translated.
+    #[error("speech_locale_unsupported")]
+    SpeechLocaleUnsupported { locale: String },
+
+    /// The engine output was rejected by the output guard (empty, runaway repetition, implausible
+    /// speed). Nothing reaches the text box.
+    #[error("speech_output_rejected")]
+    SpeechOutputRejected,
+
+    /// No voice that is proven local is available for read-aloud.
+    #[error("tts_no_local_voice")]
+    TtsNoLocalVoice,
+
+    /// The synthesiser failed on this text.
+    #[error("tts_failed")]
+    TtsFailed,
+
+    /// The folder notes are saved in cannot be used: no documents folder, or not writable.
+    #[error("notes_folder_unavailable")]
+    NotesFolderUnavailable,
+
+    /// A note name that cannot be kept once cleaned.
+    #[error("notes_name_invalid")]
+    NotesNameInvalid,
+
+    /// A note larger than the limit. Nothing was written.
+    #[error("notes_too_large")]
+    NotesTooLarge,
+
+    /// More notes in one save than the limit. Nothing was written.
+    #[error("notes_too_many")]
+    NotesTooMany,
+
+    /// A note could not be written. Nothing existing was overwritten.
+    #[error("notes_write_failed")]
+    NotesWriteFailed,
+
+    /// A note was saved but could not be analysed. It stays in its folder.
+    #[error("notes_analysis_failed")]
+    NotesAnalysisFailed,
 }
 
 impl AppError {
@@ -289,6 +379,28 @@ impl AppError {
             Self::KnowledgeOperationRefused => "knowledge_operation_refused",
             Self::KnowledgeNothingToUndo => "knowledge_nothing_to_undo",
             Self::KnowledgePackInvalid { .. } => "knowledge_pack_invalid",
+            Self::SpeechUnavailable => "speech_unavailable",
+            Self::SpeechEngineMissing => "speech_engine_missing",
+            Self::SpeechModelMissing => "speech_model_missing",
+            Self::SpeechModelCorrupt => "speech_model_corrupt",
+            Self::SpeechAudioTooShort => "speech_audio_too_short",
+            Self::SpeechAudioTooQuiet => "speech_audio_too_quiet",
+            Self::SpeechAudioTooLong => "speech_audio_too_long",
+            Self::SpeechAudioInvalid => "speech_audio_invalid",
+            Self::SpeechBusy => "speech_busy",
+            Self::SpeechCancelled => "speech_cancelled",
+            Self::SpeechTimeout => "speech_timeout",
+            Self::SpeechEngineFailed => "speech_engine_failed",
+            Self::SpeechLocaleUnsupported { .. } => "speech_locale_unsupported",
+            Self::SpeechOutputRejected => "speech_output_rejected",
+            Self::TtsNoLocalVoice => "tts_no_local_voice",
+            Self::TtsFailed => "tts_failed",
+            Self::NotesFolderUnavailable => "notes_folder_unavailable",
+            Self::NotesNameInvalid => "notes_name_invalid",
+            Self::NotesTooLarge => "notes_too_large",
+            Self::NotesTooMany => "notes_too_many",
+            Self::NotesWriteFailed => "notes_write_failed",
+            Self::NotesAnalysisFailed => "notes_analysis_failed",
         }
     }
 
@@ -324,7 +436,29 @@ impl AppError {
             | Self::KnowledgeNameTaken
             | Self::KnowledgeOperationRefused
             | Self::KnowledgeNothingToUndo
-            | Self::OcrUnavailable => json!({}),
+            | Self::OcrUnavailable
+            | Self::SpeechUnavailable
+            | Self::SpeechEngineMissing
+            | Self::SpeechModelMissing
+            | Self::SpeechModelCorrupt
+            | Self::SpeechAudioTooShort
+            | Self::SpeechAudioTooQuiet
+            | Self::SpeechAudioTooLong
+            | Self::SpeechAudioInvalid
+            | Self::SpeechBusy
+            | Self::SpeechCancelled
+            | Self::SpeechTimeout
+            | Self::SpeechEngineFailed
+            | Self::SpeechOutputRejected
+            | Self::TtsNoLocalVoice
+            | Self::TtsFailed
+            | Self::NotesFolderUnavailable
+            | Self::NotesNameInvalid
+            | Self::NotesTooLarge
+            | Self::NotesTooMany
+            | Self::NotesWriteFailed
+            | Self::NotesAnalysisFailed => json!({}),
+            Self::SpeechLocaleUnsupported { locale } => json!({ "locale": locale }),
             Self::KnowledgePackInvalid { pack, path } => json!({ "pack": pack, "path": path }),
             Self::FillTemplateUnreadable { path } => json!({ "path": path }),
             Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),

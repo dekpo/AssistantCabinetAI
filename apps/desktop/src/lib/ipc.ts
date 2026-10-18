@@ -26,6 +26,53 @@ export interface PanelLayouts {
   collapsed: PanelTriple | null;
 }
 
+/** Local voice: dictation, read-aloud and voice notes. Mirrors `speech/settings.rs`; Rust clamps
+ * whatever is sent. */
+export interface SpeechSettings {
+  /** The voice master switch for dictation and read-aloud. Off by default. */
+  enabled: boolean;
+  dictationEnabled: boolean;
+  readAloudEnabled: boolean;
+  /** The Notes button and section: its own switch, independent of `enabled`. */
+  notesEnabled: boolean;
+  /** `null` follows the interface locale. */
+  languageOverride: string | null;
+  /** Cap of one chat dictation, in seconds. */
+  maxDictationSeconds: number;
+  /** Cap of one note dictation, in seconds. */
+  maxNoteSeconds: number;
+  /** `null` is automatic. */
+  ttsEngine: "piper" | "system" | null;
+  /** A voice manifest id; `null` is the first voice of the language. */
+  ttsVoice: string | null;
+  /** Read-aloud speed as a multiple of the natural rate. */
+  ttsRate: number;
+  /** One clean folder name under the documents folder. */
+  notesFolderName: string;
+  notesVoiceCommands: boolean;
+  /** Root of the explicit model download. Held by Rust: the webview never holds an address. */
+  speechModelsUrl: string;
+}
+
+/** What Rust uses when `settings.json` has no `speech` block: voice off, notes on. */
+export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
+  enabled: false,
+  dictationEnabled: true,
+  readAloudEnabled: true,
+  notesEnabled: true,
+  languageOverride: null,
+  maxDictationSeconds: 120,
+  maxNoteSeconds: 1800,
+  ttsEngine: null,
+  ttsVoice: null,
+  ttsRate: 1,
+  notesFolderName: "Notes",
+  notesVoiceCommands: true,
+  // Empty on purpose: no source file of the webview names a host (`guards/viewer.test.ts`). Rust
+  // reads an empty address as its own default.
+  speechModelsUrl: "",
+};
+
 export interface AppSettings {
   /** Chosen locale, or null on a machine where nothing has been chosen yet. */
   locale: string | null;
@@ -79,6 +126,8 @@ export interface AppSettings {
   ownNames: string[];
   /** The remembered widths of the three zones of the window. Rust keeps only usable triples. */
   layout: PanelLayouts;
+  /** Local voice and notes. Rust keeps every value in range. */
+  speech: SpeechSettings;
 }
 
 export interface AppSnapshot {

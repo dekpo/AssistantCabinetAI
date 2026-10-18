@@ -37,6 +37,8 @@ pub mod readers;
 pub mod retrieval;
 pub mod reveal;
 mod settings;
+pub mod speech;
+mod speech_commands;
 pub mod structure;
 pub mod tabular;
 pub mod tabular_answer;
@@ -55,6 +57,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(state)
+        .manage(speech_commands::SpeechState::new())
         .invoke_handler(tauri::generate_handler![
             commands::load_app_snapshot,
             commands::save_settings,
@@ -112,6 +115,7 @@ pub fn run() {
             commands::reset_index,
             commands::fill_preview,
             commands::fill_generate,
+            speech_commands::speech_status,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

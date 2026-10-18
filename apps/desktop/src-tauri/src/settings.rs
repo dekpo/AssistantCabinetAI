@@ -13,6 +13,7 @@ use crate::error::AppError;
 use crate::knowledge::packs::{available_pack_ids, canonical_pack_id};
 use crate::knowledge::reduce::TargetingPolicy;
 use crate::knowledge::KnowledgeMode;
+use crate::speech::settings::SpeechSettings;
 use crate::work_folder::{display, WorkFolderPolicy};
 
 const SETTINGS_FILE_NAME: &str = "settings.json";
@@ -207,6 +208,9 @@ pub struct Settings {
     /// The remembered widths of the three zones of the window. A convenience of the interface: kept
     /// valid by `PanelLayouts::sanitised` on the way in and on the way out.
     pub layout: PanelLayouts,
+    /// Local voice: dictation, read-aloud and voice notes. One nested field, kept valid by
+    /// `SpeechSettings::sanitised` on the way in and on the way out (`docs/SPEECH.md`, section 4).
+    pub speech: SpeechSettings,
 }
 
 impl Default for Settings {
@@ -235,6 +239,7 @@ impl Default for Settings {
             copy_sources: false,
             own_names: Vec::new(),
             layout: PanelLayouts::default(),
+            speech: SpeechSettings::default(),
         }
     }
 }
@@ -325,6 +330,7 @@ pub fn load(app: &AppHandle) -> (Settings, Vec<String>) {
             settings.knowledge_packs = settings.knowledge_pack_ids();
             // A hand-edited layout never reaches the webview with a value it cannot use.
             settings.layout = settings.layout.sanitised();
+            settings.speech = settings.speech.sanitised();
             (settings, Vec::new())
         }
         _ => (
@@ -356,6 +362,7 @@ pub fn save(
     checked.knowledge_packs = checked.knowledge_pack_ids();
     checked.own_names = clean_own_names(&checked.own_names);
     checked.layout = checked.layout.sanitised();
+    checked.speech = checked.speech.sanitised();
     let targeting = checked.targeting_policy();
     checked.knowledge_min_scope_files = targeting.min_scope_files;
     checked.knowledge_max_selectivity = targeting.max_selectivity;
@@ -401,6 +408,12 @@ fn clean_own_names(typed: &[String]) -> Vec<String> {
 }
 
 fn clean_folder_name(typed: &str) -> String {
+    clean_folder_name_or(typed, DEFAULT_GENERATED_FOLDER_NAME)
+}
+
+/// The same cleaning with the name to fall back on when nothing usable is left, for a folder that
+/// has its own default (the notes folder).
+pub(crate) fn clean_folder_name_or(typed: &str, fallback: &str) -> String {
     use unicode_normalization::char::is_combining_mark;
     use unicode_normalization::UnicodeNormalization;
 
@@ -422,7 +435,7 @@ fn clean_folder_name(typed: &str) -> String {
     if name.chars().any(|ch| ch.is_ascii_alphanumeric()) {
         name.to_string()
     } else {
-        DEFAULT_GENERATED_FOLDER_NAME.to_string()
+        fallback.to_string()
     }
 }
 
@@ -498,9 +511,16 @@ mod tests {
                 open: Some([20.0, 40.0, 40.0]),
                 collapsed: Some([25.0, 0.0, 75.0]),
             },
+            speech: SpeechSettings {
+                enabled: true,
+                notes_folder_name: "Dictees".into(),
+                ..SpeechSettings::default()
+            },
         };
 
         let json = serde_json::to_value(&settings).expect("serialises");
+        assert_eq!(json["speech"]["enabled"], true);
+        assert_eq!(json["speech"]["notesFolderName"], "Dictees");
         assert_eq!(json["layout"]["open"][1], 40.0);
         assert_eq!(json["layout"]["collapsed"][2], 75.0);
         assert_eq!(json["generatedFolderName"], "Courriers");

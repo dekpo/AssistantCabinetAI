@@ -1,0 +1,225 @@
+{
+  "schema": 1,
+  "locale": "fr-FR",
+  "numbers": {
+    "below_hundred": [
+      "zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
+      "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf",
+      "vingt", "vingt et un", "vingt-deux", "vingt-trois", "vingt-quatre", "vingt-cinq", "vingt-six", "vingt-sept", "vingt-huit", "vingt-neuf",
+      "trente", "trente et un", "trente-deux", "trente-trois", "trente-quatre", "trente-cinq", "trente-six", "trente-sept", "trente-huit", "trente-neuf",
+      "quarante", "quarante et un", "quarante-deux", "quarante-trois", "quarante-quatre", "quarante-cinq", "quarante-six", "quarante-sept", "quarante-huit", "quarante-neuf",
+      "cinquante", "cinquante et un", "cinquante-deux", "cinquante-trois", "cinquante-quatre", "cinquante-cinq", "cinquante-six", "cinquante-sept", "cinquante-huit", "cinquante-neuf",
+      "soixante", "soixante et un", "soixante-deux", "soixante-trois", "soixante-quatre", "soixante-cinq", "soixante-six", "soixante-sept", "soixante-huit", "soixante-neuf",
+      "soixante-dix", "soixante et onze", "soixante-douze", "soixante-treize", "soixante-quatorze", "soixante-quinze", "soixante-seize", "soixante-dix-sept", "soixante-dix-huit", "soixante-dix-neuf",
+      "quatre-vingt", "quatre-vingt-un", "quatre-vingt-deux", "quatre-vingt-trois", "quatre-vingt-quatre", "quatre-vingt-cinq", "quatre-vingt-six", "quatre-vingt-sept", "quatre-vingt-huit", "quatre-vingt-neuf",
+      "quatre-vingt-dix", "quatre-vingt-onze", "quatre-vingt-douze", "quatre-vingt-treize", "quatre-vingt-quatorze", "quatre-vingt-quinze", "quatre-vingt-seize", "quatre-vingt-dix-sept", "quatre-vingt-dix-huit", "quatre-vingt-dix-neuf"
+    ],
+    "final_forms": { "80": "quatre-vingts" },
+    "hundred": { "word": "cent", "plural": "cents", "one_omitted": true },
+    "scales": [
+      { "value": 1000, "singular": "mille", "one_omitted": true, "multiplier_plural": false },
+      { "value": 1000000, "singular": "million", "plural": "millions", "multiplier_plural": true },
+      { "value": 1000000000, "singular": "milliard", "plural": "milliards", "multiplier_plural": true }
+    ],
+    "group_separators": [" ", "."],
+    "decimal_separators": [",", "."],
+    "decimal_word": "virgule",
+    "decimals_as_number_up_to": 3,
+    "singular_values": [0, 1],
+    "fraction_makes_plural": false
+  },
+  "ordinals": {
+    "irregular_last": { "un": "unième", "cinq": "cinquième", "neuf": "neuvième" },
+    "endings": [{ "ends_with": "e", "strip": 1, "add": "ième" }],
+    "default_add": "ième",
+    "exact": { "1": { "masculine": "premier", "feminine": "première" } },
+    "plural_add": "s",
+    "suffixes": [
+      { "suffix": "er", "min": 1 },
+      { "suffix": "re", "only": 1, "feminine": true },
+      { "suffix": "ère", "only": 1, "feminine": true },
+      { "suffix": "e", "min": 2 },
+      { "suffix": "ème", "min": 2 },
+      { "suffix": "eme", "min": 2 },
+      { "suffix": "nd", "only": 2, "word": "second" },
+      { "suffix": "nde", "only": 2, "word": "seconde", "feminine": true },
+      { "suffix": "es", "min": 2, "plural": true },
+      { "suffix": "èmes", "min": 2, "plural": true }
+    ]
+  },
+  "words": {
+    "minus": "moins",
+    "plus": "plus",
+    "and": "et",
+    "percent": "pour cent",
+    "times": "fois",
+    "per": "par",
+    "range_to": "à",
+    "over": "sur"
+  },
+  "months": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+  "dates": {
+    "order": "dmy",
+    "swap_when_first_over_twelve": false,
+    "template": "{day} {month} {year}",
+    "day_style": "cardinal",
+    "first_day_word": "premier",
+    "month_capitalised": false,
+    "day_after_month": false,
+    "year": { "style": "cardinal" },
+    "day_month_after": ["le", "du", "au", "dès", "depuis", "jusqu'au", "avant", "après", "ce"],
+    "day_month_template": "{day} {month}"
+  },
+  "times": {
+    "hour_marker": "h",
+    "hour_forms": { "zero": "zéro heure", "one": "une heure", "other": "{hours} heures" },
+    "on_the_hour": "{hour}",
+    "on_the_hour_ampm": "{hour}",
+    "with_minutes": "{hour} {minutes}",
+    "with_minutes_ampm": "{hour} {minutes}",
+    "with_minutes_below_ten": "{hour} {minutes}",
+    "with_minutes_below_ten_ampm": "{hour} {minutes}",
+    "ampm": [],
+    "dot_after": ["à", "vers", "dès", "de", "entre", "et", "jusqu'à", "jusqu’à", "avant", "après", "depuis"]
+  },
+  "units": [
+    { "symbols": ["mg"], "singular": "milligramme", "plural": "milligrammes" },
+    { "symbols": ["g"], "singular": "gramme", "plural": "grammes" },
+    { "symbols": ["kg"], "singular": "kilogramme", "plural": "kilogrammes" },
+    { "symbols": ["µg", "μg", "mcg"], "singular": "microgramme", "plural": "microgrammes" },
+    { "symbols": ["ml", "mL"], "singular": "millilitre", "plural": "millilitres" },
+    { "symbols": ["l", "L"], "singular": "litre", "plural": "litres" },
+    { "symbols": ["cl"], "singular": "centilitre", "plural": "centilitres" },
+    { "symbols": ["dl"], "singular": "décilitre", "plural": "décilitres" },
+    { "symbols": ["mm"], "singular": "millimètre", "plural": "millimètres" },
+    { "symbols": ["cm"], "singular": "centimètre", "plural": "centimètres" },
+    { "symbols": ["m"], "singular": "mètre", "plural": "mètres" },
+    { "symbols": ["km"], "singular": "kilomètre", "plural": "kilomètres" },
+    { "symbols": ["ms"], "singular": "milliseconde", "plural": "millisecondes" },
+    { "symbols": ["s"], "singular": "seconde", "plural": "secondes" },
+    { "symbols": ["min"], "singular": "minute", "plural": "minutes" },
+    { "symbols": ["h"], "singular": "heure", "plural": "heures" },
+    { "symbols": ["j"], "singular": "jour", "plural": "jours" },
+    { "symbols": ["UI", "IU"], "singular": "unité internationale", "plural": "unités internationales" },
+    { "symbols": ["mmHg"], "singular": "millimètre de mercure", "plural": "millimètres de mercure" },
+    { "symbols": ["bpm"], "singular": "battement par minute", "plural": "battements par minute" },
+    { "symbols": ["kcal"], "singular": "kilocalorie", "plural": "kilocalories" },
+    { "symbols": ["mmol"], "singular": "millimole", "plural": "millimoles" },
+    { "symbols": ["mol"], "singular": "mole", "plural": "moles" },
+    { "symbols": ["Hz"], "singular": "hertz", "plural": "hertz" },
+    { "symbols": ["kHz"], "singular": "kilohertz", "plural": "kilohertz" },
+    { "symbols": ["MHz"], "singular": "mégahertz", "plural": "mégahertz" },
+    { "symbols": ["GHz"], "singular": "gigahertz", "plural": "gigahertz" },
+    { "symbols": ["Ko", "KB", "kB"], "singular": "kilooctet", "plural": "kilooctets" },
+    { "symbols": ["Mo", "MB"], "singular": "mégaoctet", "plural": "mégaoctets" },
+    { "symbols": ["Go", "GB"], "singular": "gigaoctet", "plural": "gigaoctets" },
+    { "symbols": ["To", "TB"], "singular": "téraoctet", "plural": "téraoctets" },
+    { "symbols": ["cp"], "singular": "comprimé", "plural": "comprimés" },
+    { "symbols": ["lb", "lbs"], "singular": "livre", "plural": "livres" },
+    { "symbols": ["oz"], "singular": "once", "plural": "onces" }
+  ],
+  "per_words": [
+    { "written": ["jour", "day"], "spoken": "jour" },
+    { "written": ["semaine", "week"], "spoken": "semaine" },
+    { "written": ["mois", "month"], "spoken": "mois" },
+    { "written": ["heure", "hour"], "spoken": "heure" }
+  ],
+  "currencies": [
+    { "symbols": ["€", "EUR"], "singular": "euro", "plural": "euros", "minor_singular": "centime", "minor_plural": "centimes" },
+    { "symbols": ["$", "USD"], "singular": "dollar", "plural": "dollars", "minor_singular": "cent", "minor_plural": "cents" },
+    { "symbols": ["£", "GBP"], "singular": "livre sterling", "plural": "livres sterling", "minor_singular": "penny", "minor_plural": "pence" },
+    { "symbols": ["CHF"], "singular": "franc", "plural": "francs", "minor_singular": "centime", "minor_plural": "centimes" }
+  ],
+  "currency_style": {
+    "minor_joiner": "",
+    "name_minor_with_major": false,
+    "words": ["euro", "euros", "franc", "francs", "dollar", "dollars", "livre", "livres"]
+  },
+  "degrees": {
+    "singular": "degré",
+    "plural": "degrés",
+    "scales": { "C": "Celsius", "F": "Fahrenheit" }
+  },
+  "fractions": {
+    "1/2": "un demi",
+    "1/3": "un tiers",
+    "2/3": "deux tiers",
+    "1/4": "un quart",
+    "3/4": "trois quarts"
+  },
+  "glue": { "from": 1000000, "before_vowel": "d'", "otherwise": "de ", "vowels": "aeiouyéèh" },
+  "abbreviations": [
+    { "written": "av. J.-C.", "spoken": "avant Jésus-Christ" },
+    { "written": "c.-à-d.", "spoken": "c'est-à-dire" },
+    { "written": "MM.", "spoken": "messieurs" },
+    { "written": "Mmes", "spoken": "mesdames" },
+    { "written": "Mlles", "spoken": "mesdemoiselles" },
+    { "written": "St.", "spoken": "saint" },
+    { "written": "St", "spoken": "saint", "need": "name" },
+    { "written": "Ste.", "spoken": "sainte" },
+    { "written": "Ste", "spoken": "sainte", "need": "name" },
+    { "written": "etc.", "spoken": "et cetera" },
+    { "written": "env.", "spoken": "environ" },
+    { "written": "approx.", "spoken": "environ" },
+    { "written": "vs.", "spoken": "versus" },
+    { "written": "vs", "spoken": "versus" },
+    { "written": "cf.", "spoken": "voir" },
+    { "written": "p.", "spoken": "page", "need": "digit" },
+    { "written": "pp.", "spoken": "pages", "need": "digit" },
+    { "written": "tél.", "spoken": "téléphone" },
+    { "written": "tel.", "spoken": "téléphone" },
+    { "written": "av.", "spoken": "avenue", "need": "name" },
+    { "written": "bd", "spoken": "boulevard", "need": "name" },
+    { "written": "rdv", "spoken": "rendez-vous" },
+    { "written": "n°", "spoken": "numéro" },
+    { "written": "nº", "spoken": "numéro" },
+    { "written": "janv.", "spoken": "janvier" },
+    { "written": "févr.", "spoken": "février" },
+    { "written": "avr.", "spoken": "avril" },
+    { "written": "juil.", "spoken": "juillet" },
+    { "written": "sept.", "spoken": "septembre" },
+    { "written": "oct.", "spoken": "octobre" },
+    { "written": "nov.", "spoken": "novembre" },
+    { "written": "déc.", "spoken": "décembre" }
+  ],
+  "feminine": {
+    "one": "un",
+    "one_feminine": "une",
+    "nouns": [
+      "fois", "heure", "heures", "minute", "minutes", "seconde", "secondes", "semaine", "semaines", "année", "années",
+      "journée", "journées", "gélule", "gélules", "ampoule", "ampoules", "dose", "doses", "personne", "personnes",
+      "facture", "factures", "page", "pages", "ligne", "lignes", "pièce", "pièces", "ordonnance", "ordonnances",
+      "consultation", "consultations", "goutte", "gouttes", "injection", "injections", "cuillère", "cuillères",
+      "prise", "prises", "boîte", "boîtes", "unité", "unités", "carte", "cartes", "tablette", "tablettes",
+      "chambre", "chambres", "nuit", "nuits", "dent", "dents", "pilule", "pilules", "capsule", "capsules"
+    ]
+  },
+  "sentences": {
+    "never_end": [
+      "m", "mm", "mme", "mmes", "mlle", "mlles", "dr", "dre", "drs", "pr", "pre", "prof", "me", "st", "ste", "sts",
+      "mr", "mrs", "ms", "jr", "sr", "vs", "cf", "env", "approx", "e.g", "i.e", "c.-à-d", "fig", "réf", "ref",
+      "ex", "p", "pp", "tel", "tél", "av", "bd", "dept", "inc", "ltd", "n", "no", "janv", "févr", "fevr", "avr",
+      "juil", "sept", "oct", "nov", "déc", "dec", "jan", "feb", "mar", "apr", "aug", "sep"
+    ],
+    "ends_before_capital": ["etc", "al"]
+  },
+  "phones": { "ten_digits_in_pairs": true },
+  "spell_acronyms": ["IRM", "ECG", "EEG", "EMG", "TVA", "PDF", "SMS", "RIB", "NIR", "AVS", "USB", "RGPD", "DMP", "IA"],
+  "letters": {
+    "a": "a", "b": "bé", "c": "cé", "d": "dé", "e": "eu", "f": "effe", "g": "gé", "h": "hache", "i": "i",
+    "j": "gi", "k": "ka", "l": "elle", "m": "emme", "n": "enne", "o": "o", "p": "pé", "q": "cu", "r": "erre",
+    "s": "esse", "t": "té", "u": "u", "v": "vé", "w": "double vé", "x": "ixe", "y": "i grec", "z": "zède"
+  },
+  "identifiers": {
+    "readings": {
+      "nir": { "chunks": [1, 2, 2, 2, 3, 3, 2], "size": 3 },
+      "avs": { "chunks": [3, 4, 4, 2], "size": 4 },
+      "iban": { "size": 4 },
+      "ch_iban": { "size": 4 },
+      "invoice": { "size": 4 },
+      "order": { "size": 4 },
+      "health_insurance_number": { "size": 3 }
+    },
+    "email_symbols": { "@": "arobase", ".": "point", "-": "tiret", "_": "tiret bas" }
+  }
+}

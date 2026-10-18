@@ -16,6 +16,7 @@ use crate::speech::model_download::{self, Progress, Sink};
 use crate::speech::models::{self, JobSlot};
 use crate::speech::notes::{self, NoteDraft, NoteFile, SaveLog, Target};
 use crate::speech::service::{self, Purpose, SpeechService, PURPOSE_HEADER};
+use crate::speech::speakable::{self, Part, Segment};
 use crate::speech::status::{self, Probes, SpeechStatus};
 use crate::speech::stt::SttResult;
 use crate::speech::temp_audio;
@@ -283,4 +284,25 @@ pub async fn speech_model_verify(
 #[tauri::command]
 pub fn speech_model_cancel(speech: State<'_, SpeechState>) -> bool {
     speech.model_job.cancel()
+}
+
+/// The segments a voice speaks for these parts of an answer, and the notes that stand for what is
+/// not read. Derived here, by code, from the text the interface sends; no model, no engine and no
+/// network. Reads the settings only to refuse when read-aloud is off. The optional step that says
+/// the names of the selection as the knowledge base spells them is not part of this command.
+#[tauri::command]
+pub fn speech_prepare_reading(
+    state: State<'_, AppState>,
+    parts: Vec<Part>,
+    locale: String,
+) -> Result<Vec<Segment>, AppError> {
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .clone();
+    speakable::reading_allowed(&settings)?;
+    let packs = settings.knowledge_pack_ids();
+    let ids: Vec<&str> = packs.iter().map(String::as_str).collect();
+    speakable::prepare_for_locale(&parts, &locale, &ids)
 }

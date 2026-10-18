@@ -24,6 +24,10 @@
 //!   idle delay and kills it on a cancel; the console window module owns the one platform detail.
 //! * [`models`], [`model_download`]: the compiled-in manifest of the models, what is on disk, and the
 //!   one file of the module that touches the network, on an explicit user action only.
+//! * [`speakable`] and its `speakable_*` files: turns an answer into segments a voice can speak,
+//!   in Rust, by code, never by the model: Markdown reader, number, date, time and unit words from
+//!   the rule packs of `resources/speech/rules/`, titles and identifiers from the knowledge packs.
+//!   No engine, no audio and no network: a pure function of its arguments.
 
 pub mod console_window;
 pub mod languages;
@@ -33,6 +37,12 @@ pub mod notes;
 pub mod output_guard;
 pub mod service;
 pub mod settings;
+pub mod speakable;
+pub mod speakable_markdown;
+pub mod speakable_numbers;
+pub mod speakable_rules;
+pub mod speakable_scan;
+pub mod speakable_sentences;
 pub mod status;
 pub mod stt;
 pub mod temp_audio;
@@ -48,6 +58,8 @@ mod model_download_tests;
 mod models_tests;
 #[cfg(test)]
 mod notes_tests;
+#[cfg(test)]
+mod speakable_tests;
 #[cfg(test)]
 mod stt_tests;
 #[cfg(test)]

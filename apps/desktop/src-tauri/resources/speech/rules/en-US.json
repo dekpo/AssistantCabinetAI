@@ -1,0 +1,212 @@
+{
+  "schema": 1,
+  "locale": "en-US",
+  "numbers": {
+    "below_hundred": [
+      "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+      "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+      "twenty", "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight", "twenty-nine",
+      "thirty", "thirty-one", "thirty-two", "thirty-three", "thirty-four", "thirty-five", "thirty-six", "thirty-seven", "thirty-eight", "thirty-nine",
+      "forty", "forty-one", "forty-two", "forty-three", "forty-four", "forty-five", "forty-six", "forty-seven", "forty-eight", "forty-nine",
+      "fifty", "fifty-one", "fifty-two", "fifty-three", "fifty-four", "fifty-five", "fifty-six", "fifty-seven", "fifty-eight", "fifty-nine",
+      "sixty", "sixty-one", "sixty-two", "sixty-three", "sixty-four", "sixty-five", "sixty-six", "sixty-seven", "sixty-eight", "sixty-nine",
+      "seventy", "seventy-one", "seventy-two", "seventy-three", "seventy-four", "seventy-five", "seventy-six", "seventy-seven", "seventy-eight", "seventy-nine",
+      "eighty", "eighty-one", "eighty-two", "eighty-three", "eighty-four", "eighty-five", "eighty-six", "eighty-seven", "eighty-eight", "eighty-nine",
+      "ninety", "ninety-one", "ninety-two", "ninety-three", "ninety-four", "ninety-five", "ninety-six", "ninety-seven", "ninety-eight", "ninety-nine"
+    ],
+    "hundred": { "word": "hundred" },
+    "scales": [
+      { "value": 1000, "singular": "thousand" },
+      { "value": 1000000, "singular": "million" },
+      { "value": 1000000000, "singular": "billion" }
+    ],
+    "group_separators": [","],
+    "decimal_separators": ["."],
+    "decimal_word": "point",
+    "decimals_as_number_up_to": 0,
+    "singular_values": [1],
+    "fraction_makes_plural": true
+  },
+  "ordinals": {
+    "irregular_last": {
+      "one": "first",
+      "two": "second",
+      "three": "third",
+      "five": "fifth",
+      "eight": "eighth",
+      "nine": "ninth",
+      "twelve": "twelfth"
+    },
+    "endings": [{ "ends_with": "y", "strip": 1, "add": "ieth" }],
+    "default_add": "th",
+    "exact": {},
+    "plural_add": "s",
+    "suffixes": [
+      { "suffix": "st" },
+      { "suffix": "nd" },
+      { "suffix": "rd" },
+      { "suffix": "th" }
+    ]
+  },
+  "words": {
+    "minus": "minus",
+    "plus": "plus",
+    "and": "and",
+    "percent": "percent",
+    "times": "times",
+    "per": "per",
+    "range_to": "to",
+    "over": "over"
+  },
+  "months": ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"],
+  "dates": {
+    "order": "mdy",
+    "swap_when_first_over_twelve": true,
+    "template": "{month} {day}, {year}",
+    "day_style": "ordinal",
+    "month_capitalised": true,
+    "day_after_month": true,
+    "year": { "style": "pairs", "oh": "oh", "hundred": "hundred", "plain_from": 2001, "plain_to": 2009 },
+    "day_month_after": [],
+    "day_month_template": "{month} {day}"
+  },
+  "times": {
+    "hour_forms": { "other": "{hours}" },
+    "on_the_hour": "{hour} o'clock",
+    "on_the_hour_ampm": "{hour} {ampm}",
+    "with_minutes": "{hour} {minutes}",
+    "with_minutes_ampm": "{hour} {minutes} {ampm}",
+    "with_minutes_below_ten": "{hour} oh {minutes}",
+    "with_minutes_below_ten_ampm": "{hour} oh {minutes} {ampm}",
+    "ampm": [
+      { "written": ["a.m.", "am"], "spoken": "a m" },
+      { "written": ["p.m.", "pm"], "spoken": "p m" }
+    ],
+    "dot_after": ["at", "by", "from", "to", "until", "till", "before", "after", "around", "since", "between", "and"]
+  },
+  "units": [
+    { "symbols": ["mg"], "singular": "milligram", "plural": "milligrams" },
+    { "symbols": ["g"], "singular": "gram", "plural": "grams" },
+    { "symbols": ["kg"], "singular": "kilogram", "plural": "kilograms" },
+    { "symbols": ["µg", "μg", "mcg"], "singular": "microgram", "plural": "micrograms" },
+    { "symbols": ["ml", "mL"], "singular": "milliliter", "plural": "milliliters" },
+    { "symbols": ["l", "L"], "singular": "liter", "plural": "liters" },
+    { "symbols": ["cl"], "singular": "centiliter", "plural": "centiliters" },
+    { "symbols": ["dl"], "singular": "deciliter", "plural": "deciliters" },
+    { "symbols": ["mm"], "singular": "millimeter", "plural": "millimeters" },
+    { "symbols": ["cm"], "singular": "centimeter", "plural": "centimeters" },
+    { "symbols": ["m"], "singular": "meter", "plural": "meters" },
+    { "symbols": ["km"], "singular": "kilometer", "plural": "kilometers" },
+    { "symbols": ["ms"], "singular": "millisecond", "plural": "milliseconds" },
+    { "symbols": ["s"], "singular": "second", "plural": "seconds" },
+    { "symbols": ["min"], "singular": "minute", "plural": "minutes" },
+    { "symbols": ["h"], "singular": "hour", "plural": "hours" },
+    { "symbols": ["j"], "singular": "day", "plural": "days" },
+    { "symbols": ["UI", "IU"], "singular": "international unit", "plural": "international units" },
+    { "symbols": ["mmHg"], "singular": "millimeter of mercury", "plural": "millimeters of mercury" },
+    { "symbols": ["bpm"], "singular": "beat per minute", "plural": "beats per minute" },
+    { "symbols": ["kcal"], "singular": "kilocalorie", "plural": "kilocalories" },
+    { "symbols": ["mmol"], "singular": "millimole", "plural": "millimoles" },
+    { "symbols": ["mol"], "singular": "mole", "plural": "moles" },
+    { "symbols": ["Hz"], "singular": "hertz", "plural": "hertz" },
+    { "symbols": ["kHz"], "singular": "kilohertz", "plural": "kilohertz" },
+    { "symbols": ["MHz"], "singular": "megahertz", "plural": "megahertz" },
+    { "symbols": ["GHz"], "singular": "gigahertz", "plural": "gigahertz" },
+    { "symbols": ["Ko", "KB", "kB"], "singular": "kilobyte", "plural": "kilobytes" },
+    { "symbols": ["Mo", "MB"], "singular": "megabyte", "plural": "megabytes" },
+    { "symbols": ["Go", "GB"], "singular": "gigabyte", "plural": "gigabytes" },
+    { "symbols": ["To", "TB"], "singular": "terabyte", "plural": "terabytes" },
+    { "symbols": ["cp"], "singular": "tablet", "plural": "tablets" },
+    { "symbols": ["lb", "lbs"], "singular": "pound", "plural": "pounds" },
+    { "symbols": ["oz"], "singular": "ounce", "plural": "ounces" }
+  ],
+  "per_words": [
+    { "written": ["day"], "spoken": "day" },
+    { "written": ["week"], "spoken": "week" },
+    { "written": ["month"], "spoken": "month" },
+    { "written": ["hour"], "spoken": "hour" }
+  ],
+  "currencies": [
+    { "symbols": ["€", "EUR"], "singular": "euro", "plural": "euros", "minor_singular": "cent", "minor_plural": "cents" },
+    { "symbols": ["$", "USD"], "singular": "dollar", "plural": "dollars", "minor_singular": "cent", "minor_plural": "cents" },
+    { "symbols": ["£", "GBP"], "singular": "pound", "plural": "pounds", "minor_singular": "penny", "minor_plural": "pence" },
+    { "symbols": ["CHF"], "singular": "Swiss franc", "plural": "Swiss francs", "minor_singular": "centime", "minor_plural": "centimes" }
+  ],
+  "currency_style": {
+    "minor_joiner": "and",
+    "name_minor_with_major": true,
+    "words": ["euro", "euros", "franc", "francs", "dollar", "dollars", "pound", "pounds"]
+  },
+  "degrees": {
+    "singular": "degree",
+    "plural": "degrees",
+    "scales": { "C": "Celsius", "F": "Fahrenheit" }
+  },
+  "fractions": {
+    "1/2": "one half",
+    "1/3": "one third",
+    "2/3": "two thirds",
+    "1/4": "one quarter",
+    "3/4": "three quarters"
+  },
+  "abbreviations": [
+    { "written": "e.g.", "spoken": "for example" },
+    { "written": "i.e.", "spoken": "that is" },
+    { "written": "Jr.", "spoken": "junior" },
+    { "written": "Sr.", "spoken": "senior" },
+    { "written": "St.", "spoken": "saint" },
+    { "written": "St", "spoken": "saint", "need": "name" },
+    { "written": "etc.", "spoken": "et cetera" },
+    { "written": "approx.", "spoken": "approximately" },
+    { "written": "vs.", "spoken": "versus" },
+    { "written": "vs", "spoken": "versus" },
+    { "written": "cf.", "spoken": "see" },
+    { "written": "p.", "spoken": "page", "need": "digit" },
+    { "written": "pp.", "spoken": "pages", "need": "digit" },
+    { "written": "tel.", "spoken": "telephone" },
+    { "written": "av.", "spoken": "avenue", "need": "name" },
+    { "written": "rdv", "spoken": "appointment" },
+    { "written": "n°", "spoken": "number" },
+    { "written": "nº", "spoken": "number" },
+    { "written": "no.", "spoken": "number", "need": "digit" },
+    { "written": "Jan.", "spoken": "January" },
+    { "written": "Feb.", "spoken": "February" },
+    { "written": "Mar.", "spoken": "March" },
+    { "written": "Apr.", "spoken": "April" },
+    { "written": "Jun.", "spoken": "June" },
+    { "written": "Jul.", "spoken": "July" },
+    { "written": "Aug.", "spoken": "August" },
+    { "written": "Sept.", "spoken": "September" },
+    { "written": "Sep.", "spoken": "September" },
+    { "written": "Oct.", "spoken": "October" },
+    { "written": "Nov.", "spoken": "November" },
+    { "written": "Dec.", "spoken": "December" }
+  ],
+  "sentences": {
+    "never_end": [
+      "dr", "drs", "prof", "st", "mr", "mrs", "ms", "mx", "jr", "sr", "vs", "cf", "approx", "e.g", "i.e", "fig", "ref",
+      "ex", "p", "pp", "tel", "av", "dept", "inc", "ltd", "co", "corp", "n", "no", "jan", "feb", "mar", "apr", "jun",
+      "jul", "aug", "sep", "sept", "oct", "nov", "dec"
+    ],
+    "ends_before_capital": ["etc", "al"]
+  },
+  "phones": { "ten_digits_in_pairs": false },
+  "spell_acronyms": ["MRI", "ECG", "EEG", "EMG", "PDF", "SMS", "USB", "VAT", "IRS", "GP", "AI", "ID"],
+  "letters": {
+    "a": "ay", "b": "bee", "c": "see", "d": "dee", "e": "ee", "f": "eff", "g": "gee", "h": "aitch", "i": "eye",
+    "j": "jay", "k": "kay", "l": "el", "m": "em", "n": "en", "o": "oh", "p": "pee", "q": "cue", "r": "ar",
+    "s": "ess", "t": "tee", "u": "you", "v": "vee", "w": "double you", "x": "ex", "y": "why", "z": "zee"
+  },
+  "identifiers": {
+    "readings": {
+      "nir": { "chunks": [1, 2, 2, 2, 3, 3, 2], "size": 3 },
+      "avs": { "chunks": [3, 4, 4, 2], "size": 4 },
+      "iban": { "size": 4 },
+      "ch_iban": { "size": 4 },
+      "invoice": { "size": 4 },
+      "order": { "size": 4 },
+      "health_insurance_number": { "size": 3 }
+    },
+    "email_symbols": { "@": "at", ".": "dot", "-": "dash", "_": "underscore" }
+  }
+}

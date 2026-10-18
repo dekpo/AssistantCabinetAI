@@ -26,6 +26,8 @@ These hold from the prototype, not "later".
 | Excerpts sent to the LLM | Ephemeral on send | Memory only | Log files, clear swap, crash dumps |
 | Request register | Local copy possible | Yes (metadata) | Prompt or answer bodies |
 | Action plans | Yes | Hashes and decision only | A journal containing full excerpts |
+| Microphone audio (dictation, notes) | Webview memory, then a private temporary file while one job runs, removed at once; **never kept** | **No** (`/v1/audio/*` is unused) | Any copy, on either machine, in any log or in a clip store |
+| Speech models and voices | Yes (the models folder of the app-local data directory) | No | A download other than the user's explicit action |
 | Model weights | No | Yes | Any use without a licence record |
 
 Disk encryption (BitLocker, FileVault) on the workstations **and** the Mac mini is mandatory before any real
@@ -117,11 +119,37 @@ leaves a whole index rather than a half-erased one):
 | The user types `@` and some letters in the box, or presses the **@** button (lot 7) | `knowledge_search_entities` reads the **names of the current selection** that begin with the letters (the store's prefix search), with the number of selected files that hold each, and returns them to the webview, on screen only: nothing is written, logged or sent to the gateway. An empty selection, an empty prefix and the mode `off` find nothing, so the box cannot be used to read the base's names. The one place that may name a name **outside** the selection is a single labelled line of that list offering to add its files to the selection (at most three names and fifty paths a side, `outsideSelection`), and adding them is the user's own click. A picked name travels as an id (`targeting.entity_ids`); the report under an answer names entities of the selection only and is neither logged nor stored. The developer panel (off by default) shows numbers, units and catalogue words, never a question, a name or a file name |
 | The empty conversation or a folder card is shown, with a selection (lot 9) | `knowledge_suggest_questions` reads the names of the **selection** and runs a few operations on the cached workbooks to prove that each suggested question has an answer; it returns template ids and slots (a name, the text of the cell the name was read from, a column, a month), on screen only. Nothing is written, logged or sent to the gateway. **Names are left out while `knowledge_hide_names_in_suggestions` is on**, because a screen can be seen by someone waiting in the room; the user's own click shows them for the session. It reads a small workbook (at most 2 MB) from disk when its cells are not cached, and never a larger one; the cell cache it may fill is the one a question fills, a cache of the file and not knowledge. The result is kept in memory (eight screens, keyed by a hash of the selection and the state of the base) and never written |
 | The user opens the sheet of a name from a chip or the `@` list (lot 9) | `knowledge_entity_card` returns the other spellings, the roles, the files **of the selection** that hold the name (with pages, or sheet and column) and **only a count** for the files outside it; the relations stated by the files of the selection; the details that are not personal identifiers. On screen only, read-only, never logged |
-| Speech hints, transcript repair, the outbound guard (lot 9) | Rust APIs with **no command**: no name reaches the webview from them. The hints and the repair are limited to the selection and never write; a dictation never teaches the base (I3). **The guard is the one global read:** it holds every live name and alias of the base, candidates included, in memory for the time of one request, and returns spans of the text the caller already holds with entity ids, never a name. This exception to selection scoping is deliberate (a guard that only knew the selection would let the name of an unselected file through) and is why no interface may list its findings |
+| Speech hints, transcript repair, the outbound guard (lot 9) | **Three guards (speech D7, 17 October 2026).** The one command that exposes the repair to the webview (`speech_repair_names`, created in speech phase 6) must obey all three: it proposes only names **of the current selection**; the hidden-names setting (`revealNames`) collapses them to a neutral line, so a name is shown only when the user has revealed names; and it returns a suggestion, never a replacement and never a write. It is empty when `knowledge_mode` is `off`, and on any failure. Until that command exists the hints and the repair are Rust APIs with no command. The hints and the repair never write; a dictation never teaches the base (I3). **The guard is the one global read:** it holds every live name and alias of the base, candidates included, in memory for the time of one request, and returns spans of the text the caller already holds with entity ids, never a name. This exception to selection scoping is deliberate (a guard that only knew the selection would let the name of an unselected file through) and is why no interface may list its findings |
 
 After any of these, `knowledge::store::integrity_check` reports zero orphans. The index is per workstation:
 nothing is synchronised, so manual edits differ between machines, and copying `index.sqlite3` copies the
 knowledge base with it.
+
+## Speech: audio, workers and the model download (decided 17 October 2026)
+
+Canonical description: `docs/SPEECH.md`, section 8. Decisions D4, D5, D9, D10, D14: `docs/DECISIONS.md`.
+
+- **Audio is temporary.** The webview records into memory and hands a WAV to Rust, which writes it to a private temporary folder
+  of the app-local data directory for the time of one job and removes it on success, error, cancel and timeout; a lazy sweep at
+  the first speech command removes an orphan left by a crash. No audio is stored in the settings, the index, a log or a clip store.
+  Disk encryption (the gate above) covers the residue risk of a file that survives a power cut.
+- **Engines are separate processes.** The speech-to-text worker and the text-to-speech worker contain no network code, receive text
+  on stdin (never on a command line, which other processes of the same user can read), return codes and counts, and die with the
+  application. Cancel is a kill.
+- **No network from the speech module except the model download.** The download is a user's explicit action from the owner's host
+  (`speechModelsUrl`), verified against a pinned SHA-256, in one named file; only the HTTP request leaves. Nothing else of the module
+  opens a connection; a source scan and an offline proof (a firewall rule blocking the application and both workers) enforce it.
+  The WebView2 runtime itself may contact a Microsoft address, which is not the application's code (the finding recorded in the
+  document viewer section below).
+- **A transcript is typed text.** It fills a text box and travels only when the user sends the question, exactly as typed text does.
+  A dictated note is held in memory only (no recovery copy) until the user clicks Save on a preview of the exact files; a saved note
+  is an ordinary document and follows the document path, including the embedding through the practice server (D14).
+- **Logs hold no text.** The speech timing line and the notes log hold counts, milliseconds, paths and codes; never a transcript, a
+  name or an answer.
+- **Read-aloud is local.** The text is derived in Rust from what is on screen; the voice engine is a local worker or an
+  operating-system voice that has been proven local and is filtered by `localService`. A voice that is not local is never selected
+  and never a fallback.
+- **Speech never applies a file action**, and never starts an Analyse by itself: Save is the user's click.
 
 ## The workstation is not automatically local
 

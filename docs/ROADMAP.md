@@ -65,9 +65,19 @@ reports in `docs/test-reports/knowledge-base-pass-1/`.
 | Track | State | Gate |
 | --- | --- | --- |
 | Saved conversations (create, save, remove, each with its selection) | Planned after sprint 2b; needs only a stored `AnalysisScope` per conversation | None from the KB |
-| Speech (workstation-local, Whisper first), in `dekpo/SpeechLab` then its integration | Separate repository and milestones; the KB only offers read-only contracts (ranked surface forms, transcript repair proposals) | Free licences only; **cloud speech stays forbidden** (`docs/DECISIONS.md`) |
+| Voice (workstation-local dictation, read-aloud, voice notes) | **Resumed 17 October 2026**: 16 phases on `feat/speech-integration` (see "The voice track" below). Engine evidence comes from `dekpo/SpeechLab` (reference, read only); the KB offers read-only contracts (ranked surface forms, transcript repair proposals) | **Cloud speech stays forbidden**; Parakeet CC BY 4.0 accepted by decision D2, free licences for every other model (`docs/DECISIONS.md`, `docs/SPEECH.md`) |
 | Windows installer, deployment at the practice, the Mac mini (sprint 4) | Continues; no longer tied to 14 October | The DPIA draft, a named data controller and disk encryption (the legal gate below), not the KB |
 | Real documents | Unchanged | The same legal gate; until then `fixtures/gp-sandbox/` |
+
+### The voice track
+
+Not a sprint, a programme of phases, each its own branch from `feat/speech-integration` and merged back by pull request when the
+owner accepts it. Milestones are capabilities: **V-A** the speech contracts are written (phase 1, documents only); **V-B** typed notes
+in the workspace (phases 10, 11); **V-C** dictation in the chat on the real engine (phases 2, 3, 4, 3b, 5); **V-D** read-aloud with a
+local voice (phases 7, 8, 9); **V-E** names suggested after a dictation, and long dictation into notes with voice commands (phases 6,
+12); **V-F** the offline proof, the packaging gate and the credits (phase 13). Then macOS (phase 14, when the Mac is there in
+November) and German and Italian (phase 15, not scheduled). Spec, phases and order: `docs/SPEECH.md`; decisions D1 to D14:
+`docs/DECISIONS.md`. The installer wiring of the workers is the same open item as packaging Tesseract.
 
 ### History: the two dated milestones of 16 September 2026
 
@@ -624,7 +634,8 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 | macOS portability is assumed rather than proved | Nothing here has ever been compiled on macOS and there is no CI. Add a `windows-latest` plus `macos-latest` job before the OCR code, and parameterise the work-folder test paths, which today would fail on macOS for a fixture reason rather than a design one (`docs/SPRINT-2.5-ASSESSMENT.md` section O) |
 | The 2019 PC cannot keep up with indexing | Batch cap, index per work folder rather than per disk, timing measured at first run |
 | French output quality | The model alias is a setting; change the alias, not the code |
-| Drift onto Open WebUI, certificates, vision | Frozen by `.cursor/rules/v0-sprint.mdc`. Voice, organisation, calendar and connectors are planned, each behind its own decision (8 October 2026) |
+| Drift onto Open WebUI, certificates, vision | Frozen by `.cursor/rules/v0-sprint.mdc`. Organisation, calendar and connectors are planned, each behind its own decision (8 October 2026); voice has its decision since 17 October 2026 (`docs/SPEECH.md`) |
+| Voice makes the workstation slow, or a worker leaks audio or text | Engines out of process, one job at a time, models loaded on first use and unloaded when idle, no text in logs, audio never kept, an offline proof at phase 13; figures in `docs/SPEECH.md`, "Minimum configuration", re-measured on the new workstation |
 | Tabular work pulled into milestone A | Sprint 2a is documents only. Sprint 2b is dated after milestone B, and the pilot has no spreadsheets |
 | A spreadsheet application grows out of sprint 2b | Named operations and data-grid sheets only, no formula evaluation. Every operation the engine gained past the original nine was added by an owner decision recorded in `docs/DECISIONS.md`, never added quietly |
 
@@ -654,9 +665,10 @@ Defects found during the programme are kept in `docs/test-reports/knowledge-base
 *(Headed "After 14 October, not before" until 8 October 2026, when that date was withdrawn.)*
 
 **Moved to planned on 8 October 2026, each behind its own decision when its turn comes:** voice
-(workstation-local speech; cloud speech stays forbidden), file organisation, a calendar (local adapter
-first; Google needs a separate owner decision and the DPIA) and external connectors. Nothing is built for
-them in the Knowledge Base programme beyond the read-only contracts it offers. Still out: vision, mobile,
+(workstation-local speech; cloud speech stays forbidden; **its decision was taken on 17 October 2026**, see "The voice
+track" above), file organisation, a calendar (local adapter first; Google needs a separate owner decision and the DPIA)
+and external connectors. Nothing is built for the last three in the Knowledge Base programme beyond the read-only contracts
+it offers. Still out: vision, mobile,
 app stores, a second profession, autonomous agents, fine-tuning, an accounting module, the Ameli account,
 automatic transmission, RBAC, billing, analytics.
 

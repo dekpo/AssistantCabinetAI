@@ -36,10 +36,11 @@ Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 
 separators and the padding come to about 960). Each zone scrolls inside itself.
 
 **The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
-a discriminated union with two kinds today, `welcome` and `file`) and passes `openWorkspace(view)` and `closeWorkspace()`
-around. **The centre is visible exactly while `workspace !== null`.** Nothing is open at launch, so the user sees
-two columns. A new use of the zone (a file viewer, voice notes, a calendar) adds a kind to the union and a case to
-`WorkspacePanel`, and touches nothing else. A button in the title bar (`aria-pressed`) opens the welcome view or
+a discriminated union with two kinds today, `welcome` and `files` (a list of tabs, see "The document viewer")) and passes
+`openWorkspace(view)` and `closeWorkspace()` around. **The centre is visible exactly while `workspace !== null`.** Nothing
+is open at launch, so the user sees two columns. A new use of the zone (a calendar, say) adds a kind to the union and a case
+to `WorkspacePanel`, and touches nothing else. **Voice notes are not a kind of view:** they are a *section* of the zone, reached
+by a Files / Notes switch (see "Voice in the window" at the end of this file). A button in the title bar (`aria-pressed`) opens the welcome view or
 closes the zone; the user can also close it by dragging it below its minimum or by pressing Enter on a
 separator beside it.
 
@@ -376,3 +377,32 @@ this cabinet and the template for the next one — is `docs/DEPLOYMENT.md`.
 ### The knowledge base in the window (KB programme, lot 11)
 
 « Réglages » → « Connaissances » has the mode « Ciblage intelligent » (« Suggestions seulement » by default; « Désactivé »; « Automatique »), the health modules and « Gérer… » (the dialog). In « Automatique » a line under the answer says « Recherche ciblée : N documents sur M — nom » with « Voir les fichiers » and « Élargir à ma sélection ». The script the owner plays to decide whether « Automatique » may become the default is `docs/test-reports/knowledge-base-pass-1/human-tests/lot-11-validation.md`; the verdict of lot 11 is in `03-release-gate.md` (not met: it stays optional). The canonical description is `docs/KNOWLEDGE-BASE.md`.
+
+### Voice in the window (speech programme, decided 17 and 18 October 2026)
+
+Not built yet; this is what the phases will build, so that the layout rules above stay true. Spec: `docs/SPEECH.md`.
+
+- **Notes: a section of the centre, not a kind of view.** A title-bar button beside Settings (its own switch `notesEnabled`, on by
+  default, independent of the voice master switch) opens the centre on the **Notes** section, or hides the zone when it is already
+  there. A two-position switch **Files | Notes** (role `tablist`) sits at the top of the centre zone and is shown only while
+  `notesEnabled` is on; with it off the centre renders exactly as today. The file tabs are kept and `WorkspaceView` is not
+  changed: `App` holds the section (`"files" | "notes"`) and the drafts, and passes `AppLayout` a value derived from both, in one
+  pure function, so that the rule "the centre is visible exactly while there is something to show" keeps working while a note holds
+  a draft or a recording. Both sections stay mounted while the zone is open (the inactive one is hidden), so open file tabs keep
+  their scroll, zoom and sheet while she writes, and an unsaved note and a recording in progress survive a switch. Opening a file
+  from a list shows the Files section. A red dot marks the Notes segment while recording. The welcome view is the empty state of the
+  Files section.
+- **The Notes pane.** The text fills the pane and is editable, with the viewer's Raw / Preview switch (Markdown rendered by the
+  application's own component); a dark pill button centred at the bottom (microphone at rest, an animated waveform driven by the input
+  level while recording, "click again to finish"); under the text, a save block (a name field whose placeholder shows the timestamp,
+  a format choice, `.md` by default, and **Save**); a switch between several drafts and a "new note" button. It works at the 320 px
+  minimum of the centre. Save shows a preview of the exact files, writes them to `<Documents folder>/Notes`, then runs the Analyse
+  (with a confirmation when other files are also pending). A modal with Save, Discard and Cancel waits before an unsaved note can be
+  lost (another folder, closing the window, turning notes or voice off, Reset); drafts are never written to disk.
+- **The microphone button** in the Composer, between the **@** button and the model selector; with voice off the Composer renders
+  exactly as today. The transcript fills the text box; the user edits and presses Send. Names the knowledge base can suggest appear as
+  "heard to display" chips, selection only, collapsed while names are hidden.
+- **Read aloud** is one button in the action row under each finished answer, after Copy and Regenerate: Read aloud / Stop, nothing else.
+- **Settings** gets one block of its own, beside the Advanced one: master switch, per-feature switches, model status and the
+  install action, the language override, the caps, the voice and rate, the notes folder name and the voice-commands switch.
+

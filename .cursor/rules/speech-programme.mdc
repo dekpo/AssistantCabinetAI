@@ -1,0 +1,73 @@
+---
+description: Speech programme (16 phases) - mandatory ritual for any agent working on voice
+alwaysApply: true
+---
+
+# Speech programme
+
+This rule applies **only** when the task is part of the speech programme: the owner dragged a
+`docs/SESSION-SPEECH/*.md` file into the chat, or the request names a "Speech phase". Ignore it otherwise.
+
+**Authority.** The owner's decisions D1 to D14 of 17 October 2026 (completed 18 October) are recorded in
+`docs/DECISIONS.md`, "Speech: workstation-local dictation, read-aloud and voice notes". They lift the hold on
+voice (`v0-sprint.mdc`, `AGENTS.md`) for this work, within their bounds. The canonical spec is `docs/SPEECH.md`;
+where a phase prompt and the spec differ, the phase's "Re-baseline corrections" section wins over the phase text
+above it, and `docs/DECISIONS.md` wins over both. Every other boundary stays: local only, no cloud LLM, no telemetry,
+plan and approval for file actions, Compose environment, English for developers and French for users, **no real
+patient file** (fictional data only, `AGENTS.md` item 6).
+
+**Reference, read only, never modify:** the owner's repository `dekpo/SpeechLab` (local clone beside this one). Its
+integration plan v1 is a superseded draft; its ON HOLD banner (D-050) no longer applies, and an agent never edits it.
+
+**Before any code**, read in this order: `docs/SPEECH.md` (the whole spec), the decision section above, your phase's
+handoff file and its "Re-baseline corrections", `docs/SESSION-SPEECH/STATUS.md`, the reports of the phases you depend
+on in `docs/test-reports/speech-programme/`, and the open points of `docs/SPEECH.md`. `Cargo.lock`, `models/` and
+`docs/SESSION-*.md` are in `.claudeignore`: ask the owner before reading them. Do only your phase.
+
+**Invariants (proved by named tests, `docs/SPEECH.md` section 12).** Audio is never kept. No network from the module
+except the model-download file. A transcript only fills a text box. Voice never applies a file action (saving a note is
+the user's click on a preview of the exact files). Dictation never writes the KB. No text in logs. Only proven-local
+voices. Spoken text is derived by code, never by the model. Any failure degrades to the typed app. Cancel at every
+stage. One speech job at a time. Workers die with the app. Nothing heavy at launch (no costly silent background work,
+`AGENTS.md`). With the voice master switch off, every existing component renders exactly as before.
+
+**Code rules specific to speech.** Nothing speech-related is linked into the main executable: engines live in
+separate worker executables (the STT worker without espeak-ng, the TTS worker with its own notice). No `#[cfg]` outside
+a platform module; no `if fr / else en` (the language table is the only place that maps a locale); the words of a
+language live in JSON packs under `resources/speech/`. Rust in `src-tauri/src` is ASCII with no French marker word on any
+line; no literal text in `.tsx`; one `AppError` variant per machine code with a sentence in both catalogues; a string the
+module sends to a model does not exist. A Tauri command is a thin shell over a function that takes plain arguments: tests
+drive the function (nothing builds a `State` or an `AppHandle`). Edit existing files minimally and list every edit in the
+report; prefer new files; widened helpers of `commands.rs` (`pub(crate)`) are named in the report, one word each.
+
+**Five duties at the end of every phase**, the same ritual as `kb-programme.mdc`:
+
+1. **Branch.** Work on `feat/speech-<topic>` created from `feat/speech-integration` once the owner has merged the
+   previous phase into it (if not, ask which branch to stack on). Never on `feat/speech-integration` directly, never on
+   `main` or `feat/document-viewer`, never on `backup/before-speech`. Git writes are the owner's: hand over, in full and
+   in this order, `git add` of explicit paths, one Conventional Commit line (no body, no attribution), `git push -u origin
+   <branch>`, `gh pr create --base feat/speech-integration --head <branch> --title "<the same line>" --body ""`, its merge,
+   the `git switch` and `git pull` that put her back on `feat/speech-integration`, then the creation command of the next
+   phase's branch.
+2. **Document.** Write `docs/test-reports/speech-programme/<NN>-<slug>.md` (versioned) and update the docs the phase
+   names, including the measured figures of `docs/SPEECH.md` "Minimum configuration" (label each one measured or
+   estimate). A phase with no written report is not done.
+3. **Propose a real human test** when she can see the phase in the running application: a script, not a list. Same rules
+   as `kb-programme.mdc`, items 1 to 9 of "Exact commands in a human test" (every command in full, every click named by
+   its exact label, start and leave states, one backup and **one** restore at the end, expectations checked on the real
+   application, never an automated suite as a part of it), and `AGENTS.md`, "Human tests": short (about 8 steps, 10
+   minutes), essentials only, no backup when nothing is written, **one action per step**. Speech tests use her own voice
+   and microphone on her two fictional test folders; an agent never adds, renames or deletes a file there, and never runs
+   the backup, restore, log-clearing or firewall commands itself. If nothing is visible, say so and offer the nearest
+   developer check.
+4. **Hand over.** Update `docs/SESSION-SPEECH/STATUS.md` (local) and name the next handoff file to drag into a new chat.
+5. **Findings.** Record every defect or open point you or she finds, the moment you see it, in your report and in the
+   status file, with its effect on the phases still to come; a defect that blocks a later phase is fixed first, in its
+   own branch, and you stop and tell her; the others are deferred, not fixed on the side.
+
+**Test budget (`AGENTS.md`, "No redundant work").** One targeted pre-check of the files you will modify; during the work
+only the test that proves the change in hand; the full suite (`cargo test --lib --tests`, `cargo clippy`, `pnpm run build`,
+`pnpm run test`) **once**, after the last edit. Never plain `cargo fmt`: `rustfmt --check` on a file you create, and the
+count of `Diff in` blocks of a file you modify must not increase. Never add a fixture unless the owner asks for it.
+
+No AI attribution in anything git-facing (`AGENTS.md`).

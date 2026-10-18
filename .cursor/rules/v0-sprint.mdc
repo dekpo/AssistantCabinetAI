@@ -52,11 +52,14 @@ RBAC, billing, analytics, large model catalogues, commercial packaging. No date 
 lifted item by item, by an owner decision recorded in `docs/DECISIONS.md`.
 
 **No longer frozen, as of 8 October 2026 — planned, each behind its own decision when its turn comes:**
-voice (speech runs on the workstation, Whisper first, free licences only; **cloud speech stays
-forbidden**), file organisation (a plan and a human approval, never a destructive write), a calendar (a
-local adapter first; Google needs a separate owner decision and the DPIA) and external connectors (the
-user sees the exact outbound text before anything is sent). Building the Knowledge Base is allowed; building
-those features is not, until their own decision exists.
+voice (speech runs on the workstation; **cloud speech stays forbidden**), file organisation (a plan and a
+human approval, never a destructive write), a calendar (a local adapter first; Google needs a separate
+owner decision and the DPIA) and external connectors (the user sees the exact outbound text before
+anything is sent). Building the Knowledge Base is allowed; building those features is not, until their own
+decision exists. **Voice's own decision exists since 17 October 2026** (`docs/DECISIONS.md`, "Speech:
+workstation-local dictation, read-aloud and voice notes"; spec `docs/SPEECH.md`): Parakeet, a CC BY 4.0
+model, was accepted by that decision, and the free-licence rule still holds for every other model. Building
+voice is allowed within its bounds, as the speech programme (`.cursor/rules/speech-programme.mdc`).
 
 **Scan OCR left this list on 19 September 2026** and became sprint 2.5, 20–30 September. It is local,
 behind the `OcrProvider` port, and it is ingestion rather than a GP workflow: no workflow contains OCR

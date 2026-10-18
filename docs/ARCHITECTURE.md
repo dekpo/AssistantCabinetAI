@@ -88,7 +88,17 @@ TabularDataSource   open(path) -> Workbook                        csv, xlsx
 TabularInventory    build(workbook) -> WorkbookInventory          structure and facts, full pass
 InventoryStore      put / get_by_hash / invalidate                SQLite today
 TabularAnalysis     analyze(query, scope) -> TabularOutcome       deterministic, no model
+
+SpeechToTextProvider transcribe(wav, language, cancel) -> SttResult   a separate worker executable (Parakeet); fake in tests
+TextToSpeechProvider synthesize(text, voice, rate, cancel) -> WAV     a separate worker executable (Piper); system voices local-only
+AudioCapture        start / stop -> canonical WAV, level            webview today (getUserMedia); a native one may replace it
+ReadAloudEngine     speak(segments) / stop                          webview playback of the worker's audio
 ```
+
+The four speech ports follow `OcrProvider` (an id, one call per unit of work, machine-coded errors, degrade to unavailable).
+No engine is linked into the main executable and the speech module has no network code except one named model-download
+file; the module's own text rules are data packs (`resources/speech/rules/<locale>.json`) selected by a language table, so a
+new language adds a row and data files and no logic. Spec: `docs/SPEECH.md`.
 
 File discovery is generic. It recognises `.pdf`, `.docx`, `.txt`, `.md`, `.jpg`, `.png`, `.csv` and
 `.xlsx` by extension and contains no assumption about what a folder holds, because the same mechanism
@@ -410,7 +420,8 @@ name, never a raw weight name.
 | v2 | Explorer context menu, Word add-in | "Send to the assistant" without leaving the file |
 | v2 | Connection sheet for Continue / Cline / Aider | Technical profiles |
 | later | Outlook and document-management connectors | A connector is an adapter, not a new backend |
-| reserved | `/v1/audio/*` and `/v1/jobs` | Local voice and LAN mobile |
+| reserved | `/v1/jobs` | LAN mobile |
+| reserved, **unused** | `/v1/audio/*` | Voice runs on the workstation (`docs/SPEECH.md`); these routes are not the path for it and no LAN variant is built |
 
 Specific risks when connecting an IDE plugin: many extensions phone home, they send the content of open
 files, and some resend the whole history every turn. Therefore: an allow-list of permitted tools, `chat`

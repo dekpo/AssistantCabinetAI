@@ -34,7 +34,7 @@ Full wording: `docs/DECISIONS.md`. Short form, so that this file can be read alo
 |---|---|
 | D1 | Base branch `feat/speech-integration` (from `feat/document-viewer`, which stays untouched; safety branch `backup/before-speech`). One branch per phase, `feat/speech-<topic>`, merged back by pull request |
 | D2 | Speech to text: Parakeet TDT 0.6B v3 int8 (CC BY 4.0, attribution required) through sherpa-onnx, in a **separate worker executable**. Nothing speech-related is linked into the main executable. whisper.cpp (MIT) may be added later behind the same trait, and is the recorded fallback |
-| D3 | Text to speech: Piper through a separate TTS worker (preferred), operating-system voices as fallback **only if proven local**. French: `siwis` (female) and Coqui `css10` (male, to be confirmed by ear); English: `ljspeech` or `libritts_r`. `mls` rejected, `gilles` excluded |
+| D3 | Text to speech: Piper through a separate TTS worker (preferred), operating-system voices as a permanent opt-in option, **only local ones** (proven local on the owner's laptop on 18 Oct 2026, see 7.4). French: `siwis` (female) and Coqui `css10` (male, to be confirmed by ear); English: `ljspeech` or `libritts_r`. `mls` rejected, `gilles` excluded |
 | D4 | No audio, transcript, answer text or name leaves the machine through the speech module. "Local" is proven by an offline test |
 | D5 | Models are downloaded on an explicit user action from `https://assistantcabinet.ai/models/speech/`, SHA-256 pinned in the app; the only network code of the module, in one named file |
 | D6 | fr-FR and en-US now, German and Italian anticipated: a data-driven language table, locale packs, no `if fr / else en` |
@@ -179,7 +179,7 @@ One nested field `speech` of `settings.json` (`SpeechSettings`, in `speech/setti
 | `languageOverride` | null | null = follow the interface locale (`settings.locale`, then `DEFAULT_LOCALE`) |
 | `maxDictationSeconds` | 120 | Cap of one chat dictation |
 | `maxNoteSeconds` | 1800 | Cap of one note dictation (30 min, D9) |
-| `ttsEngine` | null | null = automatic: the Piper worker if installed, else system voices only if proven local, else `tts_no_local_voice` |
+| `ttsEngine` | null | null = automatic: the Piper worker if installed, else `tts_no_local_voice`; `system` = the operating-system voices, local ones only (chosen by the user, never a silent fallback) |
 | `ttsVoice` | null | A manifest id; null = the first voice of the resolved locale |
 | `ttsRate` | 1.0 | Passed as the synthesiser `speed`, never as a playback rate (it would change the pitch); the clamp is fixed in phase 2 |
 | `notesFolderName` | "Notes" | Sanitised on the Rust side; an unusable name falls back to "Notes" |
@@ -374,6 +374,14 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   switch is off or the language has no read-aloud; with no voice it is drawn and says `tts_no_local_voice` when pressed. System
   voices are used only when the engine setting is `system` (the step that follows the offline proof); `Automatic` never falls back
   to them. A reading with no `speech` item does not start and says `speech.readAloud.nothingToRead`.
+- **Human test of phase 8 (owner, 18 Oct 2026).** Passed on the owner's laptop (Windows 11, WebView2). The settings line listed three
+  local French system voices: Microsoft Hortense, Microsoft Julie and Microsoft Paul (French, France). Reading, stop, Escape and
+  regenerate while reading all behaved; with the Wi-Fi off the reading worked unchanged, which is the offline proof for these voices
+  (an online "Natural" voice would have failed). Decision: system voices stay a supported option (`DECISIONS.md`, D3 amended).
+  The voice heard was female (Hortense, the first voice of the language). **Known gap (open point 11):** the "Reading voice" list of
+  the settings shows the language table's Piper voices (`siwis`, `css10`), not the system voices, and Rust keeps a `ttsVoice` only
+  if it is ASCII letters, digits, `-` and `_` (`clean_voice_id`), while a Windows voice id is `Microsoft Paul - French (France)`.
+  So a male system voice such as Paul is installed but cannot be chosen: the engine takes the first local voice of the language.
 
 ## 8. Privacy
 
@@ -568,6 +576,7 @@ For the owner. **Answered on 18 October 2026:** the owner confirmed point 1 expl
 | 8 | Read the KB `spoken_form` of names of the selection in read-aloud (phase 7 second step) | Left out unless she asks |
 | 9 | Whether css10 really is a male voice | Her ear, phase 9; only the label key changes |
 | 10 | The new workstation's measurements and the acceptance budgets (SpeechLab's Q-08) | Section 11 estimates stay labelled until measured |
+| 11 | Choosing a system voice (a male one, Paul): needs a way to store a system voice that `clean_voice_id` accepts. Options: (a) a separate setting `ttsSystemVoice` in `speech/settings.rs` with its own validation (letters, digits, spaces, `-`, `_`, `.`, parentheses, length cap), the voice list of the settings then showing the system voices when the engine is `system`; (b) widen `clean_voice_id`. | (a), small and shared by every system voice; to be built as an extra step of phase 9 (voice choice), not before. Awaiting her go |
 
 ## 15. Facts verified on 18 October 2026
 

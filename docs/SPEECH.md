@@ -34,7 +34,7 @@ Full wording: `docs/DECISIONS.md`. Short form, so that this file can be read alo
 |---|---|
 | D1 | Base branch `feat/speech-integration` (from `feat/document-viewer`, which stays untouched; safety branch `backup/before-speech`). One branch per phase, `feat/speech-<topic>`, merged back by pull request |
 | D2 | Speech to text: Parakeet TDT 0.6B v3 int8 (CC BY 4.0, attribution required) through sherpa-onnx, in a **separate worker executable**. Nothing speech-related is linked into the main executable. whisper.cpp (MIT) may be added later behind the same trait, and is the recorded fallback |
-| D3 | Text to speech: Piper through a separate TTS worker (preferred), operating-system voices as fallback **only if proven local**. French: `siwis` (female) and Coqui `css10` (male, to be confirmed by ear); English: `ljspeech` or `libritts_r`. `mls` rejected, `gilles` excluded |
+| D3 | Text to speech: Piper through a separate TTS worker (preferred), operating-system voices as a permanent opt-in option, **only local ones** (proven local on the owner's laptop on 18 Oct 2026, see 7.4). French: `siwis` (female) and Coqui `css10` (male, to be confirmed by ear); English: `ljspeech` or `libritts_r`. `mls` rejected, `gilles` excluded |
 | D4 | No audio, transcript, answer text or name leaves the machine through the speech module. "Local" is proven by an offline test |
 | D5 | Models are downloaded on an explicit user action from `https://assistantcabinet.ai/models/speech/`, SHA-256 pinned in the app; the only network code of the module, in one named file |
 | D6 | fr-FR and en-US now, German and Italian anticipated: a data-driven language table, locale packs, no `if fr / else en` |
@@ -154,7 +154,7 @@ apps/desktop/src-tauri/
   binaries/              worker executables staged under their target-triple names (git-ignored)
 apps/speech-worker/      NEW crate(s): speech-stt-worker (feature stt), speech-tts-worker (feature tts)
 apps/desktop/src/
-  speech/                ipc.ts, availability.ts, voiceSession.ts, useDictation.ts, insertion.ts, useLongDictation.ts, output/
+  speech/                ipc.ts, availability.ts, voiceSession.ts, dictation.ts (state machine), useDictation.ts (hook), insertion.ts, useLongDictation.ts, output/
   audio/                 recorder.ts, wav.ts, segmenter.ts          public/speech/capture-worklet.js (static, no blob:)
   components/            SpeechSettings, MicButton, DictationStatus, ReadAloudButton, CentreSwitch, NotesPanel, RepairChips
 ```
@@ -179,7 +179,7 @@ One nested field `speech` of `settings.json` (`SpeechSettings`, in `speech/setti
 | `languageOverride` | null | null = follow the interface locale (`settings.locale`, then `DEFAULT_LOCALE`) |
 | `maxDictationSeconds` | 120 | Cap of one chat dictation |
 | `maxNoteSeconds` | 1800 | Cap of one note dictation (30 min, D9) |
-| `ttsEngine` | null | null = automatic: the Piper worker if installed, else system voices only if proven local, else `tts_no_local_voice` |
+| `ttsEngine` | null | null = automatic: the Piper worker if installed, else `tts_no_local_voice`; `system` = the operating-system voices, local ones only (chosen by the user, never a silent fallback) |
 | `ttsVoice` | null | A manifest id; null = the first voice of the resolved locale |
 | `ttsRate` | 1.0 | Passed as the synthesiser `speed`, never as a playback rate (it would change the pitch); the clamp is fixed in phase 2 |
 | `notesFolderName` | "Notes" | Sanitised on the Rust side; an unusable name falls back to "Notes" |
@@ -374,6 +374,14 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   switch is off or the language has no read-aloud; with no voice it is drawn and says `tts_no_local_voice` when pressed. System
   voices are used only when the engine setting is `system` (the step that follows the offline proof); `Automatic` never falls back
   to them. A reading with no `speech` item does not start and says `speech.readAloud.nothingToRead`.
+- **Human test of phase 8 (owner, 18 Oct 2026).** Passed on the owner's laptop (Windows 11, WebView2). The settings line listed three
+  local French system voices: Microsoft Hortense, Microsoft Julie and Microsoft Paul (French, France). Reading, stop, Escape and
+  regenerate while reading all behaved; with the Wi-Fi off the reading worked unchanged, which is the offline proof for these voices
+  (an online "Natural" voice would have failed). Decision: system voices stay a supported option (`DECISIONS.md`, D3 amended).
+  The voice heard was female (Hortense, the first voice of the language). **Known gap (open point 11):** the "Reading voice" list of
+  the settings shows the language table's Piper voices (`siwis`, `css10`), not the system voices, and Rust keeps a `ttsVoice` only
+  if it is ASCII letters, digits, `-` and `_` (`clean_voice_id`), while a Windows voice id is `Microsoft Paul - French (France)`.
+  So a male system voice such as Paul is installed but cannot be chosen: the engine takes the first local voice of the language.
 
 ## 8. Privacy
 
@@ -492,14 +500,14 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 |---|---|---|
 | Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio` | 3 |
 | No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`; the offline proof at the gate | 3, 3b, 13 |
-| A transcript only fills a text box | `dictation_never_calls_send` | 5 |
+| A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear) | 5 |
 | Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
 | Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `kb_off_gives_no_repair` | 6 |
-| No text in logs | `speech_timing_line_holds_no_text`, `notes_log_line_holds_no_text` | 3, 5, 10 |
+| No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text` | 3, 5, 10 |
 | Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |
 | Any failure degrades to the typed app | `missing_engine_reports_unavailable_and_typed_app_still_works` | 2, 3 |
-| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, the dictation state machine tests | 3b, 5 |
+| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, `dictation.test.ts`, "cancelling a dictation, at every stage" | 3b, 5 |
 | One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests | 3, 4 |
 | Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it` | 3b |
 | Nothing heavy at launch | `launch_starts_no_speech_work` | 2 |
@@ -568,6 +576,7 @@ For the owner. **Answered on 18 October 2026:** the owner confirmed point 1 expl
 | 8 | Read the KB `spoken_form` of names of the selection in read-aloud (phase 7 second step) | Left out unless she asks |
 | 9 | Whether css10 really is a male voice | Her ear, phase 9; only the label key changes |
 | 10 | The new workstation's measurements and the acceptance budgets (SpeechLab's Q-08) | Section 11 estimates stay labelled until measured |
+| 11 | Choosing a system voice (a male one, Paul): needs a way to store a system voice that `clean_voice_id` accepts. Options: (a) a separate setting `ttsSystemVoice` in `speech/settings.rs` with its own validation (letters, digits, spaces, `-`, `_`, `.`, parentheses, length cap), the voice list of the settings then showing the system voices when the engine is `system`; (b) widen `clean_voice_id`. | (a), small and shared by every system voice; to be built as an extra step of phase 9 (voice choice), not before. Awaiting her go |
 
 ## 15. Facts verified on 18 October 2026
 

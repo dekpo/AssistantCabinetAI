@@ -591,6 +591,22 @@
     "statusLoading": "Lecture de l'état de la voix.",
     "statusFailed": "L'état de la voix n'a pas pu être lu.",
     "featureProblem": "{feature} : {reason}",
+    "dictation": {
+      "start": "Dicter",
+      "stop": "Terminer la dictée",
+      "cancel": "Annuler",
+      "dismiss": "Fermer",
+      "requesting": "En attente du microphone...",
+      "recording": "Enregistrement en cours. Appuyez de nouveau sur le microphone pour terminer.",
+      "transcribing": "Transcription en cours...",
+      "done": "Texte ajouté à votre question. Vérifiez-le avant d'envoyer.",
+      "undo": "Annuler l'ajout",
+      "clipped": "Le son était trop fort et peut être déformé : vérifiez les mots.",
+      "numbersOne": "{count} nombre ajouté, vérifiez-le.",
+      "numbersMany": "{count} nombres ajoutés, vérifiez-les.",
+      "analysing": "Une analyse est en cours : cela peut prendre plus de temps.",
+      "nothingHeard": "Rien n'a été compris. Réessayez."
+    },
     "microphone": {
       "unsupported": "Cette fenêtre ne peut pas utiliser le microphone.",
       "denied": "Le microphone est bloqué. Autorisez-le dans les réglages du système, puis réessayez.",

@@ -64,6 +64,14 @@ Named tests: `a_non_local_voice_is_never_selected`, `no_local_voice_refuses`, `o
 
 **Not proven by a test**: the sound; which voices WebView2 lists on the owner's laptop (and whether one is local for French); the real `speech_prepare_reading` call through the bridge on a real answer; the React unmount, Escape and window-close paths in the real window (no DOM in the test environment: the logic is tested as pure functions and the wiring by source scans). The human test below is the first place all of these run. I did not play it myself: the app was not started.
 
+## Human test (played by the owner on 18 October 2026)
+
+Passed, every step. Step 3 line: "Voix du système utilisées pour cette langue : Microsoft Hortense - French (France), Microsoft Julie - French (France), Microsoft Paul - French (France)." Reading, stop, offline (Wi-Fi off: the reading works unchanged), Escape, regenerate while reading and the return to the starting state were all fine.
+
+Findings and decisions that follow:
+- **The system voices are proven local on her laptop and the owner wants them kept** as a supported option (recorded in `docs/DECISIONS.md`, "D3 amended", and `docs/SPEECH.md` 7.4). They stay opt-in; "Automatic" still does not fall back to them (not decided whether it should).
+- **The voice heard was female (Hortense).** A male voice (Paul) is installed, but **it cannot be chosen yet**: the "Reading voice" list shows the Piper voices of the language table, and Rust drops a `ttsVoice` that is not ASCII letters, digits, `-` or `_`, which a Windows voice id is not. Recorded as open point 11 in `docs/SPEECH.md` with the recommended fix (a separate `ttsSystemVoice` setting, built with phase 9's voice choice). Nothing was changed in the code for this: it is a Rust settings change, and it waits for her go.
+
 ## Spike S4 (for the owner)
 
 The human test is the procedure: it lists the voices in the settings line (name only, with a count of the online voices ignored), reads a French and an English answer, then reads again with the network switched off.

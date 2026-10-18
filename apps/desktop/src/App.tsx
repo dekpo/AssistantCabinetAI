@@ -480,6 +480,7 @@ function AppContent() {
                 suggestionsEnabled={suggestionsEnabled}
                 requestedQuestion={requestedQuestion}
                 onRequestedQuestionHandled={() => setRequestedQuestion(null)}
+                speech={snapshot.settings.speech}
               />
             }
           />

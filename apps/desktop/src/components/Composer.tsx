@@ -14,6 +14,9 @@ import type { CombinedScope, EntityChoice, OutsideSelection } from "../lib/ipc";
 import { useEntitySearch } from "../state/useEntitySearch";
 import { EntityChips } from "./EntityChips";
 import { EntityPicker } from "./EntityPicker";
+import { DictationStatus } from "./DictationStatus";
+import { MicButton } from "./MicButton";
+import type { DictationBridge } from "../speech/useDictation";
 
 /** The id the box names as the list it controls. */
 const PICKER_LIST_ID = "entity-picker";
@@ -44,6 +47,7 @@ export function Composer({
   hasSelection,
   onAddToSelection,
   onOpenCard,
+  dictation,
 }: {
   /** No documents folder is chosen yet. This is a practice assistant, not a chatbot: nothing is
    * asked until there is a folder, even an empty one (`docs/SELECTION-AND-MEMORY.md`). */
@@ -69,6 +73,8 @@ export function Composer({
   onAddToSelection: (outside: OutsideSelection) => void;
   /** Opens the sheet of a name, from its chip or from the list. */
   onOpenCard: (entity: { entityId: number; display: string }) => void;
+  /** The microphone of the box. Absent (voice off): no microphone and no line under the box. */
+  dictation?: DictationBridge;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -119,6 +125,19 @@ export function Composer({
     setDismissedAt(null);
     putCaret(inserted.caret);
   };
+
+  /* The words of a dictation went in: the caret goes just after them, as after a picked name. The
+     position is applied once, when the box holds the text it was computed for (the new draft and
+     the new position reach this component in either order). */
+  const placedNonce = useRef<number | null>(null);
+  const wanted = dictation?.caret ?? null;
+  useEffect(() => {
+    if (wanted !== null && wanted.nonce !== placedNonce.current && draft === wanted.text) {
+      placedNonce.current = wanted.nonce;
+      putCaret(wanted.position);
+    }
+    // `putCaret` is rebuilt on every render; what matters is the position and the draft.
+  }, [wanted?.nonce, draft]);
 
   const startMention = () => {
     const inserted = insertAt(draft, input.current?.selectionStart ?? draft.length);
@@ -201,6 +220,7 @@ export function Composer({
           onOpenCard={onOpenCard}
         />
       ) : null}
+      {dictation === undefined ? null : <DictationStatus dictation={dictation} />}
       <div className="composer__footer">
         <div className="composer__footnotes">{hint}</div>
         <div className="composer__actions">
@@ -216,6 +236,17 @@ export function Composer({
           >
             @
           </button>
+          {dictation === undefined ? null : (
+            <MicButton
+              dictation={dictation}
+              onStart={() =>
+                dictation.start({
+                  start: input.current?.selectionStart ?? draft.length,
+                  end: input.current?.selectionEnd ?? draft.length,
+                })
+              }
+            />
+          )}
           {aliases.length === 0 ? null : (
             <select
               className="field__control composer__model-select"

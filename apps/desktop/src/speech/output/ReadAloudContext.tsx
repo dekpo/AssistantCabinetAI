@@ -42,7 +42,7 @@ function engineFor(choice: EngineChoice, cache: { system?: ReadAloudEngine | nul
 }
 
 /** Whether a modal dialog is on screen. Its own Escape closes it; the voice is left alone. */
-function dialogIsOpen(): boolean {
+export function dialogIsOpen(): boolean {
   return document.querySelector('[aria-modal="true"], [role="dialog"], [role="alertdialog"]') !== null;
 }
 

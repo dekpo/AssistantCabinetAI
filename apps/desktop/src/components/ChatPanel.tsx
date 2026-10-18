@@ -5,7 +5,8 @@ import { answerForCopy } from "../lib/annotations";
 import { combinedHasSelection } from "../lib/analysisScope";
 import { formatConversation, hasCopyableConversation } from "../lib/conversationText";
 import { chipIds, withChip, withoutChip, type Chip } from "../lib/entityPicker";
-import type { CombinedScope, OutsideSelection } from "../lib/ipc";
+import type { CombinedScope, OutsideSelection, SpeechSettings } from "../lib/ipc";
+import { useDictation } from "../speech/useDictation";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
@@ -34,6 +35,7 @@ export function ChatPanel({
   suggestionsEnabled,
   requestedQuestion,
   onRequestedQuestionHandled,
+  speech,
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
@@ -65,6 +67,8 @@ export function ChatPanel({
    * sent as soon as nothing is being answered, then reported as handled. */
   requestedQuestion: { text: string; nonce: number } | null;
   onRequestedQuestionHandled: () => void;
+  /** The voice settings: whether the question box offers a microphone, and for how long. */
+  speech: SpeechSettings;
 }) {
   const { t, locale } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -81,6 +85,16 @@ export function ChatPanel({
     dismissError,
     clear,
   } = useChat(onFailure, hasWorkFolder, modelAlias, scope);
+  /* The microphone of the question box. It lives here because the draft, sending, stopping and
+     clearing do: each of them ends a dictation first. */
+  const dictation = useDictation({
+    speech,
+    draft,
+    setDraft,
+    chatBusy: phase !== "idle",
+    needsFolder: !hasWorkFolder,
+    analysing: indexing.running,
+  });
   /* The names chosen for the next question. They are ids with the words shown; sending clears them,
      and a stop that gives the question back gives them back too. */
   const [chips, setChips] = useState<Chip[]>([]);
@@ -112,6 +126,7 @@ export function ChatPanel({
   const [confirmingClear, setConfirmingClear] = useState(false);
 
   const onStop = () => {
+    dictation?.cancel();
     const stopped = stop();
     if (stopped !== null) {
       setDraft(stopped);
@@ -210,6 +225,7 @@ export function ChatPanel({
           confirmLabel={t("actions.clearConversation")}
           destructive
           onConfirm={() => {
+            dictation?.cancel();
             clear();
             setConfirmingClear(false);
           }}
@@ -221,6 +237,7 @@ export function ChatPanel({
         onDraftChange={setDraft}
         phase={phase}
         onSend={(question) => {
+          dictation?.cancel();
           sentChips.current = chips;
           void send(question, chips.length > 0 ? { entityIds: chipIds(chips) } : undefined);
           setChips([]);
@@ -238,6 +255,7 @@ export function ChatPanel({
         hasSelection={combinedHasSelection(scope)}
         onAddToSelection={onAddToSelection}
         onOpenCard={setCard}
+        dictation={dictation}
       />
       {card === null ? null : (
         <EntityCardDialog

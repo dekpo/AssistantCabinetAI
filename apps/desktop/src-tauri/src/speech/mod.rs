@@ -11,16 +11,30 @@
 //!   packs, capabilities and default voices. No other file names a language.
 //! * [`status`]: a pure function that says, per feature, whether it can run and, if not, why - as a
 //!   machine code the interface localises.
-//! * [`notes`]: saves reviewed notes as new files in the notes folder. The only file this module
-//!   writes, only on the user's click, and it needs no engine and no audio.
+//! * [`notes`]: saves reviewed notes as new files in the notes folder. The only file of this module
+//!   that survives a job, written only on the user's click, and it needs no engine and no audio.
+//! * [`stt`], [`service`], [`wav`], [`temp_audio`], [`output_guard`]: the speech-to-text contract
+//!   and everything around the engine. The service runs a job (one at a time, cancellable, under a
+//!   time limit); the clip lives in a private temporary folder for that job only. There is no
+//!   engine yet: without a provider the service answers `speech_engine_missing`, and the scripted
+//!   fake of the tests is never built by a command.
 
 pub mod languages;
 pub mod notes;
+pub mod output_guard;
+pub mod service;
 pub mod settings;
 pub mod status;
+pub mod stt;
+pub mod temp_audio;
+pub mod wav;
 
 #[cfg(test)]
+mod fake;
+#[cfg(test)]
 mod notes_tests;
+#[cfg(test)]
+mod stt_tests;
 #[cfg(test)]
 mod tests;
 

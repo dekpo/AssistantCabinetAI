@@ -55,10 +55,6 @@ export function modelStatusKey(model: ModelState): string {
  * speech-to-text worker. They arrived with the worker phase, so the button works. */
 export const INSTALL_AVAILABLE = true;
 
-/** Whether the read-aloud engine and voices exist. They arrive with the read-aloud button, and the
- * controls stay shown but disabled until then. */
-export const READ_ALOUD_CONTROLS_AVAILABLE = false;
-
 export interface InstallButton {
   disabled: boolean;
   /** The sentence that says why, or null when the button is usable. */

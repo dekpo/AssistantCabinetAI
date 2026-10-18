@@ -365,6 +365,15 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   sentence. WebView2 on Windows lists online "Natural" voices with `localService === false`, which is why the filter exists.
 - **Playback.** Web Audio `decodeAudioData` on the returned WAV bytes: no `media-src`, no `blob:` in the policy. The rate is the
   synthesiser `speed`; the buffer source's `playbackRate` stays at 1.
+- **As built (phase 8).** `apps/desktop/src/speech/output/`: `engine.ts` (the `ReadAloudEngine` interface: `voices`, `speak` with a
+  per-segment queue and progress, `stop`), `systemVoices.ts` (`pickLocalVoice`, `loadVoices` with the `voiceschanged` timeout, the
+  system engine), `playback.ts` (the Web Audio helper for worker audio, used by phase 9), `pauses.ts` (rest after `clause` 120 ms,
+  `sentence` 380 ms, `paragraph` 760 ms; a note is spoken where it stands, then a paragraph rest), `readingParts.ts` (the parts sent to
+  `speech_prepare_reading`), `engineChoice.ts` (visibility matrix and engine choice), `readAloud.ts` (the one reading of the window,
+  one voice at a time) and `ReadAloudContext.tsx` (mounted once in `App`). The button draws nothing while the voice or read-aloud
+  switch is off or the language has no read-aloud; with no voice it is drawn and says `tts_no_local_voice` when pressed. System
+  voices are used only when the engine setting is `system` (the step that follows the offline proof); `Automatic` never falls back
+  to them. A reading with no `speech` item does not start and says `speech.readAloud.nothingToRead`.
 
 ## 8. Privacy
 

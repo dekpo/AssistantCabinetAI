@@ -627,7 +627,25 @@
     },
     "rateLabel": "Reading speed",
     "rateDescription": "1 is the natural speed of the voice.",
-    "readAloudSoon": "Reading aloud is not available yet in this version.",
+    "readAloud": {
+      "start": "Read aloud",
+      "stop": "Stop reading",
+      "nothingToRead": "There is nothing to read aloud in this answer."
+    },
+    "readAloudNote": {
+      "table_omitted": "A table of {rows} is not read aloud.",
+      "code_omitted": "A block of code of {lines} is not read aloud.",
+      "rowOne": "row",
+      "rowMany": "rows",
+      "lineOne": "line",
+      "lineMany": "lines"
+    },
+    "systemVoices": {
+      "found": "System voices used for this language: {names}.",
+      "none": "No system voice that works on this computer alone was found for this language: nothing will be read.",
+      "ignoredOne": "{count} online voice is ignored.",
+      "ignoredMany": "{count} online voices are ignored."
+    },
     "notesFolderLabel": "Notes folder name",
     "notesFolderDescription": "A folder inside the documents folder, where saved notes are written.",
     "notesCommandsLabel": "Voice commands in notes",

@@ -1325,8 +1325,39 @@ body {
 
 .message__actions--turn {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   margin: 4px 0 0;
+}
+
+/* The read-aloud button: a loudspeaker and its words. While a reading goes, the waves pulse; with
+   reduced motion they stay still. The sentence that says why nothing is read takes the whole line
+   under the buttons. */
+.message__read .glyph {
+  width: 14px;
+  height: 14px;
+}
+
+.glyph--speaking .glyph__waves {
+  animation: speaking-pulse 1s ease-in-out infinite;
+}
+
+@keyframes speaking-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glyph--speaking .glyph__waves {
+    animation: none;
+  }
+}
+
+.message__speech-note {
+  flex-basis: 100%;
+  margin: 2px 0 0;
 }
 
 /* Between the conversation and the composer: Clear at the start, Copy at the end. Both act on the

@@ -181,12 +181,12 @@ describe("the voice block of the settings", () => {
     expect(markup).not.toContain('value="de-DE"');
   });
 
-  it("shows the read-aloud choices disabled until the button exists", () => {
+  it("offers the read-aloud choices now that the button exists", () => {
     answered = { status: MISSING_MODEL, failed: false };
     const markup = draw(settings());
 
-    expect(markup).toContain("La lecture à voix haute n&#x27;est pas encore disponible");
-    expect(markup.match(/<select[^>]*disabled=""/g)).toHaveLength(2);
+    expect(markup).not.toContain("pas encore disponible dans cette version");
+    expect(markup.match(/<select[^>]*disabled=""/g)).toBeNull();
   });
 
   it("gives its number fields the bounds Rust keeps", () => {

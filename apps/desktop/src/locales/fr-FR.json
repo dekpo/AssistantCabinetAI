@@ -627,7 +627,25 @@
     },
     "rateLabel": "Vitesse de lecture",
     "rateDescription": "1 est la vitesse naturelle de la voix.",
-    "readAloudSoon": "La lecture à voix haute n'est pas encore disponible dans cette version.",
+    "readAloud": {
+      "start": "Lire à voix haute",
+      "stop": "Arrêter la lecture",
+      "nothingToRead": "Il n'y a rien à lire à voix haute dans cette réponse."
+    },
+    "readAloudNote": {
+      "table_omitted": "Un tableau de {rows} n'est pas lu à voix haute.",
+      "code_omitted": "Un bloc de code de {lines} n'est pas lu à voix haute.",
+      "rowOne": "ligne",
+      "rowMany": "lignes",
+      "lineOne": "ligne",
+      "lineMany": "lignes"
+    },
+    "systemVoices": {
+      "found": "Voix du système utilisées pour cette langue : {names}.",
+      "none": "Aucune voix du système fonctionnant sur cet ordinateur seul n'a été trouvée pour cette langue : rien ne sera lu.",
+      "ignoredOne": "{count} voix en ligne est ignorée.",
+      "ignoredMany": "{count} voix en ligne sont ignorées."
+    },
     "notesFolderLabel": "Nom du dossier des notes",
     "notesFolderDescription": "Un dossier dans le dossier des documents, où les notes enregistrées sont écrites.",
     "notesCommandsLabel": "Commandes vocales dans les notes",

@@ -18,6 +18,11 @@ export interface Insertion {
   caret: number;
   /** The draft and caret as they were before, for the Undo. */
   before: { text: string; caret: number };
+  /** Where the words begin in `text` (after the space that was added before them, if any). */
+  start: number;
+  /** The words as the engine wrote them, trimmed: the text a name repair reads, and the text that
+   * sits at `start` in `text`. */
+  words: string;
 }
 
 /** Clamps a selection to the draft, so a stale or reversed range cannot slice outside it. */
@@ -67,6 +72,8 @@ export function insertTranscript(
       text: draft,
       caret: replacing ? remembered.start : draft.length,
     },
+    start: start + before.length,
+    words,
   };
 }
 

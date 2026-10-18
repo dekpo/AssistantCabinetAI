@@ -11,6 +11,7 @@ import {
   speechModelInstall,
   speechModelVerify,
   speechPrepareReading,
+  speechRepairNames,
   speechTranscribe,
 } from "./ipc";
 
@@ -115,5 +116,22 @@ describe("the reading bridge", () => {
     vi.mocked(invoke).mockResolvedValue(items);
 
     await expect(speechPrepareReading([], "fr-FR")).resolves.toStrictEqual(items);
+  });
+});
+
+describe("the name suggestions bridge", () => {
+  it("sends the transcript, the selection, whether capitals can be trusted and the reveal, nothing else", async () => {
+    vi.mocked(invoke).mockResolvedValue({ proposals: [], hiddenCount: 0 });
+    const scope = { documents: [], workbooks: [] } as never;
+
+    const set = await speechRepairNames("Dupond", scope, true, false);
+
+    expect(vi.mocked(invoke).mock.calls).toStrictEqual([
+      [
+        "speech_repair_names",
+        { transcript: "Dupond", scope, caseReliable: true, revealNames: false },
+      ],
+    ]);
+    expect(set).toStrictEqual({ proposals: [], hiddenCount: 0 });
   });
 });

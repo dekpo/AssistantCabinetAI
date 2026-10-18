@@ -54,6 +54,7 @@ use crate::raster::{self, PageRasterizer, Rasterizer};
 use crate::retrieval::{self, Evidence, EvidenceCoverage};
 use crate::reveal;
 use crate::settings::{self, Settings};
+use crate::speech::repair;
 use crate::tabular_answer::{self, TabularAnswer, WorkbookChoice};
 use crate::viewer_source;
 use crate::work_folder::{
@@ -1240,6 +1241,54 @@ pub fn knowledge_entity_card(
             data: &workbook_files,
         },
     )
+}
+
+/// Name suggestions for a dictated transcript (`speech::repair`): the words that probably meant a
+/// name of the **current selection**, as `heard`, the span and the candidates. A read: no model, no
+/// write to the knowledge base, and the text is not changed. With the knowledge base off, or on any
+/// failure, the answer is empty, so the dictation works as a plain dictation.
+///
+/// While the setting hides names and `reveal_names` is not set, only a count goes back: the names
+/// of the selection never reach the window.
+#[tauri::command(async)]
+pub fn speech_repair_names(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    transcript: String,
+    scope: AnalysisScope,
+    case_reliable: bool,
+    reveal_names: Option<bool>,
+) -> Result<repair::RepairSet, AppError> {
+    let (mode, hide_names, locale, packs) = state.read(|settings| {
+        (
+            settings.knowledge_mode,
+            settings.knowledge_hide_names_in_suggestions,
+            settings.locale.clone(),
+            settings.knowledge_pack_ids(),
+        )
+    })?;
+    if !mode.reads_files() {
+        return Ok(repair::RepairSet::default());
+    }
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let names_allowed = !hide_names || reveal_names.unwrap_or(false);
+    Ok(repair::or_nothing((|| {
+        let index = open_index(&app)?;
+        let selection = resolve_selection(&state, &index, &scope)?;
+        let workbook_files = selection.workbook_files();
+        let vocabulary = state.vocabulary(&locale, &packs)?;
+        repair::propose_for(
+            index.connection(),
+            &vocabulary,
+            &transcript,
+            Some(&QuerySelection {
+                documents: &selection.documents,
+                data: &workbook_files,
+            }),
+            case_reliable,
+            names_allowed,
+        )
+    })()))
 }
 
 // ---------------------------------------------------------------------------------------------

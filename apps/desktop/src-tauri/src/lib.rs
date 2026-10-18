@@ -81,6 +81,7 @@ pub fn run() {
             commands::knowledge_search_entities,
             commands::knowledge_suggest_questions,
             commands::knowledge_entity_card,
+            commands::speech_repair_names,
             commands::knowledge_overview,
             commands::knowledge_list_entities,
             commands::knowledge_entity_sheet,

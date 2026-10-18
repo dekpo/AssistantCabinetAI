@@ -7,6 +7,7 @@ import { formatConversation, hasCopyableConversation } from "../lib/conversation
 import { chipIds, withChip, withoutChip, type Chip } from "../lib/entityPicker";
 import type { CombinedScope, OutsideSelection, SpeechSettings } from "../lib/ipc";
 import { useDictation } from "../speech/useDictation";
+import { useRepairSuggestions } from "../speech/useRepairSuggestions";
 import { useChat } from "../state/useChat";
 import type { IndexingState } from "../state/useIndexing";
 import { Composer } from "./Composer";
@@ -94,6 +95,17 @@ export function ChatPanel({
     chatBusy: phase !== "idle",
     needsFolder: !hasWorkFolder,
     analysing: indexing.running,
+  });
+  /* After a dictation: the words that may have meant a name of the selection. They only suggest;
+     nothing changes until a name is pressed. */
+  const repair = useRepairSuggestions({
+    source: dictation?.heard ?? null,
+    draft,
+    setDraft,
+    scope,
+    revealNames,
+    onRevealNamesChange,
+    enabled: dictation !== undefined,
   });
   /* The names chosen for the next question. They are ids with the words shown; sending clears them,
      and a stop that gives the question back gives them back too. */
@@ -256,6 +268,7 @@ export function ChatPanel({
         onAddToSelection={onAddToSelection}
         onOpenCard={setCard}
         dictation={dictation}
+        repair={repair}
       />
       {card === null ? null : (
         <EntityCardDialog

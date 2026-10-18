@@ -46,6 +46,7 @@ function bridge(overrides: Partial<DictationBridge> = {}): DictationBridge {
     phase: "idle",
     error: null,
     result: null,
+    heard: null,
     caret: null,
     disabled: false,
     reasonKey: null,
@@ -56,6 +57,17 @@ function bridge(overrides: Partial<DictationBridge> = {}): DictationBridge {
     cancel: () => {},
     undo: () => {},
     ...overrides,
+  };
+}
+
+/** What a finished dictation leaves, for the line under the box. */
+function resultOf(text: string): NonNullable<DictationBridge["result"]> {
+  return {
+    insertion: { text, caret: text.length, before: { text: "", caret: 0 }, start: 0, words: text },
+    numbers: 0,
+    clipped: false,
+    engineId: "fake",
+    caseReliable: true,
   };
 }
 
@@ -150,7 +162,7 @@ describe("the line under the box", () => {
   it("offers the Undo and the checks once the words are in", () => {
     const html = line({
       phase: "done",
-      result: { insertion: { text: "x", caret: 1, before: { text: "", caret: 0 } }, numbers: 2, clipped: true },
+      result: { ...resultOf("x"), numbers: 2, clipped: true },
     });
 
     expect(html).toContain("Text added to your question");
@@ -162,7 +174,7 @@ describe("the line under the box", () => {
   it("says a single number in the singular", () => {
     const html = line({
       phase: "done",
-      result: { insertion: { text: "x", caret: 1, before: { text: "", caret: 0 } }, numbers: 1, clipped: false },
+      result: { ...resultOf("x"), numbers: 1, clipped: false },
     });
 
     expect(html).toContain("1 number added, check it");

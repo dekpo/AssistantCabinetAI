@@ -108,7 +108,9 @@ Providers: worker_stt (Parakeet), fake (tests), whisper_cpp (later, same trait);
 ```
 
 `case_reliable` is a property of the engine, carried in its descriptor beside `engine_id`, never a literal in a command:
-Parakeet writes cased, punctuated text, and `repair::propose` takes that flag.
+Parakeet writes cased, punctuated text, and `repair::propose` takes that flag. Built in phase 6: the manifest row of a model
+carries `casedOutput` (absent means no), `SttResult` carries `case_reliable` (`caseReliable` in the webview), and the dictation
+hands it to the repair.
 
 ### 3.3 Worker protocol (JSON lines on stdin and stdout)
 
@@ -154,7 +156,7 @@ apps/desktop/src-tauri/
   binaries/              worker executables staged under their target-triple names (git-ignored)
 apps/speech-worker/      NEW crate(s): speech-stt-worker (feature stt), speech-tts-worker (feature tts)
 apps/desktop/src/
-  speech/                ipc.ts, availability.ts, voiceSession.ts, dictation.ts (state machine), useDictation.ts (hook), insertion.ts, useLongDictation.ts, output/
+  speech/                ipc.ts, availability.ts, voiceSession.ts, dictation.ts (state machine), useDictation.ts (hook), insertion.ts, useLongDictation.ts, repairChips.ts (pure), useRepairSuggestions.ts (hook), output/
   audio/                 recorder.ts, wav.ts, segmenter.ts          public/speech/capture-worklet.js (static, no blob:)
   components/            SpeechSettings, MicButton, DictationStatus, ReadAloudButton, CentreSwitch, NotesPanel, RepairChips
 ```
@@ -278,6 +280,13 @@ scoped, read-only, empty when `knowledgeMode` is `off` and on any failure**. The
 2. while the hidden-names setting is on and not revealed, chips collapse to one neutral line (reuse `revealNames`);
 3. a chip is only a suggestion: Accept replaces the span after checking the draft still holds `heard` there, otherwise the
    chip is dropped; nothing is replaced silently and nothing is written to the KB.
+
+Built as follows (phase 6). The command is `speech_repair_names(transcript, scope, caseReliable, revealNames)` in `commands.rs`
+next to `knowledge_entity_card`; the logic is `speech::repair::propose_for`, which converts the byte spans of `propose` to UTF-16
+offsets (how the window slices a string) and applies guard 2 **in Rust**: while names are hidden and `revealNames` is not set, the
+answer is `{ proposals: [], hiddenCount }` and no name, not even the words heard, reaches the window; the window shows the count
+and a "Show names" button that asks again with the reveal. Any failure is an empty answer. Chips follow the edits of the draft
+(`repairChips.ts`, `followEdit`) and are dropped when their words are no longer alone at their place.
 
 The command, the chips and the hook are generic over entity types and subtypes (a future medication entity needs no
 change; no drug list ships). The chip component and the hook hold no Composer state, so the Notes editor reuses them.
@@ -502,7 +511,7 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 | No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`; the offline proof at the gate | 3, 3b, 13 |
 | A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear) | 5 |
 | Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
-| Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `kb_off_gives_no_repair` | 6 |
+| Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `with_the_knowledge_base_off_there_is_nothing_to_repair`, `the_command_answers_before_it_opens_the_index_when_the_base_is_off`, `hidden_names_reach_the_window_as_a_count_only` (all in `tests/speech_repair.rs`), `repairSources.test.ts` | 6 |
 | No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text` | 3, 5, 10 |
 | Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |

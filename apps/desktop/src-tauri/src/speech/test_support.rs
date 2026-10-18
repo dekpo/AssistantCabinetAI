@@ -69,6 +69,7 @@ pub fn tiny_model() -> (ModelSpec, Vec<u8>) {
                 sha256: digest(bytes),
             })
             .collect(),
+        cased_output: false,
     };
     (spec, zip)
 }

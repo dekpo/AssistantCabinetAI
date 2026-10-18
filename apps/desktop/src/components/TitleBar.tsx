@@ -1,6 +1,7 @@
 import { useTranslation } from "../i18n/I18nProvider";
 import type { ConnectionState } from "../state/useServerHealth";
 import { ServerStatus } from "./ServerStatus";
+import { NotesGlyph } from "./NotesGlyph";
 import { WorkspaceGlyph } from "./WorkspaceGlyph";
 
 export function TitleBar({
@@ -9,6 +10,7 @@ export function TitleBar({
   onOpenSettings,
   workspaceOpen,
   onToggleWorkspace,
+  notes,
 }: {
   connection: ConnectionState;
   onRefresh: () => void;
@@ -16,6 +18,9 @@ export function TitleBar({
   /** Whether the centre zone of the window is shown. */
   workspaceOpen: boolean;
   onToggleWorkspace: () => void;
+  /** The Notes button, between the workspace toggle and Settings. Absent while the Notes switch is
+   * off: the bar then draws exactly what it drew before. */
+  notes?: { open: boolean; onToggle: () => void };
 }) {
   const { t } = useTranslation();
 
@@ -38,6 +43,18 @@ export function TitleBar({
         >
           <WorkspaceGlyph />
         </button>
+        {notes === undefined ? null : (
+          <button
+            type="button"
+            className="button button--icon"
+            aria-pressed={notes.open}
+            aria-label={t("notes.toggle")}
+            title={t("notes.toggle")}
+            onClick={notes.onToggle}
+          >
+            <NotesGlyph />
+          </button>
+        )}
         <button type="button" className="button" onClick={onOpenSettings}>
           {t("actions.openSettings")}
         </button>

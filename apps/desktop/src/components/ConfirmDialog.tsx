@@ -21,6 +21,7 @@ export function ConfirmDialog({
   confirmLabel,
   destructive = false,
   singleAction = false,
+  secondary,
   busy = false,
   onConfirm,
   onCancel,
@@ -32,6 +33,9 @@ export function ConfirmDialog({
   destructive?: boolean;
   /** One button that acknowledges a notice, no cancel: Escape and a click outside answer it too. */
   singleAction?: boolean;
+  /** A third answer between Cancel and the confirming one (Cancel / Discard / Save). Absent, the
+   * dialog draws exactly what it always drew. */
+  secondary?: { label: string; onSelect: () => void; destructive?: boolean };
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -83,6 +87,20 @@ export function ConfirmDialog({
               onClick={onCancel}
             >
               {t("actions.cancel")}
+            </button>
+          )}
+          {secondary === undefined ? null : (
+            <button
+              type="button"
+              className={
+                secondary.destructive
+                  ? "button button--compact button--destructive"
+                  : "button button--compact"
+              }
+              disabled={busy}
+              onClick={secondary.onSelect}
+            >
+              {secondary.label}
             </button>
           )}
           <button

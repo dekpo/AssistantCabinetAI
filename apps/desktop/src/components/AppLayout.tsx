@@ -13,7 +13,7 @@ import {
 } from "../lib/panelLayout";
 import type { ViewStateStore } from "../lib/viewState";
 import type { WorkspaceView } from "../lib/workspaceView";
-import { WorkspacePanel, type TabActions } from "./WorkspacePanel";
+import { WorkspacePanel, type CentreNotes, type TabActions } from "./WorkspacePanel";
 
 /* Pixels, not percentages: below these the content of the zone stops being usable (the two folder
    cards, a readable page, the model selector beside the composer). A number is pixels and a string
@@ -38,6 +38,7 @@ export function AppLayout({
   onWorkspaceCollapsed,
   viewStates,
   tabActions,
+  notes,
   restoreNonce,
 }: {
   resources: ReactNode;
@@ -53,6 +54,8 @@ export function AppLayout({
   viewStates: ViewStateStore;
   /** What the tabs of the workspace can ask for: show, close, or report a file that is gone. */
   tabActions: TabActions;
+  /** The Notes section of the centre; absent while its switch is off. */
+  notes?: CentreNotes;
   /** Changes whenever the default layout must be put back on screen at once. */
   restoreNonce: number;
 }) {
@@ -147,7 +150,12 @@ export function AppLayout({
       >
         <div className="pane__content">
           {workspace === null ? null : (
-            <WorkspacePanel view={workspace} viewStates={viewStates} actions={tabActions} />
+            <WorkspacePanel
+              view={workspace}
+              viewStates={viewStates}
+              actions={tabActions}
+              notes={notes}
+            />
           )}
         </div>
       </Panel>

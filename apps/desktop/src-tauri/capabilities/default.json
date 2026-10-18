@@ -1,10 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the practice window may do. Opening a folder dialog is the only file capability: reading, writing and renaming go through Rust commands, never through the webview. Clipboard access is an explicitly granted plugin, not the ambient browser API.",
+  "description": "What the practice window may do. Opening a folder dialog is the only file capability: reading, writing and renaming go through Rust commands, never through the webview. The window may be destroyed, and only that, so a note that is not saved can be protected from the close button and the window closed once the user has answered. Clipboard access is an explicitly granted plugin, not the ambient browser API.",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-destroy",
     "dialog:allow-open",
     "clipboard-manager:allow-write-text"
   ]

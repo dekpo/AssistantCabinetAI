@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppLayout } from "./components/AppLayout";
 import { ChatPanel } from "./components/ChatPanel";
 import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
+import type { NotesActions, NotesBundle } from "./components/notes/NotesPanel";
+import { AnalysisChoiceDialog, UnsavedNoteDialog } from "./components/notes/NotesDialogs";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
 import { WorkFolderCard } from "./components/WorkFolderCard";
 import type { TabActions } from "./components/WorkspacePanel";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
+import { effectiveSection, shownCentre, type CentreSection } from "./lib/centreSection";
 import {
   addScopeFiles,
   combineScopes,
@@ -20,13 +23,22 @@ import {
   dataFolderInventory,
   type FileRecord,
   indexDataFolder,
+  revealWorkFile,
   workFolderInventory,
   type AnalysisScope,
   type OutsideSelection,
 } from "./lib/ipc";
+import {
+  guardExit,
+  hasUnsaved,
+  unsavedDrafts,
+  type NotesExit,
+} from "./lib/notesDrafts";
+import { createNotesSession } from "./lib/notesSession";
 import { NO_LAYOUTS } from "./lib/panelLayout";
 import { applyTheme } from "./lib/theme";
 import { createViewStateStore, type ViewStateStore } from "./lib/viewState";
+import { closeWindow, guardWindowClose } from "./lib/windowClose";
 import {
   activateTab,
   closeTab,
@@ -42,6 +54,7 @@ import { useAppSettings } from "./state/useAppSettings";
 import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
+import { notesPreview, notesSave } from "./speech/ipc";
 import { VoiceSessionProvider } from "./speech/VoiceSessionContext";
 
 function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boolean }) {
@@ -91,7 +104,64 @@ function AppContent() {
     setWorkspaceHidden(false);
   }, []);
   const hideWorkspace = useCallback(() => setWorkspaceHidden(true), []);
-  const shownWorkspace = workspaceHidden ? null : workspace;
+  /* The Notes section of the centre. The notes live in a session held here, in memory only, so a
+     switch of section or a hidden centre never loses them; `section` is which of the two sections
+     is on screen. The pass the Save button starts is this App's own Analyse (`indexing.run()`). */
+  const indexingRef = useRef(indexing);
+  indexingRef.current = indexing;
+  const [notesSession] = useState(() =>
+    createNotesSession({
+      preview: notesPreview,
+      save: notesSave,
+      inventory: async () => (await workFolderInventory()).files,
+      analyse: () => indexingRef.current.run(),
+    }),
+  );
+  const notes = useSyncExternalStore(notesSession.subscribe, notesSession.getSnapshot);
+  const [section, setSection] = useState<CentreSection>("files");
+  const notesEnabled = snapshot?.settings.speech.notesEnabled ?? false;
+  const shownSection = effectiveSection(section, notesEnabled);
+  /* What `AppLayout` is given: the zone stays open while Notes is shown or holds a note. */
+  const shownWorkspace = shownCentre({
+    workspace,
+    hidden: workspaceHidden,
+    notesEnabled,
+    section,
+    notesHold: hasUnsaved(notes.notes),
+  });
+  /* What would lose a note asks first (`guardExit`); the question waits for the user. `proceed` is
+     the exit itself, `abandon` what happens when the user cancels. */
+  const [leaving, setLeaving] = useState<{
+    exit: NotesExit;
+    proceed: () => void;
+    abandon?: () => void;
+  } | null>(null);
+  const guardLeaving = useCallback(
+    (exit: NotesExit, proceed: () => void, abandon?: () => void) => {
+      if (guardExit(notesSession.getSnapshot().notes, exit) === "allow") {
+        proceed();
+      } else {
+        setLeaving({ exit, proceed, abandon });
+      }
+    },
+    [notesSession],
+  );
+  const showNotes = useCallback(() => {
+    setSection("notes");
+    setWorkspaceHidden(false);
+  }, []);
+  /* The cross of the window: a note that is not saved keeps it open until the user has answered. */
+  useEffect(
+    () =>
+      guardWindowClose(() => {
+        if (!notesSession.hasUnsaved()) {
+          return false;
+        }
+        setLeaving({ exit: { kind: "close-window" }, proceed: () => void closeWindow() });
+        return true;
+      }),
+    [notesSession],
+  );
   /* The one modal of the viewer: the open file was moved, renamed, deleted or modified outside the
      software. The centre closes with it, and the file can only be shown again after an Analyse. */
   const [outsideNotice, setOutsideNotice] = useState(false);
@@ -116,6 +186,8 @@ function AppContent() {
     (folder: ViewerFolder, record: FileRecord) => {
       changeTabs((state) => openTab(state, folder, record));
       setWorkspaceHidden(false);
+      /* A file opened from a list is shown: the Files section, with Notes left alive behind it. */
+      setSection("files");
     },
     [changeTabs],
   );
@@ -156,6 +228,42 @@ function AppContent() {
     nonce: number;
   } | null>(null);
   const workFolder = snapshot?.settings.workFolder ?? null;
+  const notesActions = useMemo<NotesActions>(
+    () => ({
+      select: notesSession.select,
+      add: notesSession.add,
+      edit: notesSession.edit,
+      discard: (id) =>
+        guardLeaving({ kind: "discard-draft", id }, () => notesSession.remove(id)),
+      review: (scope) => void notesSession.review(scope),
+      confirm: () => void notesSession.confirm(),
+      cancelPlan: notesSession.cancelPlan,
+      dismissReport: notesSession.dismissReport,
+      reveal: revealWorkFile,
+    }),
+    [notesSession, guardLeaving],
+  );
+  const notesBundle = useMemo<NotesBundle>(
+    /* Dictation is wired in by its own phase: until then the pill is not drawn. */
+    () => ({
+      snapshot: notes,
+      actions: notesActions,
+      hasFolder: workFolder !== null,
+      dictation: null,
+    }),
+    [notes, notesActions, workFolder],
+  );
+  /* Files | Notes. A centre with no tab open would close when Files is chosen, so Files shows its
+     welcome view then. Switching is never a way to lose a note. */
+  const chooseSection = useCallback(
+    (next: CentreSection) => {
+      setSection(next);
+      if (next === "files" && workspace === null) {
+        setWorkspace({ kind: "welcome" });
+      }
+    },
+    [workspace],
+  );
   /* Files chosen in one folder mean nothing in another: their paths would resolve to nothing and
      every question would be refused. A different folder starts from no document again. Analyse
      leaves the selection alone: each ticked file is pinned to its content and survives a pass. */
@@ -266,12 +374,25 @@ function AppContent() {
           onOpenSettings={() => setSettingsOpen(true)}
           workspaceOpen={shownWorkspace !== null}
           onToggleWorkspace={() => {
-            if (workspace === null) {
+            if (shownWorkspace !== null) {
+              guardLeaving({ kind: "hide-zone" }, hideWorkspace);
+            } else if (workspace === null) {
               openWorkspace({ kind: "welcome" });
             } else {
-              setWorkspaceHidden((hidden) => !hidden);
+              setWorkspaceHidden(false);
             }
           }}
+          notes={
+            notesEnabled
+              ? {
+                  open: shownWorkspace !== null && shownSection === "notes",
+                  onToggle: () =>
+                    shownWorkspace !== null && shownSection === "notes"
+                      ? guardLeaving({ kind: "hide-zone" }, hideWorkspace)
+                      : showNotes(),
+                }
+              : undefined
+          }
         />
         <main className="app__main">
           <AppLayout
@@ -281,13 +402,32 @@ function AppContent() {
             onWorkspaceCollapsed={hideWorkspace}
             viewStates={viewStates}
             tabActions={tabActions}
+            notes={
+              notesEnabled
+                ? {
+                    section: shownSection,
+                    onSection: chooseSection,
+                    recording: false,
+                    bundle: notesBundle,
+                  }
+                : undefined
+            }
             restoreNonce={layoutRestores}
             resources={
               <aside className="app__side">
                 <WorkFolderCard
                   workFolder={snapshot.settings.workFolder}
                   suggestedWorkFolder={snapshot.suggestedWorkFolder}
-                  onChosen={(path) => void update({ workFolder: path })}
+                  onChosen={(path) =>
+                    /* Another folder starts from no note: the notes written for this one would
+                       otherwise land in the next. The first choice of a folder loses nothing. */
+                    workFolder === null || path === workFolder
+                      ? void update({ workFolder: path })
+                      : guardLeaving({ kind: "change-folder" }, () => {
+                          notesSession.discardAll();
+                          void update({ workFolder: path });
+                        })
+                  }
                   indexing={indexing}
                   detail="collapsible"
                   scope={scope}
@@ -295,6 +435,7 @@ function AppContent() {
                   scopeLocked={chatBusy}
                   onOpenKnowledge={() => setKnowledgeOpen(true)}
                   onOpenFile={openDocument}
+                  refreshToken={notes.writes}
                 />
                 <DataFolderCard
                   dataFolder={snapshot.settings.dataFolder}
@@ -352,11 +493,28 @@ function AppContent() {
             indexing={indexing}
             dataIndexing={dataIndexing}
             onUpdate={(patch) => void update(patch)}
-            onSaveSpeech={(change) => void saveSpeech(change)}
-            onReset={async () => {
-              await reset();
-              setLayoutRestores((count) => count + 1);
-            }}
+            onSaveSpeech={(change) =>
+              snapshot.settings.speech.notesEnabled && !change(snapshot.settings.speech).notesEnabled
+                ? guardLeaving({ kind: "disable-notes" }, () => {
+                    notesSession.discardAll();
+                    void saveSpeech(change);
+                  })
+                : void saveSpeech(change)
+            }
+            onReset={() =>
+              new Promise<void>((resolve, reject) =>
+                guardLeaving(
+                  { kind: "reset-settings" },
+                  () => {
+                    notesSession.discardAll();
+                    reset()
+                      .then(() => setLayoutRestores((count) => count + 1))
+                      .then(resolve, reject);
+                  },
+                  resolve,
+                ),
+              )
+            }
             onRestoreLayout={() => {
               setLayoutRestores((count) => count + 1);
               void update({ layout: NO_LAYOUTS });
@@ -374,6 +532,39 @@ function AppContent() {
             onClose={() => setKnowledgeOpen(false)}
           />
         ) : null}
+        {notes.phase === "asking" ? (
+          <AnalysisChoiceDialog
+            onAnalyse={() => notesSession.answer(true)}
+            onSkip={() => notesSession.answer(false)}
+          />
+        ) : null}
+        {leaving === null ? null : (
+          <UnsavedNoteDialog
+            count={leaving.exit.kind === "discard-draft" ? 1 : unsavedDrafts(notes.notes).length}
+            onCancel={() => {
+              leaving.abandon?.();
+              setLeaving(null);
+            }}
+            onDiscard={() => {
+              setLeaving(null);
+              leaving.proceed();
+            }}
+            onReview={() => {
+              leaving.abandon?.();
+              setLeaving(null);
+              /* The exit is given up: the user is taken to the exact files that would be written,
+                 and the settings, if they asked, are put out of the way. */
+              setSettingsOpen(false);
+              if (leaving.exit.kind === "discard-draft") {
+                notesSession.select(leaving.exit.id);
+                void notesSession.review("active");
+              } else {
+                void notesSession.review("all");
+              }
+              showNotes();
+            }}
+          />
+        )}
       </div>
     </I18nProvider>
   );

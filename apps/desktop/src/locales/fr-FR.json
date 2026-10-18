@@ -12,6 +12,67 @@
     "separatorChat": "Largeur de la conversation",
     "separatorBetween": "Largeur des dossiers et de la conversation"
   },
+  "centre": {
+    "switchLabel": "Sections de la zone centrale",
+    "files": "Fichiers",
+    "notes": "Notes",
+    "recording": "Enregistrement en cours"
+  },
+  "notes": {
+    "title": "Notes",
+    "toggle": "Notes",
+    "draftsLabel": "Vos notes",
+    "draftLabel": "Note {number}",
+    "new": "Nouvelle note",
+    "discard": "Abandonner cette note",
+    "placeholder": "Écrivez votre note ici. Le Markdown fonctionne : # pour un titre, - pour une liste.",
+    "textLabel": "Texte de la note",
+    "previewEmpty": "Rien à afficher pour l'instant.",
+    "nameLabel": "Nom du fichier",
+    "formatLabel": "Format",
+    "formatMarkdown": "Markdown (.md)",
+    "formatText": "Texte brut (.txt)",
+    "save": "Enregistrer cette note",
+    "saveAll": "Enregistrer toutes les notes ({count})",
+    "plan": {
+      "title": "Fichiers qui seront écrits",
+      "hint": "Rien n'est écrit tant que vous n'avez pas confirmé. Un nom déjà pris reçoit un numéro ; aucun fichier n'est jamais écrasé.",
+      "writeOne": "Écrire le fichier",
+      "writeMany": "Écrire les {count} fichiers"
+    },
+    "phase": {
+      "previewing": "Préparation des noms de fichiers...",
+      "saving": "Enregistrement...",
+      "asking": "En attente de votre réponse...",
+      "analysing": "Analyse en cours. Le panneau Documents en montre l'avancement."
+    },
+    "report": {
+      "savedOne": "Note enregistrée",
+      "savedMany": "{count} notes enregistrées",
+      "reveal": "Afficher dans le dossier",
+      "analysis": {
+        "done": "La note est analysée : vous pouvez poser des questions à son sujet.",
+        "declined": "La note est enregistrée mais pas encore analysée. Appuyez sur Analyser dans le panneau Documents quand vous le voulez."
+      }
+    },
+    "unsaved": {
+      "title": "Note non enregistrée",
+      "bodyOne": "Une note n'est pas enregistrée.\nSi vous continuez, elle sera perdue.",
+      "bodyMany": "{count} notes ne sont pas enregistrées.\nSi vous continuez, elles seront perdues.",
+      "review": "Vérifier et enregistrer",
+      "discard": "Abandonner"
+    },
+    "analysis": {
+      "title": "Analyser aussi les autres documents ?",
+      "body": "La note est enregistrée. D'autres documents du dossier attendent aussi leur analyse, et l'analyse les lit tous, ce qui peut prendre du temps. Si vous annulez, la note reste enregistrée et rien n'est analysé.",
+      "confirm": "Analyser maintenant"
+    },
+    "pill": {
+      "start": "Dicter",
+      "finish": "Terminer la dictée",
+      "hint": "Cliquez à nouveau pour terminer"
+    }
+  },
   "viewer": {
     "open": "Ouvrir",
     "openHint": "Afficher ce fichier dans la zone centrale",

@@ -12,6 +12,67 @@
     "separatorChat": "Width of the conversation",
     "separatorBetween": "Width of the folders and of the conversation"
   },
+  "centre": {
+    "switchLabel": "Sections of the central zone",
+    "files": "Files",
+    "notes": "Notes",
+    "recording": "Recording in progress"
+  },
+  "notes": {
+    "title": "Notes",
+    "toggle": "Notes",
+    "draftsLabel": "Your notes",
+    "draftLabel": "Note {number}",
+    "new": "New note",
+    "discard": "Discard this note",
+    "placeholder": "Write your note here. Markdown works: # for a title, - for a list.",
+    "textLabel": "Text of the note",
+    "previewEmpty": "Nothing to preview yet.",
+    "nameLabel": "File name",
+    "formatLabel": "Format",
+    "formatMarkdown": "Markdown (.md)",
+    "formatText": "Plain text (.txt)",
+    "save": "Save this note",
+    "saveAll": "Save all notes ({count})",
+    "plan": {
+      "title": "Files that will be written",
+      "hint": "Nothing is written until you confirm. A name already taken gets a number; no file is ever overwritten.",
+      "writeOne": "Write the file",
+      "writeMany": "Write the {count} files"
+    },
+    "phase": {
+      "previewing": "Preparing the file names...",
+      "saving": "Saving...",
+      "asking": "Waiting for your answer...",
+      "analysing": "Analysing. The Documents panel shows the progress."
+    },
+    "report": {
+      "savedOne": "Note saved",
+      "savedMany": "{count} notes saved",
+      "reveal": "Show in folder",
+      "analysis": {
+        "done": "The note is analysed: you can ask questions about it.",
+        "declined": "The note is saved but not analysed yet. Press Analyze in the Documents panel when you are ready."
+      }
+    },
+    "unsaved": {
+      "title": "Unsaved note",
+      "bodyOne": "A note has not been saved.\nIf you go on, it is lost.",
+      "bodyMany": "{count} notes have not been saved.\nIf you go on, they are lost.",
+      "review": "Review and save",
+      "discard": "Discard"
+    },
+    "analysis": {
+      "title": "Analyze the other documents too?",
+      "body": "The note is saved. Other documents of the folder are also waiting for analysis, and the analysis reads all of them, which can take a while. If you cancel, the note stays saved and nothing is analysed.",
+      "confirm": "Analyze now"
+    },
+    "pill": {
+      "start": "Dictate",
+      "finish": "Finish the dictation",
+      "hint": "Click again to finish"
+    }
+  },
   "viewer": {
     "open": "Open",
     "openHint": "Show this file in the central zone",

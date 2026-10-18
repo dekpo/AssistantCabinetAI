@@ -154,7 +154,7 @@ apps/desktop/src-tauri/
   binaries/              worker executables staged under their target-triple names (git-ignored)
 apps/speech-worker/      NEW crate(s): speech-stt-worker (feature stt), speech-tts-worker (feature tts)
 apps/desktop/src/
-  speech/                ipc.ts, availability.ts, voiceSession.ts, useDictation.ts, insertion.ts, useLongDictation.ts, output/
+  speech/                ipc.ts, availability.ts, voiceSession.ts, dictation.ts (state machine), useDictation.ts (hook), insertion.ts, useLongDictation.ts, output/
   audio/                 recorder.ts, wav.ts, segmenter.ts          public/speech/capture-worklet.js (static, no blob:)
   components/            SpeechSettings, MicButton, DictationStatus, ReadAloudButton, CentreSwitch, NotesPanel, RepairChips
 ```
@@ -500,14 +500,14 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 |---|---|---|
 | Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio` | 3 |
 | No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`; the offline proof at the gate | 3, 3b, 13 |
-| A transcript only fills a text box | `dictation_never_calls_send` | 5 |
+| A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear) | 5 |
 | Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
 | Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `kb_off_gives_no_repair` | 6 |
-| No text in logs | `speech_timing_line_holds_no_text`, `notes_log_line_holds_no_text` | 3, 5, 10 |
+| No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text` | 3, 5, 10 |
 | Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |
 | Any failure degrades to the typed app | `missing_engine_reports_unavailable_and_typed_app_still_works` | 2, 3 |
-| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, the dictation state machine tests | 3b, 5 |
+| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, `dictation.test.ts`, "cancelling a dictation, at every stage" | 3b, 5 |
 | One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests | 3, 4 |
 | Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it` | 3b |
 | Nothing heavy at launch | `launch_starts_no_speech_work` | 2 |

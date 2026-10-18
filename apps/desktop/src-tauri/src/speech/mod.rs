@@ -46,6 +46,7 @@ pub mod speakable_sentences;
 pub mod status;
 pub mod stt;
 pub mod temp_audio;
+pub mod timing_log;
 pub mod wav;
 pub mod worker_protocol;
 pub mod worker_stt;

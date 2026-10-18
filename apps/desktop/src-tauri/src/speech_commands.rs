@@ -20,6 +20,7 @@ use crate::speech::speakable::{self, Part, Segment};
 use crate::speech::status::{self, Probes, SpeechStatus};
 use crate::speech::stt::SttResult;
 use crate::speech::temp_audio;
+use crate::speech::timing_log;
 use crate::speech::worker_stt::{self, WorkerSttProvider};
 
 /// What the speech module keeps between two commands: what was found on this machine, the worker
@@ -198,7 +199,25 @@ pub async fn speech_transcribe(
         .join(temp_audio::TEMP_FOLDER_NAME);
     let result = speech.service().transcribe(wav, &plan, &temp_dir).await?;
     eprintln!("{}", service::timing_line(&result));
+    log_speech_timing(&app, &state, purpose, &result);
     Ok(result)
+}
+
+/// Appends the numbers of a finished job to `speech-timings.jsonl` when `write_timing_log` is on.
+/// Never the text; a log that cannot be written never fails the job.
+fn log_speech_timing(app: &AppHandle, state: &AppState, purpose: Purpose, result: &SttResult) {
+    let on = state
+        .settings
+        .lock()
+        .map(|settings| settings.write_timing_log)
+        .unwrap_or(false);
+    if !on {
+        return;
+    }
+    if let Ok(directory) = app.path().app_local_data_dir() {
+        let at = chrono::Local::now().timestamp();
+        let _ = timing_log::append(&directory, purpose, result, at);
+    }
 }
 
 /// Stops the transcription in progress, if any. Returns whether there was one.

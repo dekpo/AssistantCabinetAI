@@ -591,6 +591,22 @@
     "statusLoading": "Reading the state of the voice.",
     "statusFailed": "The state of the voice could not be read.",
     "featureProblem": "{feature}: {reason}",
+    "dictation": {
+      "start": "Dictate",
+      "stop": "Finish dictation",
+      "cancel": "Cancel",
+      "dismiss": "Close",
+      "requesting": "Waiting for the microphone...",
+      "recording": "Recording. Press the microphone again to finish.",
+      "transcribing": "Transcribing...",
+      "done": "Text added to your question. Check it before sending.",
+      "undo": "Undo",
+      "clipped": "The sound was too loud and may be distorted: check the words.",
+      "numbersOne": "{count} number added, check it.",
+      "numbersMany": "{count} numbers added, check them.",
+      "analysing": "An analysis is running: this may take longer.",
+      "nothingHeard": "Nothing was understood. Try again."
+    },
     "microphone": {
       "unsupported": "This window cannot use the microphone.",
       "denied": "The microphone is blocked. Allow it in the system settings, then try again.",

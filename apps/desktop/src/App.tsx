@@ -42,6 +42,7 @@ import { useAppSettings } from "./state/useAppSettings";
 import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
+import { VoiceSessionProvider } from "./speech/VoiceSessionContext";
 
 function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boolean }) {
   const { t } = useTranslation();
@@ -57,8 +58,8 @@ function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boole
   );
 }
 
-export default function App() {
-  const { snapshot, locale, loadError, saveError, reload, update, saveLayout, reset } =
+function AppContent() {
+  const { snapshot, locale, loadError, saveError, reload, update, saveLayout, saveSpeech, reset } =
     useAppSettings();
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
@@ -351,6 +352,7 @@ export default function App() {
             indexing={indexing}
             dataIndexing={dataIndexing}
             onUpdate={(patch) => void update(patch)}
+            onSaveSpeech={(change) => void saveSpeech(change)}
             onReset={async () => {
               await reset();
               setLayoutRestores((count) => count + 1);
@@ -374,5 +376,14 @@ export default function App() {
         ) : null}
       </div>
     </I18nProvider>
+  );
+}
+
+/** One microphone for the whole window: the voice session is created here, once, and renders nothing. */
+export default function App() {
+  return (
+    <VoiceSessionProvider>
+      <AppContent />
+    </VoiceSessionProvider>
   );
 }

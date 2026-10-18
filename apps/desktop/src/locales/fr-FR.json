@@ -502,6 +502,70 @@
     "manageKnowledgeDescription": "Voir ce que la base a repéré et d'où cela vient, ajouter un nom, fusionner, séparer ou supprimer une entité, ou réinitialiser la base.",
     "manageKnowledge": "Gérer…"
   },
+  "speech": {
+    "groupLabel": "Voix",
+    "enabledLabel": "Utiliser la voix",
+    "enabledDescription": "Dictée dans la conversation et lecture des réponses à voix haute. Le son et le texte restent sur cet ordinateur.",
+    "dictationLabel": "Dictée dans la conversation",
+    "readAloudLabel": "Lire les réponses à voix haute",
+    "notesLabel": "Notes vocales",
+    "notesDescription": "La section Notes. Elle a son propre interrupteur et fonctionne sans l'interrupteur de la voix ci-dessus.",
+    "modelLabel": "Modèle de reconnaissance vocale",
+    "model": {
+      "missing": "Non installé.",
+      "present": "Prêt.",
+      "corrupt": "Endommagé : il faut le réinstaller."
+    },
+    "install": {
+      "action": "Installer",
+      "notYet": "L'installation du modèle n'est pas encore disponible dans cette version.",
+      "source": "Le modèle n'est téléchargé que lorsque vous appuyez sur Installer, depuis {address}."
+    },
+    "statusLoading": "Lecture de l'état de la voix.",
+    "statusFailed": "L'état de la voix n'a pas pu être lu.",
+    "featureProblem": "{feature} : {reason}",
+    "microphone": {
+      "unsupported": "Cette fenêtre ne peut pas utiliser le microphone.",
+      "denied": "Le microphone est bloqué. Autorisez-le dans les réglages du système, puis réessayez.",
+      "missing": "Aucun microphone n'a été trouvé.",
+      "failed": "Le microphone n'a pas pu démarrer."
+    },
+    "session": {
+      "microphoneBusy": "Le microphone est déjà utilisé.",
+      "recording": "Un enregistrement est en cours. Terminez-le d'abord."
+    },
+    "languageLabel": "Langue de la voix",
+    "languageDescription": "Utilisée pour la dictée, la lecture à voix haute et les commandes vocales.",
+    "languageFollow": "La même que l'interface",
+    "dictationCapLabel": "Dictée la plus longue dans la conversation",
+    "dictationCapDescription": "Une dictée s'arrête d'elle-même après cette durée.",
+    "noteCapLabel": "Dictée la plus longue d'une note",
+    "noteCapDescription": "La dictée d'une note s'arrête d'elle-même après cette durée.",
+    "secondsUnit": "secondes",
+    "engineLabel": "Moteur de lecture",
+    "engine": {
+      "auto": "Automatique",
+      "piper": "Piper, sur cet ordinateur",
+      "system": "Voix du système, seulement si elles fonctionnent sur cet ordinateur"
+    },
+    "voiceLabel": "Voix de lecture",
+    "voice": {
+      "auto": "Première voix de la langue",
+      "option": "{gender} ({id})"
+    },
+    "gender": {
+      "female": "Voix féminine",
+      "male": "Voix masculine",
+      "mixed": "Plusieurs voix"
+    },
+    "rateLabel": "Vitesse de lecture",
+    "rateDescription": "1 est la vitesse naturelle de la voix.",
+    "readAloudSoon": "La lecture à voix haute n'est pas encore disponible dans cette version.",
+    "notesFolderLabel": "Nom du dossier des notes",
+    "notesFolderDescription": "Un dossier dans le dossier des documents, où les notes enregistrées sont écrites.",
+    "notesCommandsLabel": "Commandes vocales dans les notes",
+    "notesCommandsDescription": "Ponctuation dictée, titre, sous-titre, nouvelle ligne, nouveau paragraphe et nouvelle note."
+  },
   "errorBanner": {
     "title": "Cela n'a pas fonctionné"
   },

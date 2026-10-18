@@ -1795,7 +1795,10 @@ body {
 
 .settings-advanced > .field,
 .settings-advanced > .field__row,
-.settings-advanced > .field__description {
+.settings-advanced > .field__description,
+.settings-voice > .field,
+.settings-voice > .field__row,
+.settings-voice > .field__description {
   margin-top: 8px;
 }
 

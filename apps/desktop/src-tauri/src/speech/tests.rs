@@ -521,6 +521,30 @@ fn an_unsupported_language_blocks_the_voice_features_with_its_own_code() {
 }
 
 #[test]
+fn the_model_state_is_reported_even_when_the_master_switch_is_off() {
+    // Voice is off, so the dictation reason is `speech_unavailable`; the model state still shows.
+    let settings = Settings::default();
+    for (found, word) in [
+        (ModelState::Missing, "missing"),
+        (ModelState::Present, "present"),
+        (ModelState::Corrupt, "corrupt"),
+    ] {
+        let probes = Probes {
+            stt_model: found,
+            ..Probes::default()
+        };
+        let report = status::compute(&settings, &probes);
+        assert_eq!(
+            reason(&report.features.dictation),
+            Some("speech_unavailable")
+        );
+        assert_eq!(report.stt_model, found);
+        let json = serde_json::to_value(&report).expect("serialises");
+        assert_eq!(json["sttModel"], word);
+    }
+}
+
+#[test]
 fn the_status_crosses_the_bridge_in_camel_case_with_codes_only() {
     let json = serde_json::to_value(status::compute(&Settings::default(), &Probes::default()))
         .expect("serialises");

@@ -58,7 +58,7 @@ Owner-only. Never commit or push. Suggest English branch names, Conventional Com
 
 When the owner asks for a prompt for **another Cursor tab**: write `docs/SESSION-<topic>.md`, or a file in a series folder `docs/SESSION-<SERIES>/` when several tabs are chained (not git). In chat, give the **path** and the **tab name** (the feature name, not “Prompt …”). Do not paste a long handoff as the only deliverable. She drags that file into the new chat. When a handoff is finished, the owner moves it to `docs/SESSIONS-DONE/`.
 
-**Commands given to the owner are written for `cmd` (Windows) or a POSIX shell, never PowerShell** (owner instruction, 15 October 2026). The `.ps1` helpers already in `scripts/` stay as they are; an agent never runs the backup, restore or log-clearing helpers.
+**Commands given to the owner are written for Git Bash (a POSIX shell), never for `cmd` and never for PowerShell** (owner instruction, 15 October 2026, made explicit on 18 October 2026: she runs every git and shell command in Git Bash). A multi-line command ends each line with a backslash (never `^`, never a backtick); Windows folders are written `/c/Users/...` (never `C:\...`). This covers git and `gh` blocks, human-test launch commands and any command pasted in chat. The `.ps1` helpers already in `scripts/` stay as they are; an agent never runs the backup, restore or log-clearing helpers.
 
 ## Language
 

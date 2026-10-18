@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
-import { annotationLines, answerForCopy, computedBlock, sourceLines } from "./annotations";
+import { annotationLines, answerForCopy, cautionLines, computedBlock, sourceLines } from "./annotations";
 import type { TabularAnswer, TargetingReport } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
@@ -202,5 +202,58 @@ describe("Copy the conversation, when the search was narrowed", () => {
 
   it("keeps the line out of the notes shown as lines, which the interface draws with its buttons", () => {
     expect(annotationLines(french, "fr-FR", entry({ targeting: narrowed }))).toEqual([]);
+  });
+});
+
+describe("the caution lines read aloud", () => {
+  const everything = entry({
+    coverage: undefined,
+    withoutDocuments: true,
+    unanalysedFiles: 2,
+    scopeOutdated: ["a.pdf"],
+    interrupted: "stopped",
+    durationMs: 44000,
+    modelAlias: "gemma2:2b",
+    deterministic: true,
+    documentsNotNeeded: true,
+    mixedTableUnavailable: "no_evidence",
+    mixedDocumentsUnavailable: "not_asked_about",
+    mixedCorrections: [{ claimed: "1 480", correct: 1450 }],
+    mixedRejectedCitations: ["[3]"],
+    modelAttemptAlias: "ministral",
+    modelAttemptDurationMs: 2000,
+    unverifiedNumbers: ["80"],
+  });
+
+  it("keeps the warnings, in the order annotationLines writes them, and leaves out the rest", () => {
+    const cautions = cautionLines(english, "en-US", everything);
+
+    expect(cautions).toStrictEqual([
+      english("chat.withoutDocuments"),
+      english("chat.unanalysed", { documents: "2 unanalysed documents" }),
+      english("chat.scopeOutdated", { files: "1 file" }),
+      english("chat.interrupted"),
+      english("chat.mixedTableUnavailable.no_evidence"),
+      english("chat.mixedCorrection", { claimed: "1 480", correct: "1,450" }),
+      english("chat.mixedRejectedCitation", { citation: "[3]" }),
+      english("chat.unverifiedNumber", { number: "80" }),
+    ]);
+    // Every caution line is one of the lines shown under the answer, in the same order.
+    const shown = annotationLines(english, "en-US", everything);
+    expect(shown.filter((line) => cautions.includes(line))).toStrictEqual(cautions);
+  });
+
+  it("leaves out the variant that only says the question did not concern a side, and the coverage", () => {
+    const quiet = entry({
+      mixedTableUnavailable: "not_asked_about",
+      mixedDocumentsUnavailable: "not_asked_about",
+    });
+
+    expect(cautionLines(english, "en-US", quiet)).toStrictEqual([]);
+    expect(annotationLines(english, "en-US", quiet)).toHaveLength(2);
+  });
+
+  it("is empty for a plain answer", () => {
+    expect(cautionLines(english, "en-US", entry({ durationMs: 1000, modelAlias: "m" }))).toStrictEqual([]);
   });
 });

@@ -6,12 +6,12 @@ import { boundedNumber } from "../lib/knowledgeSettings";
 import { microphoneSupport } from "../audio/recorder";
 import { useModelJob } from "../state/useModelJob";
 import { useSpeechStatus } from "../state/useSpeechStatus";
+import { useSystemVoices } from "../state/useSystemVoices";
 import {
   featureAvailability,
   INSTALL_AVAILABLE,
   modelStatusKey,
   overrideLanguages,
-  READ_ALOUD_CONTROLS_AVAILABLE,
   voicesOfResolvedLanguage,
 } from "../speech/availability";
 import type { SpeechFeature } from "../speech/ipc";
@@ -68,7 +68,8 @@ export function SpeechSettingsBlock({
   const runningLine = jobLine(modelJob.job);
   const languages = overrideLanguages(status);
   const voices = voicesOfResolvedLanguage(status);
-  const readAloudDisabled = !READ_ALOUD_CONTROLS_AVAILABLE;
+  /* The voices of this system, read only when the system engine is the chosen one. */
+  const systemVoices = useSystemVoices(speech.ttsEngine === "system", status?.locale ?? locale);
   /* What stops a switched-on feature, one line each; a feature that is simply off says nothing. */
   const problems = FEATURES.flatMap((feature) => {
     const { reasonKey } = featureAvailability(status, feature, microphone);
@@ -247,13 +248,11 @@ export function SpeechSettingsBlock({
         }}
       />
 
-      {/* Reading aloud arrives with its own button; its choices are shown now and stay disabled. */}
       <label className="field">
         <span className="field__label">{t("speech.engineLabel")}</span>
         <select
           className="field__control"
           value={speech.ttsEngine ?? ""}
-          disabled={readAloudDisabled}
           onChange={(event) =>
             set({ ttsEngine: ENGINES.find((engine) => engine === event.target.value) ?? null })
           }
@@ -266,12 +265,30 @@ export function SpeechSettingsBlock({
           ))}
         </select>
       </label>
+      {systemVoices === null ? null : (
+        <div className="field">
+          <span className="field__description">
+            {systemVoices.names.length > 0
+              ? t("speech.systemVoices.found", { names: systemVoices.names.join(", ") })
+              : t("speech.systemVoices.none")}
+          </span>
+          {systemVoices.ignored === 0 ? null : (
+            <span className="field__description">
+              {t(
+                systemVoices.ignored === 1
+                  ? "speech.systemVoices.ignoredOne"
+                  : "speech.systemVoices.ignoredMany",
+                { count: systemVoices.ignored },
+              )}
+            </span>
+          )}
+        </div>
+      )}
       <label className="field">
         <span className="field__label">{t("speech.voiceLabel")}</span>
         <select
           className="field__control"
           value={speech.ttsVoice ?? ""}
-          disabled={readAloudDisabled}
           onChange={(event) => set({ ttsVoice: event.target.value || null })}
         >
           <option value="">{t("speech.voice.auto")}</option>
@@ -284,14 +301,11 @@ export function SpeechSettingsBlock({
       </label>
       <NumberSetting
         label={t("speech.rateLabel")}
-        description={t(
-          readAloudDisabled ? "speech.readAloudSoon" : "speech.rateDescription",
-        )}
+        description={t("speech.rateDescription")}
         value={String(speech.ttsRate)}
         min={SPEECH_LIMITS.ttsRate.min}
         max={SPEECH_LIMITS.ttsRate.max}
         step={0.1}
-        disabled={readAloudDisabled}
         commit={(typed) => {
           const next = boundedNumber(typed, SPEECH_LIMITS.ttsRate, speech.ttsRate, 2);
           if (next !== speech.ttsRate) {

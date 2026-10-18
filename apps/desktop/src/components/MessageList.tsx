@@ -23,6 +23,7 @@ import { ArrowDownGlyph } from "./ArrowDownGlyph";
 import { CollapsibleText } from "./CollapsibleText";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { Markdown } from "./Markdown";
+import { ReadAloudButton } from "./ReadAloudButton";
 import { TargetingNote } from "./TargetingNote";
 
 export function MessageList({
@@ -439,6 +440,9 @@ export function MessageList({
                       )}
                     </button>
                   )}
+                  {/* Drawn only while the voice and read-aloud are on; nothing otherwise. It reads
+                      only when pressed and stops when this row leaves the screen. */}
+                  <ReadAloudButton entry={entry} />
                 </p>
               ) : null}
               {showDiagnostics && idle && entry.id === lastAnswerId ? (

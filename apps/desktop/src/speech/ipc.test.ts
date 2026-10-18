@@ -10,6 +10,7 @@ import {
   speechModelCancel,
   speechModelInstall,
   speechModelVerify,
+  speechPrepareReading,
   speechTranscribe,
 } from "./ipc";
 
@@ -87,5 +88,32 @@ describe("the model bridge", () => {
       ["speech_model_verify"],
       ["speech_model_cancel"],
     ]);
+  });
+});
+
+describe("the reading bridge", () => {
+  it("sends the parts and the locale under their own names, and nothing else", async () => {
+    vi.mocked(invoke).mockResolvedValue([]);
+    const parts = [{ kind: "markdown" as const, text: "**Bonjour**" }];
+
+    await speechPrepareReading(parts, "fr-FR");
+
+    expect(vi.mocked(invoke).mock.calls).toStrictEqual([
+      ["speech_prepare_reading", { parts, locale: "fr-FR" }],
+    ]);
+    expect(Object.keys(vi.mocked(invoke).mock.calls[0]?.[1] as object)).toStrictEqual([
+      "parts",
+      "locale",
+    ]);
+  });
+
+  it("hands back the items as Rust answered them", async () => {
+    const items = [
+      { kind: "speech", text: "Bonjour.", pauseAfter: "sentence" },
+      { kind: "note", code: "table_omitted", count: 12 },
+    ];
+    vi.mocked(invoke).mockResolvedValue(items);
+
+    await expect(speechPrepareReading([], "fr-FR")).resolves.toStrictEqual(items);
   });
 });

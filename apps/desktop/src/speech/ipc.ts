@@ -2,8 +2,8 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 
 /**
  * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`,
- * `speech_cancel` and the three of the model (`speech_model_install`, `speech_model_verify` and
- * `speech_model_cancel`). The audio goes to Rust as a raw body, and the language and the cap on the
+ * `speech_cancel`, the three of the model (`speech_model_install`, `speech_model_verify` and
+ * `speech_model_cancel`) and `speech_prepare_reading`. The audio goes to Rust as a raw body, and the language and the cap on the
  * length always come from Rust (settings and language table), never from the webview.
  */
 
@@ -151,4 +151,33 @@ export function speechModelVerify(): Promise<void> {
 /** Stops the install or the verify in progress, if any. Resolves to whether there was one. */
 export function speechModelCancel(): Promise<boolean> {
   return invoke<boolean>("speech_model_cancel");
+}
+
+/** One piece of an answer as it is shown. `markdown` for text that may hold Markdown (the answer, a
+ * table), `plain` for a line that never does (a caution note). Nothing is stripped or localised
+ * before it is sent: Rust does that, by code, never by the model. */
+export interface ReadingPart {
+  kind: "markdown" | "plain";
+  text: string;
+}
+
+/** How long the voice rests after a segment. `clause`: the sentence goes on in the next item. */
+export type ReadingPause = "clause" | "sentence" | "paragraph";
+
+/** What Rust left out of the spoken text and says so: a table of more than 8 body rows or 5 columns
+ * (`count` is the rows), or a block of code (`count` is the lines). */
+export type ReadingNoteCode = "table_omitted" | "code_omitted";
+
+export type ReadingItem =
+  | { kind: "speech"; text: string; pauseAfter: ReadingPause }
+  | { kind: "note"; code: ReadingNoteCode; count: number };
+
+/**
+ * Turns the parts of an answer into the text to speak, in order: Markdown, links, emoji and paths
+ * removed, numbers, dates, units and identifiers written as words. Pure computation on the calling
+ * thread; it starts no process and no engine. `locale` is the interface locale. Refusals are machine
+ * codes: `speech_unavailable` (the voice or read-aloud switch is off) and `speech_locale_unsupported`.
+ */
+export function speechPrepareReading(parts: ReadingPart[], locale: string): Promise<ReadingItem[]> {
+  return invoke<ReadingItem[]>("speech_prepare_reading", { parts, locale });
 }

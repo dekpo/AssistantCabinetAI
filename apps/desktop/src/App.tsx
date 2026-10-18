@@ -55,6 +55,7 @@ import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
 import { notesPreview, notesSave } from "./speech/ipc";
+import { ReadAloudProvider } from "./speech/output/ReadAloudContext";
 import { VoiceSessionProvider } from "./speech/VoiceSessionContext";
 
 function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boolean }) {
@@ -367,6 +368,7 @@ function AppContent() {
 
   return (
     <I18nProvider locale={locale}>
+      <ReadAloudProvider speech={snapshot.settings.speech}>
       <div className="app">
         <TitleBar
           connection={connection}
@@ -566,6 +568,7 @@ function AppContent() {
           />
         )}
       </div>
+      </ReadAloudProvider>
     </I18nProvider>
   );
 }

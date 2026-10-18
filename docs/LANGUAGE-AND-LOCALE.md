@@ -154,6 +154,22 @@ the pack). A language without a pack falls back like the rest of the client: the
 language, then `fr-FR`. A new language is a new pack file for each pack and, if its sounds need it, a new encoder;
 no caller changes. See `docs/DECISIONS.md`, "Settled by KB lot 3".
 
+## Speech: the locale mapping and the packs (speech programme, 17 October 2026)
+
+The speech module reads the same `locale` and adds one table: **interface locale -> engine language code -> rule pack names ->
+capability flags -> default voice ids**, in `src-tauri/src/speech/languages.rs`. fr-FR and en-US are enabled; **German and Italian
+are anticipated** (rows declared `planned`, not enabled, for the Swiss target) and an unsupported locale answers the machine code
+`speech_locale_unsupported`. The dictation language follows the interface locale, with an override setting (`speech.languageOverride`,
+its options come from the table); the webview never sends a language, Rust resolves it. There is no `if fr / else en` anywhere.
+
+The words of a language live in **data packs**, `resources/speech/rules/<locale>.json` (number words, units, months, abbreviations,
+acronyms to spell, sentence-end exceptions, voice commands for notes). A pack holds words, never a user-visible sentence; a loader ignores
+keys it does not know. Adding German or Italian is a table row plus data files, with no change of logic, and a catalogue file for the
+interface (today only `fr-FR` and `en-US` exist). The Rust of the module is ASCII with no French marker word; every sentence the user
+reads (errors, states, credits) is a key of both catalogues. The speech module adds no string for a model. The spoken form of a title
+(`dr` to `docteur`) comes from the knowledge base pack, not from a copy. The knowledge phonetic keys exist for French and English only.
+Spec: `docs/SPEECH.md`, section 5.
+
 ## Never translated
 
 System prompts and prompt keys. Machine codes, JSON field names, API routes. Audit and log fields. The

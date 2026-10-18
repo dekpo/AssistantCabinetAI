@@ -199,3 +199,12 @@ far more per row, which is the realistic shape of an export someone actually han
 (`docs/PILOT-GP.md`) before the cache's lifecycle rules are considered final - a 2019 PC with a
 spinning disk or a slower CPU is expected to be worse, not better, than the number above. Record
 the result here in the same table shape once it exists.
+
+## Client workstation: speech (decided 18 October 2026)
+
+The speech features run on the workstation, not on the Mac mini. The reference machine is the Development PC above (Core 7 150U,
+23.6 GB, Windows 11), the machine SpeechLab measured: Parakeet dictation holds 1.6 to 1.9 GB resident and keeps 7 to 10 cores busy
+while it decodes (measured); a Piper voice holds 200 to 300 MB (measured). The 2019 practice PC is **not** measured: the practice
+workstation is being replaced, and the same short check is run on the new computer when it exists (free RAM, time to transcribe a
+10 s clip, CPU load, time to speak a paragraph). The minimum and recommended computers are **estimates** until then. Figures,
+labels and the fallback engine (whisper.cpp): `docs/SPEECH.md`, "Minimum configuration".

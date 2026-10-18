@@ -10,7 +10,8 @@ alwaysApply: true
 2. Versioned tool catalogue plus an action-plan format.
 3. Metadata-only audit. Runtimes (Open WebUI, MCP, Hermes, OpenClaw) are adapters.
 4. IDE plugins (Continue, Cline): `chat` scope only.
-5. `/v1/audio/*` and `/v1/jobs` are **reserved**. Cloud speech-to-text is forbidden.
+5. `/v1/jobs` is **reserved**. `/v1/audio/*` is reserved and **unused**: speech runs on the workstation
+   (`docs/SPEECH.md`), never through the gateway. Cloud speech-to-text is forbidden.
 6. The practice screen is a native window (Tauri), not a browser. Open WebUI is the owner's workbench,
    frozen during the v0 sprint. Open WebUI Computer (`cptr`): never on a practice machine. Detail:
    `docs/CLIENT.md`.

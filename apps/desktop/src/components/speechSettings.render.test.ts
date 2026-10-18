@@ -4,12 +4,18 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { DEFAULT_SPEECH_SETTINGS, type AppSettings } from "../lib/ipc";
 import type { SpeechStatus } from "../speech/ipc";
+import type { ModelJob } from "../speech/modelJob";
 import { SpeechSettingsBlock } from "./SpeechSettings";
 
 vi.mock("@tauri-apps/api/core", () => ({ Channel: class {}, invoke: vi.fn() }));
 
 let answered: { status: SpeechStatus | null; failed: boolean } = { status: null, failed: false };
 vi.mock("../state/useSpeechStatus", () => ({ useSpeechStatus: () => answered }));
+
+let modelJob: ModelJob = { kind: "idle" };
+vi.mock("../state/useModelJob", () => ({
+  useModelJob: () => ({ job: modelJob, install: () => {}, verify: () => {}, cancel: () => {} }),
+}));
 
 beforeAll(() => {
   Object.assign(globalThis, { document: { documentElement: {} } });
@@ -57,13 +63,61 @@ describe("the voice block of the settings", () => {
     expect(markup.match(/<details/g)).toHaveLength(1);
   });
 
-  it("says the model is missing and offers Install, disabled, with the reason", () => {
+  it("says the model is missing, offers Install and keeps Verify off", () => {
     answered = { status: MISSING_MODEL, failed: false };
+    modelJob = { kind: "idle" };
     const markup = draw(settings());
 
     expect(markup).toContain("Non installé.");
+    expect(markup).toMatch(/<button(?![^>]*disabled)[^>]*>Installer<\/button>/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Vérifier<\/button>/);
+    expect(markup).not.toContain("installation du modèle");
+    expect(markup).not.toContain("Annuler");
+  });
+
+  it("offers Verify, not Install, for a model placed by hand, and neither for a ready one", () => {
+    modelJob = { kind: "idle" };
+    answered = { status: { ...MISSING_MODEL, sttModel: "unverified" }, failed: false };
+    let markup = draw(settings());
+    expect(markup).toContain("Fichiers trouvés, pas encore vérifiés");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Installer<\/button>/);
-    expect(markup).toContain("n&#x27;est pas encore disponible");
+    expect(markup).toMatch(/<button(?![^>]*disabled)[^>]*>Vérifier<\/button>/);
+
+    answered = { status: { ...MISSING_MODEL, sttModel: "corrupt" }, failed: false };
+    markup = draw(settings());
+    expect(markup).toMatch(/<button(?![^>]*disabled)[^>]*>Installer<\/button>/);
+
+    answered = { status: { ...MISSING_MODEL, sttModel: "present" }, failed: false };
+    markup = draw(settings());
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Installer<\/button>/);
+  });
+
+  it("shows the progress of a running install with a Cancel button, and nothing else to press", () => {
+    answered = { status: MISSING_MODEL, failed: false };
+    modelJob = { kind: "installing", phase: "download", percent: 42 };
+    const markup = draw(settings());
+
+    expect(markup).toContain("Téléchargement : 42 %");
+    expect(markup).toContain(">Annuler</button>");
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Installer<\/button>/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Vérifier<\/button>/);
+
+    modelJob = { kind: "verifying" };
+    expect(draw(settings())).toContain("Vérification des fichiers");
+    modelJob = { kind: "idle" };
+  });
+
+  it("says why a download failed, with the folder for the copy by hand", () => {
+    answered = { status: MISSING_MODEL, failed: false };
+    modelJob = {
+      kind: "failed",
+      error: { code: "speech_model_download_failed", data: { folder: "C:/data/speech-models/m" } },
+    };
+    const markup = draw(settings());
+
+    expect(markup).toContain("C:/data/speech-models/m");
+    expect(markup).toContain("copiez les quatre fichiers");
+    modelJob = { kind: "idle" };
   });
 
   it("says a model is damaged or ready in words", () => {

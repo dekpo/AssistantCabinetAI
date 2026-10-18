@@ -2995,7 +2995,7 @@ async fn mixed_tier(
 /// Sidecar discovery: look next to the executable, a few ancestors up (so `tauri dev` can see
 /// copies left in `src-tauri/`), and under the resource directory. Never a hardcoded install
 /// path. A missing engine is `None`, and indexing degrades to Sprint 2a.
-fn search_roots(app: &AppHandle) -> Vec<std::path::PathBuf> {
+pub(crate) fn search_roots(app: &AppHandle) -> Vec<std::path::PathBuf> {
     sidecar_search_roots(
         app.path().resource_dir().ok(),
         std::env::current_exe().ok(),

@@ -44,3 +44,10 @@ apps/desktop/src-tauri/*.dll
 .claudeignore
 .claude/settings.json
 .claude/settings.local.json
+
+# The speech worker's native libraries (scripts/fetch-speech-resources.sh), its build output, and the
+# staged worker executables. Large reproducible binaries, never committed.
+apps/speech-worker/vendor/
+apps/speech-worker/target/
+apps/speech-worker/target-*/
+apps/desktop/src-tauri/binaries/speech-*-worker-*

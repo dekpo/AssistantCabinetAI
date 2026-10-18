@@ -8,6 +8,29 @@ with the exact command or code where it matters.
 
 ---
 
+## `cargo test --lib` freezes for 10 to 70 seconds and timing tests fail by turns (18 October 2026)
+
+**Symptom.** On the owner's laptop, a full `cargo test --lib` sometimes takes 20 to 60 s instead of 10 s, and unrelated timing tests fail
+(`cancel_stops_the_running_job...`, `a_job_over_its_time_limit...`, `only_one_job_runs_at_a_time...`: "cancel does not wait for the delay", a second job
+that was expected to be refused). Run alone, each of them passes. Every test of a group finishes at the same moment, always at a multiple of 10 s.
+
+**What it is.** The whole test process stands still for 10 to 70 s while several tests open loopback connections (127.0.0.1) at the same time,
+here the model download tests (`reqwest` against a local `tiny_http` server). The tests of other modules that use the shared Tauri runtime
+(`tauri::async_runtime::block_on`) then see their timers late. Measured: the same freezes with and without the `SSLKEYLOGFILE` variable of the
+antivirus (Avast web shield, visible in the environment), so that variable is not the cause. The antivirus is suspected, **not proven**. Closing a port
+and connecting to it (an "unreachable server" test) can also take 20 s on Windows: do not test that way.
+
+**Rules (they prevent it).**
+- A test that opens sockets runs **one at a time** (a `static Mutex<()>` taken for the whole test) and on **a runtime of its own**, never on the shared
+  `tauri::async_runtime`. See `run_async` in `src-tauri/src/speech/model_download_tests.rs`.
+- Simulate a failing server with a server that accepts and hangs up, never with a closed port. A slow body comes from a plain socket that sends its headers at once.
+- A bound on wall time proves nothing here: measure from an event (the first progress report), and keep the bound generous (120 s), or assert a logical outcome.
+- Never run a build, `pnpm run test` or a measure at the same time as `cargo test`: it adds load and produces the same symptoms. Do not "fix" the three
+  older phase 3 timing tests in `stt_tests.rs`: they are correct; the cause was the shared runtime being starved.
+- To check for the freeze: `for i in 1 2 3 4 5; do cargo test --lib model_download_tests; done`. Each run must take about 1 s. If it does not, excluding
+  `apps/desktop/src-tauri/target` from the antivirus is the first thing to try (the owner decides).
+- Also learned the same day: a full `cargo test --lib --tests` compiles about forty test binaries and takes more than ten minutes here. Run it once, at the end, in the background.
+
 ## A blank answer, and a first question that waits minutes: hidden reasoning and a model unloaded after 5 minutes
 
 **Found:** 9 October 2026, in the small-model comparison (`docs/test-reports/small-model-comparison-1/`, section 10). The

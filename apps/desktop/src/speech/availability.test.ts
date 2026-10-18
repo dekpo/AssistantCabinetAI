@@ -108,7 +108,7 @@ describe("what a feature says about being available", () => {
 });
 
 describe("the model line and the Install button", () => {
-  it.each(["missing", "present", "corrupt"] as const)("has a sentence key for %s", (state) => {
+  it.each(["missing", "unverified", "present", "corrupt"] as const)("has a sentence key for %s", (state) => {
     expect(modelStatusKey(state)).toBe(`speech.model.${state}`);
   });
 

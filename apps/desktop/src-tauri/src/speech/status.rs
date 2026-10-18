@@ -12,14 +12,18 @@ use super::settings::SpeechSettings;
 use crate::error::AppError;
 use crate::settings::{Settings, DEFAULT_LOCALE};
 
-/// The state of a model on disk. Serialised as `missing`, `present` or `corrupt`.
+/// The state of a model on disk. Serialised as `missing`, `unverified`, `present` or `corrupt`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelState {
     #[default]
     Missing,
+    /// Every file is there with its pinned size, but none was hashed yet: a model placed by hand.
+    /// Verify in the settings hashes it and makes it `Present`.
+    Unverified,
+    /// Checked against its pinned SHA-256 when it was installed or verified.
     Present,
-    /// Present but not matching its pinned SHA-256.
+    /// Present but not matching its pinned size or SHA-256.
     Corrupt,
 }
 
@@ -118,7 +122,9 @@ fn dictation(speech: &SpeechSettings, locale: &str, probes: &Probes) -> FeatureS
     }
     match probes.stt_model {
         ModelState::Present => FeatureStatus::ready(),
-        ModelState::Missing => FeatureStatus::blocked(&AppError::SpeechModelMissing),
+        ModelState::Missing | ModelState::Unverified => {
+            FeatureStatus::blocked(&AppError::SpeechModelMissing)
+        }
         ModelState::Corrupt => FeatureStatus::blocked(&AppError::SpeechModelCorrupt),
     }
 }

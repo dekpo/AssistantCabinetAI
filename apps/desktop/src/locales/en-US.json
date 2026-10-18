@@ -575,10 +575,16 @@
     "model": {
       "missing": "Not installed.",
       "present": "Ready.",
-      "corrupt": "Damaged: it must be installed again."
+      "corrupt": "Damaged: it must be installed again.",
+      "unverified": "Files found, not checked yet. Press Verify."
     },
     "install": {
       "action": "Install",
+      "verifyAction": "Verify",
+      "cancel": "Cancel",
+      "downloading": "Downloading: {percent} %",
+      "unpacking": "Preparing the files: {percent} %",
+      "verifying": "Checking the files…",
       "notYet": "Installing the model is not available yet in this version.",
       "source": "The model is downloaded only when you press Install, from {address}."
     },
@@ -689,6 +695,7 @@
     "speech_engine_missing": "The voice component is not installed on this computer. Typing still works.",
     "speech_model_missing": "The voice files are not on this computer yet. Install them from the settings; typing still works.",
     "speech_model_corrupt": "The voice files on this computer are damaged and were not used. Install them again from the settings.",
+    "speech_model_download_failed": "The voice files could not be downloaded. If your security software blocks the download, copy the four files by hand into the folder {folder}, then press Verify in the settings.",
     "speech_audio_too_short": "The recording is too short. Speak a little longer, then try again.",
     "speech_audio_too_quiet": "The recording is too quiet to be understood. Check your microphone and try again.",
     "speech_audio_too_long": "The recording is longer than the limit set in the settings. It was not transcribed.",

@@ -8,6 +8,7 @@ const read = (relative: string) => readFileSync(new URL(relative, import.meta.ur
 const FILES = [
   "../components/SpeechSettings.tsx",
   "./availability.ts",
+  "./modelJob.ts",
   "./voiceSession.ts",
   "../audio/recorder.ts",
 ];
@@ -17,6 +18,7 @@ const BUILT_KEYS = [
   "speech.model.missing",
   "speech.model.present",
   "speech.model.corrupt",
+  "speech.model.unverified",
   "speech.engine.piper",
   "speech.engine.system",
   "speech.gender.female",

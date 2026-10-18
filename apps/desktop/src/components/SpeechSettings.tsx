@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppSettings, SpeechSettings } from "../lib/ipc";
+import { errorMessage } from "../lib/errors";
 import { boundedNumber } from "../lib/knowledgeSettings";
 import { microphoneSupport } from "../audio/recorder";
+import { useModelJob } from "../state/useModelJob";
 import { useSpeechStatus } from "../state/useSpeechStatus";
 import {
   featureAvailability,
   INSTALL_AVAILABLE,
-  installButton,
   modelStatusKey,
   overrideLanguages,
   READ_ALOUD_CONTROLS_AVAILABLE,
@@ -15,6 +16,7 @@ import {
 } from "../speech/availability";
 import type { SpeechFeature } from "../speech/ipc";
 import { SPEECH_LIMITS } from "../speech/limits";
+import { jobLine, modelButtons } from "../speech/modelJob";
 import { NumberSetting } from "./NumberSetting";
 
 const FEATURES: SpeechFeature[] = ["dictation", "readAloud", "notes"];
@@ -27,10 +29,10 @@ function languageName(tag: string, locale: string): string {
 
 /**
  * The "Voice" block of the settings dialog: the switches, the state of the speech model, the
- * language, the caps, the read-aloud choices and the notes folder. It starts nothing: the model is
- * installed by an explicit button (not available yet), and with no model the block says so and
- * nothing else on screen changes. Every change goes through `onSave`, which applies it to the speech
- * settings as they stand when its turn comes.
+ * language, the caps, the read-aloud choices and the notes folder. It starts nothing by itself: the
+ * model is downloaded by the Install button, or checked by Verify (the way to use a model copied by
+ * hand), and with no model the block says so and nothing else on screen changes. Every change goes
+ * through `onSave`, which applies it to the speech settings as they stand when its turn comes.
  */
 export function SpeechSettingsBlock({
   settings,
@@ -41,9 +43,13 @@ export function SpeechSettingsBlock({
 }) {
   const { t, locale } = useTranslation();
   const speech = settings.speech;
+  /* Bumped when an install or a verify ends, so the state of the model is read again. */
+  const [revision, setRevision] = useState(0);
   const { status, failed } = useSpeechStatus(
-    JSON.stringify([speech, settings.locale, settings.workFolder]),
+    JSON.stringify([speech, settings.locale, settings.workFolder, revision]),
   );
+  const settled = useCallback(() => setRevision((current) => current + 1), []);
+  const modelJob = useModelJob(settled);
   const [notesFolderDraft, setNotesFolderDraft] = useState(speech.notesFolderName);
 
   /* Committed on blur, like the other text fields: Rust turns what was typed into one clean name
@@ -54,7 +60,12 @@ export function SpeechSettingsBlock({
 
   const set = (patch: Partial<SpeechSettings>) => onSave((current) => ({ ...current, ...patch }));
   const microphone = microphoneSupport();
-  const install = installButton(INSTALL_AVAILABLE);
+  const buttons = modelButtons(
+    modelJob.job,
+    status?.sttModel ?? "missing",
+    INSTALL_AVAILABLE && status !== null,
+  );
+  const runningLine = jobLine(modelJob.job);
   const languages = overrideLanguages(status);
   const voices = voicesOfResolvedLanguage(status);
   const readAloudDisabled = !READ_ALOUD_CONTROLS_AVAILABLE;
@@ -130,13 +141,38 @@ export function SpeechSettingsBlock({
           <span className="field__description">{t(modelStatusKey(status.sttModel))}</span>
         )}
         <div className="field__row">
-          <button type="button" className="button button--compact" disabled={install.disabled}>
+          <button
+            type="button"
+            className="button button--compact"
+            disabled={buttons.installDisabled}
+            onClick={modelJob.install}
+          >
             {t("speech.install.action")}
           </button>
+          <button
+            type="button"
+            className="button button--compact"
+            disabled={buttons.verifyDisabled}
+            onClick={modelJob.verify}
+          >
+            {t("speech.install.verifyAction")}
+          </button>
+          {buttons.cancelShown ? (
+            <button type="button" className="button button--compact" onClick={modelJob.cancel}>
+              {t("speech.install.cancel")}
+            </button>
+          ) : null}
         </div>
-        {install.reasonKey === null ? null : (
-          <span className="field__description">{t(install.reasonKey)}</span>
+        {runningLine === null ? null : (
+          <span className="field__description" role="status">
+            {t(runningLine.key, runningLine.values)}
+          </span>
         )}
+        {modelJob.job.kind === "failed" ? (
+          <span className="field__description" role="alert">
+            {errorMessage(t, modelJob.job.error)}
+          </span>
+        ) : null}
         {status === null || settings.speech.speechModelsUrl === "" ? null : (
           <span className="field__description">
             {t("speech.install.source", { address: settings.speech.speechModelsUrl })}

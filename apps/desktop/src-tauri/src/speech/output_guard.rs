@@ -5,8 +5,10 @@
 //! `speech_output_rejected`, so the interface says "nothing was heard" instead of showing text the
 //! user never said. SpeechLab never built it (its issue I-035 is open).
 //!
-//! Every threshold is a named constant with its unit. They are provisional: phase 3b calibrates
-//! them on real clips before they are trusted.
+//! Every threshold is a named constant with its unit. Phase 3b checked them against five real clips
+//! of the real engine (2.3 to 4.4 words per second, no word above 22 % of a text): all pass, with
+//! room. Five clips of a few speakers are not a calibration of every voice, so they stay constants
+//! to revisit with the new workstation's recordings.
 //!
 //! Pure functions over a string and two numbers: no file, no thread, no network.
 

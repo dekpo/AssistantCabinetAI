@@ -19,10 +19,11 @@ const BYTES_PER_SAMPLE: usize = 2;
 /// Shortest clip worth transcribing, in milliseconds. Below this it is a click, not a sentence.
 pub const MIN_CLIP_MS: u64 = 300;
 /// Peak below which a clip counts as too quiet, as a share of full scale (0 to 1). A microphone
-/// that is muted or covered stays under 1 %. A provisional value: phase 3b calibrates it on real clips.
+/// that is muted or covered stays under 1 %. Five real clips (speech peaks 0.44 to 1.0) sit far above it;
+/// kept in phase 3b.
 pub const QUIET_PEAK_FLOOR: f32 = 0.01;
 /// Root-mean-square level below which a clip counts as too quiet, as a share of full scale (0 to 1).
-/// A provisional value: phase 3b calibrates it on real clips.
+/// The same five clips have levels of 0.06 to 0.24, thirty times above it; kept in phase 3b.
 pub const QUIET_RMS_FLOOR: f32 = 0.002;
 
 /// What the samples of a valid clip say about it.

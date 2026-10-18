@@ -133,13 +133,18 @@ pub struct SpeechService {
 }
 
 impl Default for SpeechService {
-    /// No provider: the application as shipped until phase 3b, which answers `speech_engine_missing`.
+    /// No provider: answers `speech_engine_missing`. The application builds its service with the worker.
     fn default() -> Self {
         Self::new(None, Limits::default())
     }
 }
 
 impl SpeechService {
+    /// A service over a real engine, with the default time limits.
+    pub fn with_provider(provider: Arc<dyn SpeechToTextProvider>) -> Self {
+        Self::new(Some(provider), Limits::default())
+    }
+
     pub fn new(provider: Option<Arc<dyn SpeechToTextProvider>>, limits: Limits) -> Self {
         Self {
             provider,

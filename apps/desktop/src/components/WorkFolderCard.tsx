@@ -73,6 +73,7 @@ export function WorkFolderCard({
   scopeLocked = false,
   onOpenKnowledge,
   onOpenFile,
+  refreshToken = 0,
 }: {
   workFolder: string | null;
   suggestedWorkFolder: string | null;
@@ -96,6 +97,9 @@ export function WorkFolderCard({
   onOpenKnowledge?: () => void;
   /** Shows an analysed file in the centre zone (an "Open" button on its row). */
   onOpenFile?: (file: FileRecord) => void;
+  /** Counted up when files were written into the folder by the software itself (a saved note), so
+   * the listing re-reads at once rather than at the next window focus. */
+  refreshToken?: number;
 }) {
   const { t } = useTranslation();
   const [error, setError] = useState<AppError | null>(null);
@@ -181,6 +185,11 @@ export function WorkFolderCard({
       refreshInventory();
     }
   }, [finishedPasses, refreshInventory]);
+  useEffect(() => {
+    if (refreshToken > 0) {
+      refreshInventory();
+    }
+  }, [refreshToken, refreshInventory]);
 
   /* What the last pass did, beyond the counts the line under the buttons already gives. One
      paragraph of short lines rather than several paragraphs: it is one fact about one pass, and a

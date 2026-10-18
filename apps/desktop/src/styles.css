@@ -1517,6 +1517,8 @@ body {
   margin: 0 0 16px;
   color: var(--text-quiet);
   font-size: 13px;
+  /* A sentence the catalogue puts on its own line (a line break in the string) is shown on its own line. */
+  white-space: pre-line;
 }
 
 /* The safe answer first in the DOM, so it is the first stop for the keyboard; the deliberate one
@@ -2307,4 +2309,287 @@ body {
 
 .picker__item .picker__name {
   flex: 1 1 auto;
+}
+
+/* The centre zone with the Notes section: a Files | Notes switch on top, and the two sections below,
+   both mounted, the inactive one hidden (a rule of its own, because `display: flex` below would
+   otherwise win over the `hidden` attribute). */
+.centre {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.centre__section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.centre__section[hidden] {
+  display: none;
+}
+
+.centre__switch {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-self: flex-start;
+}
+
+.centre__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  color: var(--text-quiet);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.centre__tab:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.centre__tab:last-child {
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+}
+
+.centre__tab--active {
+  position: relative;
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.centre__tab:focus-visible {
+  position: relative;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* A recording is running while the other section is on screen. */
+.centre__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--offline);
+}
+
+/* The Notes section: the note fills the pane; the save block, the plan and the report sit under it. */
+.notes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.notes__bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.notes__drafts {
+  flex: 1 1 120px;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.notes__draft {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes__draft[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.notes__page {
+  position: relative;
+  flex: 1 0 180px;
+  min-height: 180px;
+  display: flex;
+}
+
+.notes__text,
+.notes__preview {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 12px 76px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.notes__text {
+  resize: none;
+}
+
+.notes__preview {
+  overflow-y: auto;
+  user-select: text;
+}
+
+.notes__empty,
+.notes__hint {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 12px;
+}
+
+.notes__save,
+.notes__plan,
+.notes__report {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notes__plan,
+.notes__report {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.notes__fields,
+.notes__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.notes__name {
+  flex: 1 1 160px;
+}
+
+.notes__plan-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notes__files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notes__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.notes__path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.notes__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 12px;
+}
+
+/* The dictation pill: dark in both themes, centred at the bottom of the note. */
+.pill {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pill__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 64px;
+  height: 40px;
+  padding: 0 20px;
+  color: #ffffff;
+  background: #1c1c1e;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.pill__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pill__button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pill__bars {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+
+.pill__bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #ffffff;
+  transition: height 0.08s linear;
+}
+
+.pill__time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill__hint {
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--text-quiet);
+  background: var(--surface);
+  border-radius: 999px;
+  font-size: 11px;
 }

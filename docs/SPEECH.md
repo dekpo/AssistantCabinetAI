@@ -147,7 +147,7 @@ error is not read and goes nowhere. Closing the worker's standard input ends it,
 apps/desktop/src-tauri/
   src/speech/            NEW, ASCII only, no French marker word, no #[cfg] (platform code goes in a paired module)
     mod.rs  languages.rs  settings.rs  status.rs  service.rs  stt.rs  tts.rs  fake.rs  temp_audio.rs  wav.rs
-    output_guard.rs  worker_protocol.rs  worker_stt.rs  worker_tts.rs  models.rs  model_download.rs  speakable.rs  notes.rs
+    output_guard.rs  worker_protocol.rs  worker_stt.rs  worker_tts.rs  models.rs  model_download.rs  speakable.rs (+ speakable_*.rs)  notes.rs
   src/speech_commands.rs NEW, its own managed SpeechState, thin shells over the functions above
   resources/speech/      NEW data: models-manifest.json, rules/<locale>.json (numbers, units, months, abbreviations,
                          dictation_commands)
@@ -337,6 +337,19 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   groups using the knowledge identifier patterns; acronym spell-out list; an abbreviation-aware sentence splitter with a
   length cap; pauses sentence versus paragraph. Number, date, time, unit and ordinal rewriting is **always** applied, for every
   voice (Coqui css10 speaks no digit without it; SpeechLab D-043). The KB `spoken_form` step is left out unless the owner asks.
+- **As built (phase 7).** `speech_prepare_reading(parts, locale)` takes `parts = [{ kind: "markdown" | "plain", text }]` and returns
+  an ordered list of items: `{ kind: "speech", text, pauseAfter: "clause" | "sentence" | "paragraph" }` (`clause` = the sentence
+  goes on in the next item, it was cut at 240 characters) or `{ kind: "note", code: "table_omitted" | "code_omitted", count }`
+  (a table of more than 8 body rows or 5 columns, a fenced block of code; `count` is rows or lines; the interface says it in the
+  user's language, at the place where the table was). It refuses with `speech_unavailable` when read-aloud is off and with
+  `speech_locale_unsupported` for a locale without a shipped read-aloud row. The code is `speech/speakable*.rs`: a line-based
+  Markdown reader, an inline cleaner, an abbreviation-aware sentence splitter and a scanner for numbers, dates, times, units,
+  currencies, ordinals and telephone numbers; titles come from the knowledge base (`PackSet::title_spoken`), identifiers from
+  its schemes (`IdentifierScheme::scan`) read in groups by the `identifiers.readings` table of the rule pack (by scheme id, then
+  kind). A file name is read as words (separators become spaces, the extension is not said); a path is reduced to its file
+  name; bracketed citation numbers (`[1]`) are dropped. A pack is `resources/speech/rules/<pack>.json`; the logic names no
+  language. German or Italian are a row of the language table, a data file and a line of the registry in `speakable_rules.rs`;
+  a grammar whose tens follow the units (German) also needs a small addition to `speakable_numbers.rs`.
 - **What is read.** The shown answer text, the engine-computed block, and the **caution notes**: without documents,
   unanalysed, scope outdated, interrupted, mixed corrections and rejected citations, unverified numbers, and the two lines that
   say which side of a mixed question could not be established (`mixedTableUnavailable`, `mixedDocumentsUnavailable`: a listener who

@@ -674,7 +674,7 @@ for French and English only.
 
 ## 16. Packaging, credits and the offline proof (phase 13, 19 October 2026)
 
-**Build.** `bash scripts/build-installer.sh --bundles nsis` (Git Bash, Windows). It reads `bundle.externalBin` of
+**Build.** Full procedure, install on other machines and troubleshooting: `docs/INSTALLER-WINDOWS.md`. `bash scripts/build-installer.sh --bundles nsis` (Git Bash, Windows). It reads `bundle.externalBin` of
 `apps/desktop/src-tauri/tauri.bundle.conf.json`, builds the two workers (`build-speech-worker.sh`, `build-speech-tts-worker.sh`),
 checks that Tesseract and every file of `bundle.resources` are staged (`scripts/fetch-speech-resources.sh` and
 `scripts/fetch-ocr-resources.ps1` first), and runs `tauri build --config`. The packaging entries are **not** in `tauri.conf.json`

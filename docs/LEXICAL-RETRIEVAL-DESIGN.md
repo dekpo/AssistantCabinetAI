@@ -158,6 +158,8 @@ Coverage     { searched, unreadable, unanalysed, partial }
 
 ### 6.1 The first interface test: a search field in each folder card (owner proposal D4)
 
+> **Superseded in part (18 and 19 October 2026).** The bullet « the result replaces the selection » and the layout line « N fichiers sélectionnés par la recherche » below no longer hold: a search only filters the list, and the files found are added to the selection by a separate click, « Cocher les N résultats » (`docs/DECISIONS.md`, « the left panel becomes one file explorer » and « the explorer's search step »). Clearing the field never changes the selection, which is still true. An extension typed is now a format filter and a date typed alone also finds the files dated so (same section).
+
 Feasible, and small, because the pieces already exist: the two cards (`WorkFolderCard.tsx`, `DataFolderCard.tsx`) already hold a disclosure titled « Documents utilisés : … » / « Données utilisées : … » with a select-all box and a ticked list; `analysisScope.ts` already builds an explicit selection (`scopeOfEntries`, `addScopeFiles`) with each file pinned to its content; Rust already refuses to look past that selection. What is added:
 
 - **One small field per card**, searching only its own domain (`documents` or `data`), calling the finder through a Tauri command. The webview never touches the server.

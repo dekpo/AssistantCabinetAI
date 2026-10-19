@@ -12,6 +12,7 @@ use std::process::Command;
 
 use assistant_cabinet_ai_lib::discovery::discover_all;
 use assistant_cabinet_ai_lib::file_profile::build::Domain;
+use assistant_cabinet_ai_lib::finder::typed::apply_typed_text;
 use assistant_cabinet_ai_lib::finder::{
     find, DateRange, EntityFilter, FinderQuery, FinderResult, FinderScope, InventoryFile,
 };
@@ -694,6 +695,236 @@ async fn a_workbook_is_found_by_a_word_of_its_cells_and_nothing_of_the_spreadshe
         before,
         tabular_snapshot(&connection),
         "the finder only reads the spreadsheet tables"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// What the left panel's field means: an extension is a format, a lone date is a date
+// ---------------------------------------------------------------------------------------------
+
+/// The query the `find_files` command builds from what was typed: the same function, over the same
+/// inventory.
+fn typed(files: &[InventoryFile], text: &str) -> FinderQuery {
+    let mut asked = query(text);
+    apply_typed_text(&mut asked, files);
+    asked
+}
+
+fn found_by_typing(
+    connection: &Connection,
+    domain: Domain,
+    files: &[InventoryFile],
+    text: &str,
+) -> Vec<String> {
+    let mut found: Vec<String> = whole(connection, domain, files, &typed(files, text))
+        .files
+        .iter()
+        .map(|hit| hit.relative_path.clone())
+        .collect();
+    found.sort();
+    found
+}
+
+#[tokio::test]
+async fn a_date_typed_finds_the_files_dated_so_before_and_after_an_analyse() {
+    let mut lab = Lab::new();
+    let workbook = "Produit;Quantite\nCompresses;4\nPansements;10\n";
+    lab.write_data("2026-02-06_commandes.csv", workbook);
+    lab.write_data("2026-02-20_stock.csv", workbook);
+    lab.write_data("archive/2026-03-04_stock.csv", workbook);
+    lab.write_data("2025-12-01_ancien.csv", workbook);
+    lab.write_data("ventes.csv", workbook);
+    let files = inventory(lab.data.path());
+
+    let check = |connection: &Connection, when: &str| {
+        let day = vec!["2026-02-06_commandes.csv".to_string()];
+        for text in ["2026-02-06", "06/02/2026", "06-02-2026"] {
+            assert_eq!(
+                found_by_typing(connection, Data, &files, text),
+                day,
+                "{text:?} {when}"
+            );
+        }
+        assert_eq!(
+            found_by_typing(connection, Data, &files, "2026-02"),
+            vec!["2026-02-06_commandes.csv", "2026-02-20_stock.csv"],
+            "a month {when}"
+        );
+        assert_eq!(
+            found_by_typing(connection, Data, &files, "2026"),
+            vec![
+                "2026-02-06_commandes.csv",
+                "2026-02-20_stock.csv",
+                "archive/2026-03-04_stock.csv"
+            ],
+            "a year {when}"
+        );
+        let hit = &whole(connection, Data, &files, &typed(&files, "2026-02-06")).files[0];
+        assert!(
+            hit.reasons
+                .iter()
+                .any(|reason| reason.kind == "date" && reason.detail.as_deref() == Some("name")),
+            "the hit says it was found by its date {when}"
+        );
+        assert_eq!(
+            found_by_typing(connection, Data, &files, "2027"),
+            Vec::<String>::new(),
+            "a year nobody carries {when}"
+        );
+        assert_eq!(
+            found_by_typing(connection, Data, &files, "2026-02-30"),
+            Vec::<String>::new(),
+            "an impossible day is only words {when}"
+        );
+    };
+    check(&lab.side(), "before the Analyse");
+    lab.analyse_data();
+    check(&lab.side(), "after the Analyse");
+}
+
+#[tokio::test]
+async fn a_year_typed_is_a_date_and_a_word_but_never_a_passage_search() {
+    let mut lab = Lab::new();
+    lab.packs = vec!["health-fr", "health-ch"];
+    lab.write("2026-05-20_ordonnance.txt", PRESCRIPTION);
+    lab.write("2026-04-14_facture-medsupply-fac-2026-014.txt", INVOICE);
+    lab.write("facture-fac-2026-015.txt", &INVOICE.replace("014", "015"));
+    lab.write(
+        "note-interne.txt",
+        "Reunion de service.\nLe planning de 2026 a ete adopte.\nLe fichier pdf est joint.\n",
+    );
+    lab.analyse().await;
+    let files = inventory(lab.work_path());
+    let connection = lab.side();
+
+    // The dated files are found, by their name or by the date in their profile.
+    let year = whole(
+        &connection,
+        Domain::Documents,
+        &files,
+        &typed(&files, "2026"),
+    );
+    let mut found = paths(&year);
+    found.sort();
+    for dated in [
+        "2026-04-14_facture-medsupply-fac-2026-014.txt",
+        "2026-05-20_ordonnance.txt",
+        "facture-fac-2026-015.txt",
+    ] {
+        assert!(found.contains(&dated), "{dated} is dated 2026: {found:?}");
+    }
+    // The passages are not searched for a year: no hit rests on the text of a passage.
+    assert!(year.files.iter().all(|hit| hit
+        .reasons
+        .iter()
+        .all(|reason| reason.detail.as_deref() != Some("passage"))));
+    // An identifier typed in full is words, not a date.
+    assert_eq!(
+        found_by_typing(&connection, Domain::Documents, &files, "FAC-2026-014"),
+        vec!["2026-04-14_facture-medsupply-fac-2026-014.txt"]
+    );
+    // The same word typed beside another word still reaches the passages.
+    assert_eq!(
+        found_by_typing(&connection, Domain::Documents, &files, "planning 2026"),
+        vec!["note-interne.txt"]
+    );
+}
+
+#[tokio::test]
+async fn an_extension_typed_is_a_format_and_never_a_word_of_the_text() {
+    let mut lab = Lab::new();
+    lab.packs = vec!["health-fr", "health-ch"];
+    lab.write("2026-05-20_ordonnance.txt", PRESCRIPTION);
+    lab.write("rapport-mensuel.txt", MINUTES);
+    lab.write("rapport-annuel.md", MINUTES);
+    lab.write("courriers/note-interne.txt", "Le fichier pdf est joint.\n");
+    lab.analyse().await;
+    let files = inventory(lab.work_path());
+    let connection = lab.side();
+    let docs = Domain::Documents;
+
+    let every_txt = vec![
+        "2026-05-20_ordonnance.txt",
+        "courriers/note-interne.txt",
+        "rapport-mensuel.txt",
+    ];
+    for text in [".txt", "txt", ".TXT", "Txt"] {
+        assert_eq!(
+            found_by_typing(&connection, docs, &files, text),
+            every_txt,
+            "{text:?}"
+        );
+    }
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, "rapport .md"),
+        vec!["rapport-annuel.md"]
+    );
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, "rapport"),
+        vec!["rapport-annuel.md", "rapport-mensuel.txt"]
+    );
+    // `pdf` is the format, not the word of a note's text: no file here is a pdf.
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, "pdf"),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, ".pdf"),
+        Vec::<String>::new()
+    );
+    // Beside another word it is still the format: the word `fichier` among the pdf files, none here.
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, "fichier pdf"),
+        Vec::<String>::new()
+    );
+    // A filter-only query lists every file of the format, whatever their state.
+    let listed = whole(&connection, docs, &files, &typed(&files, ".md"));
+    assert_eq!(listed.total, 1);
+    assert!(listed.text_search.is_none());
+}
+
+#[tokio::test]
+async fn punctuation_alone_finds_nothing_and_a_name_with_its_extension_still_finds_the_file() {
+    let lab = Lab::new();
+    lab.write("2026-02-06_rapport.docx", "x");
+    lab.write("coeur.pdf", "x");
+    let files = inventory(lab.work_path());
+    let connection = lab.side();
+    let docs = Domain::Documents;
+
+    for text in ["!!", ".", "...", "-", "?"] {
+        assert_eq!(
+            found_by_typing(&connection, docs, &files, text),
+            Vec::<String>::new(),
+            "{text:?}"
+        );
+    }
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, "rapport.docx"),
+        vec!["2026-02-06_rapport.docx"]
+    );
+    assert_eq!(
+        found_by_typing(&connection, docs, &files, "c\u{153}ur"),
+        vec!["coeur.pdf"]
+    );
+}
+
+#[tokio::test]
+async fn the_date_filter_reads_the_name_of_a_file_that_was_never_analysed() {
+    let lab = Lab::new();
+    lab.write("2026-04-10_courrier.pdf", "x");
+    lab.write("sans-date.pdf", "x");
+    let files = inventory(lab.work_path());
+    let connection = lab.side();
+
+    let mut april = FinderQuery::default();
+    april.date = Some(DateRange {
+        from: Some("2026-04".to_string()),
+        to: Some("2026-04".to_string()),
+    });
+    assert_eq!(
+        paths(&whole(&connection, Domain::Documents, &files, &april)),
+        vec!["2026-04-10_courrier.pdf"]
     );
 }
 

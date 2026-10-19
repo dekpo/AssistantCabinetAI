@@ -7,6 +7,7 @@ pub mod names;
 pub mod question_frame;
 pub mod rank;
 pub mod set_search;
+pub mod typed;
 
 pub use contracts::{
     CardEntity, Coverage, DateRange, DocumentListing, EntityFilter, Facet, Facets, FileCard,

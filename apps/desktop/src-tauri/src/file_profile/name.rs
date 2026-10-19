@@ -40,7 +40,13 @@ pub fn words_of(text: &str) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = String::new();
     let mut current_is_digit = false;
-    for c in fold(text).chars() {
+    // The ligatures oe and ae and the sharp s have no decomposition: a name typed with them meets the
+    // plain spelling a cleaned file name has.
+    let folded = fold(text)
+        .replace('\u{153}', "oe")
+        .replace('\u{e6}', "ae")
+        .replace('\u{df}', "ss");
+    for c in folded.chars() {
         if !c.is_alphanumeric() {
             if !current.is_empty() {
                 words.push(std::mem::take(&mut current));
@@ -488,6 +494,39 @@ mod tests {
             "without a date, both files answer"
         );
         assert!(march.matches("courrier orl"));
+    }
+
+    #[test]
+    fn a_name_typed_with_decomposed_accents_or_ligatures_finds_the_plain_spelling() {
+        let resume = profile("2026-01-02_resume-cardiologie.pdf");
+        // `e` + combining acute, twice: the decomposed spelling some keyboards and file systems produce.
+        assert!(resume.matches("re\u{301}sume\u{301} cardiologie"));
+        assert!(resume.matches("r\u{e9}sum\u{e9}"));
+
+        let heart = profile("2026-01-02_coeur.pdf");
+        assert!(heart.matches("c\u{153}ur"));
+        assert!(heart.matches("C\u{152}UR"));
+        // The other way round: a name that still carries the ligature meets the plain word.
+        assert!(profile("c\u{153}ur-gauche.pdf").matches("coeur"));
+        assert!(profile("caecum.pdf").matches("c\u{e6}cum"));
+        assert!(profile("rue-strasse.pdf").matches("stra\u{df}e"));
+        assert!(profile("rue-stra\u{df}e.pdf").matches("strasse"));
+    }
+
+    #[test]
+    fn a_single_letter_is_a_whole_word_and_never_the_start_of_one() {
+        let profile = profile("2026-01-02_note-a-classer.txt");
+        assert!(profile.matches("a"), "a one-letter word of the name is found");
+        assert!(!profile.matches("c"), "one letter is not the start of `classer`");
+        assert!(profile.matches("cl"), "two letters are");
+    }
+
+    #[test]
+    fn punctuation_alone_finds_nothing() {
+        let profile = profile("2026-01-02_note-a-classer.txt");
+        for query in ["!!", "...", "-", "_ -", "/", "?"] {
+            assert!(!profile.matches(query), "{query:?} must not find the file");
+        }
     }
 
     #[test]

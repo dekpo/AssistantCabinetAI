@@ -555,6 +555,9 @@ pub async fn find_files(
         .iter()
         .map(InventoryFile::from)
         .collect();
+    // An extension typed in the field is a format filter and a date typed alone also asks for the files
+    // dated so (`finder::typed`); the words that are left are what the finder searches.
+    finder::typed::apply_typed_text(&mut query, &inventory);
     // A number typed in any spelling meets the number stored in the profile: the identifiers of the active
     // packs are read from what was typed, here, where the packs are known.
     if query.identifiers.is_empty() {

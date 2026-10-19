@@ -321,6 +321,36 @@ Acceptance: `apps/desktop/src-tauri/tests/work_folder_inventory.rs`. The gateway
 every request it receives; after indexing the counter is reset, and every filesystem question must
 leave it at zero.
 
+## The merged view of the two inventories (explorer programme, step 2)
+
+The left panel shows **one** list per family, not one list per folder (`docs/CLIENT.md`, "The left panel"). It needs no
+new command: `work_folder_inventory` and `data_folder_inventory` already list **every file** of their folder
+(`discovery::discover_all`), each with a `kind` decided by extension. The client merges them in
+`lib/explorerModel.ts` and changes nothing on the Rust side or on disk:
+
+- **Entry.** One `ExplorerEntry` per file, keyed by `(root, relative path)`, never by the path alone (the same
+  relative path may exist in both folders). It keeps the inventory's own `FileRecord`, so ticking, opening and
+  revealing use the identities the selection already pins.
+- **Family by extension.** Documents (`SUPPORTED_EXTENSIONS` of `discovery.rs`) or Tables (`csv xlsx xls xlsm ods`,
+  `FileKind::TabularCandidate`). A file of neither family is counted and not listed.
+- **Native or foreign.** An entry is **native** when it sits in its family's own folder. A foreign entry is a workbook
+  of the Documents folder (kind `tabular_candidate`, "not assessed" there) or a document of the Data folder (forced to
+  `failed` by `data_folder.rs`, because that folder's pipeline reads workbooks only). What a foreign file's own inventory
+  says describes a pipeline that is not its own, so the screen shows it as **to analyse**, never as unreadable, and
+  leaves it out of its family's **Analyser** count, until it can be analysed in place.
+- **Three states for the screen:** `indexed` is analysed; `failed` is unreadable; `discovered`, `pending` (indexed once,
+  changed since) and `processing` are to analyse. The ticking rule is unchanged: **only an analysed file of its own
+  folder can be ticked** (`isSelectable`, `processingStatus === "indexed"`), so the scopes, which stay one per folder, are
+  worked out over the same set of files as before.
+- **Overlapping folders.** If one folder is chosen inside the other, or the same one twice, a physical file would be
+  listed from both. The merge, given the two folders' paths, keeps it once (the native copy wins, otherwise the
+  Documents one). Without the paths nothing is merged. A guard against choosing overlapping folders is a later step's.
+- **Counts** shown beside a family (analysed, to analyse, unreadable) are computed from the per-file states, not
+  taken from either report's summary, because the two summaries are worked out differently for the two folders and
+  neither counts a file of the other family.
+- **Cost.** The reports are read by the same cheap path as before: at launch, when the window gets the focus back,
+  and after a pass. Measured figures for 1 500 files: `docs/DECISIONS.md`, "Taken while building the explorer's unified view".
+
 ## Future reuse — two Work Folders
 
 The product will eventually have two user-configurable folders, and they stay separate:

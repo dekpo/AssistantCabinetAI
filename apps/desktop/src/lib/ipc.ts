@@ -77,6 +77,24 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   speechModelsUrl: "",
 };
 
+/** How tall a row of the file explorer is: about 24 px, or about 32 px. */
+export type ExplorerDensity = "compact" | "comfortable";
+
+/** What the file explorer remembers: the density of its rows and which family lists are folded.
+ * Mirrors `ExplorerSettings` in `settings.rs`, which reads every field leniently. */
+export interface ExplorerSettings {
+  density: ExplorerDensity;
+  documentsFolded: boolean;
+  tablesFolded: boolean;
+}
+
+/** What Rust uses when `settings.json` has no `explorer` block: compact rows, both lists open. */
+export const DEFAULT_EXPLORER_SETTINGS: ExplorerSettings = {
+  density: "compact",
+  documentsFolded: false,
+  tablesFolded: false,
+};
+
 export interface AppSettings {
   /** Chosen locale, or null on a machine where nothing has been chosen yet. */
   locale: string | null;
@@ -130,6 +148,8 @@ export interface AppSettings {
   ownNames: string[];
   /** The remembered widths of the three zones of the window. Rust keeps only usable triples. */
   layout: PanelLayouts;
+  /** Row density and folded lists of the file explorer. Rust keeps every value usable. */
+  explorer: ExplorerSettings;
   /** Local voice and notes. Rust keeps every value in range. */
   speech: SpeechSettings;
 }

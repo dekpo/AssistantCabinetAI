@@ -18,6 +18,13 @@
   --degraded: #b7791f;
   --offline: #9b2c2c;
   --radius: 8px;
+  --accent-soft: #dcebe6;
+  /* The two families of the file explorer: documents are blue, tables are brown. Each has a soft
+     background for its folder icon and its extension badges. */
+  --family-documents: #2c5d9e;
+  --family-documents-soft: #e2ebf7;
+  --family-tables: #8a5a12;
+  --family-tables-soft: #f6ead2;
 
   color-scheme: light;
 }
@@ -36,6 +43,11 @@
   --online: #68d391;
   --degraded: #ecc94b;
   --offline: #fc8181;
+  --accent-soft: #24443a;
+  --family-documents: #86b2ee;
+  --family-documents-soft: #1f2e45;
+  --family-tables: #e3b25f;
+  --family-tables-soft: #43361b;
 
   color-scheme: dark;
 }
@@ -841,6 +853,497 @@ body {
   display: flex;
   gap: 6px;
   margin-top: 2px;
+}
+
+/* The file explorer: one compact box with two family sections, replacing the two folder cards of the
+   sidebar. Every height inside it is fixed (rows, lists), so the box never grows with a folder. The
+   Settings panel still draws the two old cards, with their own rules above. */
+.explorer {
+  --explorer-row: 24px;
+  flex: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.explorer button:focus-visible,
+.explorer input:focus-visible,
+.explorer summary:focus-visible,
+.explorer-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.explorer__head {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer__titleline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.explorer__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-quiet);
+}
+
+.explorer__views {
+  display: flex;
+  gap: 2px;
+}
+
+.explorer__view {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-quiet);
+  cursor: pointer;
+}
+
+.explorer__view[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.explorer__view:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explorer__searchline {
+  display: flex;
+  gap: 6px;
+}
+
+.explorer__search {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-glyph {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translateY(-50%);
+  color: var(--text-quiet);
+  pointer-events: none;
+}
+
+.explorer__search-input {
+  width: 100%;
+  padding: 5px 8px 5px 26px;
+  background: var(--surface);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.explorer__search-input:disabled {
+  opacity: 0.55;
+}
+
+.explorer__segments {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.explorer__segment {
+  flex: 1;
+  padding: 4px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer__segment:last-child {
+  border-right: 0;
+}
+
+.explorer__segment[aria-pressed="true"] {
+  background: var(--accent-soft);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.explorer__segment-count {
+  margin-left: 4px;
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.explorer__status {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 11.5px;
+}
+
+.explorer .banner {
+  margin: 6px 10px;
+}
+
+/* A family: the family's own colours reach the icon, the name and the extension badges through two
+   custom properties set once on the section. */
+.explorer-family {
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer-family--documents {
+  --family: var(--family-documents);
+  --family-soft: var(--family-documents-soft);
+}
+
+.explorer-family--tables {
+  --family: var(--family-tables);
+  --family-soft: var(--family-tables-soft);
+}
+
+/* Always one line: the folder icon, the name with its counters, the Analyser button and the fold
+   button never wrap. The left zone has a minimum width that holds them (`AppLayout.tsx`); when the
+   name and the counters still lack room, they are the part that gives way. */
+.explorer-family__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+}
+
+.family-glyph {
+  flex: none;
+}
+
+.family-glyph {
+  width: 24px;
+  height: 21px;
+}
+
+.family-glyph__body {
+  fill: var(--family-soft);
+  stroke: var(--family);
+}
+
+.family-glyph__mark {
+  stroke: var(--family);
+}
+
+.explorer-family__text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.explorer-family__name {
+  overflow: hidden;
+  color: var(--family);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-family__counters {
+  display: flex;
+  overflow: hidden;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.explorer-family__counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.explorer-family__counter .state-glyph {
+  width: 10px;
+  height: 10px;
+}
+
+.explorer-family__head .button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.explorer-family__fold {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-quiet);
+  cursor: pointer;
+}
+
+.explorer-family__fold:hover {
+  background: var(--surface);
+}
+
+.fold-glyph {
+  width: 16px;
+  height: 16px;
+  transition: transform 120ms;
+}
+
+.fold-glyph--folded {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fold-glyph {
+    transition: none;
+  }
+}
+
+/* The shape of the glyph carries the state; the colour only repeats it. */
+.state-glyph {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+}
+
+.state-glyph--analysed {
+  color: var(--accent);
+}
+
+.state-glyph--toAnalyse {
+  color: var(--degraded);
+}
+
+.state-glyph--unreadable {
+  color: var(--offline);
+}
+
+.explorer-family__run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 6px;
+}
+
+.explorer-family__run .progress {
+  flex: 1;
+}
+
+.explorer-note,
+.explorer-empty {
+  margin: 0;
+  padding: 4px 10px;
+  color: var(--text-quiet);
+  font-size: 11.5px;
+}
+
+.explorer-empty {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.explorer-pass {
+  padding: 0 10px 4px;
+  color: var(--text-quiet);
+  font-size: 11px;
+}
+
+.explorer-pass__summary {
+  cursor: pointer;
+}
+
+.explorer-pass__lines {
+  margin: 3px 0 0;
+  line-height: 1.45;
+}
+
+/* One list per family, with its own scroll bar. The height is set inline from the row budget, and
+   the rows are a fixed height, so the list can draw only the ones in view. */
+.explorer-list {
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.explorer-list__rows {
+  margin: 0;
+  padding-right: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.explorer-row {
+  display: grid;
+  grid-template-columns: 16px 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  height: var(--explorer-row);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.explorer-row:hover {
+  background: var(--surface);
+}
+
+.explorer-row__check {
+  margin: 0;
+}
+
+.explorer-row__check:disabled {
+  opacity: 0.35;
+}
+
+.explorer-row__name {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.explorer-row__stem {
+  flex: 0 1 auto;
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The extension is never the part that is cut: only the stem gives way. */
+.explorer-row__ext {
+  flex: none;
+  margin-left: 1px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--family-soft);
+  color: var(--family);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.explorer-row__hint,
+.explorer-row__tag {
+  flex: 0 1 auto;
+  max-width: 40%;
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+
+.explorer-row__hint {
+  color: var(--text-quiet);
+}
+
+.explorer-row__tag {
+  color: var(--accent);
+}
+
+.explorer-row--foreign .explorer-row__stem {
+  color: var(--text-quiet);
+}
+
+/* Shown on hover and on keyboard focus; the room is kept, so the name does not move. */
+.explorer-row__actions {
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+}
+
+.explorer-row:hover .explorer-row__actions,
+.explorer-row:focus-within .explorer-row__actions {
+  opacity: 1;
+}
+
+.explorer-row__button {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.explorer-bottom {
+  padding: 5px 10px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.explorer-bottom__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
+.explorer-bottom__label {
+  font-weight: 600;
+}
+
+.explorer-bottom__note {
+  margin: 2px 0 0;
+  color: var(--text-quiet);
+  font-size: 11px;
+}
+
+.explorer-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.explorer-link--quiet {
+  color: var(--text-quiet);
+}
+
+.explorer-link:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .chat {

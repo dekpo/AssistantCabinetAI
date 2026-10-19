@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppLayout } from "./components/AppLayout";
 import { ChatPanel } from "./components/ChatPanel";
-import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
+import { FileExplorer } from "./components/FileExplorer";
 import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import type { NotesActions, NotesBundle } from "./components/notes/NotesPanel";
@@ -15,7 +15,6 @@ import {
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
-import { WorkFolderCard } from "./components/WorkFolderCard";
 import type { TabActions } from "./components/WorkspacePanel";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import { effectiveSection, shownCentre, type CentreSection } from "./lib/centreSection";
@@ -81,8 +80,18 @@ function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boole
 }
 
 function AppContent() {
-  const { snapshot, locale, loadError, saveError, reload, update, saveLayout, saveSpeech, reset } =
-    useAppSettings();
+  const {
+    snapshot,
+    locale,
+    loadError,
+    saveError,
+    reload,
+    update,
+    saveLayout,
+    saveExplorer,
+    saveSpeech,
+    reset,
+  } = useAppSettings();
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
   );
@@ -281,6 +290,19 @@ function AppContent() {
       reveal: revealWorkFile,
     }),
     [notesSession, guardLeaving],
+  );
+  /* Another Documents folder starts from no note: the notes written for this one would otherwise
+     land in the next. The first choice of a folder loses nothing. The one door to a change of folder
+     is the settings panel until the explorer's own menu (`docs/CLIENT.md`, "The left panel"). */
+  const chooseWorkFolder = useCallback(
+    (path: string) =>
+      workFolder === null || path === workFolder
+        ? void update({ workFolder: path })
+        : guardLeaving({ kind: "change-folder" }, () => {
+            notesSession.discardAll();
+            void update({ workFolder: path });
+          }),
+    [workFolder, update, guardLeaving, notesSession],
   );
   /* Files | Notes. A centre with no tab open would close when Files is chosen, so Files shows its
      welcome view then. Switching is never a way to lose a note. */
@@ -498,39 +520,32 @@ function AppContent() {
             restoreNonce={layoutRestores}
             resources={
               <aside className="app__side">
-                <WorkFolderCard
+                <FileExplorer
                   workFolder={snapshot.settings.workFolder}
-                  suggestedWorkFolder={snapshot.suggestedWorkFolder}
-                  onChosen={(path) =>
-                    /* Another folder starts from no note: the notes written for this one would
-                       otherwise land in the next. The first choice of a folder loses nothing. */
-                    workFolder === null || path === workFolder
-                      ? void update({ workFolder: path })
-                      : guardLeaving({ kind: "change-folder" }, () => {
-                          notesSession.discardAll();
-                          void update({ workFolder: path });
-                        })
-                  }
-                  indexing={indexing}
-                  detail="collapsible"
-                  scope={scope}
-                  onScopeChange={setScope}
-                  scopeLocked={chatBusy}
-                  onOpenKnowledge={() => setKnowledgeOpen(true)}
-                  onOpenFile={openDocument}
-                  refreshToken={notes.writes}
-                />
-                <DataFolderCard
                   dataFolder={snapshot.settings.dataFolder}
-                  suggestedDataFolder={snapshot.suggestedDataFolder}
-                  onChosen={(path) => void update({ dataFolder: path })}
-                  indexing={dataIndexing}
-                  detail="collapsible"
-                  scope={dataScope}
-                  onScopeChange={setDataScope}
+                  indexing={indexing}
+                  dataIndexing={dataIndexing}
+                  scope={scope}
+                  dataScope={dataScope}
+                  onScopeChange={setScope}
+                  onDataScopeChange={setDataScope}
                   scopeLocked={chatBusy}
+                  density={snapshot.settings.explorer.density}
+                  folded={{
+                    documents: snapshot.settings.explorer.documentsFolded,
+                    tables: snapshot.settings.explorer.tablesFolded,
+                  }}
+                  onFoldedChange={(family, isFolded) =>
+                    void saveExplorer((current) =>
+                      family === "documents"
+                        ? { ...current, documentsFolded: isFolded }
+                        : { ...current, tablesFolded: isFolded },
+                    )
+                  }
                   onOpenKnowledge={() => setKnowledgeOpen(true)}
-                  onOpenFile={openTable}
+                  onOpenDocument={openDocument}
+                  onOpenTable={openTable}
+                  refreshToken={notes.writes}
                 />
                 {snapshot.warnings.map((code) => (
                   <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -577,6 +592,8 @@ function AppContent() {
             indexing={indexing}
             dataIndexing={dataIndexing}
             onUpdate={(patch) => void update(patch)}
+            onWorkFolderChosen={chooseWorkFolder}
+            onSaveExplorer={(change) => void saveExplorer(change)}
             onSaveSpeech={(change) =>
               snapshot.settings.speech.notesEnabled && !change(snapshot.settings.speech).notesEnabled
                 ? guardLeaving({ kind: "disable-notes" }, () => {

@@ -588,7 +588,11 @@ pub async fn has_indexed_documents(app: AppHandle) -> Result<bool, AppError> {
 ///
 /// Answered from `std::fs` and the local index, never from the model, so the counts the panel
 /// shows are the same ones a question about the folder gets (`docs/WORK-FOLDER-INVENTORY.md`).
-#[tauri::command]
+///
+/// `async` so a first read, which hashes every file of a large folder, never runs on the thread
+/// that draws the window: the explorer reads this and `data_folder_inventory` at launch and each
+/// time the window gets the focus back (measured, `docs/DECISIONS.md`, "the explorer's unified view").
+#[tauri::command(async)]
 pub fn work_folder_inventory(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -752,8 +756,9 @@ pub fn index_data_folder(
 
 /// What is in the Data Folder right now, and which workbooks hold a usable table: the
 /// filesystem, joined with the cached tabular inventories. The one place both are read together
-/// (`docs/DECISIONS.md`, "the two inventories stay separate").
-#[tauri::command]
+/// (`docs/DECISIONS.md`, "the two inventories stay separate"). `async` for the same reason as
+/// `work_folder_inventory`.
+#[tauri::command(async)]
 pub fn data_folder_inventory(
     app: AppHandle,
     state: State<'_, AppState>,

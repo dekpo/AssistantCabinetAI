@@ -3052,7 +3052,7 @@ pub(crate) fn search_roots(app: &AppHandle) -> Vec<std::path::PathBuf> {
     )
 }
 
-fn sidecar_search_roots(
+pub(crate) fn sidecar_search_roots(
     resource_dir: Option<std::path::PathBuf>,
     exe: Option<std::path::PathBuf>,
     cwd: Option<std::path::PathBuf>,

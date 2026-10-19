@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": [
+      "binaries/speech-stt-worker",
+      "binaries/speech-tts-worker",
+      "binaries/tesseract"
+    ],
+    "resources": {
+      "binaries/speech-tts-worker-NOTICE.md": "./",
+      "resources/tesseract/*": "./",
+      "resources/tessdata/fra.traineddata": "resources/tessdata/fra.traineddata",
+      "resources/pdfium/pdfium.dll": "resources/pdfium/pdfium.dll"
+    }
+  }
+}

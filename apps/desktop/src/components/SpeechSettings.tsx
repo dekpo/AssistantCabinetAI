@@ -18,6 +18,7 @@ import { SPEECH_LIMITS } from "../speech/limits";
 import { jobLine, modelButtons } from "../speech/modelJob";
 import { voiceRows } from "../speech/voiceRows";
 import { NumberSetting } from "./NumberSetting";
+import { SpeechCredits } from "./SpeechCredits";
 
 const FEATURES: SpeechFeature[] = ["dictation", "readAloud", "notes"];
 const ENGINES = ["piper", "system"] as const;
@@ -443,6 +444,8 @@ export function SpeechSettingsBlock({
         </label>
         <span className="field__description">{t("speech.notesCommandsDescription")}</span>
       </div>
+
+      <SpeechCredits status={status} />
     </details>
   );
 }

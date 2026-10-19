@@ -709,7 +709,25 @@
     "notesFolderLabel": "Notes folder name",
     "notesFolderDescription": "A folder inside the documents folder, where saved notes are written.",
     "notesCommandsLabel": "Voice commands in notes",
-    "notesCommandsDescription": "Spoken punctuation, title, subtitle, new line, new paragraph and new note."
+    "notesCommandsDescription": "Spoken punctuation, title, subtitle, new line, new paragraph and new note.",
+    "credits": {
+      "title": "Credits and licences of the voice",
+      "intro": "The voice uses the open components below. The models and the voices are downloaded only when you press Install, and each voice shows the state of its licence.",
+      "componentsLabel": "Components",
+      "voicesLabel": "Voices",
+      "component": {
+        "parakeet": "Speech recognition uses NVIDIA Parakeet TDT 0.6B v3 (nvidia/parakeet-tdt-0.6b-v3), © NVIDIA, licensed under the Creative Commons Attribution 4.0 International licence (https://creativecommons.org/licenses/by/4.0/). The weights are used in an int8-quantised ONNX conversion published with sherpa-onnx (k2-fsa); no other change was made.",
+        "sherpa": "The speech recognition program and the reading program run on sherpa-onnx (k2-fsa, Apache-2.0 licence, https://github.com/k2-fsa/sherpa-onnx) and on ONNX Runtime (MIT licence). Both are built into those two programs and into nothing else.",
+        "espeak": "The Piper voices read their text through the phonemizer espeak-ng (GPL-3.0 licence, https://github.com/espeak-ng/espeak-ng). It is built into one separate program, the reading program, and nowhere else in the application; the notice of that program, speech-tts-worker-NOTICE.md, is installed next to it. The phonemizer data is not part of the installer: each voice brings its own copy.",
+        "voices": "The Piper voices come from the rhasspy/piper-voices collection (https://huggingface.co/rhasspy/piper-voices) and the voice css10 from neongeckocom/tts-vits-css10-fr (https://huggingface.co/neongeckocom/tts-vits-css10-fr). Each voice has its own licence, listed below."
+      },
+      "voice": {
+        "siwis": "French female voice, Piper fr_FR siwis medium: SIWIS French Speech Synthesis Database (CC BY 4.0), phonemizer espeak-ng (GPL-3.0). It was fine-tuned from a voice whose training data is for research only.",
+        "css10": "French male voice, Coqui VITS css10: BSD-3-Clause licence, trained on CSS10 French (LibriVox recordings, public domain).",
+        "ljspeech": "English voice, Piper en_US ljspeech medium: LJ Speech recordings (public domain), phonemizer espeak-ng (GPL-3.0).",
+        "libritts_r": "English voice, Piper en_US libritts_r medium: LibriTTS-R (CC BY 4.0), phonemizer espeak-ng (GPL-3.0)."
+      }
+    }
   },
   "errorBanner": {
     "title": "This did not work"

@@ -169,7 +169,7 @@ apps/speech-worker/      NEW crate(s): speech-stt-worker (feature stt), speech-t
 apps/desktop/src/
   speech/                ipc.ts, availability.ts, voiceSession.ts, dictation.ts (state machine), useDictation.ts (hook), insertion.ts, useLongDictation.ts, repairChips.ts (pure), useRepairSuggestions.ts (hook), output/
   audio/                 recorder.ts, wav.ts, segmenter.ts          public/speech/capture-worklet.js (static, no blob:)
-  components/            SpeechSettings, MicButton, DictationStatus, ReadAloudButton, CentreSwitch, NotesPanel, RepairChips
+  components/            SpeechSettings, SpeechCredits, MicButton, DictationStatus, ReadAloudButton, CentreSwitch, NotesPanel, RepairChips
 ```
 
 Edits to existing files are kept to a registration line each (`lib.rs`, `error.rs`, `settings.rs`, `ipc.ts`, the two
@@ -531,8 +531,8 @@ Source of the ratings: SpeechLab `docs/TTS_LICENSES.md` (read 18 October 2026), 
 of public licence texts and model cards, not legal advice. The rating is shown in the voice list and in the credits view and is
 never hidden. A voice is added only after its card has been read, its lineage followed one step, and its phonemizer recorded.
 
-**Attribution text for Parakeet** (to show in the credits view, phase 13; the wording is to be checked against the model card
-when the model is pulled in phase 3b):
+**Attribution text for Parakeet** (shown in the credits view of the voice settings since phase 13, `speech.credits.component.parakeet`
+in both catalogues, with the same words; the wording is to be checked against the model card when the model is pulled in phase 3b):
 
 > Speech recognition uses NVIDIA Parakeet TDT 0.6B v3 (`nvidia/parakeet-tdt-0.6b-v3`), (c) NVIDIA, licensed under the
 > Creative Commons Attribution 4.0 International licence (https://creativecommons.org/licenses/by/4.0/). The weights are used
@@ -567,28 +567,32 @@ engine.
 | **Minimum** (no more than) | 4 cores, 8 GB RAM of which 3 GB free for the worker, SSD, 1 GB free disk for models; a 10 s clip within about 10 s | 2 GB RAM free; one voice installed | As dictation; a 30 min note may keep the machine slow while it is decoded | **estimate** |
 | **Recommended** | 6 or more cores, 16 GB RAM, NVMe, nothing else heavy running during a dictation | As the minimum | As dictation | **estimate** |
 
-The two rows above are estimates reasoned from the laptop's figures; they are replaced by measurements of the new workstation at
-phases 3b (engine), 9 (voices) and 13 (final check). Phases 3b and 9 add their own measured figures here, labelled measured;
-phase 13 finalises the section, or leaves a figure labelled estimate with the reason.
+| The packaged application on the same laptop (19 Oct 2026, installer built by `scripts/build-installer.sh`, silent install into a throwaway folder, application started with the web view debugging port) | installer 54,054,277 bytes, installed in 7 s, 39 files and 213 MB; from the start of the process to the window ready 0.56 s; a French sentence spoken through the installed voice worker in 0.95 s (worker start and voice load included), its audio read back by the installed recogniser in 2.7 s (cold load of the model) and found word for word. The very first start of the freshly installed programs, with the connection sampler running at the same time, took about 29 s for the voice and 30 s for the recognition (not separated: a scan of new unsigned executables by the antivirus and the sampler's own load are the suspects) | measured |
+
+**Phase 13 finalisation.** The two rows "Minimum" and "Recommended" above stay labelled **estimate**: they are reasoned from the laptop's
+figures, and the new practice workstation does not exist yet, so the short check (free RAM, 10 s clip, CPU load, time to speak a
+paragraph) could not be run on it. Nothing in the packaged-application figures contradicts them. The check runs on the new computer
+when it arrives; if a 10 s clip then takes clearly more than about 10 s, whisper.cpp behind the same trait is the recorded fallback
+(D2, D12). Phases 3b and 9 added their own measured figures above.
 
 ## 12. Invariants, each proved by a named test
 
-| Invariant (from the decisions) | Named test (suggested; the phase names the final one) | Phase |
+| Invariant (from the decisions) | Named test (final names, checked against the code on 19 October 2026) | Phase |
 |---|---|---|
-| Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio`; for the voice, `a_sentence_comes_back_as_a_wav_and_the_audio_file_is_gone`, `cancel_kills_the_child_promptly_and_leaves_no_audio_file`, `a_worker_that_crashes_is_a_failed_reading_and_a_new_one_starts_next_time` (all in `worker_tts_tests.rs`, none leaves a file in the temporary folder) | 3, 9 |
-| No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`, `the_voice_client_and_the_rules_open_no_connection_and_log_nothing`, `the_worker_crate_builds_the_voice_binary_from_the_full_libraries_on_their_own`; `readAloudSources.test.ts` (the voice engine of the window has no `fetch`, blob or media element); the offline proof at the gate | 3, 3b, 9, 13 |
+| Audio is never kept | `a_clip_file_is_new_private_and_removed_when_dropped`, `the_clip_is_removed_after_an_engine_failure_a_rejected_output_and_a_panic`, `a_job_over_its_time_limit_times_out_and_cleans_up`, `the_sweep_removes_only_clips_of_this_one_folder`, `the_sweep_runs_lazily_at_the_first_job_and_only_then` (`stt_tests.rs`); for the voice, `a_sentence_comes_back_as_a_wav_and_the_audio_file_is_gone`, `cancel_kills_the_child_promptly_and_leaves_no_audio_file`, `a_worker_that_crashes_is_a_failed_reading_and_a_new_one_starts_next_time` (all in `worker_tts_tests.rs`, none leaves a file in the temporary folder) | 3, 9 |
+| No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`, `the_voice_client_and_the_rules_open_no_connection_and_log_nothing`, `the_worker_crate_builds_the_voice_binary_from_the_full_libraries_on_their_own`; `readAloudSources.test.ts` (the voice engine of the window has no `fetch`, blob or media element); the offline proof at the gate (section 16: sampler result without the rule measured on 19 Oct 2026, with the rule played by the owner) | 3, 3b, 9, 13 |
 | A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear); `longDictationSources.test.ts`, "a long dictation only fills the note" (no send, no save, no analyse) | 5, 12 |
-| Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
+| Voice never applies a file action | `no_speech_path_reaches_a_file_action` (`proof_tests.rs`, phase 13: no speech file names the plan, fill, index or Analyse modules, renames or copies only inside the model download, removes only what it created, and a note is created new); `the_preview_gives_the_names_a_save_would_give_and_writes_nothing`, `notes_never_touch_the_knowledge_base_or_the_index_themselves`, `the_notes_commands_run_only_when_the_interface_asks` (`notes_tests.rs`); `notesSources.test.ts`, "writes only through the two notes commands, behind the user's click on the plan" | 5, 10, 13 |
 | Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `with_the_knowledge_base_off_there_is_nothing_to_repair`, `the_command_answers_before_it_opens_the_index_when_the_base_is_off`, `hidden_names_reach_the_window_as_a_count_only` (all in `tests/speech_repair.rs`), `repairSources.test.ts` | 6 |
-| No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text`, `the_voice_client_starts_its_process_only_through_the_shared_starter` (the worker's standard error goes nowhere), `the_voice_client_and_the_rules_open_no_connection_and_log_nothing` | 3, 5, 9, 10 |
-| Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
+| No text in logs | `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (`stt_tests.rs`, the line of `speech-timings.jsonl`), `the_log_has_one_line_per_file_with_counts_and_never_the_text` (`notes_tests.rs`), `nothing_logs_what_a_worker_said` and `the_voice_client_starts_its_process_only_through_the_shared_starter` (the workers' standard error goes nowhere), `the_voice_client_and_the_rules_open_no_connection_and_log_nothing` | 3, 5, 9, 10 |
+| Only proven-local voices | `systemVoices.test.ts`: "a_non_local_voice_is_never_selected", "no_local_voice_refuses"; `no_installed_voice_is_no_local_voice_and_a_damaged_one_is_said_so` (`tts_tests.rs`) | 8, 9 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |
-| Any failure degrades to the typed app | `missing_engine_reports_unavailable_and_typed_app_still_works` | 2, 3 |
+| Any failure degrades to the typed app | `without_a_provider_the_service_answers_engine_missing_and_writes_nothing` (`stt_tests.rs`), `voice_on_without_an_engine_reports_the_missing_piece_in_order` (`tests.rs`), `a_worker_that_cannot_be_started_is_an_engine_failure_not_a_panic` and `a_worker_that_cannot_be_started_is_a_failed_reading_not_a_panic` (both workers), `with_the_knowledge_base_off_there_is_nothing_to_repair` | 2, 3, 9 |
 | Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly` (both workers), `a_new_request_ends_the_one_in_progress`, `piperWorker.test.ts` (stop ends the clip, the pause and the synthesis), `dictation.test.ts`, "cancelling a dictation, at every stage"; `longDictation.test.ts`, "cancelling" (permission, recording, queue, finishing) | 3b, 5, 9, 12 |
-| One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests; `longDictation.test.ts`, "runs one job at a time, in the order the passages were cut" | 3, 4, 12 |
+| One speech job at a time | `only_one_job_runs_at_a_time_and_the_flag_is_released_after_it` (`stt_tests.rs`); `a_new_request_ends_the_one_in_progress` (voice); the voice session tests (`voiceSession.test.ts`, "one microphone at a time"); `longDictation.test.ts`, "runs one job at a time, in the order the passages were cut" | 3, 4, 9, 12 |
 | Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it`; the voice worker has the same loop and pipe (`dropping_the_provider_leaves_no_process`, `shutdown_ends_the_worker_before_voice_files_are_replaced`) | 3b, 9 |
-| Nothing heavy at launch | `launch_starts_no_speech_work` | 2 |
-| Voice off changes nothing (D13) | `voice_off_leaves_the_existing_components_unchanged` (baseline render tests written before the first edit of phase 2) | 2, 11 |
+| Nothing heavy at launch | `launch_does_no_speech_work`, `the_foundations_start_no_process_thread_connection_or_file_access` (`tests.rs`); `the_sweep_runs_lazily_at_the_first_job_and_only_then`; `nothing_is_configured_nothing_is_started` (voice client) | 2, 3, 9 |
+| Voice off changes nothing (D13) | `voiceOffBaseline.test.ts` ("the composer with the voice switch off", "the conversation with the voice switch off", "the title bar with the notes button absent"; written before the first edit of phase 2) | 2, 11 |
 | Language contract | the existing `sources.test.ts` and `catalogues.test.ts` guards; `a_locale_without_a_pack_answers_speech_locale_unsupported` | every phase |
 
 Test method: unit tests on pure functions; a deterministic **fake provider** drives every integration test and runs on both CI
@@ -633,9 +637,10 @@ voices of the webview and speaks a French and an English paragraph with the fire
 with `CREATE_NO_WINDOW` it gets none. The flag is in `speech/console_window.rs`, a paired platform module, never in
 `worker_stt.rs`; the Tesseract spawn in `ocr/tesseract.rs` sets no flag and has the same flash, reported and not fixed).
 
-Packaging: there is no installer wiring for any sidecar yet (`tauri.conf.json` has no `externalBin` or `resources`; the Tesseract
-block waits in `src-tauri/binaries/README.md`). Packaging the workers is the same unresolved item as packaging Tesseract: phase 13
-coordinates with that track and invents no second mechanism. Until then voice works in `tauri dev` and in a locally staged build.
+Packaging: **decided by the owner on 19 October 2026** (`DECISIONS.md`, "Where the helper programs and the models live"): the three
+helper programs are bundled in the installer, one mechanism for all of them; the models stay online. **Built by phase 13**, see
+section 16: `src-tauri/tauri.bundle.conf.json` lists the programs and `scripts/build-installer.sh` builds the installer. Voice also
+works in `tauri dev` and in a locally staged build, as before.
 
 ## 14. Open points
 
@@ -666,3 +671,50 @@ Policy is `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 
 `toMatchSnapshot` anywhere; `open_index`, `work_folder_policy`, `resolve_selection` and `sidecar_search_roots` are private in
 `commands.rs`; there are two catalogues (`fr-FR`, `en-US`) and German and Italian have none. The knowledge phonetic keys exist
 for French and English only.
+
+## 16. Packaging, credits and the offline proof (phase 13, 19 October 2026)
+
+**Build.** `bash scripts/build-installer.sh --bundles nsis` (Git Bash, Windows). It reads `bundle.externalBin` of
+`apps/desktop/src-tauri/tauri.bundle.conf.json`, builds the two workers (`build-speech-worker.sh`, `build-speech-tts-worker.sh`),
+checks that Tesseract and every file of `bundle.resources` are staged (`scripts/fetch-speech-resources.sh` and
+`scripts/fetch-ocr-resources.ps1` first), and runs `tauri build --config`. The packaging entries are **not** in `tauri.conf.json`
+(Tauri checks them at every build, spike S3; `DECISIONS.md`, "How it is wired"). The manual workflow
+`.github/workflows/installer-windows.yml` runs the same script on a Windows runner; it has not been run on a runner yet. macOS: no
+entry, waiting for the Mac and a Tesseract fetch script for macOS.
+
+**What the installer carries** (measured on the build of 19 October 2026: 54,054,277 bytes, NSIS, per-user): the application
+(31 MB), `speech-stt-worker.exe` (19.0 MB), `speech-tts-worker.exe` (19.4 MB) with `speech-tts-worker-NOTICE.md` beside it,
+`tesseract.exe` with its 31 libraries, `resources\tessdata\fra.traineddata`, `resources\pdfium\pdfium.dll`, and the uninstaller; 39
+files, 213 MB installed. No model, no voice, no `espeak-ng-data` (each voice package brings its own copy). The application finds each
+program next to its executable (names without the target triple), which `search_roots` already searched; `speech/packaging_tests.rs`
+pins the names and the places.
+
+**Visual C++ runtime (SpeechLab I-070).** Read from the import tables of the installed files: the application and Tesseract (MinGW)
+need no Visual C++ runtime, but both workers, as first built, imported `VCRUNTIME140.dll` and `VCRUNTIME140_1.dll`. The build scripts
+now link the C runtime statically (`-C target-feature=+crt-static`, the sherpa-onnx libraries being "static-MT"); the rebuilt workers
+import Windows system libraries only, and they transcribed and spoke in the installed application. **Not run on a clean machine**: no
+virtual machine or Windows Sandbox is available (Windows Home), so "starts without the redistributable" is shown by the import tables,
+not by a run on a machine that lacks it. To repeat on the new workstation when it arrives. Without the runtime a worker would fail to
+start and the voice would degrade to the typed application (`speech_engine_failed`), never a crash.
+
+**Offline proof.** The firewall rule blocks every program of the installed folder (`scripts/speech-offline-rule.sh`, Git Bash as
+administrator: the application, both workers, Tesseract); the sampler (`scripts/speech-connection-sample.mjs`) lists, every second,
+the connections of the process tree outside the machine. What was measured **without** the rule, on the installed application over 40
+to 45 s with all three features used: no connection from either worker; the application's own process held one connection, to the
+practice server on the local network (`192.168.1.83:8080`, from the application's own code, not a speech file; its exact purpose was not traced); the system web view held one
+HTTPS connection to a Microsoft address (the same finding as SpeechLab I-066: not the application's code, purpose not verified).
+With the rule on, the expected result is: dictation, notes (typing and dictating) and read-aloud unchanged; an Install of a model
+answers `speech_model_download_failed`; the practice server is unreachable (the rule blocks the application itself), so a question
+fails and **Save in Notes saves the file and then reports `notes_analysis_failed`** (the Analyse needs the server), which is the
+expected degradation. The proof as played by the owner is in the report `12-prove-it.md`.
+
+**Credits view.** A block "Credits and licences of the voice" at the end of the voice settings (`components/SpeechCredits.tsx`, data in
+`speech/credits.ts`, sentences `speech.credits.*` in both catalogues): the Parakeet attribution (CC BY 4.0, the words of section 10),
+sherpa-onnx and ONNX Runtime, the espeak-ng notice (GPL-3.0, only in the voice program, with its notice file; the phonemizer data comes
+with each voice), the sources of the voices, then one row per voice of the manifest with its licence rating from Rust (`siwis`
+"prototype: licence to verify before any wider distribution"). `credits.test.ts` fails when a voice of the manifest has no sentence.
+
+**Not done, by design.** Code signing (SmartScreen would warn, I-068); the interactive uninstaller (the silent one removes the folder
+and the uninstall key and keeps user data in SpeechLab's M7; it was not run here, per the rule of moving real user-data folders away
+first, so the test install was removed by hand: folder, uninstall key, `HKCU\Software\assistantcabinetai` key, two shortcuts); a clean
+machine; macOS. The installer as a deliverable stays gated by `AGENTS.md`, item 6.

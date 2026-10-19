@@ -75,6 +75,10 @@ mod models_tests;
 #[cfg(test)]
 mod notes_tests;
 #[cfg(test)]
+mod packaging_tests;
+#[cfg(test)]
+mod proof_tests;
+#[cfg(test)]
 mod speakable_tests;
 #[cfg(test)]
 mod stt_tests;

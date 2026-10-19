@@ -1435,3 +1435,12 @@ executable, the exact hosting path, the form of the baseline tests, a Markdown c
 spoken forms in read-aloud, the gender of css10, and the new workstation's measurements.
 
 **Where the helper programs and the models live (owner decision, 19 October 2026).** Models stay online and are downloaded on an explicit user action (D5): they are heavy and carry no code. The helper programs of the application (the dictation worker, the voice worker and the Tesseract sidecar) are **bundled in the installer**, not downloaded: they are small (the voice worker is 19 MB), an executable fetched from the Internet would be the only code of the product to arrive that way, an antivirus or SmartScreen treats a program downloaded after the install less kindly than one it came with, and a practice workstation without Internet at install time must still work. One mechanism for the three programs, Windows and macOS, built by a script and a CI step; the voice worker travels with its own espeak-ng notice. Consequence: the rule "the only network code of the speech module is the model download file" is kept as it is. Phase 13 of the speech programme wires this; the 14 October milestone stays withdrawn as a date, and the installer track stays gated by item 6 of `AGENTS.md`.
+
+**How it is wired (phase 13, 19 October 2026; owner choice of the separate file).** The list of bundled programs and files is
+`apps/desktop/src-tauri/tauri.bundle.conf.json` (`bundle.externalBin` and `bundle.resources`), the one place that says which programs
+go in, and `scripts/build-installer.sh` builds and stages what it names and runs `tauri build --config` with it. The entries are **not**
+in `tauri.conf.json`: Tauri checks every `externalBin` and `resources` file at every build, test runs included, so declared there they
+would stop `cargo test` and `tauri dev` on any machine that has not staged the programs (measured in SpeechLab, I-064, and in this
+repository's `binaries/README.md` history). The wording "in `tauri.conf.json`" of the decision above is read as "in the build
+configuration". A test (`speech/packaging_tests.rs`) pins the three names, the notice, the places the finders look and the fact that the
+default configuration names none. Windows entries only: the macOS ones wait for the macOS phase and for a Tesseract fetch script for macOS.

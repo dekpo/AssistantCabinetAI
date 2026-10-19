@@ -18,7 +18,9 @@ VERSION="1.13.8"
 TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
 EXT=""
 case "${TRIPLE}" in
-  *windows*) LIB_DIR="${VENDOR}/sherpa-onnx-v${VERSION}-win-x64-static-MT-Release-no-tts-lib/lib"; EXT=".exe" ;;
+  # The C runtime is linked statically (the sherpa-onnx libraries are "static-MT"): the executable then needs
+  # no Visual C++ Redistributable on a clean Windows (SpeechLab I-070, answered by phase 13).
+  *windows*) LIB_DIR="${VENDOR}/sherpa-onnx-v${VERSION}-win-x64-static-MT-Release-no-tts-lib/lib"; EXT=".exe"; export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=+crt-static" ;;
   aarch64-apple-darwin) LIB_DIR="${VENDOR}/sherpa-onnx-v${VERSION}-osx-arm64-static-no-tts-lib/lib" ;;
   x86_64-apple-darwin) LIB_DIR="${VENDOR}/sherpa-onnx-v${VERSION}-osx-x64-static-no-tts-lib/lib" ;;
   *) echo "unsupported target: ${TRIPLE}" >&2; exit 1 ;;

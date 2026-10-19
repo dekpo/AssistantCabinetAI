@@ -709,7 +709,25 @@
     "notesFolderLabel": "Nom du dossier des notes",
     "notesFolderDescription": "Un dossier dans le dossier des documents, où les notes enregistrées sont écrites.",
     "notesCommandsLabel": "Commandes vocales dans les notes",
-    "notesCommandsDescription": "Ponctuation dictée, titre, sous-titre, nouvelle ligne, nouveau paragraphe et nouvelle note."
+    "notesCommandsDescription": "Ponctuation dictée, titre, sous-titre, nouvelle ligne, nouveau paragraphe et nouvelle note.",
+    "credits": {
+      "title": "Crédits et licences de la voix",
+      "intro": "La voix utilise les composants libres ci-dessous. Les modèles et les voix ne sont téléchargés que lorsque vous appuyez sur Installer, et chaque voix indique l'état de sa licence.",
+      "componentsLabel": "Composants",
+      "voicesLabel": "Voix",
+      "component": {
+        "parakeet": "La reconnaissance vocale utilise NVIDIA Parakeet TDT 0.6B v3 (nvidia/parakeet-tdt-0.6b-v3), © NVIDIA, sous licence Creative Commons Attribution 4.0 International (https://creativecommons.org/licenses/by/4.0/). Les poids sont utilisés dans une conversion ONNX quantifiée en int8 publiée avec sherpa-onnx (k2-fsa) ; aucune autre modification n'a été faite.",
+        "sherpa": "Le programme de reconnaissance vocale et le programme de lecture fonctionnent avec sherpa-onnx (k2-fsa, licence Apache-2.0, https://github.com/k2-fsa/sherpa-onnx) et ONNX Runtime (licence MIT). Les deux sont intégrés à ces deux programmes et à rien d'autre.",
+        "espeak": "Les voix Piper lisent leur texte grâce au phonémiseur espeak-ng (licence GPL-3.0, https://github.com/espeak-ng/espeak-ng). Il est intégré à un seul programme séparé, le programme de lecture, et nulle part ailleurs dans l'application ; la notice de ce programme, speech-tts-worker-NOTICE.md, est installée à côté de lui. Les données du phonémiseur ne font pas partie de l'installateur : chaque voix apporte sa propre copie.",
+        "voices": "Les voix Piper viennent de la collection rhasspy/piper-voices (https://huggingface.co/rhasspy/piper-voices) et la voix css10 de neongeckocom/tts-vits-css10-fr (https://huggingface.co/neongeckocom/tts-vits-css10-fr). Chaque voix a sa propre licence, indiquée ci-dessous."
+      },
+      "voice": {
+        "siwis": "Voix française féminine, Piper fr_FR siwis medium : base de données SIWIS French Speech Synthesis Database (CC BY 4.0), phonémiseur espeak-ng (GPL-3.0). Elle a été affinée à partir d'une voix dont les données d'entraînement sont réservées à la recherche.",
+        "css10": "Voix française masculine, Coqui VITS css10 : licence BSD-3-Clause, entraînée sur CSS10 French (enregistrements LibriVox, domaine public).",
+        "ljspeech": "Voix anglaise, Piper en_US ljspeech medium : enregistrements LJ Speech (domaine public), phonémiseur espeak-ng (GPL-3.0).",
+        "libritts_r": "Voix anglaise, Piper en_US libritts_r medium : LibriTTS-R (CC BY 4.0), phonémiseur espeak-ng (GPL-3.0)."
+      }
+    }
   },
   "errorBanner": {
     "title": "Cela n'a pas fonctionné"

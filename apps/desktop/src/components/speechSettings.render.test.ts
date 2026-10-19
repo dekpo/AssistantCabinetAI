@@ -90,7 +90,9 @@ describe("the voice block of the settings", () => {
 
     expect(markup.startsWith('<details class="field settings-voice">')).toBe(true);
     expect(markup).not.toContain("<details open");
-    expect(markup.match(/<details/g)).toHaveLength(1);
+    /* The voice block, and inside it the credits block (phase 13), both closed. */
+    expect(markup.match(/<details/g)).toHaveLength(2);
+    expect(markup).toContain('<details class="field settings-credits">');
   });
 
   it("says the model is missing, offers Install and keeps Verify off", () => {

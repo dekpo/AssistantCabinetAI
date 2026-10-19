@@ -7,6 +7,7 @@ import {
   saveSettings,
   type AppSettings,
   type AppSnapshot,
+  type ExplorerSettings,
   type PanelLayouts,
   type SpeechSettings,
 } from "../lib/ipc";
@@ -27,6 +28,10 @@ export interface AppSettingsState {
   /** The widths of the zones, saved at the end of a gesture. A convenience: a failure is not
    * reported anywhere, and nothing is saved when the layouts did not change. */
   saveLayout: (change: (current: PanelLayouts) => PanelLayouts) => Promise<void>;
+  /** One change to the explorer's remembered state (a folded list), applied to it as it stands when
+   * its turn comes: `update({ explorer })` would replace the block with a possibly stale copy. A
+   * convenience: a failure is not reported anywhere, and nothing is saved when nothing changed. */
+  saveExplorer: (change: (current: ExplorerSettings) => ExplorerSettings) => Promise<void>;
   /** One change to the nested `speech` settings, applied to them as they stand when its turn
    * comes: `update({ speech })` would replace the whole block with a possibly stale copy. A
    * failure is reported like `update`'s. */
@@ -90,6 +95,24 @@ export function useAppSettings(): AppSettingsState {
     [queue],
   );
 
+  const saveExplorer = useCallback(
+    async (change: (current: ExplorerSettings) => ExplorerSettings) => {
+      try {
+        await queue.update((current) => {
+          const next = change(current.explorer);
+          return next.density === current.explorer.density &&
+            next.documentsFolded === current.explorer.documentsFolded &&
+            next.tablesFolded === current.explorer.tablesFolded
+            ? null
+            : { explorer: next };
+        });
+      } catch {
+        // What is folded is a convenience: it is not worth a banner.
+      }
+    },
+    [queue],
+  );
+
   const saveSpeech = useCallback(
     async (change: (current: SpeechSettings) => SpeechSettings) => {
       setSaveError(null);
@@ -123,6 +146,7 @@ export function useAppSettings(): AppSettingsState {
     reload,
     update,
     saveLayout,
+    saveExplorer,
     saveSpeech,
     reset,
   };

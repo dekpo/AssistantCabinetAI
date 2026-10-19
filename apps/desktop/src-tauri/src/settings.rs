@@ -129,6 +129,58 @@ impl PanelLayouts {
     }
 }
 
+/// How tall one row of the file explorer is: about 24 px (`compact`, the default) or about 32 px
+/// (`comfortable`). Chosen in the Settings panel, never in the explorer itself.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExplorerDensity {
+    #[default]
+    Compact,
+    Comfortable,
+}
+
+/// What the file explorer remembers between launches: the density of its rows and whether each
+/// family's list is folded. A convenience of the interface, so a value that cannot be read falls back
+/// to its default, field by field, and never makes the settings file unreadable (as `layout`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplorerSettings {
+    pub density: ExplorerDensity,
+    /// The Documents family's list is folded: only its header shows. Open by default.
+    pub documents_folded: bool,
+    /// The Tables family's list is folded. Open by default.
+    pub tables_folded: bool,
+}
+
+impl ExplorerSettings {
+    /// Each field read on its own: anything that is not a recognised value is the default.
+    fn from_value(value: &serde_json::Value) -> Self {
+        let flag = |name: &str| {
+            value
+                .get(name)
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        };
+        Self {
+            density: match value.get("density").and_then(serde_json::Value::as_str) {
+                Some("comfortable") => ExplorerDensity::Comfortable,
+                _ => ExplorerDensity::Compact,
+            },
+            documents_folded: flag("documentsFolded"),
+            tables_folded: flag("tablesFolded"),
+        }
+    }
+}
+
+/// A hand-edited `explorer` block of any shape reads as the defaults rather than failing the file.
+fn lenient_explorer<'de, D>(deserializer: D) -> Result<ExplorerSettings, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(ExplorerSettings::from_value(&value))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -208,6 +260,9 @@ pub struct Settings {
     /// The remembered widths of the three zones of the window. A convenience of the interface: kept
     /// valid by `PanelLayouts::sanitised` on the way in and on the way out.
     pub layout: PanelLayouts,
+    /// The file explorer's row density and folded lists. Always readable: see `lenient_explorer`.
+    #[serde(deserialize_with = "lenient_explorer")]
+    pub explorer: ExplorerSettings,
     /// Local voice: dictation, read-aloud and voice notes. One nested field, kept valid by
     /// `SpeechSettings::sanitised` on the way in and on the way out (`docs/SPEECH.md`, section 4).
     pub speech: SpeechSettings,
@@ -239,6 +294,7 @@ impl Default for Settings {
             copy_sources: false,
             own_names: Vec::new(),
             layout: PanelLayouts::default(),
+            explorer: ExplorerSettings::default(),
             speech: SpeechSettings::default(),
         }
     }
@@ -511,6 +567,7 @@ mod tests {
                 open: Some([20.0, 40.0, 40.0]),
                 collapsed: Some([25.0, 0.0, 75.0]),
             },
+            explorer: ExplorerSettings::default(),
             speech: SpeechSettings {
                 enabled: true,
                 notes_folder_name: "Dictees".into(),
@@ -639,6 +696,62 @@ mod tests {
                 "{body}"
             );
         }
+    }
+
+    #[test]
+    fn a_file_without_explorer_settings_loads_compact_with_both_lists_open() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+
+        assert_eq!(settings.explorer, ExplorerSettings::default());
+        assert_eq!(settings.explorer.density, ExplorerDensity::Compact);
+        assert!(!settings.explorer.documents_folded);
+        assert!(!settings.explorer.tables_folded);
+    }
+
+    #[test]
+    fn the_explorer_settings_survive_a_round_trip_and_are_written_in_camel_case() {
+        let settings = Settings {
+            explorer: ExplorerSettings {
+                density: ExplorerDensity::Comfortable,
+                documents_folded: true,
+                tables_folded: false,
+            },
+            ..Settings::default()
+        };
+
+        let text = serde_json::to_string(&settings).expect("serialises");
+        let restored: Settings = serde_json::from_str(&text).expect("deserialises");
+
+        assert_eq!(restored.explorer, settings.explorer);
+        let json: serde_json::Value = serde_json::from_str(&text).expect("json");
+        assert_eq!(json["explorer"]["density"], "comfortable");
+        assert_eq!(json["explorer"]["documentsFolded"], true);
+        assert_eq!(json["explorer"]["tablesFolded"], false);
+    }
+
+    #[test]
+    fn a_hand_edited_explorer_block_falls_back_field_by_field_and_never_breaks_the_file() {
+        for body in [
+            r#"{"explorer":"compact"}"#,
+            r#"{"explorer":null}"#,
+            r#"{"explorer":[1,2]}"#,
+            r#"{"explorer":{}}"#,
+            r#"{"explorer":{"density":"huge","documentsFolded":"yes","tablesFolded":7}}"#,
+            r#"{"explorer":{"density":3,"documentsFolded":null}}"#,
+        ] {
+            let settings: Settings = serde_json::from_str(body).expect(body);
+            assert_eq!(settings.explorer, ExplorerSettings::default(), "{body}");
+        }
+
+        // A usable field survives next to an unusable one.
+        let mixed: Settings = serde_json::from_str(
+            r#"{"explorer":{"density":"comfortable","documentsFolded":"x","tablesFolded":true}}"#,
+        )
+        .expect("loads");
+        assert_eq!(mixed.explorer.density, ExplorerDensity::Comfortable);
+        assert!(!mixed.explorer.documents_folded);
+        assert!(mixed.explorer.tables_folded);
     }
 
     #[test]

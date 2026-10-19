@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
-import type { AppSettings, KnowledgeMode, SpeechSettings, ThemeChoice } from "../lib/ipc";
+import type {
+  AppSettings,
+  ExplorerDensity,
+  KnowledgeMode,
+  SpeechSettings,
+  ThemeChoice,
+} from "../lib/ipc";
 import {
   boundedNumber,
   fractionFromPercentDraft,
@@ -24,6 +30,7 @@ import { WorkFolderCard } from "./WorkFolderCard";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
 const KNOWLEDGE_MODES: KnowledgeMode[] = ["off", "suggest", "auto"];
+const DENSITY_CHOICES: ExplorerDensity[] = ["compact", "comfortable"];
 
 /* The same bounds Rust clamps to, so the control offers only what will actually be stored. They
    are duplicated rather than fetched because a number input needs them before anything is saved;
@@ -47,6 +54,8 @@ export function SettingsDialog({
   indexing,
   dataIndexing,
   onUpdate,
+  onWorkFolderChosen,
+  onSaveExplorer,
   onSaveSpeech,
   onReset,
   onRestoreLayout,
@@ -64,6 +73,10 @@ export function SettingsDialog({
   /** The Data Folder's pass, the same one its sidebar card starts. */
   dataIndexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
+  /** A Documents folder was chosen: the notes of the folder that is left are looked after first. */
+  onWorkFolderChosen: (path: string) => void;
+  /** One change to the nested explorer settings, applied to them as they stand when its turn comes. */
+  onSaveExplorer: (change: (current: AppSettings["explorer"]) => AppSettings["explorer"]) => void;
   /** One change to the nested voice settings, applied to them as they stand when its turn comes. */
   onSaveSpeech: (change: (current: SpeechSettings) => SpeechSettings) => void;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure.
@@ -121,6 +134,11 @@ export function SettingsDialog({
     system: t("settings.themeSystem"),
   };
 
+  const densityLabels: Record<ExplorerDensity, string> = {
+    compact: t("settings.explorerDensityCompact"),
+    comfortable: t("settings.explorerDensityComfortable"),
+  };
+
   return (
     <div className="dialog" role="dialog" aria-label={t("settings.title")}>
       <header className="dialog__header">
@@ -141,6 +159,27 @@ export function SettingsDialog({
             {THEME_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
                 {themeLabels[choice]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span className="field__label">{t("settings.explorerDensityLabel")}</span>
+          <span className="field__description">{t("settings.explorerDensityDescription")}</span>
+          <select
+            className="field__control"
+            value={settings.explorer.density}
+            onChange={(event) => {
+              /* Read now: the change is applied later, in the settings queue, when a controlled
+                 select has already gone back to the value it still holds. */
+              const density = event.target.value as ExplorerDensity;
+              onSaveExplorer((current) => ({ ...current, density }));
+            }}
+          >
+            {DENSITY_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {densityLabels[choice]}
               </option>
             ))}
           </select>
@@ -456,7 +495,7 @@ export function SettingsDialog({
         <WorkFolderCard
           workFolder={settings.workFolder}
           suggestedWorkFolder={suggestedWorkFolder}
-          onChosen={(path) => onUpdate({ workFolder: path })}
+          onChosen={onWorkFolderChosen}
           indexing={indexing}
           onOpenKnowledge={onOpenKnowledge}
         />

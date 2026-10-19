@@ -18,7 +18,9 @@ import { WorkspacePanel, type CentreNotes, type TabActions } from "./WorkspacePa
 /* Pixels, not percentages: below these the content of the zone stops being usable (the two folder
    cards, a readable page, the model selector beside the composer). A number is pixels and a string
    is a percentage in this library's v4 API. */
-const RESOURCES_MIN_PX = 240;
+/* 320: the explorer's family header (icon, name and counters, Analyser, fold) is one line and never
+   wraps, and it needs this much. */
+const RESOURCES_MIN_PX = 320;
 const WORKSPACE_MIN_PX = 320;
 const CHAT_MIN_PX = 340;
 

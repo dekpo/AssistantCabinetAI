@@ -5,7 +5,7 @@ import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { shownFiles } from "../lib/finderField";
 import { normaliseError, type AppError } from "../lib/errors";
 import { abbreviateFolderPath } from "../lib/folderPath";
-import { knowledgeLines } from "../lib/knowledgeSummary";
+import { dataPassLines } from "../lib/passSummary";
 import {
   chooseDataFolder,
   dataFolderInventory,
@@ -39,9 +39,6 @@ import { WarningGlyph } from "./WarningGlyph";
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. Rust's
  * `choose_data_folder` returns the same code as the Documents Folder dialog. */
 const CANCELLED = "work_folder_selection_cancelled";
-
-/** Renames listed one by one under the analysis summary; the rest are counted. */
-const MAX_RENAMES_LISTED = 5;
 
 /**
  * The Data Folder's card: the Documents Folder card, cloned (`docs/SESSION-DATA-05-TABULAR-UI.md`
@@ -140,61 +137,9 @@ export function DataFolderCard({
     }
   }, [finishedPasses, refreshInventory]);
 
-  /* What the last pass did. It opens with how many spreadsheets were read and where, because the
-     pass is over in a moment - without that line, an Analyse that finishes before the spinner is
-     seen reads as a button that did nothing. */
+  /* What the last pass did (`lib/passSummary.ts`, shared with the explorer). */
   const summary = indexing.summary;
-  const passLines =
-    summary === null
-      ? []
-      : [
-          t("dataFolder.passDone", {
-            count: counted(
-              summary.scannedFiles,
-              t("dataFolder.spreadsheetOne"),
-              t("dataFolder.spreadsheetMany"),
-            ),
-          }),
-          ...(summary.removedFiles.length > 0
-            ? [
-                `${counted(
-                  summary.removedFiles.length,
-                  t("dataFolder.removedOne"),
-                  t("dataFolder.removedMany"),
-                )}.`,
-              ]
-            : []),
-          ...(summary.renamedFiles.length > 0
-            ? [
-                `${counted(
-                  summary.renamedFiles.length,
-                  t("workFolder.renamedOne"),
-                  t("workFolder.renamedMany"),
-                )}.`,
-                ...summary.renamedFiles
-                  .slice(0, MAX_RENAMES_LISTED)
-                  .map(({ from, to }) => t("workFolder.renamedItem", { from, to })),
-                ...(summary.renamedFiles.length > MAX_RENAMES_LISTED
-                  ? [
-                      t("workFolder.renamedMore", {
-                        count: summary.renamedFiles.length - MAX_RENAMES_LISTED,
-                      }),
-                    ]
-                  : []),
-              ]
-            : []),
-          ...(summary.renameFailedFiles.length > 0
-            ? [
-                `${counted(
-                  summary.renameFailedFiles.length,
-                  t("workFolder.renameFailedOne"),
-                  t("workFolder.renameFailedMany"),
-                )}.`,
-              ]
-            : []),
-          /* What the knowledge base read in the tables, counts only. */
-          ...knowledgeLines(t, summary.knowledge, "data"),
-        ];
+  const passLines = dataPassLines(t, summary);
 
   const passSummary =
     passLines.length === 0 ? null : (

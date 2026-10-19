@@ -19,11 +19,14 @@ export function AnalyseButton({
   indexing,
   emphasised,
   pendingCount,
+  title,
 }: {
   indexing: IndexingState;
   emphasised: boolean;
   /** How many files the pass would still change. Shown only while it is worth acting on. */
   pendingCount: number;
+  /** A tooltip, when the count needs a word of explanation. */
+  title?: string;
 }) {
   const { t } = useTranslation();
 
@@ -35,6 +38,7 @@ export function AnalyseButton({
           ? "button button--compact button--primary work-folder__analyse"
           : "button button--compact work-folder__analyse"
       }
+      title={title}
       disabled={indexing.running}
       onClick={() => void indexing.run()}
     >

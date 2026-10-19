@@ -22,7 +22,7 @@ Reference: [Tauri 2](https://v2.tauri.app/start/), [webview versions](https://v2
 
 One window, one product:
 
-- **left (Resources):** the documents folder, then the data folder (files);
+- **left (Resources):** one file explorer: the two families of files, Documents then Tables (see "The left panel" below);
 - **centre (Workspace):** an extensible zone, closed unless something is shown in it (see "Layout" below);
 - **right:** chat, the proposed plan, and Approve / Cancel;
 - **top:** Assistant Cabinet AI;
@@ -31,9 +31,9 @@ One window, one product:
 ### Layout
 
 The three zones sit in one `react-resizable-panels` v4 group (`Group`, `Panel`, `Separator`; a number is pixels,
-a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 240 (the cards need it),
-Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 1000 (240 + 320 + 340, two
-separators and the padding come to about 960). Each zone scrolls inside itself.
+a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 320 (the explorer's family header is one line and never wraps),
+Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 1080 (320 + 320 + 340, two
+separators and the padding come to about 1040). Each zone scrolls inside itself.
 
 **The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
 a discriminated union with two kinds today, `welcome` and `files` (a list of tabs, see "The document viewer")) and passes
@@ -231,6 +231,48 @@ back to one sans font; Chinese, Cyrillic, Arabic and every script outside the La
 binary formats (`doc xls ppt`) are not shown and not converted. An EML shows its raw source, bodies still
 encoded. The PPTX renderer puts one letter per line on the tested files, and the XLSX one truncates long values
 in narrow columns (`10/1/202`): both are the library's, not the application's.
+
+### The left panel: one file explorer (explorer programme, step 2, 19 October 2026)
+
+The two folder cards of the sidebar are replaced by one compact box, `FileExplorer`
+(`src/components/FileExplorer.tsx`). The two physical folders and the two analysis pipelines are unchanged; only
+the way they are shown is. Decisions: `docs/DECISIONS.md`, "Settled by the owner: the left panel becomes one file
+explorer" and "... the explorer's layout, first start, progress and centre". Plan: `docs/SESSION-EXPLORER/` (git-ignored).
+
+- **Two families, sorted by extension** (`lib/explorerModel.ts`, `familyOf`): **Documents** (`pdf docx txt md jpg jpeg
+  png vtt srt rtf eml odt odp pptx`, the document pipeline's list) and **Tables** (`csv xlsx xls xlsm ods`). A file no
+  pipeline reads is set apart and **not listed**: the bottom bar says how many there are. No new inventory command: the box
+  merges the two existing reports (`work_folder_inventory`, `data_folder_inventory`), which already list every file
+  of their folder (`docs/WORK-FOLDER-INVENTORY.md`, "The merged view").
+- **One definition of the states for the screen:** analysed (filled disc), to analyse (hollow ring: not analysed yet,
+  **or changed since**, or being analysed), unreadable (triangle). The shape carries the state, the colour repeats it, and
+  every glyph has a text for screen readers (`StateGlyph`, a small SVG component; no emoji, no text character).
+- **A file of the other family** (a workbook in the Documents folder, a document in the Data folder) is shown under its
+  family with a tag « depuis Docs » / « depuis Data », is always « to analyse », cannot be ticked, opened or revealed,
+  and is **not counted** by its family's **Analyser (n)**; the button's tooltip says so. Analysing it in place is a later step.
+- **Per family:** a two-line header (the family's folder icon, its name, the three counters; **Analyser (n)**; a fold
+  button), the existing progress line and Stop while a pass runs (Stop exists for the documents' pass only, as before), and
+  a flat list with **its own scroll bar**. The folder's path is the header's tooltip. A **Dernière analyse** disclosure under the
+  header carries the lines the cards showed after a pass (`lib/passSummary.ts`, shared with the cards of the
+  Settings panel); it opens by itself when a file failed. Until the explorer has its own menu, **choosing, changing or clearing
+  a folder is done in the Settings panel**, which still draws the two old cards untouched.
+- **Height budget** (`lib/explorerWindow.ts`): both lists open, six rows each; one open, twelve; both folded, the headers
+  alone. A short list is not padded. Rows have a **fixed height** (24 px `compact`, 32 px `comfortable`), so a **hand-written
+  window** draws only the rows in view plus four above and below, the rest being padding: a thousand files are about
+  a dozen rows. Keyboard: the scroll area takes the focus when it scrolls, and the arrow keys scroll it; Tab walks the rows drawn.
+- **Remembered across launches** (settings file, `settings.json`, key `explorer`): `density` (`compact` default, `comfortable`),
+  `documentsFolded`, `tablesFolded` (open by default). Rust reads each field **leniently** (`ExplorerSettings`, a corrupted
+  value is the default, the file never becomes unreadable); the density is chosen in the **Settings panel**, never in the box.
+  The folds are written through `saveExplorer`, in the settings queue.
+- **Search and selection.** One field. The finder works per folder, so the same text is asked of each and the two answers
+  are joined by `(folder, path)`; a search that fails shows everything and says so. The search only filters the view and
+  never changes the selection. The segmented control **Tout / Documents / Tableaux** filters the lists and shows counts
+  (computed on the search results). The **bottom bar** says « Utilisés : n doc. · n tab. », offers **Cocher les N** (adds the
+  analysed files the view shows, both folders, with `addScopeFiles` through the existing rules) and **Décocher**, and a
+  second line only when there is something to say (nothing used, a whole family used, files of unread formats). The scope
+  state (`scope`, `dataScope`, `combineScopes`) and the chat contract are unchanged.
+- **Not built yet** (later steps): the filter panel (the « Filtres » button and the « Vues » switch are drawn and disabled),
+  first start, empty folders, the « ⋯ » menu, the left-zone width, the gauge, « Select. auto ».
 
 ## The work folder
 

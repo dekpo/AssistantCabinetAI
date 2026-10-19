@@ -9,9 +9,8 @@ import {
 } from "../lib/analysis";
 import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { shownFiles } from "../lib/finderField";
-import { errorMessage, normaliseError, type AppError } from "../lib/errors";
-import { knowledgeLines } from "../lib/knowledgeSummary";
-import { unreadFormatsLines } from "../lib/unreadFormats";
+import { normaliseError, type AppError } from "../lib/errors";
+import { documentPassLines } from "../lib/passSummary";
 import {
   cancelAnalysis,
   chooseWorkFolder,
@@ -47,20 +46,6 @@ import { WarningGlyph } from "./WarningGlyph";
 
 /** Closing the dialog without choosing is not a failure, so it is not reported as one. */
 const CANCELLED = "work_folder_selection_cancelled";
-
-/** The machine codes a pass can report, and the sentence each one deserves. A code we do not
-    recognise is dropped rather than shown raw: Rust names capabilities, this file names them in
-    her language (`docs/LANGUAGE-AND-LOCALE.md`). */
-const CAPABILITY_KEYS: Record<string, string> = {
-  ocrEngine: "workFolder.ocrEngineUnavailable",
-  pageRasterizer: "workFolder.pageRasterizerUnavailable",
-};
-
-/** Renames listed one by one under the analysis summary; the rest are counted. */
-const MAX_RENAMES_LISTED = 5;
-
-/** Documents that could not be analysed, listed with their reason; the rest are counted. */
-const MAX_FAILED_LISTED = 5;
 
 export function WorkFolderCard({
   workFolder,
@@ -189,123 +174,10 @@ export function WorkFolderCard({
     }
   }, [refreshToken, refreshInventory]);
 
-  /* What the last pass did, beyond the counts the line under the buttons already gives. One
-     paragraph of short lines rather than several paragraphs: it is one fact about one pass, and a
-     blank line between the parts made it read as separate announcements. It lives inside the disclosure, above the listing it describes. */
-  const passLines =
-    indexing.summary === null
-      ? []
-      : [
-          /* First, because it is the one line that asks her to do something: a document that is
-             not analysed cannot answer a question, and the reason differs from file to file. */
-          ...(indexing.summary.failedFiles.length > 0
-            ? [
-                `${counted(
-                  indexing.summary.failedFiles.length,
-                  t("workFolder.failedOne"),
-                  t("workFolder.failedMany"),
-                )}.`,
-                ...indexing.summary.failedFiles.slice(0, MAX_FAILED_LISTED).map(
-                  ({ path, code, data }) =>
-                    t("workFolder.failedItem", {
-                      path,
-                      reason: errorMessage(t, normaliseError({ code, data })),
-                    }),
-                ),
-                ...(indexing.summary.failedFiles.length > MAX_FAILED_LISTED
-                  ? [
-                      t("workFolder.failedMore", {
-                        count: indexing.summary.failedFiles.length - MAX_FAILED_LISTED,
-                      }),
-                    ]
-                  : []),
-              ]
-            : []),
-          ...(indexing.summary.ocrFiles.length > 0
-            ? [
-                `${counted(
-                  indexing.summary.ocrFiles.length,
-                  t("workFolder.ocrOne"),
-                  t("workFolder.ocrMany"),
-                )}.`,
-              ]
-            : []),
-          ...(indexing.summary.removedFiles.length > 0
-            ? [
-                `${counted(
-                  indexing.summary.removedFiles.length,
-                  t("workFolder.removedOne"),
-                  t("workFolder.removedMany"),
-                )}.`,
-              ]
-            : []),
-          /* Her files were renamed, so say which, old name and new. A count alone would hide the
-             one thing she may need to look for. */
-          ...(indexing.summary.renamedFiles.length > 0
-            ? [
-                `${counted(
-                  indexing.summary.renamedFiles.length,
-                  t("workFolder.renamedOne"),
-                  t("workFolder.renamedMany"),
-                )}.`,
-                ...indexing.summary.renamedFiles
-                  .slice(0, MAX_RENAMES_LISTED)
-                  .map(({ from, to }) => t("workFolder.renamedItem", { from, to })),
-                ...(indexing.summary.renamedFiles.length > MAX_RENAMES_LISTED
-                  ? [
-                      t("workFolder.renamedMore", {
-                        count: indexing.summary.renamedFiles.length - MAX_RENAMES_LISTED,
-                      }),
-                    ]
-                  : []),
-              ]
-            : []),
-          ...(indexing.summary.renameFailedFiles.length > 0
-            ? [
-                `${counted(
-                  indexing.summary.renameFailedFiles.length,
-                  t("workFolder.renameFailedOne"),
-                  t("workFolder.renameFailedMany"),
-                )}.`,
-              ]
-            : []),
-          ...(indexing.summary.lowConfidenceFiles.length > 0
-            ? [
-                `${counted(
-                  indexing.summary.lowConfidenceFiles.length,
-                  t("workFolder.lowConfidenceOne"),
-                  t("workFolder.lowConfidenceMany"),
-                )}.`,
-              ]
-            : []),
-          /* Files in a format nothing in the product reads: said, so that an answer drawn from the
-             others is never mistaken for an answer drawn from the whole folder. */
-          ...unreadFormatsLines(t, indexing.summary.unreadFormats),
-          /* A pass the user stopped, or one the server did not finish: what was read is kept, the
-             word search already works on all of it, and the next pass goes on from there. */
-          ...(indexing.summary.cancelled === true
-            ? [t("workFolder.summaryStopped")]
-            : (indexing.summary.vectorsPending ?? 0) > 0
-              ? [
-                  t("workFolder.summaryMeaningPartial", {
-                    percent: Math.floor(
-                      (100 * Math.max(0, indexing.summary.chunkCount - (indexing.summary.vectorsPending ?? 0))) /
-                        Math.max(1, indexing.summary.chunkCount),
-                    ),
-                  }),
-                ]
-              : []),
-          /* What the knowledge base did with the names, counts only. The line that asks her to act
-             (a document whose names were not recorded) comes first among them. */
-          ...knowledgeLines(t, indexing.summary.knowledge),
-          /* Last, and only when something is actually missing: a scan reported unreadable
-             because an engine did not start is not the document's fault, and saying so is the
-             difference between a five-second diagnosis and an investigation. */
-          ...indexing.summary.unavailableCapabilities
-            .map((code) => CAPABILITY_KEYS[code])
-            .filter((key): key is string => key !== undefined)
-            .map((key) => t(key)),
-        ];
+  /* What the last pass did, beyond the counts the line under the buttons already gives: one
+     paragraph of short lines (`lib/passSummary.ts`, shared with the explorer). It lives inside the
+     disclosure, above the listing it describes. */
+  const passLines = documentPassLines(t, indexing.summary);
 
   const passSummary =
     passLines.length === 0 ? null : (

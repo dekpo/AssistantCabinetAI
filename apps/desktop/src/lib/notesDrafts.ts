@@ -176,6 +176,6 @@ export function guardExit(
     case "close-window":
     case "disable-notes":
     case "reset-settings":
-      return hasUnsaved(state) ? "ask" : "allow";
+      return hasUnsaved(state) || context.recording === true ? "ask" : "allow";
   }
 }

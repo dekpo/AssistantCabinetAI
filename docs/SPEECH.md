@@ -306,14 +306,35 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   input level while recording, elapsed time, "click again to finish"); a save block under the text: name field (the
   placeholder shows the timestamp), format select (.md default, .txt), Save. A switcher for several drafts and a "new note"
   button. The pane works at the 320 px minimum.
-- **Dictation into a note** (phase 12): an energy-based segmenter cuts on a silence of about 0.7 s once a segment is at least
+- **Dictation into a note** (phase 12): an energy-based segmenter cuts on a silence of about 1.2 s (0.7 s put full stops in the middle of sentences: the engine closes every passage with one; human test of 19 Oct 2026) once a segment is at least
   about 1.5 s, with a hard cap about 25 s at the quietest frame (a latency device, not an engine limit: SpeechLab saw no Parakeet
   failure up to 45.8 s of audio); segments are transcribed in order through a serial queue while she keeps speaking; Stop
   finishes the queue, Cancel discards it. The model stays loaded between segments, so a 30 min note holds 1.6 to 1.9 GB
   resident for its whole length (measured, Parakeet).
+  **Built as follows.** `audio/segmenter.ts` (pure: blocks in, passages out; named constants for the 1.5 s minimum, the 1.2 s
+  silence, the 25 s cap, a 0.25 s pre-roll, a 0.2 s minimum of speech and a noise-following speech threshold; every sample of a
+  passage that holds speech is kept, a passage with no speech is dropped). `AudioCapture.start` gained an `onBlock` option
+  (streaming mode: the capture keeps nothing). `speech/longDictation.ts` is the state machine (no React, no Tauri): ordered
+  serial queue, "N passages waiting", Stop finishes the queue, Cancel discards it and stops the engine, a failed passage is
+  reported by its position (a passage the engine finds too short or too quiet is silence, not a failure), the cap
+  `maxNoteSeconds` stops the recording a second before the length Rust accepts. `speech/useLongDictation.ts` holds it for the
+  window, in `App` (so the Notes pane may unmount without touching a recording), and hands the text to the note through
+  `speech/noteText.ts` (`appendToNote`: blank, line break and mark rules, where the words land for the name suggestions).
+  A recording and the composer dictation exclude each other through the voice session (`notes` owner).
 - **Voice commands** (`notesVoiceCommands`): punctuation words, "title" -> `# `, "subtitle" -> `## `, new line, new paragraph,
   new note. A title runs to the end of the sentence, a new-line command, or a pause. Command words are data in
   `dictation_commands` of the locale pack; matching is on folded text (accents and case).
+  **Built as follows.** `speech/dictation_commands.rs` (`apply`, pure) and the command `speech_apply_dictation_commands(text,
+  pendingHeading)`, which reads the setting and the dictation language from the settings (the window names neither). Rule pack
+  format: `dictation_commands.commands[]`, each `{ say: [phrases], kind: mark | heading | line | paragraph | note, ... }`
+  (a mark has `text`, `attach` previous / next / both / neither and `capitalise_next`; a heading has `level`). Longest phrase
+  first, whole words only, a hyphen in a phrase is a blank. A mark replaces the engine's own punctuation at that place (never
+  doubled) and a full stop, question mark or exclamation mark starts the next word with a capital. A title runs to the end of the
+  sentence (its closing full stop is dropped), to a new-line command or to the end of the passage; a heading command with
+  nothing after it stays open and the window hands it back with the next passage. "New note" cuts the passage in two (the
+  window opens a new draft only after one that holds something). "New line" is a Markdown hard break (two blanks, then the
+  newline) because a single newline is not drawn by the preview; "new paragraph" is a blank line. Line breaks may open or
+  close a text; `appendToNote` joins them to the note's own. A language whose pack has no commands, or the setting off, gives the passage back as it is.
 - **Saving** (phase 10): `notes_preview(drafts)` lists the exact files and editable names, then `notes_save(drafts)` writes
   them, in `<documents folder>/<notesFolderName>`: file name = local timestamp (`2026-10-18_14-32-05`) then `-` and the
   user's sanitised name (ASCII, no spaces or accents), auto-numbered `-2`, `-3`, **never overwritten**; `.md` by default or `.txt`;
@@ -331,7 +352,10 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   waits for the user before an unsaved note can be lost: choosing another folder, the window close request, turning
   `notesEnabled` or the voice master switch off, "Reset" in Settings, and the explicit Discard; hiding the zone while a
   recording is running asks first (hiding unmounts the pane and would destroy the recording), otherwise it keeps the
-  drafts. Switching section is never an exit path. One pure function (`lib/notesDrafts.ts`) decides "allow" or "ask".
+  drafts. Switching section is never an exit path. One pure function (`lib/notesDrafts.ts`) decides "allow" or "ask"; a
+  recording makes every exit that unmounts the pane ask (hide the zone, choose another folder, the window close request,
+  Notes off, Reset), and the answer ends it. Dragging the separator closed cannot be intercepted (the zone is already shut when
+  `App` hears of it): it ends the recording at once, and the words already written stay in their note.
   Quitting on macOS (menu, Cmd+Q) does not emit the window close request: phase 14 owns it.
 - **D14.** The Notes folder is inside the Documents folder, so the next Analyse reads, embeds (through the practice server
   on the local network) and profiles the notes like any document. The rule "audio and transcripts never cross the network"
@@ -509,15 +533,15 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 |---|---|---|
 | Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio` | 3 |
 | No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`; the offline proof at the gate | 3, 3b, 13 |
-| A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear) | 5 |
+| A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear); `longDictationSources.test.ts`, "a long dictation only fills the note" (no send, no save, no analyse) | 5, 12 |
 | Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
 | Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `with_the_knowledge_base_off_there_is_nothing_to_repair`, `the_command_answers_before_it_opens_the_index_when_the_base_is_off`, `hidden_names_reach_the_window_as_a_count_only` (all in `tests/speech_repair.rs`), `repairSources.test.ts` | 6 |
 | No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text` | 3, 5, 10 |
 | Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |
 | Any failure degrades to the typed app | `missing_engine_reports_unavailable_and_typed_app_still_works` | 2, 3 |
-| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, `dictation.test.ts`, "cancelling a dictation, at every stage" | 3b, 5 |
-| One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests | 3, 4 |
+| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, `dictation.test.ts`, "cancelling a dictation, at every stage"; `longDictation.test.ts`, "cancelling" (permission, recording, queue, finishing) | 3b, 5, 12 |
+| One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests; `longDictation.test.ts`, "runs one job at a time, in the order the passages were cut" | 3, 4, 12 |
 | Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it` | 3b |
 | Nothing heavy at launch | `launch_starts_no_speech_work` | 2 |
 | Voice off changes nothing (D13) | `voice_off_leaves_the_existing_components_unchanged` (baseline render tests written before the first edit of phase 2) | 2, 11 |

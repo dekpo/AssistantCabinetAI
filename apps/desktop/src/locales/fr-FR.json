@@ -56,6 +56,7 @@
       }
     },
     "unsaved": {
+      "recording": "La dictée en cours sera aussi arrêtée.",
       "title": "Note non enregistrée",
       "bodyOne": "Une note n'est pas enregistrée.\nSi vous continuez, elle sera perdue.",
       "bodyMany": "{count} notes ne sont pas enregistrées.\nSi vous continuez, elles seront perdues.",
@@ -71,6 +72,19 @@
       "start": "Dicter",
       "finish": "Terminer la dictée",
       "hint": "Cliquez à nouveau pour terminer"
+    },
+    "dictation": {
+      "waitingOne": "1 passage en attente d'écriture",
+      "waitingMany": "{count} passages en attente d'écriture",
+      "discard": "Abandonner la dictée",
+      "capReached": "La dictée s'est arrêtée à la durée maximale. Les mots entendus sont dans la note.",
+      "failedOne": "Le passage {positions} n'a pas pu être transcrit : ses mots manquent dans la note.",
+      "failedMany": "Les passages {positions} n'ont pas pu être transcrits : leurs mots manquent dans la note."
+    },
+    "recording": {
+      "title": "Dictée en cours",
+      "body": "Une dictée est en cours.\nSi vous continuez, elle sera arrêtée et les mots pas encore écrits seront perdus.",
+      "stop": "Arrêter et abandonner"
     }
   },
   "viewer": {

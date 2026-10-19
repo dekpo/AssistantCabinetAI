@@ -164,10 +164,10 @@ fn a_locale_without_a_pack_answers_speech_locale_unsupported() {
 
 #[test]
 fn a_pack_ignores_the_keys_it_does_not_know() {
-    // Phase 12 adds the dictation commands to the same files.
+    // The dictation commands of phase 12 are a typed key now (`tests/speech_dictation_commands.rs`);
+    // a section this version does not know stays ignored.
     let body = fs::read_to_string(manifest().join("resources/speech/rules/en-US.json")).unwrap();
     let mut value: serde_json::Value = serde_json::from_str(&body).unwrap();
-    value["dictation_commands"] = serde_json::json!({ "new line": "\n" });
     value["a_future_section"] = serde_json::json!([1, 2, 3]);
     let parsed: Rules = serde_json::from_value(value).expect("unknown keys are ignored");
     assert_eq!(parsed.locale, "en-US");

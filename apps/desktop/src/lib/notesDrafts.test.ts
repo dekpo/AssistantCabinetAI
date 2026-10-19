@@ -175,6 +175,19 @@ describe("every way out of the Notes section goes through guardExit", () => {
     expect(guardExit(initialNotes(), { kind: "hide-zone" }, { recording: true })).toBe("ask");
   });
 
+  it("asks before every way out that would end a recording, even with no note to lose", () => {
+    for (const exit of [
+      { kind: "hide-zone" },
+      { kind: "change-folder" },
+      { kind: "close-window" },
+      { kind: "disable-notes" },
+      { kind: "reset-settings" },
+    ] satisfies NotesExit[]) {
+      expect(guardExit(initialNotes(), exit, { recording: true }), exit.kind).toBe("ask");
+      expect(guardExit(initialNotes(), exit, { recording: false }), exit.kind).toBe("allow");
+    }
+  });
+
   it("asks about discarding one note only when that note has text", () => {
     const state = addDraft(withText("un"));
 

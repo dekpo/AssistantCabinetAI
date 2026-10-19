@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -10,8 +11,9 @@ import { TitleBar } from "../TitleBar";
 import { WorkspacePanel } from "../WorkspacePanel";
 import { createViewStateStore } from "../../lib/viewState";
 import { CentreSwitch } from "./CentreSwitch";
-import { AnalysisChoiceDialog, UnsavedNoteDialog } from "./NotesDialogs";
+import { AnalysisChoiceDialog, RecordingDialog, UnsavedNoteDialog } from "./NotesDialogs";
 import { DictationPill } from "./DictationPill";
+import type { NotesDictation } from "./LiveDictation";
 import { NotesPanel, type NotesActions, type NotesBundle } from "./NotesPanel";
 
 /* Drawn to static markup with the real catalogues, as in `render.test.ts`: nothing is clicked, so
@@ -203,11 +205,27 @@ describe("the Notes section", () => {
   });
 });
 
+const LIVE: NotesDictation = {
+  phase: "idle",
+  recording: false,
+  disabled: false,
+  reasonKey: null,
+  level: { get: () => 0, subscribe: () => () => {} },
+  startedAt: null,
+  waiting: 0,
+  failed: [],
+  error: null,
+  capReached: false,
+  onToggle: () => {},
+  onCancel: () => {},
+  onDismiss: () => {},
+};
+
 describe("the dictation pill", () => {
   const dictation = { recording: false, level: 0, elapsedMs: 0, onToggle: () => {} };
 
   it("is drawn only when dictation is handed to the panel", () => {
-    expect(panel(snapshotOf([]), { dictation })).toContain("pill__button");
+    expect(panel(snapshotOf([]), { dictation: LIVE })).toContain("pill__button");
     expect(panel(snapshotOf([]), { dictation: null })).not.toContain("pill");
   });
 
@@ -399,5 +417,103 @@ describe("the title bar", () => {
     );
 
     expect(html).toContain('aria-pressed="true" aria-label="Notes"');
+  });
+});
+
+describe("the line under the note while dictating", () => {
+  it("says nothing at rest", () => {
+    const html = panel(snapshotOf(["Bonjour"]), { dictation: LIVE });
+
+    expect(html).not.toContain("notes__dictation\"><p");
+    expect(html).not.toContain("Discard the recording");
+  });
+
+  it("shows the waveform while recording, and the way out", () => {
+    const html = panel(snapshotOf(["Bonjour"]), {
+      dictation: { ...LIVE, phase: "recording", recording: true, startedAt: 1 },
+    });
+
+    expect(html).toContain("pill__bars");
+    expect(html).toContain("Discard the recording");
+    expect(html).not.toContain("waiting to be written");
+  });
+
+  it("counts the passages waiting, in the singular and the plural", () => {
+    const one = panel(snapshotOf(["Bonjour"]), {
+      dictation: { ...LIVE, phase: "finishing", waiting: 1 },
+    });
+    const many = panel(snapshotOf(["Bonjour"]), {
+      dictation: { ...LIVE, phase: "finishing", waiting: 3 },
+    });
+
+    expect(one).toContain("1 passage waiting to be written");
+    expect(many).toContain("3 passages waiting to be written");
+  });
+
+  it("locks the save and the note buttons while it goes on", () => {
+    const html = panel(snapshotOf(["Bonjour"]), {
+      dictation: { ...LIVE, phase: "recording", recording: true, startedAt: 1 },
+    });
+    const save = /<button[^>]*>Save this note<\/button>/.exec(html)?.[0] ?? "";
+
+    expect(save).toContain("disabled");
+  });
+
+  it("reports the failed passages by position and the length cap, with a way to close", () => {
+    const html = panel(snapshotOf(["Bonjour"]), {
+      dictation: { ...LIVE, failed: [2, 5], capReached: true },
+    });
+
+    expect(html).toContain("Passages 2, 5 could not be transcribed");
+    expect(html).toContain("stopped at the length limit");
+    expect(html).toContain("Close");
+  });
+
+  it("says why the pill cannot be used", () => {
+    const html = panel(snapshotOf([]), {
+      dictation: { ...LIVE, disabled: true, reasonKey: "speech.session.microphoneBusy" },
+    });
+
+    expect(html).toContain("microphone is already in use");
+  });
+});
+
+describe("the question before notes are lost while a dictation runs", () => {
+  const noop = () => {};
+
+  it("says that the dictation is stopped too, and only then", () => {
+    const quiet = page(
+      createElement(UnsavedNoteDialog, { count: 2, onReview: noop, onDiscard: noop, onCancel: noop }),
+    );
+    const live = page(
+      createElement(UnsavedNoteDialog, {
+        count: 2,
+        recording: true,
+        onReview: noop,
+        onDiscard: noop,
+        onCancel: noop,
+      }),
+    );
+
+    expect(quiet).not.toContain("dictation in progress");
+    expect(live).toContain("2 notes have not been saved.");
+    expect(live).toContain("The dictation in progress is stopped too.");
+  });
+
+  it("is replaced by the recording question when hiding the zone, which keeps the notes", () => {
+    const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+
+    expect(app).toContain('leaving.exit.kind === "hide-zone" ||');
+    expect(app).toContain("recording={dictationActive}");
+  });
+});
+
+describe("the question before a recording is lost", () => {
+  it("offers to keep recording or to stop and discard", () => {
+    const html = page(createElement(RecordingDialog, { onStop: () => {}, onCancel: () => {} }));
+
+    expect(html).toContain("Recording in progress");
+    expect(html).toContain("Stop and discard");
+    expect(html).toContain("Cancel");
   });
 });

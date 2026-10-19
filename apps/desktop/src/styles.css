@@ -2599,6 +2599,17 @@ body {
   font-size: 12px;
 }
 
+/* What goes on under the note while it is dictated: the queue, the way out, the last notice. */
+.notes__dictation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notes__dictation:empty {
+  display: none;
+}
+
 /* The dictation pill: dark in both themes, centred at the bottom of the note. */
 .pill {
   position: absolute;

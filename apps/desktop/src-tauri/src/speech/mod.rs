@@ -24,6 +24,8 @@
 //!   idle delay and kills it on a cancel; the console window module owns the one platform detail.
 //! * [`repair`]: shapes the name suggestions that follow a dictation (read only, selection only, names
 //!   withheld while the setting hides them) over `knowledge::repair`.
+//! * [`dictation_commands`]: the spoken commands of a note dictation (punctuation, title, new line, new
+//!   note), applied by code to a transcribed passage; the words are data in the rule packs.
 //! * [`models`], [`model_download`]: the compiled-in manifest of the models, what is on disk, and the
 //!   one file of the module that touches the network, on an explicit user action only.
 //! * [`speakable`] and its `speakable_*` files: turns an answer into segments a voice can speak,
@@ -32,6 +34,7 @@
 //!   No engine, no audio and no network: a pure function of its arguments.
 
 pub mod console_window;
+pub mod dictation_commands;
 pub mod languages;
 pub mod model_download;
 pub mod models;
@@ -54,6 +57,8 @@ pub mod wav;
 pub mod worker_protocol;
 pub mod worker_stt;
 
+#[cfg(test)]
+mod dictation_commands_tests;
 #[cfg(test)]
 mod fake;
 #[cfg(test)]

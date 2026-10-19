@@ -4,7 +4,7 @@ import type { CombinedScope } from "../lib/ipc";
 /**
  * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`,
  * `speech_cancel`, the three of the model (`speech_model_install`, `speech_model_verify` and
- * `speech_model_cancel`) and `speech_prepare_reading`. The audio goes to Rust as a raw body, and the language and the cap on the
+ * `speech_model_cancel`), `speech_prepare_reading` and `speech_apply_dictation_commands`. The audio goes to Rust as a raw body, and the language and the cap on the
  * length always come from Rust (settings and language table), never from the webview.
  */
 
@@ -184,6 +184,30 @@ export type ReadingItem =
  */
 export function speechPrepareReading(parts: ReadingPart[], locale: string): Promise<ReadingItem[]> {
   return invoke<ReadingItem[]>("speech_prepare_reading", { parts, locale });
+}
+
+/** What the voice commands made of one transcribed passage of a note. */
+export interface AppliedCommands {
+  /** The text for the note being written, then one text for each new note the commands asked for.
+   * A text may start or end with line breaks: `appendToNote` joins them to the note's own. */
+  pieces: string[];
+  /** The level of a heading command that ended the passage with nothing after it (0 for none),
+   * handed back with the next passage. */
+  pendingHeading: number;
+}
+
+/**
+ * Applies the spoken commands of the dictation language (punctuation, title, subtitle, new line, new
+ * paragraph, new note) to one passage (`speech_apply_dictation_commands`). Pure computation in Rust
+ * from the text and the settings: with the setting off the passage comes back as it is. The
+ * language is the one dictation works in, never one the window names. Refusal:
+ * `speech_locale_unsupported`.
+ */
+export function speechApplyDictationCommands(
+  text: string,
+  pendingHeading: number,
+): Promise<AppliedCommands> {
+  return invoke<AppliedCommands>("speech_apply_dictation_commands", { text, pendingHeading });
 }
 
 /** One name the selection holds, offered in place of the words heard. */

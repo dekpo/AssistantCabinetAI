@@ -3,6 +3,7 @@ import {
   CaptureError,
   captureFailureKey,
   classifyCaptureError,
+  clipFromSamples,
   createClipBuilder,
 } from "./recorder";
 import {
@@ -149,6 +150,17 @@ describe("a clip built from blocks", () => {
 
   it("joins pcm chunks in order", () => {
     expect([...concatPcm([Int16Array.of(1, 2), Int16Array.of(3)])]).toStrictEqual([1, 2, 3]);
+  });
+});
+
+describe("one passage of a long recording", () => {
+  it("becomes a clip at the engine's rate with its length and its peak", async () => {
+    const result = await clipFromSamples(sine(CAPTURE_SAMPLE_RATE * 2, 0.4), CAPTURE_SAMPLE_RATE);
+
+    expect(result.resampled).toBe(false);
+    expect(result.durationSeconds).toBeCloseTo(2, 6);
+    expect(result.wav.length).toBe(44 + CAPTURE_SAMPLE_RATE * 2 * 2);
+    expect(result.stats.peak).toBeCloseTo(0.4, 2);
   });
 });
 

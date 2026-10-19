@@ -9,11 +9,14 @@ import { ConfirmDialog } from "../ConfirmDialog";
  */
 export function UnsavedNoteDialog({
   count,
+  recording = false,
   onReview,
   onDiscard,
   onCancel,
 }: {
   count: number;
+  /** A dictation is running: the answer also stops it, and the dialog says so. */
+  recording?: boolean;
   onReview: () => void;
   onDiscard: () => void;
   onCancel: () => void;
@@ -23,7 +26,11 @@ export function UnsavedNoteDialog({
   return (
     <ConfirmDialog
       title={t("notes.unsaved.title")}
-      body={pluralise(count, t("notes.unsaved.bodyOne"), t("notes.unsaved.bodyMany", { count }))}
+      body={
+        pluralise(count, t("notes.unsaved.bodyOne"), t("notes.unsaved.bodyMany", { count })) +
+        (recording ? `
+${t("notes.unsaved.recording")}` : "")
+      }
       confirmLabel={t("notes.unsaved.review")}
       secondary={{ label: t("notes.unsaved.discard"), onSelect: onDiscard, destructive: true }}
       onConfirm={onReview}
@@ -49,6 +56,31 @@ export function AnalysisChoiceDialog({
       confirmLabel={t("notes.analysis.confirm")}
       onConfirm={onAnalyse}
       onCancel={onSkip}
+    />
+  );
+}
+
+/**
+ * "A dictation is running": Cancel keeps recording, the confirming answer stops it and drops the
+ * words not yet written. Nothing already in a note is touched by this answer.
+ */
+export function RecordingDialog({
+  onStop,
+  onCancel,
+}: {
+  onStop: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <ConfirmDialog
+      title={t("notes.recording.title")}
+      body={t("notes.recording.body")}
+      confirmLabel={t("notes.recording.stop")}
+      destructive
+      onConfirm={onStop}
+      onCancel={onCancel}
     />
   );
 }

@@ -9,14 +9,15 @@
 //! so adding a language is a row of that table, a data file and a line of [`REGISTRY`]: no change
 //! of logic, but still a source edit.
 //!
-//! The loader ignores the keys it does not know (no `deny_unknown_fields`): a later phase adds the
-//! dictation commands to the same files.
+//! The loader ignores the keys it does not know (no `deny_unknown_fields`). The dictation commands
+//! live in the same files under `dictation_commands` (see `dictation_commands.rs`).
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use serde::Deserialize;
 
+use super::dictation_commands::CommandRules;
 use super::languages::{self, Feature};
 use crate::error::AppError;
 
@@ -36,7 +37,13 @@ const REGISTRY: &[(&str, &str)] = &[
 /// read-aloud capability answers `speech_locale_unsupported`, and so does a row whose pack is not
 /// embedded.
 pub fn rules_for(locale: &str) -> Result<&'static Rules, AppError> {
-    let row = languages::resolve(locale, Feature::ReadAloud)?;
+    rules_for_feature(locale, Feature::ReadAloud)
+}
+
+/// The pack of a locale for the feature that reads it: read-aloud for the spoken forms, dictation
+/// for the voice commands. The same answers as [`rules_for`] when the feature is not available.
+pub fn rules_for_feature(locale: &str, feature: Feature) -> Result<&'static Rules, AppError> {
+    let row = languages::resolve(locale, feature)?;
     let unsupported = || AppError::SpeechLocaleUnsupported {
         locale: locale.trim().to_string(),
     };
@@ -446,6 +453,9 @@ pub struct Rules {
     pub letters: BTreeMap<String, String>,
     #[serde(default)]
     pub identifiers: IdentifierRules,
+    /// The spoken commands of a note dictation; a pack without them has no voice commands.
+    #[serde(default)]
+    pub dictation_commands: Option<CommandRules>,
 }
 
 impl Rules {
@@ -459,6 +469,9 @@ impl Rules {
         }
         if self.numbers.scales.is_empty() {
             return Err("numbers.scales is empty".into());
+        }
+        if let Some(commands) = &self.dictation_commands {
+            commands.validate()?;
         }
         Ok(())
     }

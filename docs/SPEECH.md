@@ -634,8 +634,10 @@ with `CREATE_NO_WINDOW` it gets none. The flag is in `speech/console_window.rs`,
 `worker_stt.rs`; the Tesseract spawn in `ocr/tesseract.rs` sets no flag and has the same flash, reported and not fixed).
 
 Packaging: there is no installer wiring for any sidecar yet (`tauri.conf.json` has no `externalBin` or `resources`; the Tesseract
-block waits in `src-tauri/binaries/README.md`). Packaging the workers is the same unresolved item as packaging Tesseract: phase 13
-coordinates with that track and invents no second mechanism. Until then voice works in `tauri dev` and in a locally staged build.
+block waits in `src-tauri/binaries/README.md`). Packaging the workers is the same item as packaging Tesseract. **Decided by the owner
+on 19 October 2026** (`DECISIONS.md`, "Where the helper programs and the models live"): the three helper programs are bundled in the
+installer, one mechanism for all of them; the models stay online. Phase 13 wires it. Until then voice works in `tauri dev` and in a
+locally staged build.
 
 ## 14. Open points
 

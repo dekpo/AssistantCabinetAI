@@ -113,12 +113,14 @@ pub enum Ending {
     Killed,
 }
 
-struct Worker {
+/// A running worker process. Shared with the text-to-speech client (`worker_tts`), which uses the
+/// same process handling with its own requests.
+pub(super) struct Worker {
     child: Child,
     stdin: Option<ChildStdin>,
     lines: Receiver<String>,
-    loaded: bool,
-    generation: u64,
+    pub(super) loaded: bool,
+    pub(super) generation: u64,
 }
 
 struct Slot {
@@ -137,7 +139,7 @@ pub fn idle_expired(last_used: Instant, now: Instant, idle: Duration) -> bool {
 
 /// How often the idle watcher looks: often enough to end a worker soon after the delay, rarely
 /// enough to cost nothing.
-fn poll_step(idle: Duration) -> Duration {
+pub(super) fn poll_step(idle: Duration) -> Duration {
     (idle / 4).clamp(Duration::from_millis(10), Duration::from_secs(1))
 }
 
@@ -300,7 +302,7 @@ impl WorkerSttProvider {
                     slot.last_load_ms = Some(load_ms);
                 }
                 Response::Failed { kind, .. } => return Err(map_failure(kind)),
-                Response::Transcribed { .. } => return Err(AppError::SpeechEngineFailed),
+                _ => return Err(AppError::SpeechEngineFailed),
             }
         }
 
@@ -327,7 +329,7 @@ impl WorkerSttProvider {
                 case_reliable: self.spec.cased_output,
             }),
             Response::Failed { kind, .. } => Err(map_failure(kind)),
-            Response::Loaded { .. } => Err(AppError::SpeechEngineFailed),
+            _ => Err(AppError::SpeechEngineFailed),
         }
     }
 }
@@ -407,13 +409,15 @@ fn map_failure(kind: FailureKind) -> AppError {
         FailureKind::ModelMissing => AppError::SpeechModelMissing,
         FailureKind::ModelCorrupt => AppError::SpeechModelCorrupt,
         FailureKind::AudioInvalid => AppError::SpeechAudioInvalid,
-        FailureKind::EngineFailed | FailureKind::BadRequest => AppError::SpeechEngineFailed,
+        FailureKind::EngineFailed | FailureKind::BadRequest | FailureKind::NothingToSay => {
+            AppError::SpeechEngineFailed
+        }
     }
 }
 
 /// Starts the process and its reader thread. The worker's standard error goes nowhere: what a worker
 /// prints must never reach a log, because it could be what was heard.
-fn start(launch: &WorkerLaunch, generation: u64) -> Result<Worker, AppError> {
+pub(super) fn start(launch: &WorkerLaunch, generation: u64) -> Result<Worker, AppError> {
     let mut command = Command::new(&launch.program);
     command
         .args(&launch.args)
@@ -446,7 +450,7 @@ fn start(launch: &WorkerLaunch, generation: u64) -> Result<Worker, AppError> {
     })
 }
 
-fn send(worker: &mut Worker, request: &Request) -> Result<(), AppError> {
+pub(super) fn send(worker: &mut Worker, request: &Request) -> Result<(), AppError> {
     let stdin = worker.stdin.as_mut().ok_or(AppError::SpeechEngineFailed)?;
     writeln!(stdin, "{}", protocol::encode_request(request))
         .and_then(|()| stdin.flush())
@@ -456,7 +460,7 @@ fn send(worker: &mut Worker, request: &Request) -> Result<(), AppError> {
 /// Waits for the answer to request `id`. Lines that are not answers, and answers to other requests,
 /// are skipped. Returns `speech_cancelled` as soon as the token is set, `speech_timeout` when a
 /// deadline passes, `speech_engine_failed` if the process ended.
-fn await_response(
+pub(super) fn await_response(
     worker: &mut Worker,
     id: u64,
     cancel: &CancelToken,
@@ -485,7 +489,7 @@ fn await_response(
 }
 
 /// Kills the process and waits for it. Returns how it ended.
-fn kill(mut worker: Worker) -> Ending {
+pub(super) fn kill(mut worker: Worker) -> Ending {
     worker.stdin = None;
     let _ = worker.child.kill();
     let _ = worker.child.wait();
@@ -493,7 +497,7 @@ fn kill(mut worker: Worker) -> Ending {
 }
 
 /// Asks the worker to end, gives it [`SHUTDOWN_GRACE`], then kills it.
-fn stop_gracefully(mut worker: Worker) -> Ending {
+pub(super) fn stop_gracefully(mut worker: Worker) -> Ending {
     let asked = send(&mut worker, &Request::Shutdown { id: 0 }).is_ok();
     worker.stdin = None;
     if asked {

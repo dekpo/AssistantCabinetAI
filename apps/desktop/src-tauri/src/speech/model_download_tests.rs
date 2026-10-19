@@ -13,7 +13,7 @@ use super::model_download::{self, Phase, Progress, Sink};
 use super::models::{self, ModelSpec};
 use super::status::ModelState;
 use super::stt::CancelToken;
-use super::test_support::{digest, tiny_files, tiny_model, zip_of};
+use super::test_support::{digest, tiny_files, tiny_model, tiny_voice, tiny_voice_entries, zip_of};
 use crate::error::AppError;
 
 #[derive(Debug, Clone)]
@@ -522,4 +522,163 @@ fn real_archive_installs_and_the_installed_model_transcribes() {
     );
     assert!(!heard.text.trim().is_empty());
     provider.shutdown();
+}
+
+// ---- a voice with a folder pinned as a whole -------------------------------------------------
+
+/// The tiny voice with a zip made of `entries` instead, the manifest row pointing at that zip.
+fn voice_with_entries(entries_in_zip: &[(&str, Vec<u8>)]) -> (ModelSpec, Vec<u8>) {
+    let (mut spec, _) = tiny_voice();
+    let zip = zip_of(
+        &entries_in_zip
+            .iter()
+            .map(|(name, bytes)| (*name, bytes.as_slice()))
+            .collect::<Vec<_>>(),
+    );
+    spec.archive.bytes = zip.len() as u64;
+    spec.archive.sha256 = digest(&zip);
+    (spec, zip)
+}
+
+#[test]
+fn a_voice_installs_with_its_pinned_folder_and_is_present() {
+    let (spec, zip) = tiny_voice();
+    let (base, seen) = serve(200, zip);
+    let dir = tempfile::tempdir().expect("temp dir");
+
+    let (outcome, reports) = install(&spec, &base, dir.path(), &CancelToken::new());
+    outcome.expect("installs");
+
+    let folder = spec.folder(dir.path());
+    assert_eq!(models::state(&spec, &folder), ModelState::Present);
+    for (name, bytes) in tiny_voice_entries() {
+        assert_eq!(fs::read(folder.join(name)).expect("file"), bytes, "{name}");
+    }
+    assert_eq!(entries(dir.path()), vec!["tiny-voice".to_string()]);
+    let last = reports.last().expect("reports");
+    assert_eq!(last.done_bytes, last.total_bytes);
+    assert_eq!(
+        seen.lock().expect("log")[0].url,
+        "/models/speech/tiny-voice.zip"
+    );
+
+    // The installed folder passes the full check, which hashes every file of it.
+    models::verify(&spec, &folder, &CancelToken::new()).expect("verifies");
+}
+
+#[test]
+fn a_file_of_the_pinned_folder_that_is_not_the_pinned_one_is_refused() {
+    // The archive is the one the row pins as a download, but a file of its folder is not the pinned one.
+    let mut changed = tiny_voice_entries();
+    changed[2].1 = vec![0_u8; 600];
+    let (mut spec, zip) = voice_with_entries(&changed);
+    spec.voice = tiny_voice().0.voice;
+    let (base, _) = serve(200, zip);
+    let dir = tempfile::tempdir().expect("temp dir");
+
+    let (outcome, _) = install(&spec, &base, dir.path(), &CancelToken::new());
+    assert_eq!(code(outcome), "speech_model_corrupt");
+    assert!(entries(dir.path()).is_empty(), "nothing is left behind");
+}
+
+#[test]
+fn a_missing_or_an_extra_file_in_the_pinned_folder_is_refused() {
+    let (original, _) = tiny_voice();
+
+    let mut fewer = tiny_voice_entries();
+    fewer.pop();
+    let mut more = tiny_voice_entries();
+    more.push(("phon-data/lang/extra", b"unexpected".to_vec()));
+    for (what, entries_in_zip) in [("fewer", fewer), ("more", more)] {
+        let (mut spec, zip) = voice_with_entries(&entries_in_zip);
+        spec.voice = original.voice.clone();
+        let (base, _) = serve(200, zip);
+        let dir = tempfile::tempdir().expect("temp dir");
+        let (outcome, _) = install(&spec, &base, dir.path(), &CancelToken::new());
+        assert_eq!(code(outcome), "speech_model_corrupt", "{what}");
+        assert!(entries(dir.path()).is_empty(), "{what}");
+    }
+}
+
+#[test]
+fn only_the_pinned_folder_is_unpacked_and_no_name_climbs_out_of_it() {
+    // An entry outside the pinned folder is ignored.
+    let mut with_stranger = tiny_voice_entries();
+    with_stranger.push(("elsewhere/stranger.txt", b"not pinned".to_vec()));
+    let (mut spec, zip) = voice_with_entries(&with_stranger);
+    spec.voice = tiny_voice().0.voice;
+    let (base, _) = serve(200, zip);
+    let outer = tempfile::tempdir().expect("temp dir");
+    let root = outer.path().join("models");
+    install(&spec, &base, &root, &CancelToken::new())
+        .0
+        .expect("installs");
+    assert!(!spec.folder(&root).join("elsewhere").exists());
+
+    // A name that climbs out of the pinned folder is refused, and nothing is written outside.
+    let mut climbing = tiny_voice_entries();
+    climbing.push(("phon-data/../../escaped.txt", b"outside".to_vec()));
+    let (mut spec, zip) = voice_with_entries(&climbing);
+    spec.voice = tiny_voice().0.voice;
+    let (base, _) = serve(200, zip);
+    let outer = tempfile::tempdir().expect("temp dir");
+    let root = outer.path().join("models");
+    let (outcome, _) = install(&spec, &base, &root, &CancelToken::new());
+    assert_eq!(code(outcome), "speech_model_corrupt");
+    assert!(!outer.path().join("escaped.txt").exists());
+    assert!(!root.join("escaped.txt").exists());
+    assert!(entries(&root).is_empty());
+}
+
+/// The four real voices: the archives the owner uploads are served from this machine, downloaded,
+/// hashed, unpacked and checked against the manifest compiled into the application, then the folder
+/// pinned as a whole is verified again from the disk. Run by hand:
+/// `ACAI_VOICE_ZIPS=<folder of the zips> cargo test --lib real_voice_archives -- --ignored --nocapture`.
+#[test]
+#[ignore = "needs the four real voice archives, about 280 MB"]
+fn real_voice_archives_install_and_verify() {
+    let folder =
+        std::path::PathBuf::from(std::env::var("ACAI_VOICE_ZIPS").expect("set ACAI_VOICE_ZIPS"));
+    let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").expect("binds a free port"));
+    let base = format!("http://{}/models/speech/", server.server_addr());
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let name = request
+                .url()
+                .rsplit('/')
+                .next()
+                .unwrap_or_default()
+                .to_string();
+            match fs::File::open(folder.join(name)) {
+                Ok(file) => {
+                    let _ = request.respond(tiny_http::Response::from_file(file));
+                }
+                Err(_) => {
+                    let _ = request.respond(
+                        tiny_http::Response::from_data(Vec::new())
+                            .with_status_code(tiny_http::StatusCode(404)),
+                    );
+                }
+            }
+        }
+    });
+    let dir = tempfile::tempdir().expect("temp dir");
+    for spec in models::voice_models() {
+        let started = std::time::Instant::now();
+        let (outcome, _) = install(spec, &base, dir.path(), &CancelToken::new());
+        outcome.unwrap_or_else(|error| panic!("{} did not install: {}", spec.id, error.code()));
+        let installed = spec.folder(dir.path());
+        assert_eq!(
+            models::state(spec, &installed),
+            ModelState::Present,
+            "{}",
+            spec.id
+        );
+        models::verify(spec, &installed, &CancelToken::new()).expect("verifies from the disk");
+        println!(
+            "measured: {} installed and verified in {} ms",
+            spec.id,
+            started.elapsed().as_millis()
+        );
+    }
 }

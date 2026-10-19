@@ -42,6 +42,20 @@ impl Drop for TempAudioFile {
     }
 }
 
+/// A name for a file the engine will create inside `directory`, with the guard that removes it. The
+/// folder is made, the file is not: a worker that writes audio (text to speech) creates it new.
+pub fn reserve(directory: &Path) -> Result<TempAudioFile, AppError> {
+    fs::create_dir_all(directory).map_err(|_| AppError::TtsFailed)?;
+    let name = format!(
+        "{FILE_PREFIX}{}-{}.{FILE_EXTENSION}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    Ok(TempAudioFile {
+        path: directory.join(name),
+    })
+}
+
 /// Writes a clip as a new file in `directory`, creating the folder if needed. The name carries a
 /// process id and a counter, so two clips never meet, and the file is created new, never opened over.
 pub fn write(directory: &Path, bytes: &[u8]) -> Result<TempAudioFile, AppError> {

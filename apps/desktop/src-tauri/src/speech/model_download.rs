@@ -26,7 +26,7 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::models::{self, ModelSpec};
+use super::models::{self, ModelSpec, TreeDigest, TreeSpec};
 use super::stt::CancelToken;
 use crate::error::AppError;
 
@@ -211,6 +211,101 @@ impl Drop for Staging {
     }
 }
 
+/// Where the unpacking of a pinned folder reports to, and how far the whole unpacking has got.
+struct TreeProgress<'a> {
+    done: u64,
+    total: u64,
+    last_report: Instant,
+    sink: &'a Sink,
+}
+
+/// Unpacks the pinned folder of a model (the entries of the zip under `tree.dir`) into `staging`,
+/// hashing each file, and checks the folder as a whole against the manifest. Paths come from
+/// `enclosed_name`, which refuses a name that climbs out of the folder or is absolute; an entry
+/// outside the pinned folder is never written.
+fn unpack_tree(
+    archive: &mut zip::ZipArchive<fs::File>,
+    tree: &TreeSpec,
+    staging: &Path,
+    cancel: &CancelToken,
+    progress: &mut TreeProgress<'_>,
+    folder: &Path,
+) -> Result<(), AppError> {
+    let mut digest = TreeDigest::default();
+    let mut count: u64 = 0;
+    let mut written_total: u64 = 0;
+    let mut block = vec![0_u8; BLOCK_BYTES];
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|_| AppError::SpeechModelCorrupt)?;
+        let Some(name) = entry.enclosed_name() else {
+            // A name that escapes the folder is a zip this application did not make.
+            return Err(AppError::SpeechModelCorrupt);
+        };
+        let Ok(inside) = name.strip_prefix(&tree.dir) else {
+            continue;
+        };
+        if inside.as_os_str().is_empty() {
+            continue;
+        }
+        let target = staging.join(&tree.dir).join(inside);
+        if entry.is_dir() {
+            fs::create_dir_all(&target).map_err(|_| failed(folder))?;
+            continue;
+        }
+        count += 1;
+        if count > tree.files {
+            return Err(AppError::SpeechModelCorrupt);
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|_| failed(folder))?;
+        }
+        let mut out = fs::File::create(&target).map_err(|_| failed(folder))?;
+        let mut hasher = Sha256::new();
+        let mut written: u64 = 0;
+        loop {
+            if cancel.is_cancelled() {
+                return Err(AppError::SpeechCancelled);
+            }
+            let read = entry
+                .read(&mut block)
+                .map_err(|_| AppError::SpeechModelCorrupt)?;
+            if read == 0 {
+                break;
+            }
+            written += read as u64;
+            written_total += read as u64;
+            if written_total > tree.bytes {
+                return Err(AppError::SpeechModelCorrupt);
+            }
+            hasher.update(&block[..read]);
+            out.write_all(&block[..read]).map_err(|_| failed(folder))?;
+        }
+        out.flush().map_err(|_| failed(folder))?;
+        drop(out);
+        let relative = inside
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+        digest.add(&relative, &models::to_hex(&hasher.finalize()), written);
+        progress.done += written;
+        if progress.last_report.elapsed() >= REPORT_EVERY {
+            progress.last_report = Instant::now();
+            (progress.sink)(Progress {
+                phase: Phase::Unpack,
+                done_bytes: progress.done,
+                total_bytes: progress.total,
+            });
+        }
+    }
+    if !digest.matches(tree) {
+        return Err(AppError::SpeechModelCorrupt);
+    }
+    Ok(())
+}
+
 fn unpack(
     spec: &ModelSpec,
     part: &Path,
@@ -228,7 +323,8 @@ fn unpack(
     let archive_file = fs::File::open(part).map_err(|_| failed(&folder))?;
     let mut archive =
         zip::ZipArchive::new(archive_file).map_err(|_| AppError::SpeechModelCorrupt)?;
-    let total: u64 = spec.files.iter().map(|file| file.bytes).sum();
+    let total: u64 = spec.files.iter().map(|file| file.bytes).sum::<u64>()
+        + spec.tree().map_or(0, |tree| tree.bytes);
     let mut done: u64 = 0;
     let mut last_report = Instant::now();
     let mut block = vec![0_u8; BLOCK_BYTES];
@@ -273,6 +369,22 @@ fn unpack(
         if written != wanted.bytes || models::to_hex(&hasher.finalize()) != wanted.sha256 {
             return Err(AppError::SpeechModelCorrupt);
         }
+    }
+    if let Some(tree) = spec.tree() {
+        let mut progress = TreeProgress {
+            done,
+            total,
+            last_report,
+            sink,
+        };
+        unpack_tree(
+            &mut archive,
+            tree,
+            &staging.path,
+            cancel,
+            &mut progress,
+            &folder,
+        )?;
     }
     models::write_marker(spec, &staging.path)?;
 

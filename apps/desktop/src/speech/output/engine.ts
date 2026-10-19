@@ -48,9 +48,11 @@ export interface ReadAloudEngine {
   stop: () => void;
 }
 
-/** A failure of the voice, as a machine code the catalogue has a sentence for (`errors.<code>`). */
+/** A failure of the voice, as a machine code the catalogue has a sentence for (`errors.<code>`):
+ * `tts_no_local_voice` and `tts_failed` from an engine of the window, and whatever code Rust answered
+ * for a voice worker (`speech_model_corrupt`, `speech_busy`...), which keeps its own sentence. */
 export class SpeechOutputError extends Error {
-  constructor(readonly code: "tts_no_local_voice" | "tts_failed") {
+  constructor(readonly code: string) {
     super(code);
     this.name = "SpeechOutputError";
   }

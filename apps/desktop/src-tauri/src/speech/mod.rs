@@ -22,6 +22,11 @@
 //!   process. The protocol is one file shared by source with the worker crate
 //!   (`apps/speech-worker`); the provider starts the worker on the first dictation, ends it after an
 //!   idle delay and kills it on a cancel; the console window module owns the one platform detail.
+//! * [`tts`], [`worker_tts`]: the voice of read-aloud, out of process like the other engine. `tts` holds
+//!   the pure rules (which voice reads a language, the speed the engine is given, what the settings are
+//!   told about the installed voices); `worker_tts` starts the voice worker on the first reading, loads
+//!   the voice, reads back the audio file the worker writes in the private temporary folder and removes
+//!   it at once, ends the worker after an idle delay and kills it on a cancel.
 //! * [`repair`]: shapes the name suggestions that follow a dictation (read only, selection only, names
 //!   withheld while the setting hides them) over `knowledge::repair`.
 //! * [`dictation_commands`]: the spoken commands of a note dictation (punctuation, title, new line, new
@@ -53,9 +58,11 @@ pub mod status;
 pub mod stt;
 pub mod temp_audio;
 pub mod timing_log;
+pub mod tts;
 pub mod wav;
 pub mod worker_protocol;
 pub mod worker_stt;
+pub mod worker_tts;
 
 #[cfg(test)]
 mod dictation_commands_tests;
@@ -76,7 +83,11 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tts_tests;
+#[cfg(test)]
 mod worker_stt_tests;
+#[cfg(test)]
+mod worker_tts_tests;
 
 /// Shortest cap of one chat dictation, in seconds. Below this a recording is hardly a sentence.
 pub const MIN_DICTATION_SECONDS: u32 = 10;
@@ -98,5 +109,9 @@ pub const DEFAULT_TTS_RATE: f32 = 1.0;
 
 /// Longest identifier kept for a voice, in characters. Manifest ids are short ASCII slugs.
 pub const MAX_VOICE_ID_CHARS: usize = 64;
+/// Longest identifier kept for an operating-system voice, in characters. Such an id is a name or a
+/// URI the system chose (spaces, parentheses, dots and colons are normal in it), so it is bounded
+/// and cleaned of control characters but not restricted to a slug.
+pub const MAX_SYSTEM_VOICE_ID_CHARS: usize = 200;
 /// Longest locale tag kept for the language override, in characters (BCP 47 tags are short).
 pub const MAX_LOCALE_CHARS: usize = 16;

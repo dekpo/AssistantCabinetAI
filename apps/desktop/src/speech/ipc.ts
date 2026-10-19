@@ -4,8 +4,10 @@ import type { CombinedScope } from "../lib/ipc";
 /**
  * The speech commands of Rust: `speech_status`, `notes_preview`, `notes_save`, `speech_transcribe`,
  * `speech_cancel`, the three of the model (`speech_model_install`, `speech_model_verify` and
- * `speech_model_cancel`), `speech_prepare_reading` and `speech_apply_dictation_commands`. The audio goes to Rust as a raw body, and the language and the cap on the
- * length always come from Rust (settings and language table), never from the webview.
+ * `speech_model_cancel`), `speech_prepare_reading`, `speech_apply_dictation_commands`, and the two
+ * of the voice (`tts_synthesize`, `tts_cancel`). The audio goes to Rust as a raw body, and the
+ * language and the cap on the length always come from Rust (settings and language table), never
+ * from the webview; so do the voice and the speed of a reading.
  */
 
 /** The speech-to-text model on disk. `unverified`: every file is there but none was checked yet (a
@@ -39,6 +41,18 @@ export interface SpeechLanguage {
   voices: LanguageVoice[];
 }
 
+/** How clear the licence of a voice is (the owner's review). Shown next to the voice, never hidden. */
+export type LicenceRating = "clear" | "attribution" | "review";
+
+/** One reading voice of the manifest and what is on disk for it. `id` is the voice id of the
+ * language table and of the `ttsVoice` setting; `bytes` is the size of its download. */
+export interface VoiceModelStatus {
+  id: string;
+  state: ModelState;
+  rating: LicenceRating;
+  bytes: number;
+}
+
 export interface SpeechStatus {
   /** The voice master switch. */
   enabled: boolean;
@@ -48,6 +62,8 @@ export interface SpeechStatus {
   /** Shown whatever the switches say, so a missing or damaged model is not hidden by "voice is off". */
   sttModel: ModelState;
   languages: SpeechLanguage[];
+  /** The reading voices of the manifest, whatever the switches say. */
+  voices: VoiceModelStatus[];
 }
 
 /** What each speech feature can do right now. Reads settings and probes, starts nothing. */
@@ -140,21 +156,46 @@ export interface ModelProgress {
  * refusals are machine codes: `speech_model_download_failed` (its data carries the folder where the
  * files can be placed by hand), `speech_model_corrupt`, `speech_cancelled`, `speech_busy`.
  */
-export function speechModelInstall(onProgress: (progress: ModelProgress) => void): Promise<void> {
+export function speechModelInstall(
+  onProgress: (progress: ModelProgress) => void,
+  model?: string,
+): Promise<void> {
   const channel = new Channel<ModelProgress>();
   channel.onmessage = onProgress;
-  return invoke<void>("speech_model_install", { onProgress: channel });
+  return invoke<void>("speech_model_install", {
+    onProgress: channel,
+    ...(model === undefined ? {} : { model }),
+  });
 }
 
 /** Checks the files in the model folder against the pinned digests; this is how a model placed by
  * hand becomes usable. Refusals: `speech_model_missing`, `speech_model_corrupt`, `speech_cancelled`. */
-export function speechModelVerify(): Promise<void> {
-  return invoke<void>("speech_model_verify");
+export function speechModelVerify(model?: string): Promise<void> {
+  return model === undefined
+    ? invoke<void>("speech_model_verify")
+    : invoke<void>("speech_model_verify", { model });
 }
 
 /** Stops the install or the verify in progress, if any. Resolves to whether there was one. */
 export function speechModelCancel(): Promise<boolean> {
   return invoke<boolean>("speech_model_cancel");
+}
+
+/**
+ * Speaks one segment of a reading and returns the audio, a WAV, as the raw body of the answer
+ * (`tts_synthesize`). The voice and the speed are not sent: Rust reads them from the settings. The
+ * audio is not kept on disk or anywhere else. Refusals are machine codes: `speech_unavailable`,
+ * `speech_locale_unsupported`, `tts_no_local_voice`, `speech_model_corrupt`, `speech_busy`,
+ * `speech_cancelled` (a newer request or a stop ended it), `tts_failed`.
+ */
+export async function ttsSynthesize(text: string, locale: string): Promise<Uint8Array> {
+  const audio = await invoke<ArrayBuffer>("tts_synthesize", { text, locale });
+  return new Uint8Array(audio);
+}
+
+/** Stops the synthesis in progress, if any. Resolves to whether there was one. */
+export function ttsCancel(): Promise<boolean> {
+  return invoke<boolean>("tts_cancel");
 }
 
 /** One piece of an answer as it is shown. `markdown` for text that may hold Markdown (the answer, a

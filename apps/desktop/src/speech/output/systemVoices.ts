@@ -102,6 +102,20 @@ export function summariseVoices(voices: readonly SynthesisVoice[], locale: strin
   };
 }
 
+/** The local voices a person may choose between for a language: the id the settings keep and the
+ * name shown. Online voices are not offered, as they are never used. */
+export interface VoiceChoice {
+  id: string;
+  name: string;
+}
+
+export function localVoiceChoices(voices: readonly SynthesisVoice[], locale: string): VoiceChoice[] {
+  return voices
+    .filter((voice) => voice.localService === true)
+    .filter((voice) => primaryLanguage(voice.lang) === primaryLanguage(locale))
+    .map((voice) => ({ id: systemVoiceId(voice), name: voice.name }));
+}
+
 export interface Timers {
   set: (callback: () => void, ms: number) => unknown;
   clear: (handle: unknown) => void;

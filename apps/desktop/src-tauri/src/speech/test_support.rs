@@ -70,6 +70,7 @@ pub fn tiny_model() -> (ModelSpec, Vec<u8>) {
             })
             .collect(),
         cased_output: false,
+        voice: None,
     };
     (spec, zip)
 }
@@ -105,4 +106,92 @@ pub fn canonical_clip(milliseconds: u64) -> Vec<u8> {
         bytes.extend_from_slice(&sample.to_le_bytes());
     }
     bytes
+}
+
+/// Every entry of the tiny voice's zip: the two files of the manifest row and the three files of the
+/// pinned folder, in the order the zip holds them.
+pub fn tiny_voice_entries() -> Vec<(&'static str, Vec<u8>)> {
+    vec![
+        ("voice.onnx", vec![9_u8; 2_000]),
+        ("tokens.txt", b"a 0\nb 1\n".to_vec()),
+        ("phon-data/phondata", vec![4_u8; 600]),
+        ("phon-data/lang/xx", b"name xx\n".to_vec()),
+        ("phon-data/voices/default", vec![5_u8; 90]),
+    ]
+}
+
+/// The digest a manifest row pins for a folder: the lines `path:sha256` and a line feed, sorted by
+/// path (inside the folder), hashed. Written out here on purpose, apart from the code under test.
+pub fn tree_digest_of(entries: &[(&str, Vec<u8>)], dir: &str) -> String {
+    let mut lines: Vec<String> = entries
+        .iter()
+        .filter_map(|(name, bytes)| {
+            name.strip_prefix(&format!("{dir}/"))
+                .map(|inside| format!("{inside}:{}\n", digest(bytes)))
+        })
+        .collect();
+    lines.sort();
+    digest(lines.concat().as_bytes())
+}
+
+/// The manifest row of the tiny voice (a Piper-style voice with a pinned folder) and the zip it pins.
+pub fn tiny_voice() -> (ModelSpec, Vec<u8>) {
+    let entries = tiny_voice_entries();
+    let zip = zip_of(
+        &entries
+            .iter()
+            .map(|(name, bytes)| (*name, bytes.as_slice()))
+            .collect::<Vec<_>>(),
+    );
+    let file = |role: &str, name: &str| {
+        let bytes = &entries
+            .iter()
+            .find(|(entry, _)| *entry == name)
+            .expect("entry")
+            .1;
+        FileSpec {
+            role: role.into(),
+            name: name.into(),
+            bytes: bytes.len() as u64,
+            sha256: digest(bytes),
+        }
+    };
+    let tree_files: Vec<_> = entries
+        .iter()
+        .filter(|(name, _)| name.starts_with("phon-data/"))
+        .collect();
+    let spec = ModelSpec {
+        id: "tiny-voice".into(),
+        kind: "tts".into(),
+        licence: "test".into(),
+        attribution: "test".into(),
+        source: "test".into(),
+        archive: ArchiveSpec {
+            file: "tiny-voice.zip".into(),
+            bytes: zip.len() as u64,
+            sha256: digest(&zip),
+        },
+        files: vec![file("model", "voice.onnx"), file("tokens", "tokens.txt")],
+        cased_output: false,
+        voice: Some(models::VoiceSpec {
+            family: super::worker_protocol::VoiceFamily::Piper,
+            rating: models::LicenceRating::Clear,
+            tree: Some(models::TreeSpec {
+                dir: "phon-data".into(),
+                files: tree_files.len() as u64,
+                bytes: tree_files.iter().map(|(_, bytes)| bytes.len() as u64).sum(),
+                sha256: tree_digest_of(&entries, "phon-data"),
+            }),
+        }),
+    };
+    (spec, zip)
+}
+
+/// Writes the tiny voice's files and folder into `folder` (no marker).
+pub fn place_tiny_voice(folder: &Path) {
+    for (name, bytes) in tiny_voice_entries() {
+        let target = folder.join(name);
+        std::fs::create_dir_all(target.parent().expect("parent")).expect("folder");
+        std::fs::write(target, bytes).expect("voice file writes");
+    }
 }

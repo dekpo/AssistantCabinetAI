@@ -13,6 +13,8 @@ import {
   speechPrepareReading,
   speechRepairNames,
   speechTranscribe,
+  ttsCancel,
+  ttsSynthesize,
 } from "./ipc";
 
 beforeEach(() => {
@@ -133,5 +135,43 @@ describe("the name suggestions bridge", () => {
       ],
     ]);
     expect(set).toStrictEqual({ proposals: [], hiddenCount: 0 });
+  });
+});
+
+describe("the voice bridge", () => {
+  it("sends the text and the language and nothing else, and gets the audio back as bytes", async () => {
+    vi.mocked(invoke).mockResolvedValue(new Uint8Array([82, 73, 70, 70]).buffer);
+
+    const audio = await ttsSynthesize("Bonjour.", "fr-FR");
+
+    expect(vi.mocked(invoke).mock.calls).toStrictEqual([
+      ["tts_synthesize", { text: "Bonjour.", locale: "fr-FR" }],
+    ]);
+    expect(audio).toBeInstanceOf(Uint8Array);
+    expect([...audio]).toStrictEqual([82, 73, 70, 70]);
+  });
+
+  it("stops with the command Rust registers and tells whether a synthesis was running", async () => {
+    vi.mocked(invoke).mockResolvedValue(false);
+
+    await expect(ttsCancel()).resolves.toBe(false);
+
+    expect(vi.mocked(invoke).mock.calls).toStrictEqual([["tts_cancel"]]);
+  });
+
+  it("names the voice to install or verify by its manifest id, and only then", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await speechModelInstall(() => {}, "css10");
+    await speechModelVerify("css10");
+
+    const [install, verify] = vi.mocked(invoke).mock.calls as unknown as [
+      [string, { onProgress: unknown; model: string }],
+      [string, { model: string }],
+    ];
+    expect(install[0]).toBe("speech_model_install");
+    expect(Object.keys(install[1]).sort()).toStrictEqual(["model", "onProgress"]);
+    expect(install[1].model).toBe("css10");
+    expect(verify).toStrictEqual(["speech_model_verify", { model: "css10" }]);
   });
 });

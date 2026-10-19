@@ -658,14 +658,32 @@
       "system": "System voices, only if they work on this computer"
     },
     "voiceLabel": "Reading voice",
+    "systemVoiceLabel": "System voice",
     "voice": {
       "auto": "First voice of the language",
-      "option": "{gender} ({id})"
+      "option": "{gender} ({id})",
+      "optionRated": "{gender} ({id}, {rating})"
     },
     "gender": {
       "female": "Female voice",
       "male": "Male voice",
       "mixed": "Several voices"
+    },
+    "rating": {
+      "clear": "Free to use.",
+      "attribution": "Free to use, with a credit to its authors.",
+      "review": "Prototype voice: its licence must be checked before any wider distribution.",
+      "short": {
+        "clear": "free to use",
+        "attribution": "credit required",
+        "review": "prototype"
+      }
+    },
+    "voiceModels": {
+      "label": "Voices on this computer",
+      "none": "No reading voice is offered for this language.",
+      "line": "{voice}, {size} MB",
+      "hint": "A voice is downloaded only when you press Install. Reading aloud works with an installed voice only."
     },
     "rateLabel": "Reading speed",
     "rateDescription": "1 is the natural speed of the voice.",
@@ -755,7 +773,7 @@
     "speech_engine_missing": "The voice component is not installed on this computer. Typing still works.",
     "speech_model_missing": "The voice files are not on this computer yet. Install them from the settings; typing still works.",
     "speech_model_corrupt": "The voice files on this computer are damaged and were not used. Install them again from the settings.",
-    "speech_model_download_failed": "The voice files could not be downloaded. If your security software blocks the download, copy the four files by hand into the folder {folder}, then press Verify in the settings.",
+    "speech_model_download_failed": "The voice files could not be downloaded. If your security software blocks the download, copy the files by hand into the folder {folder}, then press Verify in the settings.",
     "speech_audio_too_short": "The recording is too short. Speak a little longer, then try again.",
     "speech_audio_too_quiet": "The recording is too quiet to be understood. Check your microphone and try again.",
     "speech_audio_too_long": "The recording is longer than the limit set in the settings. It was not transcribed.",

@@ -143,6 +143,17 @@ because ending the process is the only way to give back all the memory of the ru
 is skipped, never logged: sherpa-onnx itself writes lines there (for example when it resamples a clip). The worker's standard
 error is not read and goes nowhere. Closing the worker's standard input ends it, which is how it dies with the application.
 
+**As built by phase 9 (the voice worker; this wins over the sketch above).** Same file, three more messages. Requests:
+`load_voice` (`id`, `threads`, `voice` = `family` `piper` or `coqui`, the full paths `model` and `tokens`, and `data_dir` for a Piper
+voice only: its `espeak-ng-data` folder; a second `load_voice` replaces the first) and `synthesize` (`id`, `text`, `speed_percent`
+where 100 is the voice's natural rate and the worker holds it between 50 and 200, `wav_path` = a name the application reserved in its
+private temporary folder; the worker creates that file new, never over another, and writes a 16-bit mono WAV in it). Answers:
+`voice_loaded` (`load_ms`) and `synthesized` (`audio_ms`, `processing_ms`, `sample_rate`); the `failed` kinds gain `nothing_to_say`.
+A request meant for the other kind of worker is answered `failed` with `bad_request`: the `Engine` trait has the four methods, and a
+worker implements two of them. The text goes through the standard input only; control characters (a NUL would abort the library) are
+turned into spaces by the worker. There is no `unload` message either: a loaded voice is replaced by the next `load_voice`, and the
+idle delay ends the process (`shutdown`), which gives back all the memory.
+
 ### 3.4 Module layout
 
 ```text
@@ -182,7 +193,8 @@ One nested field `speech` of `settings.json` (`SpeechSettings`, in `speech/setti
 | `maxDictationSeconds` | 120 | Cap of one chat dictation |
 | `maxNoteSeconds` | 1800 | Cap of one note dictation (30 min, D9) |
 | `ttsEngine` | null | null = automatic: the Piper worker if installed, else `tts_no_local_voice`; `system` = the operating-system voices, local ones only (chosen by the user, never a silent fallback) |
-| `ttsVoice` | null | A manifest id; null = the first voice of the resolved locale |
+| `ttsVoice` | null | A manifest id; null = the first voice of the resolved locale. Rust uses it when it is a voice of the language and installed, else the first installed voice of the language |
+| `ttsSystemVoice` | null | The id the operating system gives the voice used when the engine is `system` (built in phase 9, open point 11): up to 200 characters, trimmed, no control character, spaces and parentheses allowed. Never a manifest id and never sent to Rust's synthesiser; it goes back only to the window's own voice list. null = the first local voice of the language |
 | `ttsRate` | 1.0 | Passed as the synthesiser `speed`, never as a playback rate (it would change the pitch); the clamp is fixed in phase 2 |
 | `notesFolderName` | "Notes" | Sanitised on the Rust side; an unusable name falls back to "Notes" |
 | `notesVoiceCommands` | true | Spoken punctuation, title, subtitle, new line, new paragraph, new note |
@@ -415,6 +427,27 @@ are not part of the programme (marginal or harmful in SpeechLab, and a prompt wo
   the settings shows the language table's Piper voices (`siwis`, `css10`), not the system voices, and Rust keeps a `ttsVoice` only
   if it is ASCII letters, digits, `-` and `_` (`clean_voice_id`), while a Windows voice id is `Microsoft Paul - French (France)`.
   So a male system voice such as Paul is installed but cannot be chosen: the engine takes the first local voice of the language.
+  **Closed in phase 9** by the setting `ttsSystemVoice`.
+
+- **As built (phase 9, the Piper voice worker).** `apps/speech-worker` builds a second binary, `speech-tts-worker` (feature `tts`,
+  `--no-default-features`, its own `target-tts` directory, the FULL sherpa-onnx libraries; `scripts/build-speech-tts-worker.sh`
+  checks that `espeak` IS in it, the opposite of the speech-to-text check, and stages it with `speech-tts-worker-NOTICE.md`, the
+  copy of `apps/speech-worker/NOTICE-TTS-WORKER.md`). The engine (`voice.rs`) loads a Piper or a Coqui VITS voice and writes
+  the WAV. In the application, `speech/tts.rs` holds the pure rules (`choose_voice`: the chosen voice if the language offers it and it
+  is installed, else the first installed voice of the language, else `tts_no_local_voice`, or `speech_model_corrupt` if one is
+  damaged; `speed_percent`; the voice states handed to the settings) and `speech/worker_tts.rs` the client (it shares the process
+  handling of `worker_stt.rs`: start on the first reading, idle end, kill on cancel; a new request cancels the one in progress; the
+  audio file is read back and removed before the call returns). The command `tts_synthesize(text, locale)` returns the WAV as the raw
+  body of the answer; the voice and the speed come from the settings, so the window sends nothing else. `tts_cancel` stops it. In the
+  window, `piperWorker.ts` plays the segments in order through `createBufferPlayer` and asks for sentence N+1 while N plays (one
+  sentence ahead, not more: the voices work at about a tenth of real time), the rests between segments are timers of the text's own
+  pauses, and a stop ends the clip, the rest and the synthesis at once. `speech_status` gained `voices` (state, licence rating and
+  download size of each voice of the manifest) and its read-aloud probe is true only when a voice of the reading language is installed
+  and checked; an install or a verify tells every reader of the status (`speech/modelEvents.ts`), so a voice installed from the settings
+  is usable at once. The settings list the voices of the language with their state and licence, an Install and a Verify each; the
+  voice list carries the rating (`free to use`, `credit required`, `prototype`) and never hides it. System voices stay a permanent
+  option (D3 amended); with the engine set to `system` the voice list shows the system's local voices and keeps the choice in
+  `ttsSystemVoice` (open point 11 closed).
 
 ## 8. Privacy
 
@@ -460,6 +493,15 @@ Install and Verify hash. Uploaded to `https://assistantcabinet.ai/models/speech/
 bytes, SHA-256 `3781ca818590747c1ff244a8193b541ba8ea32506253832aa1a19ced0645883e`, holding the four files flat (the report lists
 their sizes and digests). The fetch script for the native libraries is `scripts/fetch-speech-resources.sh` (and `.ps1`), the
 build and the espeak check `scripts/build-speech-worker.sh` (and `.ps1`).
+
+**As built by phase 9 (voices).** A voice is a model of the same manifest (`kind` `tts`): its zip holds the model file, `tokens.txt`
+and, for a Piper voice, the `espeak-ng-data` folder (about 350 small files). The manifest pins the size and SHA-256 of the zip and of
+the two files, and the folder as a whole: its file count, its size and one digest of the lines `<path>:<SHA-256 of the file>` sorted by
+path. The install unpacks only the names of the manifest and the entries under that folder (a name that climbs out of it refuses the
+whole archive), hashes each file and compares the folder with the pinned digest; Verify recomputes it from the disk. Looking at the
+state of a voice stays a few `stat` calls (the folder is only looked for). The voice files are not kept in the audio folder: the
+sentence a worker speaks is written to a reserved name in `speech-temp`, read back and removed before the command answers; the sweep
+that removes orphans covers it.
 
 ## 10. Licences
 
@@ -516,6 +558,8 @@ engine.
 | Dictation, the worker of phase 3b on the same laptop (18 Oct 2026, release build, 4 threads requested) | worker process alone: 733 MB resident after the model load, 857 MB peak after decoding (commit 864 MB); cold load 2.2 s (2.5 s and, once with a cold file cache, 4.3 s); a 10 s clip in 0.9 to 1.1 s, about 7 busy cores; the cancel of a decode returns in 0.6 s and leaves no process; 18.6 MB executable, no `espeak` in it | measured |
 | Read-aloud, Piper voices (siwis, ljspeech, libritts_r) | 200 to 300 MB resident; about 67 to 82 MB on disk; real-time factor 0.045 to 0.064; cold load 0.8 to 1.3 s | measured |
 | Read-aloud, Coqui css10 | 231 MB resident; 67 MB on disk; needs the number rewriting for digits | measured |
+| Read-aloud, start of a reading as heard by the owner (19 Oct 2026) | about 1 s before the first sound with a Piper voice, practically instant with a system voice | owner's report (not measured); she judged it acceptable and asked for no preloading: the worker stays loaded for 120 s, so later readings start without it |
+| Read-aloud, the voice worker of phase 9 on the same laptop (19 Oct 2026, release build, 4 threads requested, a paragraph of about 45 words) | worker process alone, peak working set: siwis 214 MB, css10 219 MB, libritts_r 227 MB, ljspeech 281 MB; the paragraph is 11.7 to 15.7 s of audio spoken in 0.57 to 0.81 s in a bare worker (real-time factor 0.047 to 0.053) and in 1.0 to 1.4 s through the application's client (0.080 to 0.113); first sentence of a reading, worker start and voice load included: siwis 1.7 s, libritts_r 2.5 s, css10 3.3 s, ljspeech 4.2 s (the voice load itself 1.5 to 4.1 s in that run; a bare worker, from its start to the end of the paragraph, takes 1.5 to 2.5 s); 19.0 MB executable, with `espeak` in it; the cancel of a synthesis returns in under a second and leaves no process and no audio file | measured |
 | Notes | Dictation figures, for the whole length of the note: the model stays loaded (idle unload about 120 s), so a 30 min note holds 1.6 to 1.9 GB resident throughout; during a decode the machine is busy, including during an Analyse | measured (derived) |
 
 | Computer | Dictation | Read-aloud | Notes | Label |
@@ -531,18 +575,18 @@ phase 13 finalises the section, or leaves a figure labelled estimate with the re
 
 | Invariant (from the decisions) | Named test (suggested; the phase names the final one) | Phase |
 |---|---|---|
-| Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio` | 3 |
-| No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`; the offline proof at the gate | 3, 3b, 13 |
+| Audio is never kept | `temp_audio_is_removed_on_success_error_cancel_and_timeout`, `startup_sweep_removes_orphan_audio`; for the voice, `a_sentence_comes_back_as_a_wav_and_the_audio_file_is_gone`, `cancel_kills_the_child_promptly_and_leaves_no_audio_file`, `a_worker_that_crashes_is_a_failed_reading_and_a_new_one_starts_next_time` (all in `worker_tts_tests.rs`, none leaves a file in the temporary folder) | 3, 9 |
+| No network from the module except the model download file | `no_http_client_exists_in_the_speech_module` (source scan, allows `model_download.rs` only), `the_download_file_sends_nothing_but_a_get_for_the_archive`, `the_worker_crate_contains_no_network_code`, `the_voice_client_and_the_rules_open_no_connection_and_log_nothing`, `the_worker_crate_builds_the_voice_binary_from_the_full_libraries_on_their_own`; `readAloudSources.test.ts` (the voice engine of the window has no `fetch`, blob or media element); the offline proof at the gate | 3, 3b, 9, 13 |
 | A transcript only fills a text box | `dictationSources.test.ts`, "a dictation only fills the box" (source scan: no send, submit or conversation call in the five dictation files; the chat panel ends a dictation before every send, stop and clear); `longDictationSources.test.ts`, "a long dictation only fills the note" (no send, no save, no analyse) | 5, 12 |
 | Voice never applies a file action | `no_speech_path_reaches_a_file_action`; `notes_save_writes_only_what_the_preview_listed` | 5, 10 |
 | Dictation never writes the KB | `dictating_does_not_change_the_knowledge_base` (row hash of the `kb_*` tables), `repair_never_leaves_the_selection`, `with_the_knowledge_base_off_there_is_nothing_to_repair`, `the_command_answers_before_it_opens_the_index_when_the_base_is_off`, `hidden_names_reach_the_window_as_a_count_only` (all in `tests/speech_repair.rs`), `repairSources.test.ts` | 6 |
-| No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text` | 3, 5, 10 |
+| No text in logs | `speech_timing_line_holds_no_text` (`speech/timing_log.rs`, the line written to `speech-timings.jsonl`), `a_timing_line_names_the_engine_and_the_numbers_but_never_the_text` (stderr line), `notes_log_line_holds_no_text`, `the_voice_client_starts_its_process_only_through_the_shared_starter` (the worker's standard error goes nowhere), `the_voice_client_and_the_rules_open_no_connection_and_log_nothing` | 3, 5, 9, 10 |
 | Only proven-local voices | `a_non_local_voice_is_never_selected`, `no_local_voice_refuses` | 8 |
 | Spoken text derived by code, never by the model | `speakable_text_is_not_model_facing` (source scan: no gateway import) and a neutrality guard on any model-facing constant | 7 |
 | Any failure degrades to the typed app | `missing_engine_reports_unavailable_and_typed_app_still_works` | 2, 3 |
-| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly`, `dictation.test.ts`, "cancelling a dictation, at every stage"; `longDictation.test.ts`, "cancelling" (permission, recording, queue, finishing) | 3b, 5, 12 |
+| Cancel at every stage | `through_the_service_a_cancel_leaves_no_clip_and_no_process`, `cancel_kills_the_child_promptly` (both workers), `a_new_request_ends_the_one_in_progress`, `piperWorker.test.ts` (stop ends the clip, the pause and the synthesis), `dictation.test.ts`, "cancelling a dictation, at every stage"; `longDictation.test.ts`, "cancelling" (permission, recording, queue, finishing) | 3b, 5, 9, 12 |
 | One speech job at a time | `a_second_job_is_refused_with_speech_busy`; the voice session tests; `longDictation.test.ts`, "runs one job at a time, in the order the passages were cut" | 3, 4, 12 |
-| Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it` | 3b |
+| Workers die with the app | `the_worker_ends_by_itself_when_the_application_that_started_it_is_gone`, `shutdown_ends_the_worker_and_dropping_the_provider_kills_it`; the voice worker has the same loop and pipe (`dropping_the_provider_leaves_no_process`, `shutdown_ends_the_worker_before_voice_files_are_replaced`) | 3b, 9 |
 | Nothing heavy at launch | `launch_starts_no_speech_work` | 2 |
 | Voice off changes nothing (D13) | `voice_off_leaves_the_existing_components_unchanged` (baseline render tests written before the first edit of phase 2) | 2, 11 |
 | Language contract | the existing `sources.test.ts` and `catalogues.test.ts` guards; `a_locale_without_a_pack_answers_speech_locale_unsupported` | every phase |
@@ -607,9 +651,9 @@ For the owner. **Answered on 18 October 2026:** the owner confirmed point 1 expl
 | 6 | Add `pulldown-cmark` (phase 7) or write a line-based Markdown stripper? | A small line-based stripper; no new crate |
 | 7 | Edit `.github/workflows/ci.yml` to add a `cargo check --no-default-features` step for the worker crate? | Asked in phase 3b, not edited: it waits for her answer. The check was run locally and passes (`cargo check --no-default-features --offline` in `apps/speech-worker`); the sherpa download is too heavy for the runners |
 | 8 | Read the KB `spoken_form` of names of the selection in read-aloud (phase 7 second step) | Left out unless she asks |
-| 9 | Whether css10 really is a male voice | Her ear, phase 9; only the label key changes |
+| 9 | Whether css10 really is a male voice | Her ear, phase 9; only the label key changes. **Closed 19 Oct 2026**: she heard it, it is a male voice, an elderly one, with a strong accent and a right pronunciation (report 11); the label `male` stays |
 | 10 | The new workstation's measurements and the acceptance budgets (SpeechLab's Q-08) | Section 11 estimates stay labelled until measured |
-| 11 | Choosing a system voice (a male one, Paul): needs a way to store a system voice that `clean_voice_id` accepts. Options: (a) a separate setting `ttsSystemVoice` in `speech/settings.rs` with its own validation (letters, digits, spaces, `-`, `_`, `.`, parentheses, length cap), the voice list of the settings then showing the system voices when the engine is `system`; (b) widen `clean_voice_id`. | (a), small and shared by every system voice; to be built as an extra step of phase 9 (voice choice), not before. Awaiting her go |
+| 11 | Choosing a system voice (a male one, Paul): needs a way to store a system voice that `clean_voice_id` accepts. Options: (a) a separate setting `ttsSystemVoice` in `speech/settings.rs` with its own validation (letters, digits, spaces, `-`, `_`, `.`, parentheses, length cap), the voice list of the settings then showing the system voices when the engine is `system`; (b) widen `clean_voice_id`. | (a), small and shared by every system voice. **Built in phase 9 on her go (19 Oct 2026)**: `ttsSystemVoice`, validated as described in section 4 |
 
 ## 15. Facts verified on 18 October 2026
 

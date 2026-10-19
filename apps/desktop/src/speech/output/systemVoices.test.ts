@@ -3,6 +3,7 @@ import { SpeechOutputError } from "./engine";
 import {
   createSystemVoiceEngine,
   loadVoices,
+  localVoiceChoices,
   pickLocalVoice,
   summariseVoices,
   type SynthesisLike,
@@ -50,6 +51,16 @@ describe("which system voice is used", () => {
   it("is null for a language with no local voice, never a default", () => {
     expect(pickLocalVoice([ZIRA], "fr-FR", null)).toBeNull();
     expect(pickLocalVoice([], "fr-FR", null)).toBeNull();
+  });
+
+  it("offers the local voices of the language by the id the settings keep, with a name to read", () => {
+    const paul = voice("Microsoft Paul - French (France)", "fr-FR", true);
+
+    expect(localVoiceChoices([HORTENSE, DENISE, paul, ZIRA], "fr-FR")).toStrictEqual([
+      { id: "Hortense", name: "Hortense" },
+      { id: "Microsoft Paul - French (France)", name: "Microsoft Paul - French (France)" },
+    ]);
+    expect(localVoiceChoices([ZIRA], "fr-FR")).toStrictEqual([]);
   });
 
   it("summarises the local voices and counts the online ones of the language", () => {

@@ -32,6 +32,7 @@ fn voice_is_off_by_default_and_notes_are_on_by_their_own_switch() {
     assert_eq!(speech.max_note_seconds, DEFAULT_MAX_NOTE_SECONDS);
     assert_eq!(speech.tts_engine, None);
     assert_eq!(speech.tts_voice, None);
+    assert_eq!(speech.tts_system_voice, None);
     assert_eq!(speech.tts_rate, DEFAULT_TTS_RATE);
     assert_eq!(speech.notes_folder_name, DEFAULT_NOTES_FOLDER_NAME);
     assert!(speech.notes_voice_commands);
@@ -61,6 +62,7 @@ fn settings_are_written_in_camel_case_and_survive_a_round_trip() {
             max_dictation_seconds: 90,
             tts_engine: Some(TTS_ENGINE_PIPER.into()),
             tts_voice: Some("siwis".into()),
+            tts_system_voice: Some("Microsoft Paul - French (France)".into()),
             tts_rate: 1.25,
             notes_folder_name: "Dictations".into(),
             notes_voice_commands: false,
@@ -84,6 +86,7 @@ fn settings_are_written_in_camel_case_and_survive_a_round_trip() {
     assert_eq!(speech["maxNoteSeconds"], DEFAULT_MAX_NOTE_SECONDS);
     assert_eq!(speech["ttsEngine"], "piper");
     assert_eq!(speech["ttsVoice"], "siwis");
+    assert_eq!(speech["ttsSystemVoice"], "Microsoft Paul - French (France)");
     assert_eq!(speech["ttsRate"], 1.25);
     assert_eq!(speech["notesFolderName"], "Dictations");
     assert_eq!(speech["notesVoiceCommands"], false);
@@ -167,6 +170,51 @@ fn the_notes_folder_name_is_one_clean_name_that_falls_back_to_notes() {
         .sanitised();
         assert_eq!(speech.notes_folder_name, expected, "{typed:?}");
     }
+}
+
+#[test]
+fn a_system_voice_keeps_the_name_the_system_gave_it_and_nothing_unusable() {
+    let keep = |typed: &str| {
+        SpeechSettings {
+            tts_system_voice: Some(typed.into()),
+            ..SpeechSettings::default()
+        }
+        .sanitised()
+        .tts_system_voice
+    };
+    // What a system calls a voice: spaces, parentheses, dots, colons and slashes are all normal.
+    for id in [
+        "Microsoft Paul - French (France)",
+        "com.apple.voice.compact.fr-FR.Thomas",
+        "urn:voice:fr/Paul",
+        "Hortense",
+    ] {
+        assert_eq!(keep(id).as_deref(), Some(id), "{id}");
+    }
+    assert_eq!(keep("  Paul  ").as_deref(), Some("Paul"), "trimmed");
+    assert_eq!(keep(""), None);
+    assert_eq!(keep("   "), None);
+    assert_eq!(keep("Paul\nHortense"), None, "a control character");
+    assert_eq!(keep("Paul\0"), None, "a control character");
+    assert_eq!(keep(&"x".repeat(200)).map(|id| id.len()), Some(200));
+    assert_eq!(keep(&"x".repeat(201)), None, "too long");
+    // It is not the manifest slug: a slug setting still refuses what is not a slug.
+    let both = SpeechSettings {
+        tts_voice: Some("Microsoft Paul".into()),
+        tts_system_voice: Some("Microsoft Paul".into()),
+        ..SpeechSettings::default()
+    }
+    .sanitised();
+    assert_eq!(both.tts_voice, None);
+    assert_eq!(both.tts_system_voice.as_deref(), Some("Microsoft Paul"));
+}
+
+#[test]
+fn a_file_written_before_the_system_voice_setting_loads_without_one() {
+    let old: Settings =
+        serde_json::from_str(r#"{"speech":{"enabled":true,"ttsVoice":"css10"}}"#).expect("loads");
+    assert_eq!(old.speech.tts_system_voice, None);
+    assert_eq!(old.speech.tts_voice.as_deref(), Some("css10"));
 }
 
 #[test]

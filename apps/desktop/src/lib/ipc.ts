@@ -1317,11 +1317,13 @@ export type FinderScope = { kind: "wholeFolder" } | { kind: "selection"; paths: 
 /**
  * Why a file was found. `word` means a typed word met a text of the file and `detail` says which:
  * `name`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile`
- * (the words are spread over several texts) or `passage`. `entity` means a filter linked it, and
- * `detail` is the role or `mention`.
+ * (the words are spread over several texts) or `passage`. `identifier` means a number typed in any
+ * spelling met the same number stored in the file. `date` means a date typed met the file's date
+ * (`detail` is `profile` or `name`). `entity` means a filter linked it, and `detail` is the role or
+ * `mention`.
  */
 export interface FinderReason {
-  kind: "word" | "entity";
+  kind: "word" | "identifier" | "date" | "entity";
   detail: string | null;
 }
 

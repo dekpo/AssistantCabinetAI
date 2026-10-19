@@ -76,6 +76,12 @@ pub struct FinderQuery {
     /// Business type codes.
     pub kinds: Vec<String>,
     pub date: Option<DateRange>,
+    /// A day, month or year typed in the left panel's field: the files dated so (by their profile or by
+    /// the date their name starts with) are found **in addition to** the files the typed words find, and
+    /// the passages are not searched for it. Set by the `find_files` command from what was typed
+    /// (`finder::typed`), never by the webview.
+    #[serde(skip)]
+    pub typed_date: Option<DateRange>,
     /// Folders, relative to the work folder: every file under one of them.
     pub folders: Vec<String>,
     /// Extensions, lower case.
@@ -100,7 +106,8 @@ pub enum FinderScope {
 /// Why a file was found. `kind` is `word` (a typed word met a text of the file; `detail` says which:
 /// `name`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile` when the
 /// words are spread over several texts, `passage`), `identifier` (an identifier typed in any spelling met
-/// the same number stored in the file) or `entity` (`detail` is the role, or `mention`).
+/// the same number stored in the file), `date` (a date typed in the field met the file's date; `detail`
+/// is `profile` or `name`) or `entity` (`detail` is the role, or `mention`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reason {

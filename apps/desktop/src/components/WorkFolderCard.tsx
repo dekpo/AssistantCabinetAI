@@ -7,7 +7,7 @@ import {
   unfinishedPercent,
   vectorPercent,
 } from "../lib/analysis";
-import { scopedPaths, scopeFromSearch, selectionOf } from "../lib/analysisScope";
+import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { shownFiles } from "../lib/finderField";
 import { errorMessage, normaliseError, type AppError } from "../lib/errors";
 import { knowledgeLines } from "../lib/knowledgeSummary";
@@ -131,19 +131,17 @@ export function WorkFolderCard({
   const analysedCount =
     inventory === null ? 0 : inventory.files.filter(isSelectable).length;
 
-  /* The search field: typing a search selects the analysed files it finds. It is shown only where the
-     listing doubles as the selection, and not while a question is being answered. */
+  /* The search field: typing a search only filters the listing; ticking the results is the button
+     under the field. It is shown only where the listing doubles as the selection, and not while a
+     question is being answered. */
   const selectable = scope !== undefined && onScopeChange !== undefined;
   const analysedFiles = inventory === null ? [] : inventory.files.filter(isSelectable);
   const finder = useFinderSearch({
     domain: "documents",
-    analysed: analysedFiles,
+    folder: workFolder,
+    finishedPasses,
+    inventory,
     enabled: selectable && !scopeLocked && workFolder !== null,
-    onSelect: (paths, analysed) => {
-      if (scope !== undefined && onScopeChange !== undefined) {
-        onScopeChange(scopeFromSearch(scope, paths, analysed, Date.now()));
-      }
-    },
   });
   /* An index written before the profile existed is said, never rebuilt: only Analyse fills it. */
   const profileStatus = useProfileStatus("documents", workFolder, finishedPasses);
@@ -547,6 +545,8 @@ export function WorkFolderCard({
                 <FinderControls
                   search={finder}
                   analysed={analysedFiles}
+                  scope={scope}
+                  onScopeChange={onScopeChange}
                   placeholder={t("finder.placeholderDocuments")}
                   disabled={scopeLocked}
                 />

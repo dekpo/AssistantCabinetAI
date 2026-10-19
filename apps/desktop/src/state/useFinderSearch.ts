@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { foundPaths, SEARCH_DELAY_MS, SEARCH_LIMIT } from "../lib/finderField";
-import { findFiles, type FileRecord, type FinderDomain } from "../lib/ipc";
+import { useCallback, useEffect, useReducer } from "react";
+import { foundPaths, SEARCH_LIMIT } from "../lib/finderField";
+import { initialSearchState, searchReducer } from "../lib/finderSearchState";
+import { findFiles, type FinderDomain } from "../lib/ipc";
 
 /**
  * The search field of a folder card: what she typed, the files the finder found, and whether the
  * listing shows all the files or only the ones found.
  *
- * Typing is her own action, so a finished search **replaces the selection** with the analysed files
- * it found (`onSelect`). Clearing the field, or "Réinitialiser", only ends the filter: the selection
- * stays as the search left it. The search runs after a pause in typing, never at launch, and costs
- * no model call (`docs/LEXICAL-RETRIEVAL-DESIGN.md` 6.1).
+ * A search only filters the view and never touches the selection: ticking the results is a separate
+ * click (`FinderControls`). The rules (pause in typing, stale answers, a new search after a pass)
+ * live in `lib/finderSearchState.ts`, which is tested; this hook only starts the request that state
+ * asks for and gives the answer back. The search runs after a pause in typing, never at launch, and
+ * costs no model call (`docs/LEXICAL-RETRIEVAL-DESIGN.md` 6.1).
  */
 export interface FinderSearch {
   text: string;
@@ -26,68 +28,55 @@ export interface FinderSearch {
 
 export function useFinderSearch({
   domain,
-  analysed,
-  onSelect,
+  folder,
+  finishedPasses,
+  inventory,
   enabled,
 }: {
   domain: FinderDomain;
-  /** The analysed files, for the selection the search makes. */
-  analysed: FileRecord[];
-  /** Called with the paths found, once a search has finished. */
-  onSelect: (paths: string[], analysed: FileRecord[]) => void;
+  /** The folder of the card: the text and the results are dropped when it changes. */
+  folder: string | null;
+  /** Counted up by every finished pass: the files and their names may have changed. */
+  finishedPasses: number;
+  /** The inventory last read (it changes identity at every read, including on window focus). */
+  inventory: unknown;
   /** False while the field is not shown (no folder, or a question is being answered). */
   enabled: boolean;
 }): FinderSearch {
-  const [text, setTextState] = useState("");
-  const [found, setFound] = useState<string[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-  /* The latest values, read when a search ends, so that the effect below depends on the words she
-     typed and on nothing else. */
-  const latest = useRef({ analysed, onSelect });
-  latest.current = { analysed, onSelect };
-  const request = useRef(0);
+  const [state, dispatch] = useReducer(searchReducer, enabled, initialSearchState);
 
-  const setText = useCallback((next: string) => {
-    setTextState(next);
-    if (next.trim() === "") {
-      // Clearing the field ends the filter and keeps the selection.
-      request.current += 1;
-      setFound(null);
-      setFailed(false);
-      setShowAll(false);
-    }
-  }, []);
+  const setText = useCallback((text: string) => dispatch({ type: "textChanged", text }), []);
+  const setShowAll = useCallback(
+    (showAll: boolean) => dispatch({ type: "showAllChanged", showAll }),
+    [],
+  );
+  const reset = useCallback(() => dispatch({ type: "textChanged", text: "" }), []);
 
-  const reset = useCallback(() => setText(""), [setText]);
+  useEffect(() => dispatch({ type: "folderChanged" }), [folder]);
+  useEffect(() => dispatch({ type: "enabledChanged", enabled }), [enabled]);
+  useEffect(() => dispatch({ type: "refresh" }), [finishedPasses, inventory]);
 
+  const wanted = state.wanted;
   useEffect(() => {
-    const typed = text.trim();
-    if (!enabled || typed === "") {
+    if (wanted === null) {
       return;
     }
-    const mine = ++request.current;
     const timer = window.setTimeout(() => {
-      findFiles(domain, { text: typed, limit: SEARCH_LIMIT, pathsOnly: true }).then(
-        (result) => {
-          if (mine !== request.current) {
-            return; // A newer search, or a cleared field, has taken over.
-          }
-          const paths = foundPaths(result);
-          setFound(paths);
-          setFailed(false);
-          latest.current.onSelect(paths, latest.current.analysed);
-        },
-        () => {
-          if (mine === request.current) {
-            setFound(null);
-            setFailed(true);
-          }
-        },
+      findFiles(domain, { text: wanted.text, limit: SEARCH_LIMIT, pathsOnly: true }).then(
+        (result) => dispatch({ type: "answered", id: wanted.id, paths: foundPaths(result) }),
+        () => dispatch({ type: "failed", id: wanted.id }),
       );
-    }, SEARCH_DELAY_MS);
+    }, wanted.delayMs);
     return () => window.clearTimeout(timer);
-  }, [text, domain, enabled]);
+  }, [wanted, domain]);
 
-  return { text, setText, found, failed, showAll, setShowAll, reset };
+  return {
+    text: state.text,
+    setText,
+    found: state.found,
+    failed: state.failed,
+    showAll: state.showAll,
+    setShowAll,
+    reset,
+  };
 }

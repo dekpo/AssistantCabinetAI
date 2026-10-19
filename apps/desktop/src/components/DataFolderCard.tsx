@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { analysisFraction, analysisPending, countPending } from "../lib/analysis";
-import { scopedPaths, scopeFromSearch, selectionOf } from "../lib/analysisScope";
+import { scopedPaths, selectionOf } from "../lib/analysisScope";
 import { shownFiles } from "../lib/finderField";
 import { normaliseError, type AppError } from "../lib/errors";
 import { abbreviateFolderPath } from "../lib/folderPath";
@@ -99,19 +99,17 @@ export function DataFolderCard({
   const selection = scope === undefined ? "none" : selectionOf(scope);
   const usableCount = inventory === null ? 0 : inventory.files.filter(isSelectable).length;
 
-  /* The search field: typing a search selects the analysed files it finds. It is shown only where the
-     listing doubles as the selection, and not while a question is being answered. */
+  /* The search field: typing a search only filters the listing; ticking the results is the button
+     under the field. It is shown only where the listing doubles as the selection, and not while a
+     question is being answered. */
   const selectable = scope !== undefined && onScopeChange !== undefined;
   const analysedFiles = inventory === null ? [] : inventory.files.filter(isSelectable);
   const finder = useFinderSearch({
     domain: "data",
-    analysed: analysedFiles,
+    folder: dataFolder,
+    finishedPasses,
+    inventory,
     enabled: selectable && !scopeLocked && dataFolder !== null,
-    onSelect: (paths, analysed) => {
-      if (scope !== undefined && onScopeChange !== undefined) {
-        onScopeChange(scopeFromSearch(scope, paths, analysed, Date.now()));
-      }
-    },
   });
   /* An index written before the profile existed is said, never rebuilt: only Analyse fills it. */
   const profileStatus = useProfileStatus("data", dataFolder, finishedPasses);
@@ -386,6 +384,8 @@ export function DataFolderCard({
                 <FinderControls
                   search={finder}
                   analysed={analysedFiles}
+                  scope={scope}
+                  onScopeChange={onScopeChange}
                   placeholder={t("finder.placeholderData")}
                   disabled={scopeLocked}
                 />

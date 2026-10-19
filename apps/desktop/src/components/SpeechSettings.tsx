@@ -12,11 +12,11 @@ import {
   INSTALL_AVAILABLE,
   modelStatusKey,
   overrideLanguages,
-  voicesOfResolvedLanguage,
 } from "../speech/availability";
 import type { SpeechFeature } from "../speech/ipc";
 import { SPEECH_LIMITS } from "../speech/limits";
 import { jobLine, modelButtons } from "../speech/modelJob";
+import { voiceRows } from "../speech/voiceRows";
 import { NumberSetting } from "./NumberSetting";
 
 const FEATURES: SpeechFeature[] = ["dictation", "readAloud", "notes"];
@@ -65,9 +65,10 @@ export function SpeechSettingsBlock({
     status?.sttModel ?? "missing",
     INSTALL_AVAILABLE && status !== null,
   );
-  const runningLine = jobLine(modelJob.job);
+  /* A job about a reading voice shows under that voice; the dictation model shows its own. */
+  const runningLine = modelJob.target === null ? jobLine(modelJob.job) : null;
   const languages = overrideLanguages(status);
-  const voices = voicesOfResolvedLanguage(status);
+  const voices = voiceRows(status);
   /* The voices of this system, read only when the system engine is the chosen one. */
   const systemVoices = useSystemVoices(speech.ttsEngine === "system", status?.locale ?? locale);
   /* What stops a switched-on feature, one line each; a feature that is simply off says nothing. */
@@ -146,7 +147,7 @@ export function SpeechSettingsBlock({
             type="button"
             className="button button--compact"
             disabled={buttons.installDisabled}
-            onClick={modelJob.install}
+            onClick={() => modelJob.install()}
           >
             {t("speech.install.action")}
           </button>
@@ -154,11 +155,11 @@ export function SpeechSettingsBlock({
             type="button"
             className="button button--compact"
             disabled={buttons.verifyDisabled}
-            onClick={modelJob.verify}
+            onClick={() => modelJob.verify()}
           >
             {t("speech.install.verifyAction")}
           </button>
-          {buttons.cancelShown ? (
+          {buttons.cancelShown && modelJob.target === null ? (
             <button type="button" className="button button--compact" onClick={modelJob.cancel}>
               {t("speech.install.cancel")}
             </button>
@@ -169,7 +170,7 @@ export function SpeechSettingsBlock({
             {t(runningLine.key, runningLine.values)}
           </span>
         )}
-        {modelJob.job.kind === "failed" ? (
+        {modelJob.job.kind === "failed" && modelJob.target === null ? (
           <span className="field__description" role="alert">
             {errorMessage(t, modelJob.job.error)}
           </span>
@@ -284,21 +285,125 @@ export function SpeechSettingsBlock({
           )}
         </div>
       )}
-      <label className="field">
-        <span className="field__label">{t("speech.voiceLabel")}</span>
-        <select
-          className="field__control"
-          value={speech.ttsVoice ?? ""}
-          onChange={(event) => set({ ttsVoice: event.target.value || null })}
-        >
-          <option value="">{t("speech.voice.auto")}</option>
-          {voices.map((voice) => (
-            <option key={voice.id} value={voice.id}>
-              {t("speech.voice.option", { gender: t(`speech.gender.${voice.gender}`), id: voice.id })}
-            </option>
-          ))}
-        </select>
-      </label>
+      {speech.ttsEngine === "system" ? (
+        <label className="field">
+          <span className="field__label">{t("speech.systemVoiceLabel")}</span>
+          <select
+            className="field__control"
+            value={speech.ttsSystemVoice ?? ""}
+            onChange={(event) => set({ ttsSystemVoice: event.target.value || null })}
+          >
+            <option value="">{t("speech.voice.auto")}</option>
+            {/* A voice chosen earlier that this computer no longer lists stays visible, so that the
+                choice is never silently lost by looking at the list. */}
+            {speech.ttsSystemVoice !== null &&
+            !(systemVoices?.choices ?? []).some((voice) => voice.id === speech.ttsSystemVoice) ? (
+              <option value={speech.ttsSystemVoice}>{speech.ttsSystemVoice}</option>
+            ) : null}
+            {(systemVoices?.choices ?? []).map((voice) => (
+              <option key={voice.id} value={voice.id}>
+                {voice.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <label className="field">
+          <span className="field__label">{t("speech.voiceLabel")}</span>
+          <select
+            className="field__control"
+            value={speech.ttsVoice ?? ""}
+            onChange={(event) => set({ ttsVoice: event.target.value || null })}
+          >
+            <option value="">{t("speech.voice.auto")}</option>
+            {voices.map((voice) => (
+              <option key={voice.id} value={voice.id}>
+                {voice.rating === null
+                  ? t("speech.voice.option", {
+                      gender: t(`speech.gender.${voice.gender}`),
+                      id: voice.id,
+                    })
+                  : t("speech.voice.optionRated", {
+                      gender: t(`speech.gender.${voice.gender}`),
+                      id: voice.id,
+                      rating: t(`speech.rating.short.${voice.rating}`),
+                    })}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {/* The voices of the language, each with its state and its licence: nothing is downloaded until
+          the user presses Install on one of them. */}
+      <div className="field">
+        <span className="field__label">{t("speech.voiceModels.label")}</span>
+        <span className="field__description">{t("speech.voiceModels.hint")}</span>
+        {voices.length === 0 ? (
+          <span className="field__description">{t("speech.voiceModels.none")}</span>
+        ) : null}
+        {voices.map((voice) => {
+          const voiceButtons = modelButtons(
+            modelJob.job,
+            voice.state,
+            INSTALL_AVAILABLE && status !== null,
+          );
+          const mine = modelJob.target === voice.id;
+          const voiceLine = mine ? jobLine(modelJob.job) : null;
+          return (
+            <div className="field" key={voice.id}>
+              <span className="field__description">
+                {t("speech.voiceModels.line", {
+                  voice: t("speech.voice.option", {
+                    gender: t(`speech.gender.${voice.gender}`),
+                    id: voice.id,
+                  }),
+                  size: voice.megabytes,
+                })}
+                {" "}
+                {t(modelStatusKey(voice.state))}
+                {voice.rating === null ? null : ` ${t(`speech.rating.${voice.rating}`)}`}
+              </span>
+              <div className="field__row">
+                <button
+                  type="button"
+                  className="button button--compact"
+                  disabled={voiceButtons.installDisabled}
+                  onClick={() => modelJob.install(voice.id)}
+                >
+                  {t("speech.install.action")}
+                </button>
+                <button
+                  type="button"
+                  className="button button--compact"
+                  disabled={voiceButtons.verifyDisabled}
+                  onClick={() => modelJob.verify(voice.id)}
+                >
+                  {t("speech.install.verifyAction")}
+                </button>
+                {voiceButtons.cancelShown && mine ? (
+                  <button
+                    type="button"
+                    className="button button--compact"
+                    onClick={modelJob.cancel}
+                  >
+                    {t("speech.install.cancel")}
+                  </button>
+                ) : null}
+              </div>
+              {voiceLine === null ? null : (
+                <span className="field__description" role="status">
+                  {t(voiceLine.key, voiceLine.values)}
+                </span>
+              )}
+              {modelJob.job.kind === "failed" && mine ? (
+                <span className="field__description" role="alert">
+                  {errorMessage(t, modelJob.job.error)}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       <NumberSetting
         label={t("speech.rateLabel")}
         description={t("speech.rateDescription")}

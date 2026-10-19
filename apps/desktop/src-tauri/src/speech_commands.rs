@@ -14,7 +14,7 @@ use crate::commands::{search_roots, work_folder_policy, AppState};
 use crate::error::AppError;
 use crate::speech::dictation_commands::{self, Applied};
 use crate::speech::model_download::{self, Progress, Sink};
-use crate::speech::models::{self, JobSlot};
+use crate::speech::models::{self, JobSlot, ModelSpec};
 use crate::speech::notes::{self, NoteDraft, NoteFile, SaveLog, Target};
 use crate::speech::service::{self, Purpose, SpeechService, PURPOSE_HEADER};
 use crate::speech::speakable::{self, Part, Segment};
@@ -22,14 +22,19 @@ use crate::speech::status::{self, Probes, SpeechStatus};
 use crate::speech::stt::SttResult;
 use crate::speech::temp_audio;
 use crate::speech::timing_log;
+use crate::speech::tts::{self, VoiceModelStatus};
 use crate::speech::worker_stt::{self, WorkerSttProvider};
+use crate::speech::worker_tts::{self, WorkerTtsProvider};
 
 /// What the speech module keeps between two commands: what was found on this machine, the worker
 /// provider (a process that exists only after the first dictation) behind the transcription service,
-/// and the slot of the one install or verify that may run.
+/// the voice worker provider (a process that exists only after the first reading), the state of the
+/// voices on disk, and the slot of the one install or verify that may run.
 pub struct SpeechState {
     probes: Mutex<Probes>,
+    voices: Mutex<Vec<VoiceModelStatus>>,
     worker: Option<Arc<WorkerSttProvider>>,
+    tts: WorkerTtsProvider,
     service: SpeechService,
     model_job: JobSlot,
 }
@@ -45,7 +50,9 @@ impl Default for SpeechState {
         };
         Self {
             probes: Mutex::new(Probes::default()),
+            voices: Mutex::new(Vec::new()),
             worker,
+            tts: WorkerTtsProvider::default(),
             service,
             model_job: JobSlot::default(),
         }
@@ -68,21 +75,41 @@ impl SpeechState {
         &self.service
     }
 
-    /// Finds the worker and the model folder on this machine, tells the provider, and records what
-    /// was found. A handful of `stat` calls; no hashing and no process.
+    pub(crate) fn voices(&self) -> Result<Vec<VoiceModelStatus>, AppError> {
+        self.voices
+            .lock()
+            .map(|voices| voices.clone())
+            .map_err(|_| AppError::Internal)
+    }
+
+    /// Finds the workers and the model folders on this machine, tells the providers, and records
+    /// what was found. A handful of `stat` calls per model; no hashing and no process.
     pub(crate) fn refresh(&self, app: &AppHandle) -> Result<Probes, AppError> {
-        let (Some(worker), Some(spec)) = (&self.worker, models::stt_model()) else {
-            return self.probes();
-        };
         let local = app
             .path()
             .app_local_data_dir()
             .map_err(|_| AppError::Internal)?;
-        worker.configure(worker_stt::setup_for(&search_roots(app), &local, spec));
+        let roots = search_roots(app);
+        let root = worker_stt::models_root(&local);
+        self.tts.configure(worker_tts::setup_for(
+            &roots,
+            root.clone(),
+            local.join(temp_audio::TEMP_FOLDER_NAME),
+        ));
+        let voices = tts::voice_statuses(&root);
+        let voice_ready = self.tts.engine_found()
+            && voices
+                .iter()
+                .any(|voice| voice.state == crate::speech::status::ModelState::Present);
+        *self.voices.lock().map_err(|_| AppError::Internal)? = voices;
+        let (Some(worker), Some(spec)) = (&self.worker, models::stt_model()) else {
+            return self.probes();
+        };
+        worker.configure(worker_stt::setup_for(&roots, &local, spec));
         let found = Probes {
             stt_engine: worker.engine_found(),
             stt_model: worker.model_state(),
-            tts_voice: false,
+            tts_voice: voice_ready,
         };
         *self.probes.lock().map_err(|_| AppError::Internal)? = found;
         Ok(found)
@@ -103,7 +130,15 @@ pub fn speech_status(
         .lock()
         .map_err(|_| AppError::Internal)?
         .clone();
-    Ok(status::compute(&settings, &speech.refresh(&app)?))
+    let mut probes = speech.refresh(&app)?;
+    let voices = speech.voices()?;
+    // The probe is about the language read-aloud works in: a French voice does not make an English
+    // answer readable.
+    let locale = status::effective_locale(&settings);
+    probes.tts_voice = probes.tts_voice && tts::any_voice_ready(&locale, &voices);
+    let mut computed = status::compute(&settings, &probes);
+    computed.voices = voices;
+    Ok(computed)
 }
 
 /// The documents folder and the notes subfolder name, read from the settings. Nothing the webview
@@ -247,25 +282,45 @@ fn model_places(
     Ok((worker_stt::models_root(&local), address))
 }
 
-/// Downloads and installs the speech model. Only ever called by the Install button: nothing starts
-/// it by itself. Progress goes to the channel; `speech_model_cancel` stops it.
+/// The manifest row a model command works on: the one the interface names by id (a voice), or the
+/// speech-to-text model when it names none.
+fn model_spec(model: Option<&str>) -> Result<&'static ModelSpec, AppError> {
+    match model {
+        None => models::stt_model().ok_or(AppError::Internal),
+        Some(id) => models::find(id).ok_or(AppError::Internal),
+    }
+}
+
+impl SpeechState {
+    /// Ends the worker that holds the files of `spec` open: a loaded model keeps its files open, and
+    /// Windows will not replace a file that is open.
+    fn release_model(&self, spec: &ModelSpec) {
+        if spec.kind == "tts" {
+            self.tts.shutdown();
+        } else if let Some(worker) = &self.worker {
+            worker.shutdown();
+        }
+    }
+}
+
+/// Downloads and installs a speech model: the dictation model, or the voice named by `model`. Only
+/// ever called by an Install button: nothing starts it by itself. Progress goes to the channel;
+/// `speech_model_cancel` stops it.
 #[tauri::command]
 pub async fn speech_model_install(
     app: AppHandle,
     state: State<'_, AppState>,
     speech: State<'_, SpeechState>,
     on_progress: Channel<Progress>,
+    model: Option<String>,
 ) -> Result<(), AppError> {
-    let spec = models::stt_model().ok_or(AppError::Internal)?;
+    let spec = model_spec(model.as_deref())?;
     let (root, address) = model_places(&app, &state)?;
     if speech.service().is_busy() {
         return Err(AppError::SpeechBusy);
     }
     let job = speech.model_job.begin()?;
-    // A loaded model keeps its files open, and Windows will not replace a file that is open.
-    if let Some(worker) = &speech.worker {
-        worker.shutdown();
-    }
+    speech.release_model(spec);
     let sink: Sink = Arc::new(move |progress| {
         let _ = on_progress.send(progress);
     });
@@ -281,16 +336,15 @@ pub async fn speech_model_verify(
     app: AppHandle,
     state: State<'_, AppState>,
     speech: State<'_, SpeechState>,
+    model: Option<String>,
 ) -> Result<(), AppError> {
-    let spec = models::stt_model().ok_or(AppError::Internal)?;
+    let spec = model_spec(model.as_deref())?;
     let (root, _) = model_places(&app, &state)?;
     if speech.service().is_busy() {
         return Err(AppError::SpeechBusy);
     }
     let job = speech.model_job.begin()?;
-    if let Some(worker) = &speech.worker {
-        worker.shutdown();
-    }
+    speech.release_model(spec);
     let folder = spec.folder(&root);
     let token = job.cancel_token().clone();
     tauri::async_runtime::spawn_blocking(move || models::verify(spec, &folder, &token))
@@ -304,6 +358,53 @@ pub async fn speech_model_verify(
 #[tauri::command]
 pub fn speech_model_cancel(speech: State<'_, SpeechState>) -> bool {
     speech.model_job.cancel()
+}
+
+/// Speaks one segment of a reading and hands the audio back to the window: a WAV, as the raw body of
+/// the answer. The voice and the speed come from the settings and the language table, never from the
+/// window; the text is the only thing it sends. The worker starts here, on the first reading, and
+/// the audio file it writes is read back and removed before this returns. Nothing is stored.
+#[tauri::command]
+pub async fn tts_synthesize(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    speech: State<'_, SpeechState>,
+    text: String,
+    locale: String,
+) -> Result<tauri::ipc::Response, AppError> {
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .clone();
+    speakable::reading_allowed(&settings)?;
+    if speech.model_job.is_running() {
+        return Err(AppError::SpeechBusy);
+    }
+    speech.refresh(&app)?;
+    let root = worker_stt::models_root(
+        &app.path()
+            .app_local_data_dir()
+            .map_err(|_| AppError::Internal)?,
+    );
+    let voice = tts::choose_voice(&locale, settings.speech.tts_voice.as_deref(), |spec| {
+        models::state(spec, &spec.folder(&root))
+    })?;
+    let speed = tts::speed_percent(settings.speech.tts_rate);
+    let synthesis = tauri::async_runtime::spawn_blocking(move || {
+        let speech = app.state::<SpeechState>();
+        speech.tts.synthesize(voice, &text, speed)
+    })
+    .await
+    .map_err(|_| AppError::Internal)??;
+    Ok(tauri::ipc::Response::new(synthesis.wav))
+}
+
+/// Stops the synthesis in progress, if any. The voice worker is killed and starts again at the next
+/// reading. Returns whether there was one.
+#[tauri::command]
+pub fn tts_cancel(speech: State<'_, SpeechState>) -> bool {
+    speech.tts.cancel()
 }
 
 /// The segments a voice speaks for these parts of an answer, and the notes that stand for what is

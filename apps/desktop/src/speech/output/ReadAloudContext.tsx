@@ -12,10 +12,12 @@ import { useTranslation } from "../../i18n/I18nProvider";
 import type { SpeechSettings } from "../../lib/ipc";
 import { useSpeechStatus } from "../../state/useSpeechStatus";
 import { useVoiceSession } from "../VoiceSessionContext";
-import { speechPrepareReading } from "../ipc";
+import { speechPrepareReading, speechStatus, ttsCancel, ttsSynthesize } from "../ipc";
 import { readAloudVisibility, type EngineChoice } from "./engineChoice";
 import type { ReadAloudEngine } from "./engine";
 import { noteSentence } from "./pauses";
+import { createBufferPlayer } from "./playback";
+import { createPiperEngine, installedVoices } from "./piperWorker";
 import { createReadAloud, escapeStopsReading, type ReadAloud, type ReadAloudState } from "./readAloud";
 import { browserSystemVoiceEngine } from "./systemVoices";
 
@@ -29,14 +31,26 @@ export interface ReadAloudValue {
 export const ReadAloudContext = createContext<ReadAloudValue | null>(null);
 
 /**
- * The engine for a choice. The Piper worker arrives with its own phase; until it does a Piper choice
- * has no engine, so a reading is refused with `tts_no_local_voice` and never falls back to an
+ * The engine for a choice. A Piper choice is the voice worker of Rust; a choice of nothing has no
+ * engine, so a reading is refused with `tts_no_local_voice` and never falls back to an
  * operating-system voice the user did not choose.
  */
-function engineFor(choice: EngineChoice, cache: { system?: ReadAloudEngine | null }): ReadAloudEngine | null {
+function engineFor(
+  choice: EngineChoice,
+  cache: { system?: ReadAloudEngine | null; piper?: ReadAloudEngine },
+): ReadAloudEngine | null {
   if (choice === "system") {
     cache.system ??= browserSystemVoiceEngine();
     return cache.system;
+  }
+  if (choice === "piper") {
+    cache.piper ??= createPiperEngine({
+      synthesize: ttsSynthesize,
+      cancel: ttsCancel,
+      player: createBufferPlayer(),
+      voices: async (locale) => installedVoices(await speechStatus(), locale),
+    });
+    return cache.piper;
   }
   return null;
 }
@@ -59,13 +73,20 @@ export function ReadAloudProvider({ speech, children }: { speech: SpeechSettings
 
   const latest = useRef({ speech, choice, t });
   latest.current = { speech, choice, t };
-  const cache = useRef<{ system?: ReadAloudEngine | null }>({});
+  const cache = useRef<{ system?: ReadAloudEngine | null; piper?: ReadAloudEngine }>({});
   const [controller] = useState(() =>
     createReadAloud({
       prepare: speechPrepareReading,
       engine: () => engineFor(latest.current.choice, cache.current),
       session,
-      options: () => ({ rate: latest.current.speech.ttsRate, voiceId: latest.current.speech.ttsVoice }),
+      options: () => ({
+        rate: latest.current.speech.ttsRate,
+        /* The voice list of the engine in use: a manifest voice, or a voice the system named. */
+        voiceId:
+          latest.current.choice === "system"
+            ? latest.current.speech.ttsSystemVoice
+            : latest.current.speech.ttsVoice,
+      }),
       noteText: (code, count) => noteSentence(latest.current.t, code, count),
     }),
   );

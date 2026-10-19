@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     DEFAULT_TTS_RATE, MAX_DICTATION_SECONDS, MAX_LOCALE_CHARS, MAX_NOTE_SECONDS, MAX_TTS_RATE,
-    MAX_VOICE_ID_CHARS, MIN_DICTATION_SECONDS, MIN_NOTE_SECONDS, MIN_TTS_RATE,
+    MAX_SYSTEM_VOICE_ID_CHARS, MAX_VOICE_ID_CHARS, MIN_DICTATION_SECONDS, MIN_NOTE_SECONDS,
+    MIN_TTS_RATE,
 };
 
 /// Cap of one chat dictation until the user changes it, in seconds.
@@ -47,6 +48,10 @@ pub struct SpeechSettings {
     pub tts_engine: Option<String>,
     /// A voice manifest id, or `None` for the first voice of the resolved locale.
     pub tts_voice: Option<String>,
+    /// The operating-system voice used when the engine is `system`: the id the system gives it, or
+    /// `None` for the first local voice of the language. Separate from `tts_voice`, whose ids are
+    /// manifest slugs; this one only ever goes back to the window's own voice list.
+    pub tts_system_voice: Option<String>,
     /// Read-aloud speed as a multiple of the voice's natural rate.
     pub tts_rate: f32,
     /// One clean folder name under the documents folder, never a path.
@@ -69,6 +74,7 @@ impl Default for SpeechSettings {
             max_note_seconds: DEFAULT_MAX_NOTE_SECONDS,
             tts_engine: None,
             tts_voice: None,
+            tts_system_voice: None,
             tts_rate: DEFAULT_TTS_RATE,
             notes_folder_name: DEFAULT_NOTES_FOLDER_NAME.to_string(),
             notes_voice_commands: true,
@@ -100,6 +106,7 @@ impl SpeechSettings {
                 .filter(|engine| TTS_ENGINES.contains(engine))
                 .map(str::to_string),
             tts_voice: self.tts_voice.as_deref().and_then(clean_voice_id),
+            tts_system_voice: self.tts_system_voice.as_deref().and_then(clean_system_voice_id),
             tts_rate: if self.tts_rate.is_finite() {
                 self.tts_rate.clamp(MIN_TTS_RATE, MAX_TTS_RATE)
             } else {
@@ -135,6 +142,16 @@ fn clean_voice_id(typed: &str) -> Option<String> {
         && id
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'));
+    usable.then(|| id.to_string())
+}
+
+/// The id of an operating-system voice: what the system calls it, trimmed. It is kept whole when it
+/// is short and free of control characters; anything else reads as "the first local voice".
+fn clean_system_voice_id(typed: &str) -> Option<String> {
+    let id = typed.trim();
+    let usable = !id.is_empty()
+        && id.chars().count() <= MAX_SYSTEM_VOICE_ID_CHARS
+        && !id.chars().any(char::is_control);
     usable.then(|| id.to_string())
 }
 

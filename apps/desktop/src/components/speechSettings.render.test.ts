@@ -13,8 +13,16 @@ let answered: { status: SpeechStatus | null; failed: boolean } = { status: null,
 vi.mock("../state/useSpeechStatus", () => ({ useSpeechStatus: () => answered }));
 
 let modelJob: ModelJob = { kind: "idle" };
+/* The voice the running job is about; null is the dictation model. */
+let modelTarget: string | null = null;
 vi.mock("../state/useModelJob", () => ({
-  useModelJob: () => ({ job: modelJob, install: () => {}, verify: () => {}, cancel: () => {} }),
+  useModelJob: () => ({
+    job: modelJob,
+    target: modelTarget,
+    install: () => {},
+    verify: () => {},
+    cancel: () => {},
+  }),
 }));
 
 beforeAll(() => {
@@ -47,9 +55,31 @@ const MISSING_MODEL: SpeechStatus = {
     notes: { available: false, reason: "notes_folder_unavailable" },
   },
   sttModel: "missing",
+  voices: [],
   languages: [
     { id: "fr-FR", support: "enabled", dictation: true, readAloud: true, voices: [] },
     { id: "de-DE", support: "planned", dictation: false, readAloud: false, voices: [] },
+  ],
+};
+
+const WITH_VOICES: SpeechStatus = {
+  ...MISSING_MODEL,
+  enabled: true,
+  languages: [
+    {
+      id: "fr-FR",
+      support: "enabled",
+      dictation: true,
+      readAloud: true,
+      voices: [
+        { gender: "female", id: "siwis" },
+        { gender: "male", id: "css10" },
+      ],
+    },
+  ],
+  voices: [
+    { id: "siwis", state: "present", rating: "review", bytes: 67_428_923 },
+    { id: "css10", state: "missing", rating: "attribution", bytes: 65_346_319 },
   ],
 };
 
@@ -116,8 +146,82 @@ describe("the voice block of the settings", () => {
     const markup = draw(settings());
 
     expect(markup).toContain("C:/data/speech-models/m");
-    expect(markup).toContain("copiez les quatre fichiers");
+    expect(markup).toContain("copiez les fichiers à la main");
     modelJob = { kind: "idle" };
+  });
+
+  it("lists the voices of the language with their state, their size and their licence", () => {
+    modelJob = { kind: "idle" };
+    modelTarget = null;
+    answered = { status: WITH_VOICES, failed: false };
+    const markup = draw(settings());
+
+    expect(markup).toContain("Voix installées sur cet ordinateur");
+    expect(markup).toContain("Voix féminine (siwis), 67 Mo");
+    expect(markup).toContain("Voix masculine (css10), 65 Mo");
+    expect(markup).toContain("Prêt.");
+    expect(markup).toContain("Non installé.");
+    // The licence is never hidden: the prototype voice says so, the other asks for a credit.
+    expect(markup).toContain("Voix de prototype : sa licence doit être vérifiée");
+    expect(markup).toContain("Libre d&#x27;usage, avec mention de ses auteurs.");
+    // The reading list carries the rating too.
+    expect(markup).toContain("Voix féminine (siwis, prototype)");
+    expect(markup).toContain("Voix masculine (css10, mention des auteurs requise)");
+    // One Install per voice, usable only for a voice that is not there.
+    expect(markup.match(/>Installer<\/button>/g)).toHaveLength(3);
+  });
+
+  it("shows the progress of a voice under that voice, and not under the dictation model", () => {
+    answered = { status: WITH_VOICES, failed: false };
+    modelJob = { kind: "installing", phase: "download", percent: 17 };
+    modelTarget = "css10";
+    const markup = draw(settings());
+
+    expect(markup.match(/Téléchargement : 17 %/g)).toHaveLength(1);
+    expect(markup.match(/>Annuler<\/button>/g)).toHaveLength(1);
+    const afterCss10 = markup.slice(markup.indexOf("css10), 65 Mo"));
+    expect(afterCss10).toContain("Téléchargement : 17 %");
+
+    modelJob = { kind: "idle" };
+    modelTarget = null;
+  });
+
+  it("says why the install of a voice failed under that voice only", () => {
+    answered = { status: WITH_VOICES, failed: false };
+    modelJob = {
+      kind: "failed",
+      error: { code: "speech_model_download_failed", data: { folder: "C:/data/speech-models/css10" } },
+    };
+    modelTarget = "css10";
+    const markup = draw(settings());
+
+    expect(markup.match(/C:\/data\/speech-models\/css10/g)).toHaveLength(1);
+    modelJob = { kind: "idle" };
+    modelTarget = null;
+  });
+
+  it("lets the user choose among the system voices, not the manifest voices, when the engine is the system's", () => {
+    answered = { status: WITH_VOICES, failed: false };
+
+    const piper = draw(settings({ ttsEngine: "piper" }));
+    expect(piper).toContain("Voix de lecture");
+    expect(piper).not.toContain("Voix du système</span>");
+
+    const system = draw(
+      settings({ ttsEngine: "system", ttsSystemVoice: "Microsoft Paul - French (France)" }),
+    );
+    expect(system).toContain("Voix du système</span>");
+    // A voice chosen earlier stays in the list even before the system has named its voices.
+    expect(system).toContain(
+      '<option value="Microsoft Paul - French (France)" selected="">Microsoft Paul - French (France)</option>',
+    );
+    expect(system).not.toContain("<span class=\"field__label\">Voix de lecture</span>");
+  });
+
+  it("says a language has no reading voice when the table offers none", () => {
+    answered = { status: MISSING_MODEL, failed: false };
+
+    expect(draw(settings())).toContain("Aucune voix de lecture n&#x27;est proposée pour cette langue.");
   });
 
   it("says a model is damaged or ready in words", () => {

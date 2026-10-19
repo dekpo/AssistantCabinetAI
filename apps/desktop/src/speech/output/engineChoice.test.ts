@@ -11,6 +11,7 @@ function status(readAloud: FeatureStatus, enabled = true): SpeechStatus {
     locale: "fr-FR",
     features: { dictation: READY, readAloud, notes: READY },
     sttModel: "present",
+    voices: [],
     languages: [],
   };
 }

@@ -1,5 +1,6 @@
 //! Reads the clip the application writes: a 16-bit PCM mono WAV. The application has already
-//! judged it (length, loudness, header), so this reader only refuses what it cannot decode.
+//! judged it (length, loudness, header), so this reader only refuses what it cannot decode. The
+//! text-to-speech worker writes its audio in the same canonical form.
 
 /// Samples as floats in [-1, 1] and their sample rate.
 #[derive(Debug, Clone, PartialEq)]
@@ -63,6 +64,32 @@ pub fn parse(bytes: &[u8]) -> Option<Clip> {
     None
 }
 
+/// Header of a canonical file, in bytes.
+const HEADER_BYTES: usize = 44;
+
+/// Encodes samples in [-1, 1] as a 16-bit PCM mono WAV. A sample outside the range is clipped.
+pub fn encode_pcm16(samples: &[f32], sample_rate: u32) -> Vec<u8> {
+    let data_bytes = samples.len() * 2;
+    let mut out = Vec::with_capacity(HEADER_BYTES + data_bytes);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&((36 + data_bytes) as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&sample_rate.to_le_bytes());
+    out.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(data_bytes as u32).to_le_bytes());
+    for sample in samples {
+        let value = (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +119,20 @@ mod tests {
         assert_eq!(clip.sample_rate, 16_000);
         assert_eq!(clip.samples, vec![0.0, 0.5, -1.0]);
         assert_eq!(clip.duration_ms(), 0);
+    }
+
+    #[test]
+    fn an_encoded_clip_reads_back() {
+        let bytes = encode_pcm16(&[0.0, 0.5, -1.0, 2.0], 22_050);
+        assert_eq!(bytes.len(), 44 + 8);
+        let clip = parse(&bytes).expect("parses");
+        assert_eq!(clip.sample_rate, 22_050);
+        assert_eq!(clip.samples.len(), 4);
+        assert!((clip.samples[1] - 0.5).abs() < 0.001);
+        assert!(
+            (clip.samples[3] - 1.0).abs() < 0.001,
+            "clipped to full scale"
+        );
     }
 
     #[test]

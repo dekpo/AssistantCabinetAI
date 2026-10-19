@@ -7,9 +7,10 @@ rust-version = "1.82"
 publish = false
 
 # Its own crate and its own lock, outside the application's build: nothing speech-related is linked
-# into the main executable (decision D2). The text-to-speech worker of a later phase links the full
-# sherpa-onnx libraries, which carry the GPL-3.0 espeak-ng, so the two workers cannot come out of
-# one build; `scripts/build-speech-worker.sh` builds each into its own target directory.
+# into the main executable (decision D2). The text-to-speech worker links the full sherpa-onnx
+# libraries, which carry the GPL-3.0 espeak-ng (its notice: `NOTICE-TTS-WORKER.md`), so the two
+# workers cannot come out of one build; `scripts/build-speech-worker.sh` builds each into its own
+# target directory.
 [lib]
 name = "speech_worker"
 path = "src/lib.rs"
@@ -19,11 +20,19 @@ name = "speech-stt-worker"
 path = "src/bin/stt.rs"
 required-features = ["stt"]
 
+[[bin]]
+name = "speech-tts-worker"
+path = "src/bin/tts.rs"
+required-features = ["tts"]
+
 [features]
 default = ["stt"]
 # The speech-to-text engine. Without it only the protocol and the WAV reader are compiled, which is
 # what `cargo check --no-default-features` verifies without downloading the native libraries.
 stt = ["dep:sherpa-onnx"]
+# The text-to-speech engine (Piper and Coqui VITS voices). Linked against the FULL sherpa-onnx
+# libraries, so this feature is built on its own: `--no-default-features --features tts`.
+tts = ["dep:sherpa-onnx"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

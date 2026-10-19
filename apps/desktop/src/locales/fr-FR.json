@@ -658,14 +658,32 @@
       "system": "Voix du système, seulement si elles fonctionnent sur cet ordinateur"
     },
     "voiceLabel": "Voix de lecture",
+    "systemVoiceLabel": "Voix du système",
     "voice": {
       "auto": "Première voix de la langue",
-      "option": "{gender} ({id})"
+      "option": "{gender} ({id})",
+      "optionRated": "{gender} ({id}, {rating})"
     },
     "gender": {
       "female": "Voix féminine",
       "male": "Voix masculine",
       "mixed": "Plusieurs voix"
+    },
+    "rating": {
+      "clear": "Libre d'usage.",
+      "attribution": "Libre d'usage, avec mention de ses auteurs.",
+      "review": "Voix de prototype : sa licence doit être vérifiée avant toute diffusion plus large.",
+      "short": {
+        "clear": "libre d'usage",
+        "attribution": "mention des auteurs requise",
+        "review": "prototype"
+      }
+    },
+    "voiceModels": {
+      "label": "Voix installées sur cet ordinateur",
+      "none": "Aucune voix de lecture n'est proposée pour cette langue.",
+      "line": "{voice}, {size} Mo",
+      "hint": "Une voix n'est téléchargée que lorsque vous appuyez sur Installer. La lecture à voix haute fonctionne avec une voix installée uniquement."
     },
     "rateLabel": "Vitesse de lecture",
     "rateDescription": "1 est la vitesse naturelle de la voix.",
@@ -755,7 +773,7 @@
     "speech_engine_missing": "Le composant vocal n'est pas installé sur cet ordinateur. La saisie au clavier fonctionne toujours.",
     "speech_model_missing": "Les fichiers vocaux ne sont pas encore sur cet ordinateur. Installez-les depuis les réglages ; la saisie au clavier fonctionne toujours.",
     "speech_model_corrupt": "Les fichiers vocaux de cet ordinateur sont abîmés et n'ont pas été utilisés. Installez-les à nouveau depuis les réglages.",
-    "speech_model_download_failed": "Les fichiers vocaux n'ont pas pu être téléchargés. Si votre logiciel de sécurité bloque le téléchargement, copiez les quatre fichiers à la main dans le dossier {folder}, puis appuyez sur Vérifier dans les réglages.",
+    "speech_model_download_failed": "Les fichiers vocaux n'ont pas pu être téléchargés. Si votre logiciel de sécurité bloque le téléchargement, copiez les fichiers à la main dans le dossier {folder}, puis appuyez sur Vérifier dans les réglages.",
     "speech_audio_too_short": "L'enregistrement est trop court. Parlez un peu plus longtemps, puis réessayez.",
     "speech_audio_too_quiet": "L'enregistrement est trop faible pour être compris. Vérifiez votre microphone et réessayez.",
     "speech_audio_too_long": "L'enregistrement dépasse la limite fixée dans les réglages. Il n'a pas été transcrit.",

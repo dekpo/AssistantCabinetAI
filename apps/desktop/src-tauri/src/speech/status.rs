@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use super::languages::{self, Feature, LanguageInfo};
 use super::settings::SpeechSettings;
+use super::tts::VoiceModelStatus;
 use crate::error::AppError;
 use crate::settings::{Settings, DEFAULT_LOCALE};
 
@@ -82,6 +83,9 @@ pub struct SpeechStatus {
     pub stt_model: ModelState,
     /// The language table, so the override list comes from Rust.
     pub languages: Vec<LanguageInfo>,
+    /// The voices of the manifest and what is on disk for each, so the settings can offer to install
+    /// the one the user wants. Empty out of `compute`: the command fills it from the disk.
+    pub voices: Vec<VoiceModelStatus>,
 }
 
 /// The locale speech works in: the override, else the interface locale, else the default.
@@ -107,6 +111,7 @@ pub fn compute(settings: &Settings, probes: &Probes) -> SpeechStatus {
         locale,
         stt_model: probes.stt_model,
         languages: languages::table(),
+        voices: Vec::new(),
     }
 }
 

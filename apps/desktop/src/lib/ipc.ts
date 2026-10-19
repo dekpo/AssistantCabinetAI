@@ -45,6 +45,9 @@ export interface SpeechSettings {
   ttsEngine: "piper" | "system" | null;
   /** A voice manifest id; `null` is the first voice of the language. */
   ttsVoice: string | null;
+  /** The id the operating system gives the voice used by the `system` engine; `null` is the first
+   * local voice of the language. */
+  ttsSystemVoice: string | null;
   /** Read-aloud speed as a multiple of the natural rate. */
   ttsRate: number;
   /** One clean folder name under the documents folder. */
@@ -65,6 +68,7 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   maxNoteSeconds: 1800,
   ttsEngine: null,
   ttsVoice: null,
+  ttsSystemVoice: null,
   ttsRate: 1,
   notesFolderName: "Notes",
   notesVoiceCommands: true,

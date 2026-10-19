@@ -39,6 +39,144 @@
           "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
         }
       ]
+    },
+    {
+      "id": "siwis",
+      "kind": "tts",
+      "licence": "CC-BY-4.0 (SIWIS data); fine-tuned from the Lessac voice (research-only data): licence to verify before any distribution",
+      "attribution": "Piper fr_FR siwis medium: SIWIS French Speech Synthesis Database (CC BY 4.0), phonemizer espeak-ng (GPL-3.0)",
+      "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/fr/fr_FR/siwis/medium",
+      "voice": {
+        "family": "piper",
+        "rating": "review",
+        "tree": {
+          "dir": "espeak-ng-data",
+          "files": 355,
+          "bytes": 17991651,
+          "sha256": "b1d0cfe9e894ddd95db6f7f3547a7a5e4a35d4804c6a8a650ceae6f35efd6a88"
+        }
+      },
+      "archive": {
+        "file": "siwis.zip",
+        "bytes": 67428923,
+        "sha256": "f603cbc352c6394a4b65eb0f6f5ea4441eb5f6bcf015330c79ca9f0bd40e0b48"
+      },
+      "files": [
+        {
+          "role": "model",
+          "name": "fr_FR-siwis-medium.onnx",
+          "bytes": 63149190,
+          "sha256": "b015076c2bedcff22fbedd5da6ffb49b7d0abb2e3bdc51e1a7906e0000e411ed"
+        },
+        {
+          "role": "tokens",
+          "name": "tokens.txt",
+          "bytes": 921,
+          "sha256": "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"
+        }
+      ]
+    },
+    {
+      "id": "css10",
+      "kind": "tts",
+      "licence": "BSD-3-Clause (model); CSS10 French, LibriVox public-domain recordings",
+      "attribution": "Coqui VITS fr css10 (neongeckocom/tts-vits-css10-fr), BSD-3-Clause; trained on CSS10 French (LibriVox, public domain)",
+      "source": "https://huggingface.co/neongeckocom/tts-vits-css10-fr",
+      "voice": {
+        "family": "coqui",
+        "rating": "attribution"
+      },
+      "archive": {
+        "file": "css10.zip",
+        "bytes": 65346319,
+        "sha256": "bb8abe0f6f4c8c153312755cb46d7a57efe7b09d46580bb456c0c5852768e0c6"
+      },
+      "files": [
+        {
+          "role": "model",
+          "name": "model.onnx",
+          "bytes": 71024119,
+          "sha256": "5638372974d5293c83ccef2fe1a758499a1ba012f7954bd1f3792331ae620227"
+        },
+        {
+          "role": "tokens",
+          "name": "tokens.txt",
+          "bytes": 1410,
+          "sha256": "4b4ba3385bf661b87735835de24365e25623d250be0621bc184dff050df4c2fb"
+        }
+      ]
+    },
+    {
+      "id": "ljspeech",
+      "kind": "tts",
+      "licence": "Public domain (LJ Speech), trained from scratch",
+      "attribution": "Piper en_US ljspeech medium (LJ Speech, public domain), phonemizer espeak-ng (GPL-3.0)",
+      "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/medium",
+      "voice": {
+        "family": "piper",
+        "rating": "clear",
+        "tree": {
+          "dir": "espeak-ng-data",
+          "files": 355,
+          "bytes": 17991651,
+          "sha256": "b1d0cfe9e894ddd95db6f7f3547a7a5e4a35d4804c6a8a650ceae6f35efd6a88"
+        }
+      },
+      "archive": {
+        "file": "ljspeech.zip",
+        "bytes": 67436754,
+        "sha256": "a2bb421b37479e1baaaf7528404146664cceae52c2e928c55858ba7ba4795474"
+      },
+      "files": [
+        {
+          "role": "model",
+          "name": "en_US-ljspeech-medium.onnx",
+          "bytes": 63531507,
+          "sha256": "8ceba58a4b540d4e7e7e24ad079cf0d92762a4fd334e059f12940787c6c37b3d"
+        },
+        {
+          "role": "tokens",
+          "name": "tokens.txt",
+          "bytes": 940,
+          "sha256": "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"
+        }
+      ]
+    },
+    {
+      "id": "libritts_r",
+      "kind": "tts",
+      "licence": "CC-BY-4.0 (LibriTTS-R)",
+      "attribution": "Piper en_US libritts_r medium: LibriTTS-R (CC BY 4.0), phonemizer espeak-ng (GPL-3.0)",
+      "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/libritts_r/medium",
+      "voice": {
+        "family": "piper",
+        "rating": "attribution",
+        "tree": {
+          "dir": "espeak-ng-data",
+          "files": 355,
+          "bytes": 17991651,
+          "sha256": "b1d0cfe9e894ddd95db6f7f3547a7a5e4a35d4804c6a8a650ceae6f35efd6a88"
+        }
+      },
+      "archive": {
+        "file": "libritts_r.zip",
+        "bytes": 81821685,
+        "sha256": "3756e846dd8762c45dbf0917fdc25cc149195a31c3101b25806cecefd5401ee4"
+      },
+      "files": [
+        {
+          "role": "model",
+          "name": "en_US-libritts_r-medium.onnx",
+          "bytes": 78529840,
+          "sha256": "8cce84cee4060bc3c2194bf95d33253c48dc8ff15e197b3b7a00b334ee0017f4"
+        },
+        {
+          "role": "tokens",
+          "name": "tokens.txt",
+          "bytes": 954,
+          "sha256": "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"
+        }
+      ]
     }
   ]
 }

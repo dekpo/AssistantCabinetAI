@@ -25,6 +25,7 @@ function statusWith(features: Partial<Record<SpeechFeature, FeatureStatus>>): Sp
       ...features,
     },
     sttModel: "present",
+    voices: [],
     languages: [
       {
         id: "fr-FR",

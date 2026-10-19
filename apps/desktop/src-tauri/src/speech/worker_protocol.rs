@@ -27,6 +27,25 @@ pub struct ModelFiles {
     pub tokens: String,
 }
 
+/// The engine family of a voice model. Both are VITS models: the Piper ones go through a phonemizer
+/// (espeak-ng, whose data folder travels with the model), the Coqui ones read characters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VoiceFamily {
+    Piper,
+    Coqui,
+}
+
+/// The files of a voice model, as full paths. `data_dir` is the phonemizer's data folder and is
+/// there for a Piper voice only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceFiles {
+    pub family: VoiceFamily,
+    pub model: String,
+    pub tokens: String,
+    pub data_dir: Option<String>,
+}
+
 /// What the application asks of a worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -43,6 +62,21 @@ pub enum Request {
         id: u64,
         wav_path: String,
         language: String,
+    },
+    /// Reads a voice model into memory (text-to-speech worker). Replaces the voice already loaded.
+    LoadVoice {
+        id: u64,
+        threads: u32,
+        voice: VoiceFiles,
+    },
+    /// Speaks `text` with the loaded voice and writes the audio, a 16-bit mono WAV, to `wav_path`,
+    /// a new file in the application's private temporary folder. `speed_percent` is the reading
+    /// speed as a percentage of the voice's natural rate (100 is natural).
+    Synthesize {
+        id: u64,
+        text: String,
+        speed_percent: u32,
+        wav_path: String,
     },
     /// Ends the worker. It sends nothing back.
     Shutdown { id: u64 },
@@ -62,6 +96,8 @@ pub enum FailureKind {
     EngineFailed,
     /// The line was not a request this worker understands.
     BadRequest,
+    /// The text holds nothing a voice can say.
+    NothingToSay,
 }
 
 /// What a worker answers.
@@ -78,6 +114,16 @@ pub enum Response {
         audio_ms: u64,
         processing_ms: u64,
     },
+    VoiceLoaded {
+        id: u64,
+        load_ms: u64,
+    },
+    Synthesized {
+        id: u64,
+        audio_ms: u64,
+        processing_ms: u64,
+        sample_rate: u32,
+    },
     Failed {
         id: u64,
         kind: FailureKind,
@@ -87,7 +133,11 @@ pub enum Response {
 impl Response {
     pub fn id(&self) -> u64 {
         match self {
-            Self::Loaded { id, .. } | Self::Transcribed { id, .. } | Self::Failed { id, .. } => *id,
+            Self::Loaded { id, .. }
+            | Self::Transcribed { id, .. }
+            | Self::VoiceLoaded { id, .. }
+            | Self::Synthesized { id, .. }
+            | Self::Failed { id, .. } => *id,
         }
     }
 }
@@ -100,8 +150,17 @@ pub struct Heard {
     pub processing_ms: u64,
 }
 
-/// What a worker's engine does. The real one wraps sherpa-onnx; the tests of the application run
-/// the same loop over a scripted one.
+/// What one synthesis produced, as an engine hands it to the loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Spoken {
+    pub audio_ms: u64,
+    pub processing_ms: u64,
+    pub sample_rate: u32,
+}
+
+/// What a worker's engine does. The real ones wrap sherpa-onnx; the tests of the application run
+/// the same loop over a scripted one. A speech-to-text engine implements the first two methods, a
+/// text-to-speech engine the last two; a request for the other kind is a bad request.
 pub trait Engine {
     /// Loads the model and returns how long it took, in milliseconds.
     fn load(&mut self, threads: u32, files: &ModelFiles) -> Result<u64, FailureKind>;
@@ -109,6 +168,21 @@ pub trait Engine {
     /// Transcribes one clip. `language` is the engine code from the application's language table;
     /// an engine that detects the language itself ignores it.
     fn transcribe(&mut self, wav_path: &str, language: &str) -> Result<Heard, FailureKind>;
+
+    /// Loads a voice model and returns how long it took, in milliseconds.
+    fn load_voice(&mut self, _threads: u32, _voice: &VoiceFiles) -> Result<u64, FailureKind> {
+        Err(FailureKind::BadRequest)
+    }
+
+    /// Speaks `text` and writes the WAV at `wav_path`.
+    fn synthesize(
+        &mut self,
+        _text: &str,
+        _speed_percent: u32,
+        _wav_path: &str,
+    ) -> Result<Spoken, FailureKind> {
+        Err(FailureKind::BadRequest)
+    }
 }
 
 /// Encodes a request as one line, without the newline.
@@ -159,6 +233,26 @@ pub fn serve<R: BufRead, W: Write>(
                     text: heard.text,
                     audio_ms: heard.audio_ms,
                     processing_ms: heard.processing_ms,
+                },
+                Err(kind) => Response::Failed { id, kind },
+            },
+            Ok(Request::LoadVoice { id, threads, voice }) => {
+                match engine.load_voice(threads, &voice) {
+                    Ok(load_ms) => Response::VoiceLoaded { id, load_ms },
+                    Err(kind) => Response::Failed { id, kind },
+                }
+            }
+            Ok(Request::Synthesize {
+                id,
+                text,
+                speed_percent,
+                wav_path,
+            }) => match engine.synthesize(&text, speed_percent, &wav_path) {
+                Ok(spoken) => Response::Synthesized {
+                    id,
+                    audio_ms: spoken.audio_ms,
+                    processing_ms: spoken.processing_ms,
+                    sample_rate: spoken.sample_rate,
                 },
                 Err(kind) => Response::Failed { id, kind },
             },

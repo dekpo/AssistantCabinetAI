@@ -15,12 +15,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::status::ModelState;
 use super::stt::CancelToken;
-use super::worker_protocol::ModelFiles;
+use super::worker_protocol::{ModelFiles, VoiceFamily, VoiceFiles};
 use crate::error::AppError;
 
 /// Name of the folder, under the application's local data directory, that holds every model.
@@ -49,6 +49,42 @@ pub struct FileSpec {
     pub sha256: String,
 }
 
+/// How clear the licence of a voice is, from the owner's review of the voices
+/// (`docs/SPEECH.md`, section 10). Shown next to the voice in the settings, never hidden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LicenceRating {
+    /// Public domain data, trained from scratch: nothing to credit.
+    Clear,
+    /// Free to use, with a credit or a licence notice that must travel with the product.
+    Attribution,
+    /// One point needs a reading before any distribution (lineage of the weights): a development
+    /// and controlled-prototype voice.
+    Review,
+}
+
+/// A folder of many small files that belongs to a model (the phonemizer's data of a Piper voice),
+/// pinned as a whole: the number of files, their size and one digest of their paths and contents.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct TreeSpec {
+    /// The folder name inside the model's folder and inside the zip.
+    pub dir: String,
+    pub files: u64,
+    pub bytes: u64,
+    /// SHA-256 of the lines `<path inside the folder>:<SHA-256 of the file>` and a line feed, sorted
+    /// by path.
+    pub sha256: String,
+}
+
+/// What a text-to-speech model adds to its manifest row.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct VoiceSpec {
+    pub family: VoiceFamily,
+    pub rating: LicenceRating,
+    #[serde(default)]
+    pub tree: Option<TreeSpec>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ModelSpec {
     pub id: String,
@@ -62,6 +98,9 @@ pub struct ModelSpec {
     /// only then. Absent means no.
     #[serde(default, rename = "casedOutput")]
     pub cased_output: bool,
+    /// Present for a text-to-speech model (`kind` is `tts`).
+    #[serde(default)]
+    pub voice: Option<VoiceSpec>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +118,24 @@ fn manifest() -> Option<&'static Manifest> {
 /// The speech-to-text model the application ships a manifest row for.
 pub fn stt_model() -> Option<&'static ModelSpec> {
     manifest()?.models.iter().find(|model| model.kind == "stt")
+}
+
+/// The text-to-speech models the application ships a manifest row for, in manifest order.
+pub fn voice_models() -> Vec<&'static ModelSpec> {
+    manifest()
+        .map(|manifest| {
+            manifest
+                .models
+                .iter()
+                .filter(|model| model.kind == "tts")
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The model with this manifest id, whatever its kind.
+pub fn find(id: &str) -> Option<&'static ModelSpec> {
+    manifest()?.models.iter().find(|model| model.id == id)
 }
 
 impl ModelSpec {
@@ -103,6 +160,32 @@ impl ModelSpec {
         })
     }
 
+    /// The files a voice worker is given, as full paths; `None` for a model that is not a voice or
+    /// whose row lacks a file.
+    pub fn voice_files(&self, folder: &Path) -> Option<VoiceFiles> {
+        let voice = self.voice.as_ref()?;
+        let path = |role: &str| {
+            self.files
+                .iter()
+                .find(|file| file.role == role)
+                .map(|file| folder.join(&file.name).to_string_lossy().into_owned())
+        };
+        Some(VoiceFiles {
+            family: voice.family,
+            model: path("model")?,
+            tokens: path("tokens")?,
+            data_dir: voice
+                .tree
+                .as_ref()
+                .map(|tree| folder.join(&tree.dir).to_string_lossy().into_owned()),
+        })
+    }
+
+    /// The folder pinned as a whole, if the row has one.
+    pub fn tree(&self) -> Option<&TreeSpec> {
+        self.voice.as_ref()?.tree.as_ref()
+    }
+
     /// What the marker holds: a digest of the manifest row, so a new model version in a later
     /// release makes the old marker stale instead of silently trusted.
     pub fn fingerprint(&self) -> String {
@@ -110,6 +193,12 @@ impl ModelSpec {
         hasher.update(self.id.as_bytes());
         for file in &self.files {
             hasher.update(format!("\n{}:{}:{}", file.name, file.bytes, file.sha256));
+        }
+        if let Some(tree) = self.tree() {
+            hasher.update(format!(
+                "\n{}/:{}:{}:{}",
+                tree.dir, tree.files, tree.bytes, tree.sha256
+            ));
         }
         to_hex(&hasher.finalize())
     }
@@ -136,7 +225,11 @@ pub fn state(spec: &ModelSpec, folder: &Path) -> ModelState {
             _ => {}
         }
     }
-    if found < spec.files.len() {
+    // The pinned folder is only looked for here; counting and hashing its files is Verify's job.
+    let tree_found = spec
+        .tree()
+        .map_or(true, |tree| folder.join(&tree.dir).is_dir());
+    if found < spec.files.len() || !tree_found {
         return ModelState::Missing;
     }
     if wrong_size {
@@ -167,6 +260,67 @@ pub fn hash_file(path: &Path, cancel: &CancelToken) -> Result<String, AppError> 
     }
 }
 
+/// Accumulates the digest of a pinned folder: each file adds its path (inside the folder, with
+/// forward slashes) and its SHA-256, and the lines are sorted by path before they are hashed, so the
+/// digest does not depend on the order the files were met in.
+#[derive(Default)]
+pub struct TreeDigest {
+    lines: Vec<(String, String)>,
+    bytes: u64,
+}
+
+impl TreeDigest {
+    pub fn add(&mut self, path: &str, file_sha256: &str, bytes: u64) {
+        self.lines.push((path.to_string(), file_sha256.to_string()));
+        self.bytes += bytes;
+    }
+
+    /// Whether what was added is exactly what the row pins.
+    pub fn matches(mut self, tree: &TreeSpec) -> bool {
+        self.lines.sort();
+        let mut hasher = Sha256::new();
+        for (path, hash) in &self.lines {
+            hasher.update(format!("{path}:{hash}\n"));
+        }
+        self.lines.len() as u64 == tree.files
+            && self.bytes == tree.bytes
+            && to_hex(&hasher.finalize()) == tree.sha256
+    }
+}
+
+/// Hashes the files of a pinned folder that is already on disk.
+fn hash_tree(folder: &Path, tree: &TreeSpec, cancel: &CancelToken) -> Result<TreeDigest, AppError> {
+    fn walk(
+        root: &Path,
+        at: &Path,
+        digest: &mut TreeDigest,
+        cancel: &CancelToken,
+    ) -> Result<(), AppError> {
+        let entries = fs::read_dir(at).map_err(|_| AppError::SpeechModelMissing)?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, digest, cancel)?;
+            } else {
+                let bytes = fs::metadata(&path)
+                    .map_err(|_| AppError::SpeechModelCorrupt)?
+                    .len();
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|_| AppError::SpeechModelCorrupt)?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                digest.add(&relative, &hash_file(&path, cancel)?, bytes);
+            }
+        }
+        Ok(())
+    }
+    let root = folder.join(&tree.dir);
+    let mut digest = TreeDigest::default();
+    walk(&root, &root, &mut digest, cancel)?;
+    Ok(digest)
+}
+
 /// Hashes every file of the model's folder against the manifest and, if all match, writes the
 /// marker. `speech_model_missing` for an absent file, `speech_model_corrupt` for any mismatch
 /// (nothing is written then). This is the one place a hand-placed file is trusted.
@@ -178,6 +332,11 @@ pub fn verify(spec: &ModelSpec, folder: &Path, cancel: &CancelToken) -> Result<(
             return Err(AppError::SpeechModelMissing);
         }
         if meta.len() != file.bytes || hash_file(&path, cancel)? != file.sha256 {
+            return Err(AppError::SpeechModelCorrupt);
+        }
+    }
+    if let Some(tree) = spec.tree() {
+        if !hash_tree(folder, tree, cancel)?.matches(tree) {
             return Err(AppError::SpeechModelCorrupt);
         }
     }

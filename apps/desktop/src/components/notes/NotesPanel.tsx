@@ -16,7 +16,8 @@ import type { NoteFormat } from "../../speech/ipc";
 import { ErrorBanner } from "../ErrorBanner";
 import { Markdown } from "../Markdown";
 import { PreviewModeSwitch } from "../viewer/PreviewModeSwitch";
-import { DictationPill, type DictationPillProps } from "./DictationPill";
+import { RepairChips } from "../RepairChips";
+import { DictationStatus, LivePill, type NotesDictation } from "./LiveDictation";
 
 /** What the Notes section can ask of `App`. Each call is the user's own click. */
 export interface NotesActions {
@@ -41,8 +42,8 @@ export interface NotesBundle {
   actions: NotesActions;
   /** A documents folder is chosen: without it nothing can be written. */
   hasFolder: boolean;
-  /** `null` while dictation is not available: the pill is then not drawn at all. */
-  dictation: DictationPillProps | null;
+  /** `null` while the voice is off: the pill is then not drawn at all. */
+  dictation: NotesDictation | null;
 }
 
 const MODES: readonly PreviewMode[] = ["raw", "preview"];
@@ -66,6 +67,8 @@ export function NotesPanel({ bundle }: { bundle: NotesBundle }) {
   const active = activeDraft(snapshot.notes);
   const savable = unsavedDrafts(snapshot.notes).length;
   const busy = snapshot.phase !== "idle";
+  /* A dictation is writing into the note: it cannot be saved or thrown away under it. */
+  const dictating = dictation !== null && dictation.phase !== "idle";
   const canRender = active.format === "md";
   const shownMode: PreviewMode = canRender ? mode : "raw";
   const label = (number: number, name: string | null) =>
@@ -102,7 +105,7 @@ export function NotesPanel({ bundle }: { bundle: NotesBundle }) {
         <button
           type="button"
           className="button button--compact"
-          disabled={busy}
+          disabled={busy || dictating}
           onClick={actions.add}
         >
           {t("notes.new")}
@@ -110,7 +113,7 @@ export function NotesPanel({ bundle }: { bundle: NotesBundle }) {
         <button
           type="button"
           className="button button--compact"
-          disabled={busy}
+          disabled={busy || dictating}
           onClick={() => actions.discard(active.id)}
         >
           {t("notes.discard")}
@@ -140,8 +143,15 @@ export function NotesPanel({ bundle }: { bundle: NotesBundle }) {
             )}
           </div>
         )}
-        {dictation === null ? null : <DictationPill {...dictation} />}
+        {dictation === null ? null : <LivePill dictation={dictation} />}
       </div>
+
+      {dictation === null ? null : (
+        <>
+          <DictationStatus dictation={dictation} />
+          {dictation.repair === undefined ? null : <RepairChips repair={dictation.repair} />}
+        </>
+      )}
 
       {hasContent(active) ? (
         <div className="notes__save">
@@ -179,7 +189,7 @@ export function NotesPanel({ bundle }: { bundle: NotesBundle }) {
             <button
               type="button"
               className="button button--compact button--primary"
-              disabled={busy || !hasFolder}
+              disabled={busy || dictating || !hasFolder}
               onClick={() => actions.review("active")}
             >
               {t("notes.save")}
@@ -188,7 +198,7 @@ export function NotesPanel({ bundle }: { bundle: NotesBundle }) {
               <button
                 type="button"
                 className="button button--compact"
-                disabled={busy || !hasFolder}
+                disabled={busy || dictating || !hasFolder}
                 onClick={() => actions.review("all")}
               >
                 {t("notes.saveAll", { count: savable })}

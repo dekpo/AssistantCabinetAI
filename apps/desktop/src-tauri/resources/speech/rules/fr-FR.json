@@ -221,5 +221,25 @@
       "health_insurance_number": { "size": 3 }
     },
     "email_symbols": { "@": "arobase", ".": "point", "-": "tiret", "_": "tiret bas" }
+  },
+  "dictation_commands": {
+    "commands": [
+      { "say": ["virgule"], "kind": "mark", "text": ",", "attach": "previous" },
+      { "say": ["point"], "kind": "mark", "text": ".", "attach": "previous", "capitalise_next": true },
+      { "say": ["point d'interrogation"], "kind": "mark", "text": "?", "attach": "previous", "capitalise_next": true },
+      { "say": ["point d'exclamation"], "kind": "mark", "text": "!", "attach": "previous", "capitalise_next": true },
+      { "say": ["deux points", "deux-points"], "kind": "mark", "text": ":", "attach": "previous" },
+      { "say": ["point virgule", "point-virgule"], "kind": "mark", "text": ";", "attach": "previous" },
+      { "say": ["points de suspension"], "kind": "mark", "text": "...", "attach": "previous" },
+      { "say": ["ouvrir la parenthèse", "ouvrez la parenthèse", "ouvre la parenthèse"], "kind": "mark", "text": "(", "attach": "next" },
+      { "say": ["fermer la parenthèse", "fermez la parenthèse", "ferme la parenthèse"], "kind": "mark", "text": ")", "attach": "previous" },
+      { "say": ["ouvrir les guillemets", "ouvrez les guillemets", "ouvre les guillemets"], "kind": "mark", "text": "\"", "attach": "next" },
+      { "say": ["fermer les guillemets", "fermez les guillemets", "ferme les guillemets"], "kind": "mark", "text": "\"", "attach": "previous" },
+      { "say": ["titre"], "kind": "heading", "level": 1 },
+      { "say": ["sous-titre", "sous titre", "sous-titres", "sous titres"], "kind": "heading", "level": 2 },
+      { "say": ["à la ligne", "nouvelle ligne"], "kind": "line" },
+      { "say": ["nouveau paragraphe"], "kind": "paragraph" },
+      { "say": ["nouvelle note"], "kind": "note" }
+    ]
   }
 }

@@ -208,5 +208,25 @@
       "health_insurance_number": { "size": 3 }
     },
     "email_symbols": { "@": "at", ".": "dot", "-": "dash", "_": "underscore" }
+  },
+  "dictation_commands": {
+    "commands": [
+      { "say": ["comma"], "kind": "mark", "text": ",", "attach": "previous" },
+      { "say": ["period", "full stop"], "kind": "mark", "text": ".", "attach": "previous", "capitalise_next": true },
+      { "say": ["question mark"], "kind": "mark", "text": "?", "attach": "previous", "capitalise_next": true },
+      { "say": ["exclamation mark", "exclamation point"], "kind": "mark", "text": "!", "attach": "previous", "capitalise_next": true },
+      { "say": ["colon"], "kind": "mark", "text": ":", "attach": "previous" },
+      { "say": ["semicolon", "semi colon"], "kind": "mark", "text": ";", "attach": "previous" },
+      { "say": ["ellipsis"], "kind": "mark", "text": "...", "attach": "previous" },
+      { "say": ["open parenthesis", "open bracket", "open paren"], "kind": "mark", "text": "(", "attach": "next" },
+      { "say": ["close parenthesis", "close bracket", "close paren"], "kind": "mark", "text": ")", "attach": "previous" },
+      { "say": ["open quote", "open quotes"], "kind": "mark", "text": "\"", "attach": "next" },
+      { "say": ["close quote", "close quotes", "end quote"], "kind": "mark", "text": "\"", "attach": "previous" },
+      { "say": ["title"], "kind": "heading", "level": 1 },
+      { "say": ["subtitle", "sub title", "subtitles", "sub titles"], "kind": "heading", "level": 2 },
+      { "say": ["new line"], "kind": "line" },
+      { "say": ["new paragraph"], "kind": "paragraph" },
+      { "say": ["new note"], "kind": "note" }
+    ]
   }
 }

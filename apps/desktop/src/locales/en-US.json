@@ -56,6 +56,7 @@
       }
     },
     "unsaved": {
+      "recording": "The dictation in progress is stopped too.",
       "title": "Unsaved note",
       "bodyOne": "A note has not been saved.\nIf you go on, it is lost.",
       "bodyMany": "{count} notes have not been saved.\nIf you go on, they are lost.",
@@ -71,6 +72,19 @@
       "start": "Dictate",
       "finish": "Finish the dictation",
       "hint": "Click again to finish"
+    },
+    "dictation": {
+      "waitingOne": "1 passage waiting to be written",
+      "waitingMany": "{count} passages waiting to be written",
+      "discard": "Discard the recording",
+      "capReached": "The recording stopped at the length limit. The words heard are in the note.",
+      "failedOne": "Passage {positions} could not be transcribed: its words are missing from the note.",
+      "failedMany": "Passages {positions} could not be transcribed: their words are missing from the note."
+    },
+    "recording": {
+      "title": "Recording in progress",
+      "body": "A dictation is running.\nIf you go on, it is stopped and the words not yet written are lost.",
+      "stop": "Stop and discard"
     }
   },
   "viewer": {

@@ -915,3 +915,78 @@ fn real_worker_transcribes_a_clip_and_cancel_leaves_no_process() {
     assert!(!provider.is_running());
     assert_eq!(provider.last_ending(), Some(Ending::Killed));
 }
+
+/// A mono 16-bit PCM WAV at 16 kHz around `pcm` (little-endian samples).
+fn wav_around(pcm: &[u8]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(44 + pcm.len());
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + pcm.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&16_000u32.to_le_bytes());
+    bytes.extend_from_slice(&32_000u32.to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&(pcm.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(pcm);
+    bytes
+}
+
+/// A long recording of a note is sent to the engine as passages, one after the other: the warm
+/// worker answers each in turn and the texts, put end to end, keep the order of the speech. Run by
+/// hand with the variables of the test above and `ACAI_STT_CLIP` set to a 16 kHz mono 16-bit WAV of
+/// about 30 seconds with the canonical 44-byte header:
+/// `cargo test --lib real_worker_two_passages -- --ignored --nocapture`.
+#[test]
+#[ignore = "needs the real worker, the real model and a recorded clip of about 30 seconds"]
+fn real_worker_two_passages_come_back_in_order() {
+    let spec = models::stt_model().expect("manifest").clone();
+    let staged = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join("speech-stt-worker-x86_64-pc-windows-msvc.exe");
+    let worker = std::env::var("ACAI_STT_WORKER")
+        .map(PathBuf::from)
+        .unwrap_or(staged);
+    let folder =
+        PathBuf::from(std::env::var("ACAI_STT_MODEL_FOLDER").expect("set ACAI_STT_MODEL_FOLDER"));
+    let clip = fs::read(std::env::var("ACAI_STT_CLIP").expect("set ACAI_STT_CLIP")).expect("clip");
+    assert!(clip.len() > 44 + 2 * 16_000 * 2, "the clip is too short");
+    let pcm = &clip[44..];
+    let middle = (pcm.len() / 2) & !1;
+
+    let provider = Arc::new(WorkerSttProvider::new(spec));
+    provider.configure(Setup {
+        launch: WorkerLaunch::program(worker),
+        model_folder: folder,
+    });
+    let dir = tempfile::tempdir().expect("temp dir");
+    let mut texts = Vec::new();
+    for (index, part) in [&pcm[..middle], &pcm[middle..]].into_iter().enumerate() {
+        let path = dir.path().join(format!("passage-{index}.wav"));
+        fs::write(&path, wav_around(part)).expect("passage writes");
+        let request = SttRequest {
+            wav_path: path,
+            language: "fr".into(),
+            max_seconds: 120,
+        };
+        let heard = provider
+            .transcribe(&request, &CancelToken::new())
+            .expect("a passage is transcribed");
+        println!(
+            "measured: passage {index}: {} ms of audio in {} ms, {} words",
+            heard.audio_ms,
+            heard.processing_ms,
+            heard.text.split_whitespace().count()
+        );
+        texts.push(heard.text);
+    }
+    assert_eq!(texts.len(), 2);
+    assert!(
+        texts.iter().all(|text| !text.trim().is_empty()),
+        "both passages carry words"
+    );
+    println!("measured: the two texts, in order: {texts:?}");
+}

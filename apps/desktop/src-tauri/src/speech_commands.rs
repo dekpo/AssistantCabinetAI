@@ -12,6 +12,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::commands::{search_roots, work_folder_policy, AppState};
 use crate::error::AppError;
+use crate::speech::dictation_commands::{self, Applied};
 use crate::speech::model_download::{self, Progress, Sink};
 use crate::speech::models::{self, JobSlot};
 use crate::speech::notes::{self, NoteDraft, NoteFile, SaveLog, Target};
@@ -324,4 +325,22 @@ pub fn speech_prepare_reading(
     let packs = settings.knowledge_pack_ids();
     let ids: Vec<&str> = packs.iter().map(String::as_str).collect();
     speakable::prepare_for_locale(&parts, &locale, &ids)
+}
+
+/// The spoken commands of a note dictation applied to one transcribed passage: punctuation, headings,
+/// line breaks and "new note". A pure function of the text, the heading left open by the previous
+/// passage and the settings; no engine, no file and no network. The text only goes back to the
+/// editor, which appends it: nothing is written here.
+#[tauri::command]
+pub fn speech_apply_dictation_commands(
+    state: State<'_, AppState>,
+    text: String,
+    pending_heading: u8,
+) -> Result<Applied, AppError> {
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .clone();
+    dictation_commands::apply_for_settings(&settings, &text, pending_heading)
 }

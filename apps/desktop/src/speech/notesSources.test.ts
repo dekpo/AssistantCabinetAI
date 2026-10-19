@@ -20,6 +20,7 @@ const NOTES_FILES = [
   "../components/notes/NotesDialogs.tsx",
   "../components/notes/CentreSwitch.tsx",
   "../components/notes/DictationPill.tsx",
+  "../components/notes/LiveDictation.tsx",
 ];
 
 describe("the notes are memory only (decision D10)", () => {
@@ -54,11 +55,13 @@ describe("the Notes section and the voice master switch", () => {
     expect(app).not.toMatch(/speech\.enabled|speech\.dictationEnabled/);
   });
 
-  it("does not call the speech engine: dictation is wired by its own phase", () => {
+  it("does not call the speech engine: the long dictation is wired outside the notes files", () => {
     for (const file of NOTES_FILES) {
       expect(withoutComments(read(file)), file).not.toMatch(/speechTranscribe|speechCancel|useVoiceSession/);
     }
-    expect(withoutComments(read("../App.tsx"))).toContain("dictation: null");
+    const app = withoutComments(read("../App.tsx"));
+    expect(app).toContain("dictation: notesDictation");
+    expect(app).toContain("useLongDictation(");
   });
 });
 

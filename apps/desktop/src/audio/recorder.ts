@@ -62,6 +62,12 @@ export interface CaptureResult {
 export interface CaptureOptions {
   /** Told of the input level (0 to 1) about every 64 ms; drives the waveform animation. */
   onLevel?: (level: number) => void;
+  /**
+   * Streaming mode, for a long recording: each block of the microphone goes here, with the sample
+   * rate of the audio context, and nothing is kept by the capture. `stop` then resolves with an empty
+   * clip, after the last block was handed over. The caller owns the audio from there.
+   */
+  onBlock?: (block: Float32Array, rate: number) => void;
 }
 
 export interface AudioCapture {
@@ -135,6 +141,16 @@ export function microphoneSupport(): MicrophoneSupport {
   return hasStream && hasWorklet ? "supported" : "unsupported";
 }
 
+/**
+ * One passage of a long recording as a WAV clip at the engine's rate, resampled by the browser when
+ * the audio context ran at another one. The samples are not kept once the clip is built.
+ */
+export function clipFromSamples(samples: Float32Array, rate: number): Promise<CaptureResult> {
+  const builder = createClipBuilder(rate);
+  builder.add(samples);
+  return builder.finish(resampleWithTheBrowser);
+}
+
 async function resampleWithTheBrowser(
   samples: Float32Array,
   from: number,
@@ -199,11 +215,20 @@ export function createWebviewCapture(): AudioCapture {
           context = new AudioContext();
         }
         await context.audioWorklet.addModule(WORKLET_URL);
-        const builder = createClipBuilder(context.sampleRate, options?.onLevel);
+        const rate = context.sampleRate;
+        const builder = createClipBuilder(rate, options?.onLevel);
         clip = builder;
         const source = context.createMediaStreamSource(stream);
         node = new AudioWorkletNode(context, WORKLET_NAME);
-        node.port.onmessage = (event: MessageEvent<Float32Array>) => builder.add(event.data);
+        const onBlock = options?.onBlock;
+        node.port.onmessage = (event: MessageEvent<Float32Array>) => {
+          if (onBlock === undefined) {
+            builder.add(event.data);
+          } else {
+            options?.onLevel?.(chunkLevel(event.data));
+            onBlock(event.data, rate);
+          }
+        };
         source.connect(node);
         // A worklet is only pulled while it is part of the graph; it outputs silence.
         node.connect(context.destination);

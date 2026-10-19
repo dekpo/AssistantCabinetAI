@@ -125,6 +125,7 @@ pub fn run() {
             speech_commands::speech_model_verify,
             speech_commands::speech_model_cancel,
             speech_commands::speech_prepare_reading,
+            speech_commands::speech_apply_dictation_commands,
         ])
         .run(tauri::generate_context!())
         .expect("the application must start");

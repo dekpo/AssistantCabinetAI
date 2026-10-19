@@ -6,7 +6,12 @@ import { ErrorBanner } from "./components/ErrorBanner";
 import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import type { NotesActions, NotesBundle } from "./components/notes/NotesPanel";
-import { AnalysisChoiceDialog, UnsavedNoteDialog } from "./components/notes/NotesDialogs";
+import type { NotesDictation } from "./components/notes/LiveDictation";
+import {
+  AnalysisChoiceDialog,
+  RecordingDialog,
+  UnsavedNoteDialog,
+} from "./components/notes/NotesDialogs";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
@@ -29,6 +34,7 @@ import {
   type OutsideSelection,
 } from "./lib/ipc";
 import {
+  activeDraft,
   guardExit,
   hasUnsaved,
   unsavedDrafts,
@@ -56,6 +62,8 @@ import { useIndexing } from "./state/useIndexing";
 import { useServerHealth } from "./state/useServerHealth";
 import { notesPreview, notesSave } from "./speech/ipc";
 import { ReadAloudProvider } from "./speech/output/ReadAloudContext";
+import { useLongDictation } from "./speech/useLongDictation";
+import { useRepairSuggestions } from "./speech/useRepairSuggestions";
 import { VoiceSessionProvider } from "./speech/VoiceSessionContext";
 
 function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boolean }) {
@@ -122,13 +130,28 @@ function AppContent() {
   const [section, setSection] = useState<CentreSection>("files");
   const notesEnabled = snapshot?.settings.speech.notesEnabled ?? false;
   const shownSection = effectiveSection(section, notesEnabled);
+  /* The voice of the notes: the microphone opens only when the pill is pressed. `undefined` while
+     the voice is off, so no pill is drawn. A recording lives here, not in the panel, so that
+     a section switch never touches it. */
+  const longDictation = useLongDictation({
+    speech: snapshot?.settings.speech ?? null,
+    locale,
+    session: notesSession,
+    notesEnabled,
+    saving: notes.phase !== "idle",
+  });
+  const dictationActive = longDictation?.active ?? false;
+  const dictationActiveRef = useRef(false);
+  dictationActiveRef.current = dictationActive;
+  const cancelDictationRef = useRef<() => void>(() => undefined);
+  cancelDictationRef.current = longDictation?.cancel ?? (() => undefined);
   /* What `AppLayout` is given: the zone stays open while Notes is shown or holds a note. */
   const shownWorkspace = shownCentre({
     workspace,
     hidden: workspaceHidden,
     notesEnabled,
     section,
-    notesHold: hasUnsaved(notes.notes),
+    notesHold: hasUnsaved(notes.notes) || dictationActive,
   });
   /* What would lose a note asks first (`guardExit`); the question waits for the user. `proceed` is
      the exit itself, `abandon` what happens when the user cancels. */
@@ -139,10 +162,19 @@ function AppContent() {
   } | null>(null);
   const guardLeaving = useCallback(
     (exit: NotesExit, proceed: () => void, abandon?: () => void) => {
-      if (guardExit(notesSession.getSnapshot().notes, exit) === "allow") {
+      /* Every way out except the two that keep the Notes section mounted ends a recording. */
+      const keeps = exit.kind === "switch-section" || exit.kind === "open-file";
+      const leave = () => {
+        if (!keeps) {
+          cancelDictationRef.current();
+        }
         proceed();
+      };
+      const recording = dictationActiveRef.current;
+      if (guardExit(notesSession.getSnapshot().notes, exit, { recording }) === "allow") {
+        leave();
       } else {
-        setLeaving({ exit, proceed, abandon });
+        setLeaving({ exit, proceed: leave, abandon });
       }
     },
     [notesSession],
@@ -155,10 +187,16 @@ function AppContent() {
   useEffect(
     () =>
       guardWindowClose(() => {
-        if (!notesSession.hasUnsaved()) {
+        if (!notesSession.hasUnsaved() && !dictationActiveRef.current) {
           return false;
         }
-        setLeaving({ exit: { kind: "close-window" }, proceed: () => void closeWindow() });
+        setLeaving({
+          exit: { kind: "close-window" },
+          proceed: () => {
+            cancelDictationRef.current();
+            void closeWindow();
+          },
+        });
         return true;
       }),
     [notesSession],
@@ -244,16 +282,6 @@ function AppContent() {
     }),
     [notesSession, guardLeaving],
   );
-  const notesBundle = useMemo<NotesBundle>(
-    /* Dictation is wired in by its own phase: until then the pill is not drawn. */
-    () => ({
-      snapshot: notes,
-      actions: notesActions,
-      hasFolder: workFolder !== null,
-      dictation: null,
-    }),
-    [notes, notesActions, workFolder],
-  );
   /* Files | Notes. A centre with no tab open would close when Files is chosen, so Files shows its
      welcome view then. Switching is never a way to lose a note. */
   const chooseSection = useCallback(
@@ -284,6 +312,53 @@ function AppContent() {
   );
   /* Both lists, joined only when a question is sent (`docs/SELECTION-AND-MEMORY.md`). */
   const chatScope = useMemo(() => combineScopes(scope, dataScope), [scope, dataScope]);
+  /* The name suggestions for the words just dictated into the active note: the files of the
+     selection, names hidden until the user asks, nothing replaced without a click. */
+  const activeNote = activeDraft(notes.notes);
+  const setActiveNoteText = useCallback(
+    (text: string) => notesSession.edit(activeNote.id, { text }),
+    [notesSession, activeNote.id],
+  );
+  const repair = useRepairSuggestions({
+    source: longDictation?.heard ?? null,
+    draft: activeNote.text,
+    setDraft: setActiveNoteText,
+    scope: chatScope,
+    revealNames,
+    onRevealNamesChange: setRevealNames,
+    enabled: longDictation !== undefined,
+  });
+  const notesDictation = useMemo<NotesDictation | null>(
+    () =>
+      longDictation === undefined
+        ? null
+        : {
+            phase: longDictation.phase,
+            recording: longDictation.recording,
+            disabled: longDictation.disabled,
+            reasonKey: longDictation.reasonKey,
+            level: longDictation.level,
+            startedAt: longDictation.startedAt,
+            waiting: longDictation.waiting,
+            failed: longDictation.failed,
+            error: longDictation.error,
+            capReached: longDictation.capReached,
+            onToggle: longDictation.toggle,
+            onCancel: longDictation.cancel,
+            onDismiss: longDictation.dismiss,
+            repair,
+          },
+    [longDictation, repair],
+  );
+  const notesBundle = useMemo<NotesBundle>(
+    () => ({
+      snapshot: notes,
+      actions: notesActions,
+      hasFolder: workFolder !== null,
+      dictation: notesDictation,
+    }),
+    [notes, notesActions, workFolder, notesDictation],
+  );
   /* "Add to my selection", under the name picker: the files of a name that is only in analysed
      files she did not tick. Her own click, and the same ticking as the listing's checkboxes
      (`addScopeFiles` shares its rule with `toggleScopeFile`). The ids come from a fresh read of each
@@ -401,7 +476,13 @@ function AppContent() {
             workspace={shownWorkspace}
             layouts={snapshot.settings.layout}
             onLayoutsChange={(change) => void saveLayout(change)}
-            onWorkspaceCollapsed={hideWorkspace}
+            onWorkspaceCollapsed={() => {
+              /* A drag of the separator cannot be intercepted: the zone is already closed. A recording
+                 must not go on out of sight with the microphone open, so it ends here; what was
+                 already written stays in its note. */
+              cancelDictationRef.current();
+              hideWorkspace();
+            }}
             viewStates={viewStates}
             tabActions={tabActions}
             notes={
@@ -409,7 +490,7 @@ function AppContent() {
                 ? {
                     section: shownSection,
                     onSection: chooseSection,
-                    recording: false,
+                    recording: longDictation?.recording ?? false,
                     bundle: notesBundle,
                   }
                 : undefined
@@ -541,9 +622,22 @@ function AppContent() {
             onSkip={() => notesSession.answer(false)}
           />
         ) : null}
-        {leaving === null ? null : (
+        {leaving === null ? null : leaving.exit.kind === "hide-zone" ||
+          (unsavedDrafts(notes.notes).length === 0 && leaving.exit.kind !== "discard-draft") ? (
+          <RecordingDialog
+            onStop={() => {
+              setLeaving(null);
+              leaving.proceed();
+            }}
+            onCancel={() => {
+              leaving.abandon?.();
+              setLeaving(null);
+            }}
+          />
+        ) : (
           <UnsavedNoteDialog
             count={leaving.exit.kind === "discard-draft" ? 1 : unsavedDrafts(notes.notes).length}
+            recording={dictationActive}
             onCancel={() => {
               leaving.abandon?.();
               setLeaving(null);
@@ -556,7 +650,9 @@ function AppContent() {
               leaving.abandon?.();
               setLeaving(null);
               /* The exit is given up: the user is taken to the exact files that would be written,
-                 and the settings, if they asked, are put out of the way. */
+                 and the settings, if they asked, are put out of the way. A recording in progress
+                 ends first: the notes cannot change under the plan. */
+              cancelDictationRef.current();
               setSettingsOpen(false);
               if (leaving.exit.kind === "discard-draft") {
                 notesSession.select(leaving.exit.id);

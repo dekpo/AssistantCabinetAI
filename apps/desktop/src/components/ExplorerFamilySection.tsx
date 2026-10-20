@@ -55,6 +55,7 @@ export function ExplorerFamilySection({
   showKnowledgeLink,
   onOpenKnowledge,
   filtering,
+  reasonOf,
 }: {
   family: Family;
   /** The folder this family is analysed from, or null while none is chosen. */
@@ -88,6 +89,8 @@ export function ExplorerFamilySection({
   onOpenKnowledge?: () => void;
   /** The view is narrowed: an empty list then means "nothing matches", not "nothing here". */
   filtering: boolean;
+  /** Why a text search found an entry, or undefined when none is active or it said nothing. */
+  reasonOf?: (entry: ExplorerEntry) => { text: string; title: string } | undefined;
 }) {
   const { t } = useTranslation();
   const familyName = t(family === "documents" ? "explorer.familyDocuments" : "explorer.familyTables");
@@ -213,6 +216,7 @@ export function ExplorerFamilySection({
                   checkDisabled={locked || !isTickable(entry)}
                   onToggle={() => onToggleTick(entry)}
                   hint={duplicates.has(entry.name.toLowerCase()) ? folderHint(entry) : ""}
+                  reason={reasonOf?.(entry)}
                   onOpen={isTickable(entry) ? () => onOpenFile(entry) : undefined}
                   onReveal={entry.native ? () => onRevealFile(entry) : undefined}
                 />

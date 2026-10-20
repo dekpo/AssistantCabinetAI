@@ -1,11 +1,29 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { unfinishedPercent } from "../lib/analysis";
 import { selectionOf, tickedPaths, toggleScopeFile } from "../lib/analysisScope";
 import { normaliseError, type AppError } from "../lib/errors";
 import {
+  activeFilterCount,
+  activePills,
+  folderChoices,
+  formatChoices,
+  leftByOthers,
+  NO_CHOICES,
+  reasonKeys,
+  removePill,
+  stateCounts,
+  toggleChoice,
+  withoutTypedFormat,
+  withoutTypedFormats,
+  type ActivePill,
+  type FilterKind,
+  type PanelChoices,
+} from "../lib/explorerFilters";
+import {
   countsByFamily,
   filterEntries,
+  explorerKey,
   foundKeys,
   isTickable,
   mergeInventories,
@@ -42,6 +60,8 @@ import type { IndexingState } from "../state/useIndexing";
 import { useProfileStatus } from "../state/useProfileStatus";
 import { useVectorShare } from "../state/useVectorShare";
 import { ErrorBanner } from "./ErrorBanner";
+import { ExplorerActivePills } from "./ExplorerActivePills";
+import { ExplorerFilterPanel } from "./ExplorerFilterPanel";
 import { ExplorerBottomBar } from "./ExplorerBottomBar";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
 import { SearchGlyph } from "./ExplorerGlyphs";
@@ -101,6 +121,13 @@ export function FileExplorer({
   const { t } = useTranslation();
   const [familyChoice, setFamilyChoice] = useState<FamilyChoice>("all");
   const [error, setError] = useState<AppError | null>(null);
+  /* The choices of the filter panel. The family is held apart: it is the segmented control, outside
+     the panel. A filter only narrows the view; none of this state is the selection. */
+  const [choices, setChoices] = useState<PanelChoices>(NO_CHOICES);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelId = useId();
+  const filtersButton = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
 
   const documentsInventory = useFolderInventory(
     workFolderInventory,
@@ -151,12 +178,26 @@ export function FileExplorer({
     dataFinder.setText(next);
   };
 
+  /* What the finders read out of the text as extensions: they light the matching format pills. */
+  const typedFormats = useMemo(
+    () =>
+      searchFailed || found === null
+        ? []
+        : [...new Set([...documentsFinder.typedFormats, ...dataFinder.typedFormats])],
+    [searchFailed, found, documentsFinder.typedFormats, dataFinder.typedFormats],
+  );
   const filter: ExplorerFilter = {
     family: familyChoice === "all" ? null : familyChoice,
+    formats: choices.formats,
+    states: choices.states,
+    folders: choices.folders,
     found,
   };
   const searched = useMemo(() => filterEntries(entries, { found }), [entries, found]);
-  const shown = useMemo(() => filterEntries(entries, filter), [entries, filter.family, found]);
+  const shown = useMemo(
+    () => filterEntries(entries, filter),
+    [entries, familyChoice, choices, found],
+  );
   const listed = useMemo(
     () => ({
       documents: sortEntries(
@@ -171,11 +212,89 @@ export function FileExplorer({
     [shown],
   );
   const counts = useMemo(() => countsByFamily(entries), [entries]);
+  /* The number beside a segment is what the other filters leave for it: the family left out. */
+  const forSegments = leftByOthers(entries, filter, "family");
   const segmentCounts: Record<FamilyChoice, number> = {
-    all: searched.length,
-    documents: searched.filter((entry) => entry.family === "documents").length,
-    tables: searched.filter((entry) => entry.family === "tables").length,
+    all: forSegments.length,
+    documents: forSegments.filter((entry) => entry.family === "documents").length,
+    tables: forSegments.filter((entry) => entry.family === "tables").length,
   };
+  const pills = activePills(filter, typedFormats);
+  /* The folder choices are worked out only when something shows them: the open panel, or a folder pill
+     (which says the root when both roots hold a folder of that name). */
+  const folderOptions =
+    panelOpen || choices.folders.size > 0 ? folderChoices(entries, filter) : [];
+
+  const toggleFilter = (kind: FilterKind, value: string) =>
+    setChoices((now) => toggleChoice(now, kind, value));
+  const removeTyped = (extension: string) => setText(withoutTypedFormat(text, extension));
+  const removeActivePill = (pill: ActivePill) => {
+    if (pill.typed) {
+      removeTyped(pill.value);
+    } else {
+      setChoices((now) => removePill(now, pill));
+    }
+  };
+  const clearFilters = () => {
+    setChoices(NO_CHOICES);
+    if (typedFormats.length > 0) {
+      setText(withoutTypedFormats(text, typedFormats));
+    }
+  };
+  const closePanel = (returnFocus: boolean) => {
+    setPanelOpen(false);
+    if (returnFocus) {
+      filtersButton.current?.focus();
+    }
+  };
+  /* Escape closes the panel and gives the focus back to its button; a click anywhere else closes it
+     and leaves the focus where the click put it. */
+  useEffect(() => {
+    if (!panelOpen) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePanel(true);
+      }
+    };
+    const onPointer = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!panel.current?.contains(target) && !filtersButton.current?.contains(target)) {
+        closePanel(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [panelOpen]);
+
+  /* Why each file was found, from both finders, by (folder, path). Only while a text search is active. */
+  const reasonsByKey = useMemo(() => {
+    const map = new Map<string, string[]>();
+    if (found === null) {
+      return map;
+    }
+    for (const [root, finder] of [
+      ["documents", documentsFinder],
+      ["data", dataFinder],
+    ] as const) {
+      for (const [path, reasons] of Object.entries(finder.reasons)) {
+        map.set(explorerKey(root, path), reasonKeys(reasons));
+      }
+    }
+    return map;
+  }, [found, documentsFinder.reasons, dataFinder.reasons]);
+  const reasonOf = (entry: ExplorerEntry) => {
+    const keys = reasonsByKey.get(entry.key) ?? [];
+    return keys.length === 0
+      ? undefined
+      : { text: t(keys[0] ?? ""), title: keys.map((key) => t(key)).join(", ") };
+  };
+  const noFolders = workFolder === null && dataFolder === null;
 
   /* The selection: the same two scopes the chat is sent with. A row's tick, the two links of the
      bottom bar and the counts all read them through the analysed files of each folder. */
@@ -272,16 +391,45 @@ export function FileExplorer({
               onChange={(event) => setText(event.target.value)}
             />
           </label>
-          {/* The filter panel is the next step: the button is drawn and waits. */}
           <button
+            ref={filtersButton}
             type="button"
             className="button button--compact"
-            disabled
-            title={t("explorer.soon")}
+            aria-expanded={panelOpen}
+            aria-controls={panelOpen ? panelId : undefined}
+            disabled={noFolders}
+            onClick={() => setPanelOpen((open) => !open)}
           >
             {t("explorer.filters")}
+            {pills.length === 0 ? null : (
+              <span
+                className="explorer__filters-badge"
+                aria-label={t("explorer.filtersActive", { count: activeFilterCount(filter, typedFormats) })}
+              >
+                {activeFilterCount(filter, typedFormats)}
+              </span>
+            )}
           </button>
         </div>
+        {panelOpen ? (
+          <ExplorerFilterPanel
+            id={panelId}
+            panelRef={panel}
+            formats={formatChoices(entries, filter, typedFormats)}
+            chosenFormats={choices.formats}
+            typedFormats={typedFormats}
+            stateCounts={stateCounts(entries, filter)}
+            chosenStates={choices.states}
+            folders={folderOptions}
+            chosenFolders={choices.folders}
+            disabled={noFolders}
+            anyActive={pills.length > 0}
+            onToggle={toggleFilter}
+            onRemoveTyped={removeTyped}
+            onClear={clearFilters}
+            onClose={() => closePanel(true)}
+          />
+        ) : null}
         <div className="explorer__segments" role="group" aria-label={t("explorer.segmentLabel")}>
           {FAMILY_CHOICES.map((choice) => (
             <button
@@ -296,6 +444,12 @@ export function FileExplorer({
             </button>
           ))}
         </div>
+        <ExplorerActivePills
+          pills={pills}
+          folders={folderOptions}
+          onRemove={removeActivePill}
+          onClear={clearFilters}
+        />
         {searchFailed ? (
           <p className="explorer__status" role="status">
             {t("finder.failed")}
@@ -344,6 +498,7 @@ export function FileExplorer({
         showKnowledgeLink={indexing.summary?.knowledge != null}
         onOpenKnowledge={onOpenKnowledge}
         filtering={isFiltering(filter)}
+        reasonOf={reasonOf}
       />
       <ExplorerFamilySection
         family="tables"
@@ -367,6 +522,7 @@ export function FileExplorer({
         showKnowledgeLink={dataIndexing.summary?.knowledge != null}
         onOpenKnowledge={onOpenKnowledge}
         filtering={isFiltering(filter)}
+        reasonOf={reasonOf}
       />
 
       {error === null ? null : <ErrorBanner error={error} />}

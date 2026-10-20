@@ -271,7 +271,26 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   analysed files the view shows, both folders, with `addScopeFiles` through the existing rules) and **Décocher**, and a
   second line only when there is something to say (nothing used, a whole family used, files of unread formats). The scope
   state (`scope`, `dataScope`, `combineScopes`) and the chat contract are unchanged.
-- **Not built yet** (later steps): the filter panel (the « Filtres » button and the « Vues » switch are drawn and disabled),
+- **The filter panel (explorer step 3, 20 October 2026).** The « Filtres » button opens a panel **in the flow of the box**, under the
+  search line (the box clips what overflows it, and nothing may be drawn below the box). It closes on Escape (the focus returns to the
+  button), on « Terminé » (same) and on a click outside it (the focus stays where the click put it). It has **no scroll area**: the
+  format pills wrap. **Format** and **state** are pills with the number of files each leaves; the **origin folder** is a typed field
+  that offers **at most five** suggestions (the folders, each ancestor included, with the files in it or under it) **only while it
+  has the focus**, then « N autres : tapez pour affiner ». The segmented control stays outside. The choices in force appear as
+  **removable pills** under the segmented control (a « Tout effacer » link from two), and as a badge on the button. A filter only
+  narrows the view; it never changes the selection, and « Cocher les N » ticks what all the filters show. The numbers beside every
+  choice, and the segmented control's, are counted over what **all the other filters** leave (the choice's own kind left out); a
+  choice that would empty the list says 0. Rules and code: `lib/explorerFilters.ts` (pure, tested), `ExplorerFilter` in
+  `lib/explorerModel.ts` (the filter type, with the origin folder), `components/ExplorerFilterPanel.tsx`,
+  `components/ExplorerActivePills.tsx`. The two roots can hold a folder of the same name: a choice is identified by root and folder,
+  and says its root (« 2025 (Docs) ») only when both hold that name.
+- **A typed extension and the reasons of the hits.** The finder's answer now echoes the extensions it took out of the text
+  (`FinderResult.typedFormats`, set by `find_files` from `finder::typed`): the matching format pill is lit and pressing it takes the
+  extension out of the text. A typed extension **narrows** like any other filter (see `docs/DECISIONS.md`, « the explorer's filter
+  panel »). With a text search, each row shows beside its name **why it was found** (« dans le nom », « dans le contenu », « dans une
+  cellule »...), the first reason in the row and all of them in its tooltip, from `FinderHit.reasons`, which the paths-only request
+  already carries.
+- **Not built yet** (later steps): first start, empty folders, the « ⋯ » menu, the gauge, « Select. auto », the « Vues » switch.
   first start, empty folders, the « ⋯ » menu, the left-zone width, the gauge, « Select. auto ».
 
 ## The work folder

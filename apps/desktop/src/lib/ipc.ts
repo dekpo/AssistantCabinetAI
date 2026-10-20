@@ -1336,7 +1336,7 @@ export type FinderScope = { kind: "wholeFolder" } | { kind: "selection"; paths: 
 
 /**
  * Why a file was found. `word` means a typed word met a text of the file and `detail` says which:
- * `name`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile`
+ * `name`, `folder`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile`
  * (the words are spread over several texts) or `passage`. `identifier` means a number typed in any
  * spelling met the same number stored in the file. `date` means a date typed met the file's date
  * (`detail` is `profile` or `name`). `entity` means a filter linked it, and `detail` is the role or
@@ -1420,6 +1420,9 @@ export interface FinderResult {
   coverage: FinderCoverage;
   /** Present when words were typed: the interface says it is a word search. */
   textSearch: { terms: string[]; lastIsPrefix: boolean } | null;
+  /** The file extensions the typed text carried (`.docx`, `xlsx`), taken out of the words and applied
+   * as a format filter; lower case, no dot. Empty when none was typed. */
+  typedFormats: string[];
 }
 
 /**

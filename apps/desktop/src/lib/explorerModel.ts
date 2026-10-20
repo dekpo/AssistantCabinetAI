@@ -213,8 +213,23 @@ export interface ExplorerFilter {
   /** Extensions, lowercase without the dot. Empty keeps every format. */
   formats?: ReadonlySet<string>;
   states?: ReadonlySet<ExplorerState>;
+  /** Origin folders, as `folderKey(root, folder)`: a file passes when it sits in one of them or under
+   * one of them. Empty keeps every folder. */
+  folders?: ReadonlySet<string>;
   /** The keys the typed search found, or null while no search is active. */
   found?: ReadonlySet<string> | null;
+}
+
+/** The identity of an origin folder: the root and the folder inside it, because the two roots can
+ * hold a sub-folder of the same name. */
+export function folderKey(root: ExplorerRoot, folder: string): string {
+  return `${root}:${folder}`;
+}
+
+/** Whether a file of `root` that sits in `folder` is in the origin folder `key`, or under it. */
+function inFolder(entry: ExplorerEntry, key: string): boolean {
+  const own = folderKey(entry.root, entry.folder);
+  return own === key || own.startsWith(`${key}/`);
 }
 
 /** The entries that pass the filter, in their order. */
@@ -229,6 +244,9 @@ export function filterEntries(
         filter.formats.size === 0 ||
         filter.formats.has(entry.extension)) &&
       (filter.states === undefined || filter.states.size === 0 || filter.states.has(entry.state)) &&
+      (filter.folders === undefined ||
+        filter.folders.size === 0 ||
+        [...filter.folders].some((key) => inFolder(entry, key))) &&
       (filter.found == null || filter.found.has(entry.key)),
   );
 }

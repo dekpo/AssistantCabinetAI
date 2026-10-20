@@ -3,11 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { noDocumentsScope } from "../lib/analysisScope";
-import { countsByFamily, mergeInventories, type ExplorerEntry } from "../lib/explorerModel";
+import { folderChoices, formatChoices, stateCounts } from "../lib/explorerFilters";
+import {
+  countsByFamily,
+  folderKey,
+  mergeInventories,
+  type ExplorerEntry,
+  type ExplorerState,
+} from "../lib/explorerModel";
 import type { FileRecord, ProcessingStatus } from "../lib/ipc";
 import type { IndexingState } from "../state/useIndexing";
 import { ExplorerBottomBar } from "./ExplorerBottomBar";
+import { ExplorerActivePills } from "./ExplorerActivePills";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
+import { ExplorerFilterPanel, FolderSuggestionList } from "./ExplorerFilterPanel";
 import { ExplorerFileRow } from "./ExplorerFileRow";
 import { FileExplorer } from "./FileExplorer";
 
@@ -358,14 +367,204 @@ describe("the whole box, drawn", () => {
     expect(html.trimEnd().endsWith("</div></section>")).toBe(true);
   });
 
-  it("shows the Filtres button and the Vues switch, disabled until their step", () => {
+  it("shows a working Filtres button, closed, and the Vues switch still waiting for its step", () => {
     const html = explorer();
 
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Filtres<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Filtres<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Filtres/);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Vues<\/button>/);
+    // The panel and the pills are drawn only when opened or when a filter is in force.
+    expect(html).not.toContain("explorer-filters");
+    expect(html).not.toContain("explorer-pills");
+  });
+
+  it("disables the Filtres button while no folder is chosen", () => {
+    const html = page(
+      "fr-FR",
+      createElement(FileExplorer, {
+        workFolder: null,
+        dataFolder: null,
+        indexing: IDLE,
+        dataIndexing: IDLE,
+        scope: noDocumentsScope(1),
+        dataScope: noDocumentsScope(1),
+        onScopeChange: NOOP,
+        onDataScopeChange: NOOP,
+        scopeLocked: false,
+        density: "compact",
+        folded: { documents: false, tables: false },
+        onFoldedChange: NOOP,
+        onOpenKnowledge: NOOP,
+        onOpenDocument: NOOP,
+        onOpenTable: NOOP,
+        refreshToken: 0,
+      }),
+    );
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Filtres<\/button>/);
   });
 
   it("carries the row height of the density as a custom property", () => {
     expect(explorer()).toContain("--explorer-row:24px");
+  });
+});
+
+describe("a row with the reason of a hit, drawn", () => {
+  const [entry] = entriesOf([record("a/rapport.pdf")], []);
+
+  it("shows the short reason beside the name and every reason in its tooltip", () => {
+    const html = row(entry as ExplorerEntry, {
+      reason: { text: "dans le nom", title: "dans le nom, dans le contenu" },
+    });
+
+    expect(html).toContain(
+      '<span class="explorer-row__reason" title="dans le nom, dans le contenu">dans le nom</span>',
+    );
+  });
+
+  it("shows no reason without a text search", () => {
+    expect(row(entry as ExplorerEntry)).not.toContain("explorer-row__reason");
+  });
+});
+
+describe("the filter panel, drawn", () => {
+  const entries = entriesOf(
+    [record("clients/a.pdf"), record("clients/b.docx", "failed"), record("c.pdf", "discovered")],
+    [record("budget/g.xlsx")],
+  );
+  const panel = (overrides: Record<string, unknown> = {}, locale = "fr-FR") =>
+    page(
+      locale,
+      createElement(ExplorerFilterPanel, {
+        id: "p",
+        formats: formatChoices(entries, {}, []),
+        chosenFormats: new Set<string>(),
+        typedFormats: [],
+        stateCounts: stateCounts(entries, {}),
+        chosenStates: new Set<ExplorerState>(),
+        folders: folderChoices(entries, {}),
+        chosenFolders: new Set<string>(),
+        disabled: false,
+        anyActive: false,
+        onToggle: NOOP,
+        onRemoveTyped: NOOP,
+        onClear: NOOP,
+        onClose: NOOP,
+        ...overrides,
+      }),
+    );
+
+  it("has format and state pills with their counts, the folder field and the two buttons", () => {
+    const html = panel();
+
+    expect(html).toContain("Format");
+    expect(html).toContain("État");
+    expect(html).toContain("Dossier d&#x27;origine");
+    expect(html).toMatch(/aria-pressed="false"[^>]*>\.pdf<small[^>]*>2<\/small>/);
+    expect(html).toMatch(/>Analysé<small[^>]*>2<\/small>/);
+    expect(html).toMatch(/>À analyser<small[^>]*>1<\/small>/);
+    expect(html).toMatch(/>Illisible<small[^>]*>1<\/small>/);
+    expect(html).toContain("Effacer les filtres");
+    expect(html).toContain("Terminé");
+    expect(html).toContain('type="search"');
+  });
+
+  it("has no scroll area, and draws the suggestions only while the field has the focus", () => {
+    const html = panel();
+
+    expect(html).not.toMatch(/overflow|scroll/i);
+    expect(html).not.toContain("explorer-suggest");
+  });
+
+  it("lights a ticked pill and one that comes from the typed text, and disables clearing when nothing is active", () => {
+    const html = panel({
+      chosenFormats: new Set(["pdf"]),
+      typedFormats: ["xlsx"],
+      formats: formatChoices(entries, {}, ["xlsx"]),
+    });
+
+    expect(html).toMatch(/aria-pressed="true"[^>]*>\.pdf</);
+    expect(html).toMatch(/aria-pressed="true"[^>]*title="[^"]*"[^>]*>\.xlsx</);
+    expect(html).toMatch(/disabled=""[^>]*>Effacer les filtres/);
+  });
+
+  it("disables every control while there is nothing to filter", () => {
+    const html = panel({ disabled: true });
+
+    expect(html.match(/<button[^>]*class="explorer-chip[^>]*disabled=""/g)?.length).toBeGreaterThan(3);
+  });
+
+  it("says no sub-folder when the folders hold none", () => {
+    const flat = entriesOf([record("a.pdf")], []);
+
+    expect(panel({ folders: folderChoices(flat, {}) })).toContain("Aucun sous-dossier.");
+  });
+
+  it("speaks English with the English catalogue", () => {
+    const html = panel({}, "en-US");
+
+    expect(html).toContain("Origin folder");
+    expect(html).toContain("Clear filters");
+  });
+});
+
+describe("the suggestions of the folder field, drawn", () => {
+  const many = entriesOf(
+    Array.from({ length: 8 }, (_, index) => record(`dir${index}/f.pdf`)),
+    [],
+  );
+  const list = (typed: string, locale = "fr-FR") =>
+    page(
+      locale,
+      createElement(FolderSuggestionList, {
+        choices: folderChoices(many, {}),
+        typed,
+        chosen: new Set<string>(),
+        onPick: NOOP,
+      }),
+    );
+
+  it("lists at most five folders with their counts, then says how many more", () => {
+    const html = list("");
+
+    expect(html.match(/explorer-suggest__item/g)).toHaveLength(5);
+    expect(html).toContain("3 autres : tapez pour affiner");
+  });
+
+  it("says nothing more when everything fits, and says when nothing matches", () => {
+    expect(list("dir7")).not.toContain("autre");
+    expect(list("nothing-like-it")).toContain("Aucun dossier ne correspond.");
+  });
+});
+
+describe("the active pills, drawn", () => {
+  const folders = folderChoices(entriesOf([record("2025/a.pdf")], [record("2025/t.csv")]), {});
+  const pills = (items: Parameters<typeof ExplorerActivePills>[0]["pills"]) =>
+    page(
+      "fr-FR",
+      createElement(ExplorerActivePills, { pills: items, folders, onRemove: NOOP, onClear: NOOP }),
+    );
+
+  it("draws nothing without a filter", () => {
+    expect(pills([])).toBe("");
+  });
+
+  it("draws a removable pill per filter and no clear-all link for a single one", () => {
+    const html = pills([{ kind: "format", value: "pdf", typed: false }]);
+
+    expect(html).toContain(">.pdf<");
+    expect(html).toContain('aria-label="Retirer le filtre .pdf"');
+    expect(html).not.toContain("Tout effacer");
+  });
+
+  it("offers Tout effacer from two pills, and says the root of a folder both roots hold", () => {
+    const html = pills([
+      { kind: "state", value: "unreadable", typed: false },
+      { kind: "folder", value: folderKey("data", "2025"), typed: false },
+    ]);
+
+    expect(html).toContain(">Illisible<");
+    expect(html).toContain("2025 (Data)");
+    expect(html).toContain("Tout effacer");
   });
 });

@@ -93,10 +93,11 @@ pub fn read_typed(text: &str, folder_extensions: &[String]) -> TypedText {
 /// join `formats` (added to the formats already asked for), and a date typed alone sets `typed_date`.
 /// A text with no word, no extension and no date in it (punctuation only) is left as typed, so the finder
 /// finds nothing for it rather than listing the whole folder. `inventory` gives the extensions the
-/// folder holds.
-pub fn apply_typed_text(query: &mut FinderQuery, inventory: &[InventoryFile]) {
+/// folder holds. Returns the extensions that were taken out of the text (not those the caller already
+/// asked for), so the answer can echo them and the panel can light the matching format choice.
+pub fn apply_typed_text(query: &mut FinderQuery, inventory: &[InventoryFile]) -> Vec<String> {
     let Some(text) = query.text.as_deref() else {
-        return;
+        return Vec::new();
     };
     let mut held: Vec<String> = inventory
         .iter()
@@ -106,7 +107,7 @@ pub fn apply_typed_text(query: &mut FinderQuery, inventory: &[InventoryFile]) {
     held.dedup();
     let typed = read_typed(text, &held);
     if typed.words.is_none() && typed.formats.is_empty() {
-        return;
+        return Vec::new();
     }
     // A date typed in a French form is searched as words in its ISO form, so that `06/02/2026` and
     // `2026-02-06` find exactly the same files.
@@ -116,12 +117,13 @@ pub fn apply_typed_text(query: &mut FinderQuery, inventory: &[InventoryFile]) {
         }) => Some(iso.clone()),
         _ => typed.words,
     };
-    for format in typed.formats {
-        if !query.formats.contains(&format) {
-            query.formats.push(format);
+    for format in &typed.formats {
+        if !query.formats.contains(format) {
+            query.formats.push(format.clone());
         }
     }
     query.typed_date = typed.date;
+    typed.formats
 }
 
 /// `text` as one day, month or year, when it is only that. Day and month are checked as a calendar.
@@ -382,6 +384,23 @@ mod tests {
         };
         apply_typed_text(&mut query, &[]);
         assert_eq!(query.formats, vec!["pdf", "docx"]);
+    }
+
+    #[test]
+    fn the_typed_extensions_are_returned_apart_from_the_formats_already_asked_for() {
+        let mut query = FinderQuery {
+            text: Some("rapport .docx XLSX".to_string()),
+            formats: vec!["pdf".to_string()],
+            ..FinderQuery::default()
+        };
+        assert_eq!(apply_typed_text(&mut query, &[]), vec!["docx", "xlsx"]);
+        assert_eq!(query.formats, vec!["pdf", "docx", "xlsx"]);
+
+        let mut query = FinderQuery {
+            text: Some("rapport".to_string()),
+            ..FinderQuery::default()
+        };
+        assert!(apply_typed_text(&mut query, &[]).is_empty());
     }
 
     #[test]

@@ -282,6 +282,7 @@ pub fn find(
         facets,
         coverage,
         text_search,
+        typed_formats: Vec::new(),
     })
 }
 

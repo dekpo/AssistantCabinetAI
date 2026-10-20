@@ -4,7 +4,7 @@ import { StateGlyph } from "./ExplorerGlyphs";
 
 /**
  * One file of the explorer: a checkbox, the state glyph, the stem with an ellipsis and the extension
- * as a badge that is never cut, the grey sub-folder when two files share a name, a tag on a file that
+ * as a badge that is never cut, the grey sub-folder when two files share a name, the reason of a text hit, a tag on a file that
  * sits in the other family's folder, and the "Open" and "See" buttons that show on hover and focus.
  * The full path is the row's tooltip. The row's height is the list's (`--explorer-row`): rows have a
  * fixed height so the list can draw only the ones in view.
@@ -15,6 +15,7 @@ export function ExplorerFileRow({
   checkDisabled,
   onToggle,
   hint,
+  reason,
   onOpen,
   onReveal,
 }: {
@@ -25,6 +26,9 @@ export function ExplorerFileRow({
   onToggle: () => void;
   /** The grey sub-folder shown beside a name two files share; empty for none. */
   hint: string;
+  /** Why a text search found this file: the short label beside the name, every reason in its tooltip.
+   * Absent without a search. The row keeps its height: the label gives way like the grey hint. */
+  reason?: { text: string; title: string };
   /** Present only where opening is allowed: an analysed file of its own folder. */
   onOpen?: () => void;
   /** Present only where showing the file in the file manager is allowed. */
@@ -63,6 +67,11 @@ export function ExplorerFileRow({
         {hint === "" ? null : (
           <span className="explorer-row__hint" title={entry.folder}>
             {hint}
+          </span>
+        )}
+        {reason === undefined ? null : (
+          <span className="explorer-row__reason" title={reason.title}>
+            {reason.text}
           </span>
         )}
         {tag === null ? null : (

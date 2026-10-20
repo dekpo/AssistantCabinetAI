@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer } from "react";
-import { foundPaths, SEARCH_LIMIT } from "../lib/finderField";
+import { foundPaths, foundReasons, SEARCH_LIMIT } from "../lib/finderField";
 import { initialSearchState, searchReducer } from "../lib/finderSearchState";
-import { findFiles, type FinderDomain } from "../lib/ipc";
+import { findFiles, type FinderDomain, type FinderReason } from "../lib/ipc";
 
 /**
  * The search field of a folder card: what she typed, the files the finder found, and whether the
@@ -18,6 +18,10 @@ export interface FinderSearch {
   setText: (text: string) => void;
   /** The paths found, or null while no search is active. */
   found: string[] | null;
+  /** Why each path was found, by path. */
+  reasons: Record<string, FinderReason[]>;
+  /** The extensions the finder read out of the typed text and applied as a format filter. */
+  typedFormats: string[];
   /** The search could not run (the index is unavailable); the field says so. */
   failed: boolean;
   showAll: boolean;
@@ -63,7 +67,14 @@ export function useFinderSearch({
     }
     const timer = window.setTimeout(() => {
       findFiles(domain, { text: wanted.text, limit: SEARCH_LIMIT, pathsOnly: true }).then(
-        (result) => dispatch({ type: "answered", id: wanted.id, paths: foundPaths(result) }),
+        (result) =>
+          dispatch({
+            type: "answered",
+            id: wanted.id,
+            paths: foundPaths(result),
+            reasons: foundReasons(result),
+            typedFormats: result.typedFormats,
+          }),
         () => dispatch({ type: "failed", id: wanted.id }),
       );
     }, wanted.delayMs);
@@ -74,6 +85,8 @@ export function useFinderSearch({
     text: state.text,
     setText,
     found: state.found,
+    reasons: state.reasons,
+    typedFormats: state.typedFormats,
     failed: state.failed,
     showAll: state.showAll,
     setShowAll,

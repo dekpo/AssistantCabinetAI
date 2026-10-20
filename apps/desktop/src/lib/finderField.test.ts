@@ -9,7 +9,7 @@ import {
   tickedPaths,
   wholeFolderScope,
 } from "./analysisScope";
-import { foundAnalysed, foundNotAnalysed, foundPaths, resultsToTick, shownFiles } from "./finderField";
+import { foundAnalysed, foundNotAnalysed, foundPaths, foundReasons, resultsToTick, shownFiles } from "./finderField";
 import type { FileRecord, FinderResult } from "./ipc";
 
 function file(relativePath: string, id: string): FileRecord {
@@ -139,5 +139,21 @@ describe("the files of a result", () => {
     } as FinderResult;
 
     expect(foundPaths(result)).toStrictEqual(["b.pdf", "a.pdf"]);
+  });
+});
+
+describe("the reasons of a result", () => {
+  it("are read by path, as the finder reported them", () => {
+    const result = {
+      files: [
+        { relativePath: "b.pdf", reasons: [{ kind: "word", detail: "passage" }] },
+        { relativePath: "a.pdf", reasons: [] },
+      ],
+    } as unknown as FinderResult;
+
+    expect(foundReasons(result)).toStrictEqual({
+      "b.pdf": [{ kind: "word", detail: "passage" }],
+      "a.pdf": [],
+    });
   });
 });

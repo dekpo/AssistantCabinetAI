@@ -117,6 +117,8 @@ describe("what narrows the view", () => {
     expect(isFiltering({ family: "tables" })).toBe(true);
     expect(isFiltering({ formats: new Set(["pdf"]) })).toBe(true);
     expect(isFiltering({ states: new Set(["analysed"]) })).toBe(true);
+    expect(isFiltering({ folders: new Set(["documents:clients"]) })).toBe(true);
+    expect(isFiltering({ folders: new Set() })).toBe(false);
   });
 });
 

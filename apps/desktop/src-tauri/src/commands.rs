@@ -557,7 +557,7 @@ pub async fn find_files(
         .collect();
     // An extension typed in the field is a format filter and a date typed alone also asks for the files
     // dated so (`finder::typed`); the words that are left are what the finder searches.
-    finder::typed::apply_typed_text(&mut query, &inventory);
+    let typed_formats = finder::typed::apply_typed_text(&mut query, &inventory);
     // A number typed in any spelling meets the number stored in the profile: the identifiers of the active
     // packs are read from what was typed, here, where the packs are known.
     if query.identifiers.is_empty() {
@@ -572,7 +572,9 @@ pub async fn find_files(
         }
     }
     let index = open_index(&app)?;
-    finder::find(index.connection(), domain, &inventory, &query, &scope)
+    let mut result = finder::find(index.connection(), domain, &inventory, &query, &scope)?;
+    result.typed_formats = typed_formats;
+    Ok(result)
 }
 
 /// Whether the local index has anything to search yet. The chat panel checks this before

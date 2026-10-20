@@ -1,4 +1,5 @@
 import { SEARCH_DELAY_MS } from "./finderField";
+import type { FinderReason } from "./ipc";
 
 /**
  * What the search field of a folder card knows and decides, with no timer, no call and no React, so
@@ -26,6 +27,10 @@ export interface SearchState {
   text: string;
   /** The paths found, or null while no search is active. */
   found: string[] | null;
+  /** Why each path was found (`reasons[path]`); empty while no search is active. */
+  reasons: Record<string, FinderReason[]>;
+  /** The extensions the finder took out of the typed text and applied as a format filter. */
+  typedFormats: string[];
   /** The search could not run; the field says so. */
   failed: boolean;
   showAll: boolean;
@@ -44,7 +49,13 @@ export type SearchAction =
   | { type: "enabledChanged"; enabled: boolean }
   /** A pass finished or the inventory was read again: the files may have changed under the text. */
   | { type: "refresh" }
-  | { type: "answered"; id: number; paths: string[] }
+  | {
+      type: "answered";
+      id: number;
+      paths: string[];
+      reasons?: Record<string, FinderReason[]>;
+      typedFormats?: string[];
+    }
   | { type: "failed"; id: number }
   | { type: "showAllChanged"; showAll: boolean };
 
@@ -52,6 +63,8 @@ export function initialSearchState(enabled: boolean): SearchState {
   return {
     text: "",
     found: null,
+    reasons: {},
+    typedFormats: [],
     failed: false,
     showAll: false,
     enabled,
@@ -66,6 +79,8 @@ function cleared(state: SearchState, text: string): SearchState {
     ...state,
     text,
     found: null,
+    reasons: {},
+    typedFormats: [],
     failed: false,
     showAll: false,
     request: state.request + 1,
@@ -119,13 +134,20 @@ export function searchReducer(state: SearchState, action: SearchAction): SearchS
       if (action.id !== state.request) {
         return state;
       }
-      return { ...state, found: action.paths, failed: false, wanted: null };
+      return {
+        ...state,
+        found: action.paths,
+        reasons: action.reasons ?? {},
+        typedFormats: action.typedFormats ?? [],
+        failed: false,
+        wanted: null,
+      };
     }
     case "failed": {
       if (action.id !== state.request) {
         return state;
       }
-      return { ...state, found: null, failed: true, wanted: null };
+      return { ...state, found: null, reasons: {}, typedFormats: [], failed: true, wanted: null };
     }
     case "showAllChanged": {
       return { ...state, showAll: action.showAll };

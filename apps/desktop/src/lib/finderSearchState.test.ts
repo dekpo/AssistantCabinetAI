@@ -172,7 +172,61 @@ describe("the view controls", () => {
     const state = run(ON, type("rapport"), { type: "answered", id: 1, paths: ["a.pdf"] }, type(""));
 
     expect(Object.keys(state).sort()).toStrictEqual(
-      ["enabled", "failed", "found", "request", "showAll", "text", "wanted"].sort(),
+      [
+        "enabled",
+        "failed",
+        "found",
+        "reasons",
+        "request",
+        "showAll",
+        "text",
+        "typedFormats",
+        "wanted",
+      ].sort(),
     );
+  });
+});
+
+describe("the reasons and the typed formats of an answer", () => {
+  const reasons = { "a.pdf": [{ kind: "word" as const, detail: "name" }] };
+
+  it("are kept with the paths when the answer is the latest", () => {
+    const asked = run(ON, type("rapport .pdf"));
+    const state = run(asked, {
+      type: "answered",
+      id: asked.request,
+      paths: ["a.pdf"],
+      reasons,
+      typedFormats: ["pdf"],
+    });
+
+    expect(state.reasons).toStrictEqual(reasons);
+    expect(state.typedFormats).toStrictEqual(["pdf"]);
+  });
+
+  it("are empty when the answer carries none", () => {
+    const asked = run(ON, type("rapport"));
+    const state = run(asked, { type: "answered", id: asked.request, paths: ["a.pdf"] });
+
+    expect(state.reasons).toStrictEqual({});
+    expect(state.typedFormats).toStrictEqual([]);
+  });
+
+  it("are dropped with a stale answer, and when the search ends or fails", () => {
+    const asked = run(ON, type("rapport"));
+    const stale = run(asked, { type: "answered", id: asked.request - 1, paths: ["a.pdf"], reasons, typedFormats: ["pdf"] });
+    expect(stale.reasons).toStrictEqual({});
+
+    const answered = run(asked, { type: "answered", id: asked.request, paths: ["a.pdf"], reasons, typedFormats: ["pdf"] });
+    expect(run(answered, type("")).reasons).toStrictEqual({});
+    expect(run(answered, type("")).typedFormats).toStrictEqual([]);
+    const retyped = run(answered, type("rapports"));
+    expect(run(retyped, { type: "failed", id: retyped.request }).reasons).toStrictEqual({});
+  });
+
+  it("stay on screen until the next answer replaces them", () => {
+    const answered = run(ON, type("rap"), { type: "answered", id: 1, paths: ["a.pdf"], reasons, typedFormats: [] });
+
+    expect(run(answered, type("rapp")).reasons).toStrictEqual(reasons);
   });
 });

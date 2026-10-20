@@ -1257,6 +1257,7 @@ body {
 }
 
 .explorer-row__hint,
+.explorer-row__reason,
 .explorer-row__tag {
   flex: 0 1 auto;
   max-width: 40%;
@@ -1267,7 +1268,8 @@ body {
   font-size: 10.5px;
 }
 
-.explorer-row__hint {
+.explorer-row__hint,
+.explorer-row__reason {
   color: var(--text-quiet);
 }
 
@@ -1323,6 +1325,203 @@ body {
   margin: 2px 0 0;
   color: var(--text-quiet);
   font-size: 11px;
+}
+
+/* The filter panel opens in the flow of the head: the box clips what overflows it. It has no scroll
+   area (the format pills wrap), and every block fits the 320 px minimum of the left zone. */
+.explorer-filters {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.explorer-filters__block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.explorer-filters__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-quiet);
+}
+
+.explorer-filters__none {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-quiet);
+}
+
+.explorer-filters__field {
+  width: 100%;
+  padding: 4px 8px;
+  background: var(--panel);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.explorer-filters__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.explorer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.explorer-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer-chip--mono {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11.5px;
+}
+
+.explorer-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.explorer-chip[data-empty="true"] {
+  opacity: 0.55;
+}
+
+.explorer-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.explorer-chip__count {
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.explorer-suggest {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.explorer-suggest__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explorer-suggest__item:hover {
+  background: var(--accent-soft);
+}
+
+.explorer-suggest__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-suggest__count {
+  flex: none;
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 10.5px;
+}
+
+.explorer-suggest__more {
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: var(--text-quiet);
+}
+
+.explorer-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.explorer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 0 3px 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 11.5px;
+}
+
+.explorer-pill__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-pill__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.explorer-pill__remove:hover {
+  background: var(--border);
+}
+
+.explorer__filters-badge {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 10.5px;
+  font-weight: 600;
 }
 
 .explorer-link {

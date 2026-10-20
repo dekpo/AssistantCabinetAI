@@ -230,6 +230,9 @@ pub struct FinderResult {
     pub facets: Facets,
     pub coverage: Coverage,
     pub text_search: Option<TextSearch>,
+    /// The file extensions taken out of the typed text and applied as a format filter (lower case,
+    /// without the dot). Empty when none was typed. The panel lights the matching format choice.
+    pub typed_formats: Vec<String>,
 }
 
 /// One file of a set answer, with the passage that matched.

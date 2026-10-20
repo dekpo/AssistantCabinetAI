@@ -14,8 +14,8 @@ export const CHAT_ID = "chat";
 export type PanelLayout = Record<string, number>;
 
 /** The proportions before anything is saved, and after a restore. */
-export const DEFAULT_OPEN_TRIPLE: PanelTriple = [22, 38, 40];
-export const DEFAULT_COLLAPSED_TRIPLE: PanelTriple = [26, 0, 74];
+export const DEFAULT_OPEN_TRIPLE: PanelTriple = [28, 34, 38];
+export const DEFAULT_COLLAPSED_TRIPLE: PanelTriple = [30, 0, 70];
 
 export const NO_LAYOUTS: PanelLayouts = { open: null, collapsed: null };
 

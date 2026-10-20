@@ -129,7 +129,7 @@ export function AppLayout({
       <Panel
         id={RESOURCES_ID}
         className="pane"
-        defaultSize="22%"
+        defaultSize="28%"
         minSize={RESOURCES_MIN_PX}
         maxSize="35%"
       >

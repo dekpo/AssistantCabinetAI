@@ -1036,7 +1036,7 @@ body {
 .explorer-family__head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 5px 10px;
 }
 
@@ -1099,7 +1099,8 @@ body {
   white-space: nowrap;
 }
 
-.explorer-family__fold {
+.explorer-family__fold,
+.explorer-family__menu {
   display: grid;
   flex: none;
   place-items: center;
@@ -1113,8 +1114,56 @@ body {
   cursor: pointer;
 }
 
-.explorer-family__fold:hover {
+.explorer-family__fold:hover,
+.explorer-family__menu:hover,
+.explorer-family__menu[aria-expanded="true"] {
   background: var(--surface);
+}
+
+.menu-glyph {
+  width: 16px;
+  height: 16px;
+}
+
+/* The formats a family reads, on the second line of its header while its folder is empty. */
+.explorer-family__types {
+  overflow: hidden;
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The « ⋯ » menu: in fixed coordinates (`lib/explorerMenu.ts`), because the box clips its overflow. */
+.explorer-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+}
+
+.explorer-menu__item {
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer-menu__item:hover,
+.explorer-menu__item:focus-visible {
+  background: var(--accent-soft);
 }
 
 .fold-glyph {
@@ -1174,6 +1223,87 @@ body {
 .explorer-empty {
   font-size: 12px;
   padding: 8px 10px;
+}
+
+/* A folder that holds nothing: the sentence and the two buttons. At the narrowest width the buttons
+   go under the sentence; nothing is cut. */
+.explorer-empty--folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.explorer-empty__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.explorer-empty__actions .button {
+  white-space: nowrap;
+}
+
+/* « Pour commencer »: the first-start block, then one setup block per family without a folder. */
+.explorer-start {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin: 8px 10px;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.explorer-start__title {
+  margin: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.explorer-start__steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.explorer-start .button {
+  white-space: nowrap;
+}
+
+.explorer-setup__types {
+  overflow: hidden;
+  color: var(--family);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-setup__path {
+  overflow: hidden;
+  margin: 0 10px;
+  padding: 3px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-setup__actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 8px;
+}
+
+.explorer-setup__actions .button {
+  white-space: nowrap;
 }
 
 .explorer-pass {

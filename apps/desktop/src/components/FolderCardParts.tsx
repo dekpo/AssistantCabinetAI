@@ -20,6 +20,7 @@ export function AnalyseButton({
   emphasised,
   pendingCount,
   title,
+  disabled = false,
 }: {
   indexing: IndexingState;
   emphasised: boolean;
@@ -27,6 +28,8 @@ export function AnalyseButton({
   pendingCount: number;
   /** A tooltip, when the count needs a word of explanation. */
   title?: string;
+  /** The pass has nothing to do (an empty folder): the button stays, greyed, and `title` says why. */
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -39,7 +42,7 @@ export function AnalyseButton({
           : "button button--compact work-folder__analyse"
       }
       title={title}
-      disabled={indexing.running}
+      disabled={indexing.running || disabled}
       onClick={() => void indexing.run()}
     >
       {indexing.running ? (

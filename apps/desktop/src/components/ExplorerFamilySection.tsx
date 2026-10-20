@@ -12,6 +12,7 @@ import {
 } from "../lib/explorerModel";
 import { counted } from "../lib/plural";
 import type { IndexingState } from "../state/useIndexing";
+import { ExplorerFamilyMenu } from "./ExplorerFamilyMenu";
 import { FamilyFolderGlyph, FoldGlyph, StateGlyph } from "./ExplorerGlyphs";
 import { ExplorerFileRow } from "./ExplorerFileRow";
 import { ExplorerList } from "./ExplorerList";
@@ -26,8 +27,10 @@ const COUNTERS: readonly { state: ExplorerState; one: string; many: string }[] =
 
 /**
  * One family of the explorer: a two-line header (the folder's icon, the family's name and its three
- * counters, the Analyser button and the fold button), the line of the running analysis, a few quiet
- * notes, what the last pass did, and the bounded list. The folder's path is the header's tooltip.
+ * counters, the Analyser button, the « ⋯ » menu and the fold button), the line of the running
+ * analysis, a few quiet notes, what the last pass did, and the bounded list. The folder's path is the
+ * header's tooltip. A folder that holds nothing says so in place of the list, with the two things to
+ * do about it, and its header says which formats go in.
  *
  * A file of the other family sits in this list, tagged, and is not counted by Analyser: its own
  * family's pass cannot read it yet, and the button's tooltip says so.
@@ -35,6 +38,8 @@ const COUNTERS: readonly { state: ExplorerState; one: string; many: string }[] =
 export function ExplorerFamilySection({
   family,
   folder,
+  isEmpty,
+  folderActions,
   counts,
   entries,
   allEntries,
@@ -58,8 +63,12 @@ export function ExplorerFamilySection({
   reasonOf,
 }: {
   family: Family;
-  /** The folder this family is analysed from, or null while none is chosen. */
-  folder: string | null;
+  /** The folder this family is analysed from (a family with no folder is `ExplorerFamilySetup`). */
+  folder: string;
+  /** The folder holds no file: nothing to list and nothing for Analyser to do. */
+  isEmpty: boolean;
+  /** What the « ⋯ » menu and the empty folder's two buttons do. */
+  folderActions: { reveal: () => void; change: () => void; clear: () => void };
   counts: FamilyCounts;
   /** The entries to list: this family's, filtered and sorted. */
   entries: readonly ExplorerEntry[];
@@ -94,6 +103,7 @@ export function ExplorerFamilySection({
 }) {
   const { t } = useTranslation();
   const familyName = t(family === "documents" ? "explorer.familyDocuments" : "explorer.familyTables");
+  const typesLine = t(family === "documents" ? "explorer.typesDocuments" : "explorer.typesTables");
   const duplicates = duplicateNames(allEntries);
   const running = indexing.running;
   const foreignNote =
@@ -106,28 +116,42 @@ export function ExplorerFamilySection({
 
   return (
     <section className={`explorer-family explorer-family--${family}`}>
-      <div className="explorer-family__head" title={folder ?? undefined}>
+      <div className="explorer-family__head" title={folder}>
         <FamilyFolderGlyph family={family} />
         <div className="explorer-family__text">
           <span className="explorer-family__name">{familyName}</span>
-          <span className="explorer-family__counters">
-            {COUNTERS.map(({ state, one, many }) => {
-              const count = counts[state];
-              return (
-                <span key={state} className="explorer-family__counter">
-                  <StateGlyph state={state} label={counted(count, t(one), t(many))} />
-                  <span aria-hidden="true">{count}</span>
-                </span>
-              );
-            })}
-          </span>
+          {isEmpty ? (
+            <span className="explorer-family__types">{typesLine}</span>
+          ) : (
+            <span className="explorer-family__counters">
+              {COUNTERS.map(({ state, one, many }) => {
+                const count = counts[state];
+                return (
+                  <span key={state} className="explorer-family__counter">
+                    <StateGlyph state={state} label={counted(count, t(one), t(many))} />
+                    <span aria-hidden="true">{count}</span>
+                  </span>
+                );
+              })}
+            </span>
+          )}
         </div>
-        {folder === null ? null : (
-          <AnalyseButton
-            indexing={indexing}
-            emphasised={counts.analysable > 0}
-            pendingCount={counts.analysable}
-            title={foreignNote}
+        <AnalyseButton
+          indexing={indexing}
+          emphasised={counts.analysable > 0}
+          pendingCount={counts.analysable}
+          title={isEmpty ? t("explorer.analyseEmptyHint") : foreignNote}
+          disabled={isEmpty}
+        />
+        {/* Nothing in the menu can be done to a folder while its analysis runs. */}
+        {running ? null : (
+          <ExplorerFamilyMenu
+            label={t("explorer.menuLabel", { family: familyName })}
+            items={[
+              { id: "reveal", label: t("explorer.menuReveal"), onSelect: folderActions.reveal },
+              { id: "change", label: t("explorer.menuChange"), onSelect: folderActions.change },
+              { id: "clear", label: t("explorer.menuClear"), onSelect: folderActions.clear },
+            ]}
           />
         )}
         <button
@@ -196,8 +220,26 @@ export function ExplorerFamilySection({
               ) : null}
             </details>
           )}
-          {folder === null ? (
-            <p className="explorer-empty">{t("explorer.noFolder")}</p>
+          {isEmpty ? (
+            <div className="explorer-empty explorer-empty--folder">
+              <span className="explorer-empty__text">{t("explorer.emptyFolder")}</span>
+              <span className="explorer-empty__actions">
+                <button
+                  type="button"
+                  className="button button--compact button--primary"
+                  onClick={folderActions.reveal}
+                >
+                  {t("explorer.menuReveal")}
+                </button>
+                <button
+                  type="button"
+                  className="button button--compact"
+                  onClick={folderActions.change}
+                >
+                  {t("explorer.changeShort")}
+                </button>
+              </span>
+            </div>
           ) : entries.length === 0 ? (
             <p className="explorer-empty">
               {t(filtering ? "explorer.noMatch" : "explorer.emptyFamily")}

@@ -388,6 +388,8 @@ describe("the whole box, drawn", () => {
         searchClears: 0,
         onFacts: NOOP,
         onOpenReport: NOOP,
+        savedViews: [],
+        onSavedViewsChange: NOOP,
         onOpenDocument: NOOP,
         onOpenTable: NOOP,
         refreshToken: 0,
@@ -408,12 +410,14 @@ describe("the whole box, drawn", () => {
     expect(html.trimEnd().endsWith("</div></section>")).toBe(true);
   });
 
-  it("shows a working Filtres button, closed, and the Vues switch still waiting for its step", () => {
+  it("shows a working Filtres button, closed, and the Fichiers and Vues switch both working", () => {
     const html = explorer();
 
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Filtres<\/button>/);
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Filtres/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Vues<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>Fichiers<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-pressed="false"[^>]*>Vues<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Vues<\/button>/);
     // The panel and the pills are drawn only when opened or when a filter is in force.
     expect(html).not.toContain("explorer-filters");
     expect(html).not.toContain("explorer-pills");
@@ -442,6 +446,8 @@ describe("the whole box, drawn", () => {
         searchClears: 0,
         onFacts: NOOP,
         onOpenReport: NOOP,
+        savedViews: [],
+        onSavedViewsChange: NOOP,
         onOpenDocument: NOOP,
         onOpenTable: NOOP,
         refreshToken: 0,

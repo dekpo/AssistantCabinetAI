@@ -95,6 +95,27 @@ export const DEFAULT_EXPLORER_SETTINGS: ExplorerSettings = {
   tablesFolded: false,
 };
 
+/** One view the user saved in the explorer: a name and the filters of the left panel, never a file or
+ * a selection. Mirrors `SavedView` in `settings.rs`, which keeps only what it can use. A person or an
+ * organisation is its knowledge-base id (`12`, or `12:author` for one role), never its name. */
+export interface SavedViewSetting {
+  id: string;
+  name: string;
+  family: "all" | "documents" | "tables";
+  formats: string[];
+  states: ("analysed" | "toAnalyse" | "unreadable")[];
+  /** Origin-folder keys, `<root>:<folder>`. */
+  folders: string[];
+  people: string[];
+  organisations: string[];
+  /** Business type codes. */
+  types: string[];
+  /** `YYYY`. */
+  years: string[];
+  recent: boolean;
+  inConversation: boolean;
+}
+
 export interface AppSettings {
   /** Chosen locale, or null on a machine where nothing has been chosen yet. */
   locale: string | null;
@@ -150,6 +171,8 @@ export interface AppSettings {
   layout: PanelLayouts;
   /** Row density and folded lists of the file explorer. Rust keeps every value usable. */
   explorer: ExplorerSettings;
+  /** The views the user saved in the explorer. Rust drops what it cannot use, entry by entry. */
+  explorerViews: SavedViewSetting[];
   /** Local voice and notes. Rust keeps every value in range. */
   speech: SpeechSettings;
 }
@@ -1439,6 +1462,44 @@ export function findFiles(
   scope: FinderScope = { kind: "wholeFolder" },
 ): Promise<FinderResult> {
   return invoke<FinderResult>("find_files", { domain, query, scope });
+}
+
+/** One person or organisation linked to a file, with every role that links them: the roles of the
+ * file's profile (`author`, `subject`, `recipient`, `sender`, `issuer`, `mentioned`...), the knowledge
+ * base's own (`client`, `provider`, `supplier`), or `mention` for a name met in the text with no role. */
+export interface FileEntityLink {
+  entityId: number;
+  roles: string[];
+}
+
+/** What is known of one analysed file. A file that carries nothing is not listed. */
+export interface FileKnowledgeFacts {
+  relativePath: string;
+  businessType: string | null;
+  /** `YYYY`, ascending. */
+  years: string[];
+  entities: FileEntityLink[];
+}
+
+/** A person or an organisation the files link to, under the name the base gives it. `typeId` is
+ * `person` or `organization`, whatever packs are active. */
+export interface FactEntity {
+  entityId: number;
+  name: string;
+  typeId: string;
+}
+
+export interface FolderKnowledgeFacts {
+  files: FileKnowledgeFacts[];
+  entities: FactEntity[];
+}
+
+/**
+ * What the knowledge base and the file profile know of each analysed file of one folder, for the
+ * explorer's filters (`file_knowledge_facts`). A read: no model, no file, nothing written.
+ */
+export function fileKnowledgeFacts(domain: FinderDomain): Promise<FolderKnowledgeFacts> {
+  return invoke<FolderKnowledgeFacts>("file_knowledge_facts", { domain });
 }
 
 /** The preview of a mail merge for the choices made on the plan card. */

@@ -582,7 +582,7 @@ fn by_date(
 }
 
 /// The date at the start of a file's name (`2026-02-06_commandes.csv`), as `YYYY-MM-DD`.
-fn name_date(relative_path: &str) -> Option<String> {
+pub(super) fn name_date(relative_path: &str) -> Option<String> {
     let name = relative_path.rsplit('/').next().unwrap_or(relative_path);
     let stem = match name.rsplit_once('.') {
         Some((stem, _)) if !stem.is_empty() => stem,

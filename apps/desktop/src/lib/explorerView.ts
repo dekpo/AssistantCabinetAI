@@ -27,7 +27,7 @@ export const NO_VIEW: ExplorerView = { family: "all", choices: NO_CHOICES };
 export function viewShowingState(state: ExplorerState, family: FamilyChoice = "all"): ExplorerView {
   return {
     family,
-    choices: { formats: new Set(), states: new Set([state]), folders: new Set() },
+    choices: { ...NO_CHOICES, states: new Set([state]) },
   };
 }
 

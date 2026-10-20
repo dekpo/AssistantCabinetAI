@@ -3,6 +3,7 @@
 
 pub mod contracts;
 pub mod engine;
+pub mod facts;
 pub mod names;
 pub mod question_frame;
 pub mod rank;

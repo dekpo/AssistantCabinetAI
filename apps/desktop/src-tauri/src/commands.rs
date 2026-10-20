@@ -578,6 +578,19 @@ pub async fn find_files(
     Ok(result)
 }
 
+/// What the knowledge base and the file profile know of each analysed file of one folder (business type,
+/// years, people and organisations with their roles), for the explorer's filters. Two reads of the profile
+/// tables and two of the knowledge base: no model, no file read, nothing written. The explorer asks for it when
+/// a filter of the knowledge base is shown or in force, never at launch.
+#[tauri::command(async)]
+pub fn file_knowledge_facts(
+    app: AppHandle,
+    domain: file_profile::build::Domain,
+) -> Result<finder::facts::FolderFacts, AppError> {
+    let index = open_index(&app)?;
+    finder::facts::folder_facts(index.connection(), domain)
+}
+
 /// Whether the local index has anything to search yet. The chat panel checks this before
 /// spending a round trip on a question the retrieval path is guaranteed to refuse
 /// (`AppError::InsufficientEvidence`) - a document has been chosen but never analysed.

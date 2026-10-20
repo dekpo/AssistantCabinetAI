@@ -362,6 +362,14 @@ describe("the order a list takes", () => {
     expect(listSort({ searching: false, folders: new Set([notes]), notesKey: null })).toBe("name");
   });
 
+  it("puts the newest first whenever the Recents order was asked for, even while searching", () => {
+    expect(listSort({ searching: false, folders: new Set(), notesKey: null, recent: true })).toBe("date");
+    expect(listSort({ searching: true, folders: new Set(), notesKey: null, recent: true })).toBe("date");
+    expect(listSort({ searching: true, folders: new Set(), notesKey: null, recent: false })).toBe(
+      "relevance",
+    );
+  });
+
   it("counts the Notes folder and what is under it, not a folder of the same name elsewhere", () => {
     const all = entries(
       [

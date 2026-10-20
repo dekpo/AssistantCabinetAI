@@ -69,8 +69,8 @@ export function clearedScopes(now: number): ScopesByRoot {
   return { documents: noDocumentsScope(now), data: noDocumentsScope(now) };
 }
 
-/** Whether the view is narrowed by anything: the typed search, the family, a format, a state or an
- * origin folder.
+/** Whether the view is narrowed by anything: the typed search, the family, a format, a state, an
+ * origin folder, a person, an organisation, a business type, a year or the conversation's files.
  * "Cocher les N" shows only then, as it ticks what the user is looking at. */
 export function isFiltering(filter: ExplorerFilter): boolean {
   return (
@@ -78,7 +78,12 @@ export function isFiltering(filter: ExplorerFilter): boolean {
     filter.family != null ||
     (filter.formats?.size ?? 0) > 0 ||
     (filter.states?.size ?? 0) > 0 ||
-    (filter.folders?.size ?? 0) > 0
+    (filter.folders?.size ?? 0) > 0 ||
+    (filter.people?.size ?? 0) > 0 ||
+    (filter.organisations?.size ?? 0) > 0 ||
+    (filter.types?.size ?? 0) > 0 ||
+    (filter.years?.size ?? 0) > 0 ||
+    filter.ticked != null
   );
 }
 

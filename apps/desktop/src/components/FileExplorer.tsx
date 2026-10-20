@@ -11,20 +11,26 @@ import {
 import { useTranslation } from "../i18n/I18nProvider";
 import { unfinishedPercent } from "../lib/analysis";
 import { selectionOf, tickedPaths, toggleScopeFile } from "../lib/analysisScope";
+import { restoreCount, showsTickLink, targetOf, unreachableCount } from "../lib/autoSelect";
 import { normaliseError, type AppError } from "../lib/errors";
+import { attachFacts, type EntityKind } from "../lib/explorerFacts";
 import {
   activeFilterCount,
   activePills,
+  entityOptions,
   folderChoices,
   formatChoices,
   leftByOthers,
   NO_CHOICES,
   reasonKeys,
   removePill,
+  setEntityRole,
   stateCounts,
   toggleChoice,
+  typeChoices,
   withoutTypedFormat,
   withoutTypedFormats,
+  yearChoices,
   type ActivePill,
   type FilterKind,
   type PanelChoices,
@@ -51,8 +57,17 @@ import {
   selectionNotes,
   tickableRecords,
   usedCount,
+  type ScopesByRoot,
 } from "../lib/explorerSelection";
 import { boxState, folderState, nothingToSearch } from "../lib/explorerStates";
+import {
+  addView,
+  deleteView,
+  missingEntities,
+  newViewId,
+  renameView,
+  savedFromView,
+} from "../lib/explorerViews";
 import { ROW_HEIGHT, rowBudget } from "../lib/explorerWindow";
 import type { ExplorerView, FamilyChoice } from "../lib/explorerView";
 import {
@@ -64,19 +79,25 @@ import {
   type AnalysisScope,
   type ExplorerDensity,
   type FileRecord,
+  type SavedViewSetting,
 } from "../lib/ipc";
 import type { ExplorerFacts } from "../lib/overviewModel";
 import { counted } from "../lib/plural";
+import { useAutoSelect } from "../state/useAutoSelect";
 import { useExplorerFolders } from "../state/useExplorerFolders";
 import { useFinderSearch } from "../state/useFinderSearch";
 import { useFolderInventory } from "../state/useFolderInventory";
 import type { IndexingState } from "../state/useIndexing";
+import { useKnowledgeFacts } from "../state/useKnowledgeFacts";
 import { useNow } from "../state/useNow";
 import { useProfileStatus } from "../state/useProfileStatus";
 import { useVectorShare } from "../state/useVectorShare";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorBanner } from "./ErrorBanner";
 import { ExplorerActivePills } from "./ExplorerActivePills";
+import { ExplorerAutoSwitch } from "./ExplorerAutoSwitch";
+import { ExplorerKnowledgeFilters } from "./ExplorerKnowledgeFilters";
+import { ExplorerViewsPanel } from "./ExplorerViewsPanel";
 import { ExplorerFilterPanel } from "./ExplorerFilterPanel";
 import { ExplorerBottomBar } from "./ExplorerBottomBar";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
@@ -119,6 +140,8 @@ export function FileExplorer({
   searchClears,
   onFacts,
   onOpenReport,
+  savedViews,
+  onSavedViewsChange,
 }: {
   workFolder: string | null;
   dataFolder: string | null;
@@ -159,6 +182,9 @@ export function FileExplorer({
   onFacts: (facts: ExplorerFacts) => void;
   /** « Voir le rapport »: opens the centre on its overview. */
   onOpenReport: () => void;
+  /** The views the user saved: filters under a name, kept in the settings file. */
+  savedViews: readonly SavedViewSetting[];
+  onSavedViewsChange: (views: SavedViewSetting[]) => void;
 }) {
   const { t } = useTranslation();
   const familyChoice = view.family;
@@ -172,6 +198,11 @@ export function FileExplorer({
     }));
   const [error, setError] = useState<AppError | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  /* Files or views: the second shows the application's views and the user's own. */
+  const [mode, setMode] = useState<"files" | "views">("files");
+  /* Counted up each time the panel or the views open: the knowledge base is read again then. */
+  const [openings, setOpenings] = useState(0);
+  const [deletingView, setDeletingView] = useState<string | null>(null);
   /* Clearing a family's analysis asks first; the question names the family. */
   const [confirmingClear, setConfirmingClear] = useState<Family | null>(null);
   const folders = useExplorerFolders({
@@ -207,7 +238,22 @@ export function FileExplorer({
       }),
     [documentsInventory, dataInventory, workFolder, dataFolder],
   );
-  const entries = merged.entries;
+  /* What the knowledge base knows of the files is read only when something shows or uses it: the open
+     panel, the views, or a choice of the knowledge base already in force. */
+  const knowledgeChosen =
+    choices.people.size + choices.organisations.size + choices.types.size + choices.years.size > 0;
+  const knowledge = useKnowledgeFacts({
+    documentsFolder: workFolder,
+    dataFolder,
+    documentsPasses: indexing.finishedPasses,
+    dataPasses: dataIndexing.finishedPasses,
+    wanted: panelOpen || mode === "views" || knowledgeChosen,
+    refresh: openings,
+  });
+  const entries = useMemo(
+    () => attachFacts(merged.entries, knowledge.facts),
+    [merged.entries, knowledge.facts],
+  );
 
   /* One field, two searches: the finder works per folder, so the same text is asked of each and the
      two answers are joined by (folder, path). A search that could not run shows everything and says
@@ -251,17 +297,40 @@ export function FileExplorer({
         : [...new Set([...documentsFinder.typedFormats, ...dataFinder.typedFormats])],
     [searchFailed, found, documentsFinder.typedFormats, dataFinder.typedFormats],
   );
+  /* « Dans la conversation »: the files the conversation uses now, as keys. Worked out only while that
+     filter is on. */
+  const tickedKeys = useMemo(() => {
+    if (!choices.inConversation) {
+      return null;
+    }
+    const keys = new Set<string>();
+    for (const [root, side] of [
+      ["documents", scope],
+      ["data", dataScope],
+    ] as const) {
+      for (const path of tickedPaths(side, tickableRecords(entries, root))) {
+        keys.add(explorerKey(root, path));
+      }
+    }
+    return keys;
+  }, [choices.inConversation, entries, scope, dataScope]);
   const filter: ExplorerFilter = {
     family: familyChoice === "all" ? null : familyChoice,
     formats: choices.formats,
     states: choices.states,
     folders: choices.folders,
+    people: choices.people,
+    organisations: choices.organisations,
+    types: choices.types,
+    years: choices.years,
     found,
+    ticked: tickedKeys,
   };
+  const switches = { recent: choices.recent, conversation: choices.inConversation };
   const searched = useMemo(() => filterEntries(entries, { found }), [entries, found]);
   const shown = useMemo(
     () => filterEntries(entries, filter),
-    [entries, familyChoice, choices, found],
+    [entries, familyChoice, choices, found, tickedKeys],
   );
   /* The Notes folder, as an origin-folder choice: one click shows the notes the user wrote. */
   const notesKey = notesFolder.trim() === "" ? null : folderKey("documents", notesFolder);
@@ -282,7 +351,12 @@ export function FileExplorer({
     }
     return rank;
   }, [documentsFinder.found, dataFinder.found]);
-  const sort = listSort({ searching: found !== null, folders: choices.folders, notesKey });
+  const sort = listSort({
+    searching: found !== null,
+    folders: choices.folders,
+    notesKey,
+    recent: choices.recent,
+  });
   const listed = useMemo(
     () => ({
       documents: sortEntries(
@@ -306,7 +380,7 @@ export function FileExplorer({
     documents: forSegments.filter((entry) => entry.family === "documents").length,
     tables: forSegments.filter((entry) => entry.family === "tables").length,
   };
-  const pills = activePills(filter, typedFormats);
+  const pills = activePills(filter, typedFormats, switches);
   /* The folder choices are worked out only when something shows them: the open panel, or a folder pill
      (which says the root when both roots hold a folder of that name). */
   const folderOptions =
@@ -314,6 +388,8 @@ export function FileExplorer({
 
   const toggleFilter = (kind: FilterKind, value: string) =>
     setChoices((now) => toggleChoice(now, kind, value));
+  const chooseRole = (kind: EntityKind, entityId: number, role: string | null) =>
+    setChoices((now) => setEntityRole(now, kind, entityId, role));
   const removeTyped = (extension: string) => setText(withoutTypedFormat(text, extension));
   const removeActivePill = (pill: ActivePill) => {
     if (pill.typed) {
@@ -398,6 +474,22 @@ export function FileExplorer({
   const box = boxState(documentsState, tablesState);
   const idle = nothingToSearch(box);
 
+  /* « Select. auto »: the selection follows the result of the filters, once the result has arrived.
+     The rules are the pure state machine of `lib/autoSelect.ts`; this only feeds it and applies what
+     it asks for. Off at every launch, locked while a question is being answered. */
+  const auto = useAutoSelect({
+    locked: scopeLocked,
+    apply: (next: ScopesByRoot) => {
+      onScopeChange(next.documents);
+      onDataScopeChange(next.data);
+    },
+  });
+  useEffect(() => {
+    if (auto.state.on) {
+      auto.send({ type: "resultArrived", target: targetOf(shown, entries, Date.now()) });
+    }
+  }, [auto.state.on, shown, entries]);
+
   /* The selection: the same two scopes the chat is sent with. A row's tick, the two links of the
      bottom bar and the counts all read them through the analysed files of each folder. */
   const tickable = {
@@ -414,6 +506,8 @@ export function FileExplorer({
     if (!isTickable(entry)) {
       return;
     }
+    /* A tick by hand turns the automatic selection off and drops nothing else. */
+    auto.send({ type: "manualChange" });
     const now = Date.now();
     if (entry.root === "documents") {
       onScopeChange(toggleScopeFile(scope, entry.record, tickable.documents, now));
@@ -462,6 +556,25 @@ export function FileExplorer({
 
   const query = text.trim();
   const notAnalysed = searched.filter((entry) => !isTickable(entry)).length;
+  /* A saved view opens as the filters it holds, in the files side: the typed text, the lists and the
+     selection are left as they are. */
+  const openView = (next: ExplorerView) => {
+    onViewChange(next);
+    setMode("files");
+  };
+  /* The people and organisations of the filters that the files no longer link to: said, not hidden. */
+  const missingNames = knowledge.loaded
+    ? missingEntities(view, new Set(knowledge.facts.entities.keys()))
+    : [];
+  const toggleAuto = () =>
+    auto.state.on
+      ? auto.send({ type: "switchOff" })
+      : auto.send({
+          type: "switchOn",
+          scopes,
+          count: documentsUsed + tablesUsed,
+          target: targetOf(shown, entries, Date.now()),
+        });
   const familyLabels: Record<FamilyChoice, string> = {
     all: t("explorer.segmentAll"),
     documents: t("explorer.familyDocuments"),
@@ -477,139 +590,215 @@ export function FileExplorer({
       <header className="explorer__head">
         <div className="explorer__titleline">
           <h2 className="explorer__title">{t("explorer.title")}</h2>
-          {/* The saved views arrive with the filters of a later step: the switch is drawn, and the
-              second choice waits. */}
           <div className="explorer__views" role="group" aria-label={t("explorer.viewSwitch")}>
-            <button type="button" className="explorer__view" aria-pressed="true">
+            <button
+              type="button"
+              className="explorer__view"
+              aria-pressed={mode === "files"}
+              onClick={() => setMode("files")}
+            >
               {t("explorer.viewFiles")}
             </button>
             <button
               type="button"
               className="explorer__view"
-              aria-pressed="false"
-              disabled
-              title={t("explorer.soon")}
+              aria-pressed={mode === "views"}
+              onClick={() => {
+                setMode("views");
+                setPanelOpen(false);
+                setOpenings((count) => count + 1);
+              }}
             >
               {t("explorer.viewViews")}
             </button>
           </div>
         </div>
-        <div className="explorer__searchline">
-          <label className="explorer__search">
-            <SearchGlyph />
-            <input
-              type="search"
-              className="explorer__search-input"
-              value={text}
-              placeholder={t("explorer.searchPlaceholder")}
-              aria-label={t("explorer.searchLabel")}
-              disabled={scopeLocked || idle}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => setText(event.target.value)}
+        {mode === "views" ? (
+          <>
+            <ExplorerViewsPanel
+              saved={savedViews}
+              current={view}
+              facts={knowledge.facts}
+              factsLoaded={knowledge.loaded}
+              onOpen={openView}
+              onSave={(name) =>
+                onSavedViewsChange(
+                  addView(savedViews, savedFromView(view, newViewId(savedViews, Date.now()), name)),
+                )
+              }
+              onRename={(id, name) => onSavedViewsChange(renameView(savedViews, id, name))}
+              onDelete={setDeletingView}
             />
-          </label>
-          <button
-            ref={filtersButton}
-            type="button"
-            className="button button--compact"
-            aria-expanded={panelOpen}
-            aria-controls={panelOpen ? panelId : undefined}
-            disabled={idle}
-            onClick={() => setPanelOpen((open) => !open)}
-          >
-            {t("explorer.filters")}
-            {pills.length === 0 ? null : (
-              <span
-                className="explorer__filters-badge"
-                aria-label={t("explorer.filtersActive", { count: activeFilterCount(filter, typedFormats) })}
-              >
-                {activeFilterCount(filter, typedFormats)}
-              </span>
-            )}
-          </button>
-        </div>
-        {panelOpen && !idle ? (
-          <ExplorerFilterPanel
-            id={panelId}
-            panelRef={panel}
-            formats={formatChoices(entries, filter, typedFormats)}
-            chosenFormats={choices.formats}
-            typedFormats={typedFormats}
-            stateCounts={stateCounts(entries, filter)}
-            chosenStates={choices.states}
-            folders={folderOptions}
-            chosenFolders={choices.folders}
-            disabled={idle}
-            anyActive={pills.length > 0}
-            onToggle={toggleFilter}
-            onRemoveTyped={removeTyped}
-            onClear={clearFilters}
-            onClose={() => closePanel(true)}
-          />
-        ) : null}
-        {idle ? null : (
-          <div className="explorer__segments" role="group" aria-label={t("explorer.segmentLabel")}>
-            {FAMILY_CHOICES.map((choice) => (
+            <ExplorerActivePills
+              pills={pills}
+              folders={folderOptions}
+              foldersKnown={entries.length > 0}
+              facts={knowledge.facts}
+              factsLoaded={knowledge.loaded}
+              onRemove={removeActivePill}
+              onClear={clearFilters}
+            />
+          </>
+        ) : (
+          <>
+            <div className="explorer__searchline">
+              <label className="explorer__search">
+                <SearchGlyph />
+                <input
+                  type="search"
+                  className="explorer__search-input"
+                  value={text}
+                  placeholder={t("explorer.searchPlaceholder")}
+                  aria-label={t("explorer.searchLabel")}
+                  disabled={scopeLocked || idle}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(event) => setText(event.target.value)}
+                />
+              </label>
               <button
-                key={choice}
+                ref={filtersButton}
                 type="button"
-                className="explorer__segment"
-                aria-pressed={familyChoice === choice}
-                onClick={() => setFamilyChoice(choice)}
+                className="button button--compact"
+                aria-expanded={panelOpen}
+                aria-controls={panelOpen ? panelId : undefined}
+                disabled={idle}
+                onClick={() => {
+                  if (!panelOpen) {
+                    setOpenings((count) => count + 1);
+                  }
+                  setPanelOpen((open) => !open);
+                }}
               >
-                {familyLabels[choice]}
-                <small className="explorer__segment-count">{segmentCounts[choice]}</small>
+                {t("explorer.filters")}
+                {pills.length === 0 ? null : (
+                  <span
+                    className="explorer__filters-badge"
+                    aria-label={t("explorer.filtersActive", {
+                      count: activeFilterCount(filter, typedFormats, switches),
+                    })}
+                  >
+                    {activeFilterCount(filter, typedFormats, switches)}
+                  </span>
+                )}
               </button>
-            ))}
-          </div>
+            </div>
+            {idle ? null : (
+              <ExplorerAutoSwitch
+                on={auto.state.on}
+                disabled={scopeLocked}
+                onToggle={toggleAuto}
+              />
+            )}
+            {panelOpen && !idle ? (
+              <ExplorerFilterPanel
+                id={panelId}
+                panelRef={panel}
+                formats={formatChoices(entries, filter, typedFormats)}
+                chosenFormats={choices.formats}
+                typedFormats={typedFormats}
+                stateCounts={stateCounts(entries, filter)}
+                chosenStates={choices.states}
+                folders={folderOptions}
+                chosenFolders={choices.folders}
+                disabled={idle}
+                anyActive={pills.length > 0}
+                onToggle={toggleFilter}
+                onRemoveTyped={removeTyped}
+                onClear={clearFilters}
+                onClose={() => closePanel(true)}
+                knowledge={
+                  <ExplorerKnowledgeFilters
+                    loaded={knowledge.loaded}
+                    types={typeChoices(entries, filter)}
+                    chosenTypes={choices.types}
+                    years={yearChoices(entries, filter)}
+                    chosenYears={choices.years}
+                    people={entityOptions(entries, filter, "person", knowledge.facts)}
+                    chosenPeople={choices.people}
+                    organisations={entityOptions(entries, filter, "organisation", knowledge.facts)}
+                    chosenOrganisations={choices.organisations}
+                    disabled={idle}
+                    onToggle={toggleFilter}
+                    onRole={chooseRole}
+                  />
+                }
+              />
+            ) : null}
+            {idle ? null : (
+              <div className="explorer__segments" role="group" aria-label={t("explorer.segmentLabel")}>
+                {FAMILY_CHOICES.map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    className="explorer__segment"
+                    aria-pressed={familyChoice === choice}
+                    onClick={() => setFamilyChoice(choice)}
+                  >
+                    {familyLabels[choice]}
+                    <small className="explorer__segment-count">{segmentCounts[choice]}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+            {idle || notesKey === null || notesCount === 0 ? null : (
+              <div className="explorer__notes">
+                <button
+                  type="button"
+                  className="explorer__notes-chip"
+                  aria-pressed={choices.folders.has(notesKey)}
+                  title={t("explorer.notesHint")}
+                  onClick={() => toggleFilter("folder", notesKey)}
+                >
+                  {t("explorer.notesChip")}
+                  <small className="explorer__segment-count">{notesCount}</small>
+                </button>
+              </div>
+            )}
+            <ExplorerActivePills
+              pills={pills}
+              folders={folderOptions}
+              foldersKnown={entries.length > 0}
+              facts={knowledge.facts}
+              factsLoaded={knowledge.loaded}
+              onRemove={removeActivePill}
+              onClear={clearFilters}
+            />
+            {missingNames.length > 0 ? (
+              <p className="explorer__status" role="status">
+                {missingNames.length === 1
+                  ? t("explorer.viewMissingOne")
+                  : t("explorer.viewMissingMany", { count: missingNames.length })}
+              </p>
+            ) : null}
+            {searchFailed ? (
+              <p className="explorer__status" role="status">
+                {t("finder.failed")}
+              </p>
+            ) : found !== null && query !== "" ? (
+              <p className="explorer__status" role="status">
+                {searched.length === 0
+                  ? t("finder.none", { query })
+                  : t("finder.found", {
+                      files: counted(searched.length, t("finder.foundOne"), t("finder.foundMany")),
+                      query,
+                    })}
+                {notAnalysed > 0
+                  ? ` ${t("finder.notAnalysed", {
+                      count: counted(
+                        notAnalysed,
+                        t("finder.notAnalysedOne"),
+                        t("finder.notAnalysedMany"),
+                      ),
+                    })}`
+                  : ""}
+              </p>
+            ) : null}
+          </>
         )}
-        {idle || notesKey === null || notesCount === 0 ? null : (
-          <div className="explorer__notes">
-            <button
-              type="button"
-              className="explorer__notes-chip"
-              aria-pressed={choices.folders.has(notesKey)}
-              title={t("explorer.notesHint")}
-              onClick={() => toggleFilter("folder", notesKey)}
-            >
-              {t("explorer.notesChip")}
-              <small className="explorer__segment-count">{notesCount}</small>
-            </button>
-          </div>
-        )}
-        <ExplorerActivePills
-          pills={pills}
-          folders={folderOptions}
-          onRemove={removeActivePill}
-          onClear={clearFilters}
-        />
-        {searchFailed ? (
-          <p className="explorer__status" role="status">
-            {t("finder.failed")}
-          </p>
-        ) : found !== null && query !== "" ? (
-          <p className="explorer__status" role="status">
-            {searched.length === 0
-              ? t("finder.none", { query })
-              : t("finder.found", {
-                  files: counted(searched.length, t("finder.foundOne"), t("finder.foundMany")),
-                  query,
-                })}
-            {notAnalysed > 0
-              ? ` ${t("finder.notAnalysed", {
-                  count: counted(
-                    notAnalysed,
-                    t("finder.notAnalysedOne"),
-                    t("finder.notAnalysedMany"),
-                  ),
-                })}`
-              : ""}
-          </p>
-        ) : null}
       </header>
 
-      {box === "firstStart" ? (
+      {mode === "views" ? null : box === "firstStart" ? (
         <ExplorerFirstStart
           busy={folders.busy}
           canCreate={suggestedWorkFolder !== null || suggestedDataFolder !== null}
@@ -617,7 +806,7 @@ export function FileExplorer({
         />
       ) : null}
 
-      {workFolder === null ? (
+      {mode === "views" ? null : workFolder === null ? (
         <ExplorerFamilySetup
           family="documents"
           suggested={suggestedWorkFolder}
@@ -656,7 +845,7 @@ export function FileExplorer({
           reasonOf={reasonOf}
         />
       )}
-      {dataFolder === null ? (
+      {mode === "views" ? null : dataFolder === null ? (
         <ExplorerFamilySetup
           family="tables"
           suggested={suggestedDataFolder}
@@ -704,14 +893,16 @@ export function FileExplorer({
         <ExplorerBottomBar
           documentsUsed={documentsUsed}
           tablesUsed={tablesUsed}
-          toTick={toTick.length}
+          toTick={showsTickLink(auto.state, toTick.length) ? toTick.length : 0}
           onTick={() => {
+            auto.send({ type: "manualChange" });
             const next = addEntriesToScopes(scopes, toTick, entries, Date.now());
             onScopeChange(next.documents);
             onDataScopeChange(next.data);
           }}
           canClear={selectionOf(scope) !== "none" || selectionOf(dataScope) !== "none"}
           onClear={() => {
+            auto.send({ type: "manualChange" });
             const next = clearedScopes(Date.now());
             onScopeChange(next.documents);
             onDataScopeChange(next.data);
@@ -719,6 +910,28 @@ export function FileExplorer({
           locked={scopeLocked}
           notes={selectionNotes(selectionOf(scope), selectionOf(dataScope))}
           unsupported={merged.unsupported}
+          auto={{
+            on: auto.state.on,
+            unreachable: unreachableCount(shown),
+            restore: restoreCount(auto.state),
+            onRestore: () => auto.send({ type: "restore" }),
+          }}
+        />
+      )}
+      {deletingView === null ? null : (
+        <ConfirmDialog
+          title={t("explorer.viewDeleteTitle")}
+          body={t("explorer.viewDeleteBody", {
+            name: savedViews.find((saved) => saved.id === deletingView)?.name ?? "",
+          })}
+          confirmLabel={t("explorer.viewDelete")}
+          destructive
+          busy={false}
+          onConfirm={() => {
+            onSavedViewsChange(deleteView(savedViews, deletingView));
+            setDeletingView(null);
+          }}
+          onCancel={() => setDeletingView(null)}
         />
       )}
       {confirmingClear === null ? null : (

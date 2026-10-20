@@ -657,6 +657,8 @@ function AppContent() {
                   searchClears={searchClears}
                   onFacts={setExplorerFacts}
                   onOpenReport={showOverview}
+                  savedViews={snapshot.settings.explorerViews}
+                  onSavedViewsChange={(views) => void update({ explorerViews: views })}
                   notesFolder={snapshot.settings.speech.notesFolderName}
                   onFoldedChange={(family, isFolded) => {
                     /* A fold she makes herself is hers: the link's memory is dropped. */

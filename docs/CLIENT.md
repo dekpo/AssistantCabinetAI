@@ -105,7 +105,7 @@ developers that appears under the last answer. Design and rules: `docs/DECISIONS
 
 **Knowledge management dialog (KB lot 8).** Settings → « Connaissances » → **Gérer…**, or the link **Voir les connaissances** under the analysis summary of either folder card, opens a full-window administrative dialog; nothing in the conversation opens it. Tabs: **Entités** (a searchable, filterable list of 50 per page and the sheet of the chosen entity: its names, where each mention was found with the passage, the method and the confidence, the links, the details, the pairs, how the spreadsheet columns were read; actions Modifier, Ajouter un nom, Fusionner avec…, Séparer…, Supprimer, Restaurer, Défaire la fusion), **À vérifier** (possible matches to merge or dismiss, and library-health counts), **Types et rôles** (read-only) and **Réinitialiser**. A strip under the title counts what the base holds, says how many documents the next Analyse will read again (from the stored text, without the AI) and holds **Annuler : <operation>**. Delete, merge, split, removing a name and both resets ask first through the confirmation dialog. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 8".
 
-**The search field of a folder card (explorer step 1, 19 October 2026).** A field above the list in each folder card searches that folder's file names, its file profile and, for documents, the text, with no model. It **only filters the list**: the selection never changes because of it. Under the result line, « Cocher les N résultats » adds the analysed results that are not yet selected (N counts only those, the button is hidden at 0), and the line says how many results are not analysed and cannot be ticked. « Tous les fichiers » shows the whole folder again and « Réinitialiser » ends the search; neither touches the selection. A typed word that is a file extension (`.docx`, `xlsx`) filters by format, and a text that is only a date (`2026`, `2026-02`, `2026-02-06`, `06/02/2026`) finds the files dated so. The search runs again by itself when an Analyse finishes or the list is read again on window focus, and the text is cleared when the folder changes. Rules: `docs/DECISIONS.md`, « the explorer's search step »; code: `lib/finderSearchState.ts` (tested), `state/useFinderSearch.ts`, `components/FinderControls.tsx`, `finder/typed.rs`.
+**The search field of a folder card (explorer step 1, 19 October 2026).** A field above the list in each folder card searches that folder's file names, its file profile and, for documents, the text, with no model. It **only filters the list**: the selection never changes because of it. Under the result line, « Cocher les N » adds the analysed results that are not yet selected (N counts only those, the button is hidden at 0), and the line says how many results are not analysed and cannot be ticked. « Tous les fichiers » shows the whole folder again and « Réinitialiser » ends the search; neither touches the selection. A typed word that is a file extension (`.docx`, `xlsx`) filters by format, and a text that is only a date (`2026`, `2026-02`, `2026-02-06`, `06/02/2026`) finds the files dated so. The search runs again by itself when an Analyse finishes or the list is read again on window focus, and the text is cleared when the folder changes. Rules: `docs/DECISIONS.md`, « the explorer's search step »; code: `lib/finderSearchState.ts` (tested), `state/useFinderSearch.ts`, `components/FinderControls.tsx`, `finder/typed.rs`.
 
 **Suggestions, and the sheet of a name (KB lot 9).** Two more things, and nothing changes while the mode is `off`. (1) In the empty conversation (and nowhere else: the folder cards no longer draw them, 17 October 2026), a short block titled **« Suggestions »** (« Questions suggérées à partir de vos fichiers ») is drawn as buttons: each was checked on the selected files before it was shown (a few operations run on the cached workbooks, nothing on the AI) and a click sends it as it stands. Nothing says it will have an answer. Names are **hidden by default** (the setting « Masquer les noms dans les suggestions »): only questions that name nobody are shown, with **Afficher les suggestions avec des noms**, which the user clicks and which lasts the session, and **Masquer à nouveau les noms**. Nothing is looked up at launch or while an Analyse runs. (2) A small **i** beside a name, on its chip above the box and in the `@` list, opens the **sheet of the name** inside the selection: its other spellings, its roles, the documents with their pages and the tables with the sheet and the column, a count (never a list) for what lies outside the selection, and the links the files state. It only reads. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 9".
 
@@ -339,7 +339,44 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   exactly what the panel sets. The typed search stays in the box (`searchClears` asks it to empty). The box reports what the
   Overview needs from its inventories (`ExplorerFacts`: the merged entries, the situation of each folder, the share of the meaning
   search, the profile note) through `onFacts`.
-- **Not built yet** (later steps): « Select. auto », the « Vues » switch.
+- **Knowledge-base filters, views and « Select. auto »** (step 7, 21 October 2026): see the next section.
+
+### The knowledge-base filters, the views and « Select. auto » (explorer step 7, 21 October 2026)
+
+- **Filters.** The « Filtres » panel gains four blocks, drawn between the states and the origin folder: **Type de document** (chips,
+  labelled from the catalogue key `businessType.<code>`; a type the build has no word for keeps its code), **Année** (chips,
+  newest first), **Personnes** and **Organisations** (typed fields: at most five suggestions, the most frequent first, only while
+  the field has the focus, « N autres : tapez pour affiner », no scroll bar). A chosen name is a chip; when it is linked to the
+  files in two or more labelled roles it gets the **role step**: « Tous les rôles » then one chip per role with its count (author,
+  subject, recipient, sender, issuer, « Cité »; a name met in the text with no role is not a role). Counts follow the step 3 rule:
+  over what **all the other filters** leave, the kind's own choices left out; a chosen name or type the files no longer carry stays
+  listed with 0 (a name the base no longer knows says « Nom introuvable »). The choices of one kind combine as « this or that », the
+  kinds as « this and that », and everything combines with the family, the typed text and the other filters.
+- **One read, no call per filter change.** `file_knowledge_facts(domain)` (Rust, `finder/facts.rs`) returns once per folder, for
+  every analysed file, its business type, its years and its people and organisations with their roles, plus the names of those
+  entities. `lib/explorerFacts.ts` attaches them to the entries (`ExplorerEntry.facts`), and **every count and every filter is worked
+  out in TypeScript** (`filterEntries`, `typeChoices`, `yearChoices`, `entityOptions`, `suggestEntities`). It is read only when
+  something needs it (the panel open, the « Vues » side, or a choice of the knowledge base in force), again after each pass and each
+  time the panel opens, and never at launch (`state/useKnowledgeFacts.ts`). A person is a person and an organisation an
+  organisation whatever packs are active: the type comes from the base. The engine facets were **not** used: they are counted
+  over one result (the kind's own choices cannot be left out) and list ten entities at most.
+- **Pills.** Each choice is a pill (`ActivePill` kinds `person`, `organisation`, `type`, `year`, plus `conversation` and `recent`);
+  a person pill reads « Name · Role »; a folder that no longer exists says « (introuvable) ».
+- **Vues.** The switch « Fichiers | Vues » of the header is enabled. « Vues » shows the three views of the application (**Récents**:
+  newest first; **À analyser**: the state filter; **Dans la conversation**: only the files the conversation uses now), the user's
+  own (open, rename, delete with a confirmation) and the form « Enregistrer les filtres actuels » (name unique ignoring case and
+  accents, at most 60 characters, at most 50 views, nothing to save without a filter). A view stores **filters only** (the family and
+  the panel's choices; never a file, a selection or the typed text), in `settings.json` under `explorerViews` (`SavedView` in
+  `settings.rs`, read leniently entry by entry); a person or an organisation is kept **by id, never by name**. Opening a view
+  replaces the filters through `onViewChange` and goes back to « Fichiers »; it **never touches the selection, the lists' folds or
+  the typed text** (the text keeps narrowing; it stays visible in the field). A view or a filter that names someone the files no
+  longer link to says so (« Un nom de ce filtre ne figure plus dans vos fichiers. ») instead of showing nothing.
+- **« Select. auto ».** A `role="switch"` under the search line with its hint; off by default and at every launch (nothing is
+  stored). Pure rules in `lib/autoSelect.ts`, held by `state/useAutoSelect.ts`; see `docs/SELECTION-AND-MEMORY.md`, « Automatic
+  selection ». The bottom bar always says « Mode : automatique (suit les filtres) » or « Mode : manuel », shows
+  « Rétablir la sélection précédente (n) » while a snapshot exists, says how many results cannot be ticked, and « Cocher les N
+  résultats » is hidden while the switch is on.
+- **Not built:** a per-person automatic view, a « Tout analyser » button, any change to how entities are extracted.
 
 ### The overview of the centre (explorer step 6, 20 October 2026)
 

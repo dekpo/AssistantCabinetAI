@@ -1,6 +1,9 @@
+import { ENTITY_TYPE, type EntityKind, type KnowledgeFacts } from "./explorerFacts";
 import {
+  entityChoice,
   filterEntries,
   folderKey,
+  parseEntityChoice,
   type ExplorerEntry,
   type ExplorerFilter,
   type ExplorerRoot,
@@ -26,8 +29,21 @@ import type { FinderReason } from "./ipc";
  * shows nothing (the `pdf` choice says 0 before it is ticked). It never widens to "pdf or docx".
  */
 
-/** The kinds of choice the panel offers. The family is the segmented control, outside the panel. */
-export type FilterKind = "format" | "state" | "folder";
+/**
+ * The kinds of choice the panel offers. The family is the segmented control, outside the panel. `recent`
+ * (the newest files first) and `conversation` (only the files the conversation uses) are single
+ * switches that the built-in views set; `conversation` narrows, `recent` only orders.
+ */
+export type FilterKind =
+  | "format"
+  | "state"
+  | "folder"
+  | "person"
+  | "organisation"
+  | "type"
+  | "year"
+  | "recent"
+  | "conversation";
 
 /** The most suggestions the origin-folder field offers; the rest is counted, not listed. */
 export const MAX_FOLDER_SUGGESTIONS = 5;
@@ -40,6 +56,11 @@ function without(filter: ExplorerFilter, kind: FilterKind | "family"): ExplorerF
     formats: kind === "format" ? undefined : filter.formats,
     states: kind === "state" ? undefined : filter.states,
     folders: kind === "folder" ? undefined : filter.folders,
+    people: kind === "person" ? undefined : filter.people,
+    organisations: kind === "organisation" ? undefined : filter.organisations,
+    types: kind === "type" ? undefined : filter.types,
+    years: kind === "year" ? undefined : filter.years,
+    ticked: kind === "conversation" ? null : filter.ticked,
   };
 }
 
@@ -200,6 +221,168 @@ export function suggestFolders(
   return { shown: matching.slice(0, limit), more: Math.max(0, matching.length - limit) };
 }
 
+/** One business type choice: a code the profile gave some files, with its count. */
+export interface TypeChoice {
+  code: string;
+  count: number;
+}
+
+/** The business types of the analysed files, most files first, then by code. A type chosen is always
+ * listed, even if no file is left for it. */
+export function typeChoices(entries: readonly ExplorerEntry[], filter: ExplorerFilter): TypeChoice[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.facts?.type != null) {
+      counts.set(entry.facts.type, counts.get(entry.facts.type) ?? 0);
+    }
+  }
+  for (const entry of leftByOthers(entries, filter, "type")) {
+    if (entry.facts?.type != null) {
+      counts.set(entry.facts.type, (counts.get(entry.facts.type) ?? 0) + 1);
+    }
+  }
+  for (const code of filter.types ?? []) {
+    counts.set(code, counts.get(code) ?? 0);
+  }
+  return [...counts]
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+}
+
+/** One year choice. */
+export interface YearChoice {
+  year: string;
+  count: number;
+}
+
+/** The years of the analysed files, newest first. A file spanning several years counts in each. A year
+ * chosen is always listed. */
+export function yearChoices(entries: readonly ExplorerEntry[], filter: ExplorerFilter): YearChoice[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    for (const year of entry.facts?.years ?? []) {
+      counts.set(year, counts.get(year) ?? 0);
+    }
+  }
+  for (const entry of leftByOthers(entries, filter, "year")) {
+    for (const year of entry.facts?.years ?? []) {
+      counts.set(year, (counts.get(year) ?? 0) + 1);
+    }
+  }
+  for (const year of filter.years ?? []) {
+    counts.set(year, counts.get(year) ?? 0);
+  }
+  return [...counts]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => b.year.localeCompare(a.year));
+}
+
+/** The most suggestions a typed field offers; the rest is counted, not listed. */
+export const MAX_ENTITY_SUGGESTIONS = 5;
+
+/** The roles worth offering as a second step: a name met in the text with no role is not one. */
+export const ROLE_MENTION = "mention";
+
+/** One person or organisation the field can offer. */
+export interface EntityOption {
+  entityId: number;
+  /** The name the base gives it, or null when the base no longer knows it (a view that names it says so). */
+  name: string | null;
+  /** The files linked to it among what the other filters leave. */
+  count: number;
+  /** The roles that link it to those files, with their counts; the second step lists them. */
+  roles: { role: string; count: number }[];
+}
+
+/** The people or the organisations the files link to, each counted over the files the other filters
+ * leave (the kind's own choices left out). One that is chosen is always listed, known or not. Not
+ * sorted. */
+export function entityOptions(
+  entries: readonly ExplorerEntry[],
+  filter: ExplorerFilter,
+  kind: EntityKind,
+  facts: KnowledgeFacts,
+): EntityOption[] {
+  const options = new Map<number, { count: number; roles: Map<string, number> }>();
+  const wanted = ENTITY_TYPE[kind];
+  const optionOf = (entityId: number) => {
+    let option = options.get(entityId);
+    if (option === undefined) {
+      option = { count: 0, roles: new Map() };
+      options.set(entityId, option);
+    }
+    return option;
+  };
+  for (const entry of entries) {
+    for (const link of entry.facts?.links ?? []) {
+      if (facts.entities.get(link.entityId)?.typeId === wanted) {
+        optionOf(link.entityId);
+      }
+    }
+  }
+  for (const entry of leftByOthers(entries, filter, kind)) {
+    for (const link of entry.facts?.links ?? []) {
+      if (facts.entities.get(link.entityId)?.typeId !== wanted) {
+        continue;
+      }
+      const option = optionOf(link.entityId);
+      option.count += 1;
+      for (const role of link.roles) {
+        option.roles.set(role, (option.roles.get(role) ?? 0) + 1);
+      }
+    }
+  }
+  for (const value of (kind === "person" ? filter.people : filter.organisations) ?? []) {
+    optionOf(parseEntityChoice(value).entityId);
+  }
+  return [...options].map(([entityId, { count, roles }]) => ({
+    entityId,
+    name: facts.entities.get(entityId)?.name ?? null,
+    count,
+    roles: [...roles]
+      .map(([role, roleCount]) => ({ role, count: roleCount }))
+      .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role)),
+  }));
+}
+
+/** What a typed field of people or organisations offers for what was typed. */
+export interface EntitySuggestions {
+  /** At most `MAX_ENTITY_SUGGESTIONS`: the ones with the most files, then by name. */
+  shown: EntityOption[];
+  /** How many more match: told as "N autres : tapez pour affiner", never listed. */
+  more: number;
+}
+
+/** The suggestions for `typed`: the names that contain it (accents and case ignored), minus the ones
+ * already chosen and the ones the base no longer knows. Nothing typed offers the most frequent. */
+export function suggestEntities(
+  options: readonly EntityOption[],
+  typed: string,
+  chosen: ReadonlySet<number>,
+  limit: number = MAX_ENTITY_SUGGESTIONS,
+): EntitySuggestions {
+  const wanted = plain(typed.trim());
+  const matching = options
+    .filter(
+      (option) =>
+        option.name !== null &&
+        !chosen.has(option.entityId) &&
+        plain(option.name).includes(wanted),
+    )
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        (a.name ?? "").localeCompare(b.name ?? "") ||
+        a.entityId - b.entityId,
+    );
+  return { shown: matching.slice(0, limit), more: Math.max(0, matching.length - limit) };
+}
+
+/** The ids of the people or organisations among the choices, whatever role they were chosen for. */
+export function chosenEntityIds(chosen: ReadonlySet<string>): Set<number> {
+  return new Set([...chosen].map((value) => parseEntityChoice(value).entityId));
+}
+
 /** One removable pill under the segmented control. `typed` pills come from the search text: removing
  * one takes the extension out of the text (`withoutTypedFormat`), the others empty a set. */
 export interface ActivePill {
@@ -209,10 +392,20 @@ export interface ActivePill {
   typed: boolean;
 }
 
-/** The active pills in a stable order: formats (typed first), states, folders. */
+/** The two switches the built-in views set, outside the sets of the filter. */
+export interface Switches {
+  recent: boolean;
+  conversation: boolean;
+}
+
+const NO_SWITCHES: Switches = { recent: false, conversation: false };
+
+/** The active pills in a stable order: formats (typed first), states, folders, people, organisations,
+ * types, years, then the two switches. */
 export function activePills(
   filter: ExplorerFilter,
   typedFormats: readonly string[],
+  switches: Switches = NO_SWITCHES,
 ): ActivePill[] {
   const pills: ActivePill[] = typedFormats.map((value) => ({ kind: "format", value, typed: true }));
   for (const value of filter.formats ?? []) {
@@ -228,6 +421,24 @@ export function activePills(
   for (const value of filter.folders ?? []) {
     pills.push({ kind: "folder", value, typed: false });
   }
+  for (const value of filter.people ?? []) {
+    pills.push({ kind: "person", value, typed: false });
+  }
+  for (const value of filter.organisations ?? []) {
+    pills.push({ kind: "organisation", value, typed: false });
+  }
+  for (const value of filter.types ?? []) {
+    pills.push({ kind: "type", value, typed: false });
+  }
+  for (const value of [...(filter.years ?? [])].sort()) {
+    pills.push({ kind: "year", value, typed: false });
+  }
+  if (switches.conversation) {
+    pills.push({ kind: "conversation", value: "conversation", typed: false });
+  }
+  if (switches.recent) {
+    pills.push({ kind: "recent", value: "recent", typed: false });
+  }
   return pills;
 }
 
@@ -235,8 +446,9 @@ export function activePills(
 export function activeFilterCount(
   filter: ExplorerFilter,
   typedFormats: readonly string[],
+  switches?: Switches,
 ): number {
-  return activePills(filter, typedFormats).length;
+  return activePills(filter, typedFormats, switches).length;
 }
 
 /** The set of one kind without one value; the same set when it holds none. */
@@ -255,21 +467,39 @@ function toggled<T>(set: ReadonlySet<T> | undefined, value: T): Set<T> {
   return next;
 }
 
-/** The panel's three sets, as the box holds them. The family is held apart. */
+/** The panel's choices, as the box holds them. The family is held apart. */
 export interface PanelChoices {
   formats: ReadonlySet<string>;
   states: ReadonlySet<ExplorerState>;
   folders: ReadonlySet<string>;
+  /** `entityId` (any role) or `entityId:role`. */
+  people: ReadonlySet<string>;
+  organisations: ReadonlySet<string>;
+  /** Business type codes. */
+  types: ReadonlySet<string>;
+  /** `YYYY`. */
+  years: ReadonlySet<string>;
+  /** The newest files first. Orders the lists, never narrows them. */
+  recent: boolean;
+  /** Only the files the conversation uses now. */
+  inConversation: boolean;
 }
 
 export const NO_CHOICES: PanelChoices = {
   formats: new Set(),
   states: new Set(),
   folders: new Set(),
+  people: new Set(),
+  organisations: new Set(),
+  types: new Set(),
+  years: new Set(),
+  recent: false,
+  inConversation: false,
 };
 
 /** The choices after one was ticked, or unticked if it was ticked. A format is a string, a state is
- * one of the three, a folder is a key. */
+ * one of the three, a folder is a key, a person or an organisation is an entity choice, a type is a
+ * code, a year is `YYYY`. The two switches ignore the value. */
 export function toggleChoice(choices: PanelChoices, kind: FilterKind, value: string): PanelChoices {
   switch (kind) {
     case "format":
@@ -278,6 +508,18 @@ export function toggleChoice(choices: PanelChoices, kind: FilterKind, value: str
       return { ...choices, states: toggled(choices.states, value as ExplorerState) };
     case "folder":
       return { ...choices, folders: toggled(choices.folders, value) };
+    case "person":
+      return { ...choices, people: toggled(choices.people, value) };
+    case "organisation":
+      return { ...choices, organisations: toggled(choices.organisations, value) };
+    case "type":
+      return { ...choices, types: toggled(choices.types, value) };
+    case "year":
+      return { ...choices, years: toggled(choices.years, value) };
+    case "recent":
+      return { ...choices, recent: !choices.recent };
+    case "conversation":
+      return { ...choices, inConversation: !choices.inConversation };
   }
 }
 
@@ -293,7 +535,33 @@ export function removePill(choices: PanelChoices, pill: ActivePill): PanelChoice
       return { ...choices, states: minus(choices.states, pill.value as ExplorerState) };
     case "folder":
       return { ...choices, folders: minus(choices.folders, pill.value) };
+    case "person":
+      return { ...choices, people: minus(choices.people, pill.value) };
+    case "organisation":
+      return { ...choices, organisations: minus(choices.organisations, pill.value) };
+    case "type":
+      return { ...choices, types: minus(choices.types, pill.value) };
+    case "year":
+      return { ...choices, years: minus(choices.years, pill.value) };
+    case "recent":
+      return { ...choices, recent: false };
+    case "conversation":
+      return { ...choices, inConversation: false };
   }
+}
+
+/** The role step: the person or organisation is kept for one role, or for any role (null). It is
+ * chosen once, whatever it was chosen for before. */
+export function setEntityRole(
+  choices: PanelChoices,
+  kind: EntityKind,
+  entityId: number,
+  role: string | null,
+): PanelChoices {
+  const own = kind === "person" ? choices.people : choices.organisations;
+  const kept = [...own].filter((value) => parseEntityChoice(value).entityId !== entityId);
+  const next = new Set([...kept, entityChoice(entityId, role)]);
+  return kind === "person" ? { ...choices, people: next } : { ...choices, organisations: next };
 }
 
 /** The typed text without the words that are this extension (`.docx`, `DOCX`). The finder decided

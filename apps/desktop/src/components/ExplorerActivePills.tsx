@@ -1,5 +1,7 @@
 import { useTranslation } from "../i18n/I18nProvider";
+import { NO_FACTS, type KnowledgeFacts } from "../lib/explorerFacts";
 import { folderOfKey, type ActivePill, type FolderChoice } from "../lib/explorerFilters";
+import { businessTypeLabel, entityChoiceLabel } from "../lib/explorerLabels";
 import type { ExplorerState } from "../lib/explorerModel";
 import { useFolderLabel } from "./ExplorerFilterPanel";
 
@@ -11,12 +13,21 @@ import { useFolderLabel } from "./ExplorerFilterPanel";
 export function ExplorerActivePills({
   pills,
   folders,
+  foldersKnown = false,
+  facts = NO_FACTS,
+  factsLoaded = false,
   onRemove,
   onClear,
 }: {
   pills: readonly ActivePill[];
   /** The folder choices, to say a folder with the root when both roots hold one of that name. */
   folders: readonly FolderChoice[];
+  /** The folders have been read: a folder choice that is not among them says it is not found. */
+  foldersKnown?: boolean;
+  /** The knowledge-base facts, for the names of the people and organisations. */
+  facts?: KnowledgeFacts;
+  /** The facts have been read: a name that is not among them says it is not found. */
+  factsLoaded?: boolean;
   onRemove: (pill: ActivePill) => void;
   onClear: () => void;
 }) {
@@ -33,8 +44,24 @@ export function ExplorerActivePills({
         return t(`explorer.state.${pill.value as ExplorerState}`);
       case "folder": {
         const choice = folders.find((candidate) => candidate.key === pill.value);
-        return choice === undefined ? folderOfKey(pill.value) : folderLabel(choice);
+        if (choice !== undefined) {
+          return folderLabel(choice);
+        }
+        return foldersKnown
+          ? t("explorer.folderMissing", { folder: folderOfKey(pill.value) })
+          : folderOfKey(pill.value);
       }
+      case "person":
+      case "organisation":
+        return entityChoiceLabel(t, pill.value, facts, factsLoaded);
+      case "type":
+        return businessTypeLabel(t, pill.value);
+      case "year":
+        return pill.value;
+      case "conversation":
+        return t("explorer.pillConversation");
+      case "recent":
+        return t("explorer.pillRecent");
     }
   };
   return (

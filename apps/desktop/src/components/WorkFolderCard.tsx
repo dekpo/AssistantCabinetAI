@@ -360,7 +360,7 @@ export function WorkFolderCard({
           <button
             type="button"
             className="button button--compact"
-            onClick={() => void cancelAnalysis()}
+            onClick={() => void cancelAnalysis("documents")}
           >
             {t("workFolder.stop")}
           </button>

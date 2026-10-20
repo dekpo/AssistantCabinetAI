@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::analysis_scope::{AnalysisScope, GroundingTier, ScopeMode};
+use crate::analysis_stop::AnalysisStops;
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::data_folder::{self, DataFolder, DataFolderReport};
@@ -67,9 +68,10 @@ pub struct AppState {
     pub gateway: GatewayClient,
     /// Lets `cancel_chat` reach the question being worked on. One at a time.
     pub cancellation: Cancellation,
-    /// Raised by `cancel_analysis`, read between two files and two batches by the pass that is running
-    /// (`indexing::run_cancellable`); lowered when a pass starts.
-    pub analysis_stop: std::sync::atomic::AtomicBool,
+    /// One Stop flag per folder, raised by `cancel_analysis`, read between two files and two batches by
+    /// the pass of that folder (`indexing::run_cancellable`, `data_folder::analyse_cancellable`) and
+    /// lowered when a pass of that folder starts. The two passes can run together.
+    pub analysis_stop: AnalysisStops,
     /// What each file in the work folder last hashed to. Lives as long as the application so the
     /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
     /// scan in the folder (`inventory::FileHashCache`).
@@ -100,7 +102,7 @@ impl AppState {
             settings: Mutex::new(Settings::default()),
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
-            analysis_stop: std::sync::atomic::AtomicBool::new(false),
+            analysis_stop: AnalysisStops::default(),
             file_hashes: FileHashCache::new(),
             data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
@@ -448,7 +450,7 @@ pub async fn index_work_folder(
         .map(|context| context.with_own_names(&own_names));
     state
         .analysis_stop
-        .store(false, std::sync::atomic::Ordering::SeqCst);
+        .lower(file_profile::build::Domain::Documents);
     let mut summary = indexing::run_cancellable(
         &mut index,
         &state.gateway,
@@ -466,7 +468,7 @@ pub async fn index_work_folder(
         &|| {
             state
                 .analysis_stop
-                .load(std::sync::atomic::Ordering::SeqCst)
+                .is_raised(file_profile::build::Domain::Documents)
         },
     )
     .await?;
@@ -482,13 +484,12 @@ pub async fn index_work_folder(
     Ok(summary)
 }
 
-/// Stop the analysis that is running. It stops between two files or two batches of vectors; what it
-/// wrote stays, and the next one goes on from there. Nothing happens when none is running.
+/// Stop the analysis of one folder that is running. It stops between two files, two batches of
+/// vectors or two workbooks; what it wrote stays, and the next one goes on from there. The other
+/// folder's analysis is not touched. Nothing happens when none is running.
 #[tauri::command]
-pub fn cancel_analysis(state: State<'_, AppState>) {
-    state
-        .analysis_stop
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+pub fn cancel_analysis(state: State<'_, AppState>, domain: file_profile::build::Domain) {
+    state.analysis_stop.raise(domain);
 }
 
 /// How many passages have their meaning vector, out of all of them: one cheap count, so the card can
@@ -698,12 +699,24 @@ pub fn reset_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), App
 /// CSV/XLS/XLSX/XLSM file parsed and its inventory cached (`data_folder::analyse`). No embedding
 /// and no gateway call - local parsing only, so it is over in moments where the Documents pass
 /// takes minutes. Counts only on the progress channel: no file name, no cell.
+///
+/// Parsed on a blocking thread, so the window keeps drawing and the Stop of this folder
+/// (`cancel_analysis`) can be heard between two workbooks, while the Documents pass runs on its own.
 #[tauri::command]
-pub fn index_data_folder(
+pub async fn index_data_folder(
     app: AppHandle,
-    state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
+    tauri::async_runtime::spawn_blocking(move || run_data_pass(&app, &on_progress))
+        .await
+        .map_err(|_| AppError::Internal)?
+}
+
+fn run_data_pass(
+    app: &AppHandle,
+    on_progress: &Channel<IndexProgress>,
+) -> Result<IndexSummary, AppError> {
+    let state = app.state::<AppState>();
     let (data_folder, locale, mode, packs, own_names) = state.read(|settings| {
         (
             settings.data_folder.clone(),
@@ -722,9 +735,9 @@ pub fn index_data_folder(
     // (`docs/DECISIONS.md`, "clean file names"): the name only, never the content, never over
     // another file, never out of its folder.
     let sanitised = filename_sanitizer::sanitize_folder(Path::new(&data_folder));
-    log_renames(&app, &sanitised.renamed);
+    log_renames(app, &sanitised.renamed);
 
-    let mut index = open_index(&app)?;
+    let mut index = open_index(app)?;
     let _ = file_profile::store::record_original_names(
         index.connection(),
         file_profile::build::Domain::Data,
@@ -732,10 +745,11 @@ pub fn index_data_folder(
     );
     // The knowledge base never blocks a pass: if it cannot start, the workbooks are analysed exactly
     // as before and the summary says that part of the analysis did not complete.
-    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs)
+    let mut knowledge = knowledge_context(app, &index, mode, locale, &packs)
         .ok()
         .map(|context| context.with_own_names(&own_names));
-    let mut summary = data_folder::analyse_with_knowledge(
+    state.analysis_stop.lower(file_profile::build::Domain::Data);
+    let mut summary = data_folder::analyse_cancellable(
         Path::new(&data_folder),
         &mut index,
         locale,
@@ -743,6 +757,11 @@ pub fn index_data_folder(
             let _ = on_progress.send(progress);
         },
         knowledge.as_mut(),
+        &|| {
+            state
+                .analysis_stop
+                .is_raised(file_profile::build::Domain::Data)
+        },
     )?;
     if knowledge.is_none() && mode.reads_files() {
         summary.knowledge = Some(KnowledgeSummary {
@@ -752,7 +771,7 @@ pub fn index_data_folder(
     }
     summary.renamed_files = sanitised.renamed;
     summary.rename_failed_files = sanitised.failed;
-    log_analysis_timing(&app, &state, &summary);
+    log_analysis_timing(app, &state, &summary);
     Ok(summary)
 }
 

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { initialTrace, stepTrace, type ProgressTrace } from "../lib/analysisProgress";
 import { normaliseError, type AppError } from "../lib/errors";
 import { indexWorkFolder, type IndexProgress, type IndexSummary } from "../lib/ipc";
 
@@ -14,6 +15,11 @@ export interface IndexingState {
   running: boolean;
   /** How far the running pass has got, or null when nothing is running. */
   progress: IndexProgress | null;
+  /** What the running pass has reported, with the moment it started, for the gauge's stage, rate and
+   * clock (`lib/analysisProgress.ts`). Null when nothing is running. */
+  trace: ProgressTrace | null;
+  /** How long the last finished pass took, from the press to its end. Cleared when a new pass starts. */
+  durationMs: number | null;
   /** What the last finished pass did. Cleared when a new pass starts. */
   summary: IndexSummary | null;
   error: AppError | null;
@@ -33,6 +39,8 @@ export function useIndexing(
 ): IndexingState {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<IndexProgress | null>(null);
+  const [trace, setTrace] = useState<ProgressTrace | null>(null);
+  const [durationMs, setDurationMs] = useState<number | null>(null);
   const [summary, setSummary] = useState<IndexSummary | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [finishedPasses, setFinishedPasses] = useState(0);
@@ -47,17 +55,30 @@ export function useIndexing(
     setError(null);
     setSummary(null);
     setProgress(null);
+    setDurationMs(null);
+    const startedAt = Date.now();
+    setTrace(initialTrace(startedAt));
     setRunning(true);
     try {
-      setSummary(await pass(setProgress));
+      setSummary(
+        await pass((next) => {
+          const at = Date.now();
+          setProgress(next);
+          setTrace((current) =>
+            current === null ? current : stepTrace(current, { at, progress: next }),
+          );
+        }),
+      );
       return true;
     } catch (raw: unknown) {
       setError(normaliseError(raw));
       return false;
     } finally {
       inFlight.current = false;
+      setDurationMs(Date.now() - startedAt);
       setRunning(false);
       setProgress(null);
+      setTrace(null);
       setFinishedPasses((count) => count + 1);
     }
   }, [pass]);
@@ -65,7 +86,8 @@ export function useIndexing(
   const reset = useCallback(() => {
     setSummary(null);
     setError(null);
+    setDurationMs(null);
   }, []);
 
-  return { running, progress, summary, error, finishedPasses, run, reset };
+  return { running, progress, trace, durationMs, summary, error, finishedPasses, run, reset };
 }

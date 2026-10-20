@@ -51,6 +51,8 @@ function record(relativePath: string, status: ProcessingStatus = "indexed"): Fil
 const IDLE: IndexingState = {
   running: false,
   progress: null,
+  trace: null,
+  durationMs: null,
   summary: null,
   error: null,
   finishedPasses: 0,
@@ -190,6 +192,8 @@ function section(
       rows: 6,
       rowHeight: 24,
       indexing: IDLE,
+      now: 0,
+      onStop: NOOP,
       locked: false,
       isTicked: () => false,
       onToggleTick: NOOP,
@@ -262,23 +266,6 @@ describe("a family section, drawn", () => {
   it("says why a list is empty", () => {
     expect(section([], [])).toContain("Aucun fichier.");
     expect(section([], [], { filtering: true })).toContain("Aucun fichier ne correspond.");
-  });
-
-  it("keeps the existing progress line and Stop while a pass runs", () => {
-    const running: IndexingState = {
-      ...IDLE,
-      running: true,
-      progress: {
-        totalFiles: 10,
-        processedFiles: 4,
-        batchIndex: 0,
-        batchTotal: 0,
-      } as IndexingState["progress"],
-    };
-    const html = section([record("a.pdf")], [], { indexing: running, onStop: NOOP });
-
-    expect(html).toContain('role="progressbar"');
-    expect(html).toContain("Arrêter");
   });
 
   it("draws no emoji and no text glyph for a state", () => {

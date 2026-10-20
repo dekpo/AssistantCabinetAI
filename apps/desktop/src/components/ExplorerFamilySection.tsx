@@ -1,6 +1,7 @@
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
-import { analysisFraction, vectorPercent } from "../lib/analysis";
+import { endLine, gaugeLabel, runLine } from "../lib/analysisLines";
+import { progressView, type PassFamily } from "../lib/analysisProgress";
 import {
   duplicateNames,
   folderHint,
@@ -16,7 +17,15 @@ import { ExplorerFamilyMenu } from "./ExplorerFamilyMenu";
 import { FamilyFolderGlyph, FoldGlyph, StateGlyph } from "./ExplorerGlyphs";
 import { ExplorerFileRow } from "./ExplorerFileRow";
 import { ExplorerList } from "./ExplorerList";
-import { AnalyseButton, AnalysisProgress, KnowledgeLink } from "./FolderCardParts";
+import { AnalysisGauge } from "./AnalysisGauge";
+import { AnalyseButton, KnowledgeLink } from "./FolderCardParts";
+
+/**
+ * The thin line under the header of a running family, filled to the stage's percentage. Built behind
+ * this switch so it can be compared with and without in the real application (owner decision
+ * pending, `docs/DECISIONS.md`, "Progress of an Analyse"): set it to `false` to draw none.
+ */
+const PROGRESS_HAIRLINE = true;
 
 /** The three counters of a header, in the order of the states on screen. */
 const COUNTERS: readonly { state: ExplorerState; one: string; many: string }[] = [
@@ -28,7 +37,7 @@ const COUNTERS: readonly { state: ExplorerState; one: string; many: string }[] =
 /**
  * One family of the explorer: a two-line header (the folder's icon, the family's name and its three
  * counters, the Analyser button, the « ⋯ » menu and the fold button), the line of the running
- * analysis, a few quiet notes, what the last pass did, and the bounded list. The folder's path is the
+ * analysis (the Analyser button is then the gauge with its Stop, and the menu is gone), a few quiet notes, what the last pass did, and the bounded list. The folder's path is the
  * header's tooltip. A folder that holds nothing says so in place of the list, with the two things to
  * do about it, and its header says which formats go in.
  *
@@ -48,6 +57,7 @@ export function ExplorerFamilySection({
   rows,
   rowHeight,
   indexing,
+  now,
   onStop,
   locked,
   isTicked,
@@ -80,8 +90,10 @@ export function ExplorerFamilySection({
   rows: number;
   rowHeight: number;
   indexing: IndexingState;
-  /** Present where a pass can be stopped. */
-  onStop?: () => void;
+  /** The clock, ticking while a pass runs (`useNow`): an input, so the times are tested with any value. */
+  now: number;
+  /** Stops this family's pass and no other. */
+  onStop: () => void;
   /** A question is being answered: the selection must not change under it. */
   locked: boolean;
   isTicked: (entry: ExplorerEntry) => boolean;
@@ -101,11 +113,26 @@ export function ExplorerFamilySection({
   /** Why a text search found an entry, or undefined when none is active or it said nothing. */
   reasonOf?: (entry: ExplorerEntry) => { text: string; title: string } | undefined;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const familyName = t(family === "documents" ? "explorer.familyDocuments" : "explorer.familyTables");
   const typesLine = t(family === "documents" ? "explorer.typesDocuments" : "explorer.typesTables");
   const duplicates = duplicateNames(allEntries);
   const running = indexing.running;
+  const passFamily: PassFamily = family === "documents" ? "documents" : "tables";
+  /* Pressed once, the Stop waits for the pass to end between two files; it cannot be pressed twice. */
+  const [stopping, setStopping] = useState(false);
+  useEffect(() => {
+    if (!running) {
+      setStopping(false);
+    }
+  }, [running]);
+  const trace = indexing.trace;
+  const view = running && trace !== null ? progressView(trace, now, passFamily) : null;
+  const line = running
+    ? runLine(t, locale, passFamily, view, trace === null ? 0 : now - trace.startedAt)
+    : indexing.summary !== null
+      ? endLine(t, locale, indexing.summary, indexing.durationMs)
+      : null;
   const foreignNote =
     counts.foreign === 0
       ? undefined
@@ -136,13 +163,28 @@ export function ExplorerFamilySection({
             </span>
           )}
         </div>
-        <AnalyseButton
-          indexing={indexing}
-          emphasised={counts.analysable > 0}
-          pendingCount={counts.analysable}
-          title={isEmpty ? t("explorer.analyseEmptyHint") : foreignNote}
-          disabled={isEmpty}
-        />
+        {running ? (
+          <AnalysisGauge
+            label={stopping ? t("explorer.gaugeStopping") : gaugeLabel(t, view)}
+            percent={view?.percent ?? 0}
+            title={line ?? undefined}
+            stopLabel={t("explorer.gaugeStop", { family: familyName })}
+            stopHint={t("explorer.gaugeStopHint")}
+            stopping={stopping}
+            onStop={() => {
+              setStopping(true);
+              onStop();
+            }}
+          />
+        ) : (
+          <AnalyseButton
+            indexing={indexing}
+            emphasised={counts.analysable > 0}
+            pendingCount={counts.analysable}
+            title={isEmpty ? t("explorer.analyseEmptyHint") : foreignNote}
+            disabled={isEmpty}
+          />
+        )}
         {/* Nothing in the menu can be done to a folder while its analysis runs. */}
         {running ? null : (
           <ExplorerFamilyMenu
@@ -165,37 +207,30 @@ export function ExplorerFamilySection({
           <FoldGlyph open={open} />
         </button>
       </div>
-      {running ? (
-        <div className="explorer-family__run">
-          {indexing.progress === null ? null : (
-            <AnalysisProgress
-              fraction={analysisFraction(indexing.progress)}
-              label={
-                indexing.progress.readingNames === true
-                  ? t(family === "documents" ? "workFolder.progressNamesLabel" : "dataFolder.progressNamesLabel")
-                  : vectorPercent(indexing.progress) !== null
-                    ? t("workFolder.progressMeaningLabel", {
-                        percent: vectorPercent(indexing.progress) ?? 0,
-                      })
-                    : t(family === "documents" ? "workFolder.progressLabel" : "dataFolder.progressLabel")
-              }
-            />
-          )}
-          {onStop === undefined ? null : (
-            <button type="button" className="button button--compact" onClick={onStop}>
-              {t("workFolder.stop")}
-            </button>
-          )}
+      {running && PROGRESS_HAIRLINE ? (
+        <div className="explorer-family__line" aria-hidden="true">
+          <span className="explorer-family__line-fill" style={{ width: `${view?.percent ?? 0}%` }} />
         </div>
+      ) : null}
+      {line === null ? null : (
+        <p
+          className={running ? "explorer-family__run" : "explorer-family__run explorer-family__run--end"}
+          title={line}
+        >
+          {line}
+        </p>
+      )}
+      {running && view?.stage === "meaning" ? (
+        <p className="explorer-note">{t("explorer.runWordsWork")}</p>
       ) : null}
       {open ? (
         <>
-          {needsAnalyse ? (
+          {needsAnalyse && !running ? (
             <p className="explorer-note" role="status">
               {t("finder.needsAnalyse")}
             </p>
           ) : null}
-          {meaningPercent === null ? null : (
+          {meaningPercent === null || running ? null : (
             <p className="explorer-note" role="status">
               {t("workFolder.meaningShare", { percent: meaningPercent })}
             </p>

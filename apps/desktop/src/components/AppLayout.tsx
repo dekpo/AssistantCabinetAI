@@ -131,7 +131,9 @@ export function AppLayout({
         className="pane"
         defaultSize="28%"
         minSize={RESOURCES_MIN_PX}
-        maxSize="35%"
+        /* Two columns (no centre): up to half the window, so the explorer's long lines have room;
+           with the centre open the three zones share the window and 35 % stays the ceiling. */
+        maxSize={centreOpen ? "35%" : "50%"}
       >
         <div className="pane__content">{resources}</div>
       </Panel>

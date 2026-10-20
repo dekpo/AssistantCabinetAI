@@ -5,6 +5,7 @@
 //! commands registered below.
 
 pub mod analysis_scope;
+pub mod analysis_stop;
 pub mod cancellation;
 pub mod cards;
 pub mod chunking;

@@ -59,6 +59,7 @@ import { useExplorerFolders } from "../state/useExplorerFolders";
 import { useFinderSearch } from "../state/useFinderSearch";
 import { useFolderInventory } from "../state/useFolderInventory";
 import type { IndexingState } from "../state/useIndexing";
+import { useNow } from "../state/useNow";
 import { useProfileStatus } from "../state/useProfileStatus";
 import { useVectorShare } from "../state/useVectorShare";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -149,6 +150,8 @@ export function FileExplorer({
     onDataFolderChosen,
     onError: setError,
   });
+  /* One clock for both families: it ticks only while a pass runs. */
+  const now = useNow(indexing.running || dataIndexing.running);
   const panelId = useId();
   const filtersButton = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -551,7 +554,8 @@ export function FileExplorer({
           rows={budget.documents}
           rowHeight={rowHeight}
           indexing={indexing}
-          onStop={() => void cancelAnalysis()}
+          now={now}
+          onStop={() => void cancelAnalysis("documents")}
           locked={scopeLocked}
           isTicked={isTicked}
           onToggleTick={toggleTick}
@@ -592,6 +596,8 @@ export function FileExplorer({
           rows={budget.tables}
           rowHeight={rowHeight}
           indexing={dataIndexing}
+          now={now}
+          onStop={() => void cancelAnalysis("data")}
           locked={scopeLocked}
           isTicked={isTicked}
           onToggleTick={toggleTick}

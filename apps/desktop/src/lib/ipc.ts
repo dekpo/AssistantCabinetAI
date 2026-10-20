@@ -1269,9 +1269,13 @@ export interface ProfileIndexStatus {
   data: FolderProfileStatus;
 }
 
-/** Stop the analysis that is running. What it wrote stays; the next one goes on from there. */
-export function cancelAnalysis(): Promise<void> {
-  return invoke<void>("cancel_analysis");
+/** The two folders an Analyse runs over, as Rust names them (`file_profile::build::Domain`). */
+export type AnalysisDomain = "documents" | "data";
+
+/** Stop the analysis of one folder that is running; the other folder's is not touched. What it wrote
+ * stays; the next one goes on from there. */
+export function cancelAnalysis(domain: AnalysisDomain): Promise<void> {
+  return invoke<void>("cancel_analysis", { domain });
 }
 
 /** How many passages have their meaning vector, out of all of them (one cheap lookup). */

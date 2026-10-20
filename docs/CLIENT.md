@@ -32,7 +32,7 @@ One window, one product:
 
 The three zones sit in one `react-resizable-panels` v4 group (`Group`, `Panel`, `Separator`; a number is pixels,
 a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 320 (the explorer's family header is one line and never wraps),
-Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 1080 (320 + 320 + 340, two
+Workspace 320, Chat 340; Resources never exceeds 35 % with the centre open, and 50 % in two columns (centre closed; owner request, 20 October 2026, so the explorer's line of times has room). The window `minWidth` is 1080 (320 + 320 + 340, two
 separators and the padding come to about 1040). Each zone scrolls inside itself. **Default widths** (`lib/panelLayout.ts`,
 explorer step 4): `[28, 34, 38]` with the centre open and `[30, 0, 70]` with it closed, so the left zone starts at about
 330 px in the default window. A layout saved before the minimum went to 320 px (for example `[22, 38, 40]`) is read back
@@ -255,11 +255,27 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   family with a tag « depuis Docs » / « depuis Data », is always « to analyse », cannot be ticked, opened or revealed,
   and is **not counted** by its family's **Analyser (n)**; the button's tooltip says so. Analysing it in place is a later step.
 - **Per family:** a two-line header (the family's folder icon, its name, the three counters; **Analyser (n)**; a fold
-  button), the existing progress line and Stop while a pass runs (Stop exists for the documents' pass only, as before), and
+  button), the analysis gauge while a pass runs (below), and
   a flat list with **its own scroll bar**. The folder's path is the header's tooltip. A **Dernière analyse** disclosure under the
   header carries the lines the cards showed after a pass (`lib/passSummary.ts`, shared with the cards of the
   Settings panel); it opens by itself when a file failed. Choosing, changing and clearing a folder are in the
   box itself since step 4 (below); the Settings panel still draws the two old cards untouched until step 10.
+- **The gauge (step 5).** While a family's pass runs, **Analyser** is replaced by `AnalysisGauge`: a spinner, « Lecture 45 % »
+  then « Sens 63 % » (« Noms n % » while the stored documents are read again for new names), a fill that follows the
+  percentage and a square **Stop** of its own. It is not a disabled button (the text stays at full contrast) and is a
+  `role="status"`. The « ⋯ » menu is absent, the fold button stays. **Each family stops on its own**: the Documents pass and the
+  Tables pass can run together, and `cancel_analysis(domain)` raises only that family's flag. Under the header, one line
+  (`lib/analysisLines.ts`): « Étape 1 sur 2 · Lecture des documents · 761 / 1 245 · 3 min 48 s écoulées · environ 2 min
+  restantes », the stage and the counts first and the times last, so that an ellipsis cuts the times first (the whole line is
+  the tooltip); the Tables pass has one stage and names no step; stage 2 adds « La recherche par mots fonctionne déjà. ». A thin
+  2 px line under the header (`PROGRESS_HAIRLINE` in `ExplorerFamilySection.tsx`) fills with the stage's percentage. When the pass
+  ends the same place says « Terminé · 1 245 analysés, 3 illisibles · 6 min 49 s », or « Analyse arrêtée · 3 min 48 s · ce qui
+  est lu est conservé »; « Voir le rapport » comes with step 6. The numbers come from `lib/analysisProgress.ts` (pure: the clock
+  is an input): the remaining time is shown only after 10 % of the stage and 8 s in it, from the **recent rate** (the last 15 s of
+  messages, at least two), smoothed (30 % of each new estimate of the finishing moment), and it is the time left **in the stage
+  being run**. `useIndexing` keeps the trace and the pass's duration; `useNow` ticks once a second only while a pass runs. A pass
+  started from the Notes section shows the same gauge. The old cards of the Settings panel keep `AnalysisProgress` and their Stop
+  until step 10.
 - **Height budget** (`lib/explorerWindow.ts`): both lists open, six rows each; one open, twelve; both folded, the headers
   alone. A short list is not padded. Rows have a **fixed height** (24 px `compact`, 32 px `comfortable`), so a **hand-written
   window** draws only the rows in view plus four above and below, the rest being padding: a thousand files are about

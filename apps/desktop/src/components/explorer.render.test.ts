@@ -60,6 +60,14 @@ const IDLE: IndexingState = {
 
 const NOOP = () => undefined;
 
+/** The folder props the box asks of `App`, for a test that does not use them. */
+const FOLDER_CHOICE = {
+  suggestedWorkFolder: null,
+  suggestedDataFolder: null,
+  onWorkFolderChosen: NOOP,
+  onDataFolderChosen: NOOP,
+};
+
 function row(entry: ExplorerEntry, overrides: Record<string, unknown> = {}, locale = "fr-FR") {
   return page(
     locale,
@@ -172,6 +180,8 @@ function section(
     createElement(ExplorerFamilySection, {
       family,
       folder: "/some/folder",
+      isEmpty: false,
+      folderActions: { reveal: NOOP, change: NOOP, clear: NOOP },
       counts: countsByFamily(all)[family],
       entries: all.filter((entry) => entry.family === family),
       allEntries: all,
@@ -252,11 +262,6 @@ describe("a family section, drawn", () => {
   it("says why a list is empty", () => {
     expect(section([], [])).toContain("Aucun fichier.");
     expect(section([], [], { filtering: true })).toContain("Aucun fichier ne correspond.");
-    expect(section([], [], { folder: null })).toContain("Aucun dossier choisi");
-  });
-
-  it("shows no Analyser button while no folder is chosen", () => {
-    expect(section([], [], { folder: null })).not.toContain("Analyser");
   });
 
   it("keeps the existing progress line and Stop while a pass runs", () => {
@@ -336,6 +341,7 @@ describe("the whole box, drawn", () => {
       createElement(FileExplorer, {
         workFolder: "/docs",
         dataFolder: "/data",
+        ...FOLDER_CHOICE,
         indexing: IDLE,
         dataIndexing: IDLE,
         scope: noDocumentsScope(1),
@@ -384,6 +390,7 @@ describe("the whole box, drawn", () => {
       createElement(FileExplorer, {
         workFolder: null,
         dataFolder: null,
+        ...FOLDER_CHOICE,
         indexing: IDLE,
         dataIndexing: IDLE,
         scope: noDocumentsScope(1),

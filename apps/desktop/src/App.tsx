@@ -523,6 +523,10 @@ function AppContent() {
                 <FileExplorer
                   workFolder={snapshot.settings.workFolder}
                   dataFolder={snapshot.settings.dataFolder}
+                  suggestedWorkFolder={snapshot.suggestedWorkFolder}
+                  suggestedDataFolder={snapshot.suggestedDataFolder}
+                  onWorkFolderChosen={chooseWorkFolder}
+                  onDataFolderChosen={(path) => void update({ dataFolder: path })}
                   indexing={indexing}
                   dataIndexing={dataIndexing}
                   scope={scope}

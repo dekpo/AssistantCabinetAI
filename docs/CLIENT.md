@@ -33,7 +33,11 @@ One window, one product:
 The three zones sit in one `react-resizable-panels` v4 group (`Group`, `Panel`, `Separator`; a number is pixels,
 a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 320 (the explorer's family header is one line and never wraps),
 Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 1080 (320 + 320 + 340, two
-separators and the padding come to about 1040). Each zone scrolls inside itself.
+separators and the padding come to about 1040). Each zone scrolls inside itself. **Default widths** (`lib/panelLayout.ts`,
+explorer step 4): `[28, 34, 38]` with the centre open and `[30, 0, 70]` with it closed, so the left zone starts at about
+330 px in the default window. A layout saved before the minimum went to 320 px (for example `[22, 38, 40]`) is read back
+untouched and shown clamped to 320 px by the panel library; it is never rewritten by that clamp, because only a gesture of the
+user is saved (`isUserInteraction`).
 
 **The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
 a discriminated union with two kinds today, `welcome` and `files` (a list of tabs, see "The document viewer")) and passes
@@ -254,8 +258,8 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   button), the existing progress line and Stop while a pass runs (Stop exists for the documents' pass only, as before), and
   a flat list with **its own scroll bar**. The folder's path is the header's tooltip. A **Dernière analyse** disclosure under the
   header carries the lines the cards showed after a pass (`lib/passSummary.ts`, shared with the cards of the
-  Settings panel); it opens by itself when a file failed. Until the explorer has its own menu, **choosing, changing or clearing
-  a folder is done in the Settings panel**, which still draws the two old cards untouched.
+  Settings panel); it opens by itself when a file failed. Choosing, changing and clearing a folder are in the
+  box itself since step 4 (below); the Settings panel still draws the two old cards untouched until step 10.
 - **Height budget** (`lib/explorerWindow.ts`): both lists open, six rows each; one open, twelve; both folded, the headers
   alone. A short list is not padded. Rows have a **fixed height** (24 px `compact`, 32 px `comfortable`), so a **hand-written
   window** draws only the rows in view plus four above and below, the rest being padding: a thousand files are about
@@ -290,8 +294,28 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   panel »). With a text search, each row shows beside its name **why it was found** (« dans le nom », « dans le contenu », « dans une
   cellule »...), the first reason in the row and all of them in its tooltip, from `FinderHit.reasons`, which the paths-only request
   already carries.
-- **Not built yet** (later steps): first start, empty folders, the « ⋯ » menu, the gauge, « Select. auto », the « Vues » switch.
-  first start, empty folders, the « ⋯ » menu, the left-zone width, the gauge, « Select. auto ».
+- **The three situations of the box (explorer step 4, 20 October 2026).** `lib/explorerStates.ts` (pure, tested) decides from
+  the two inventories and the settings: a family's folder is `none` (not chosen), `empty` (chosen, its inventory read, no file
+  in the folder and none listed under the family) or `filled` (anything else, **including a folder not read yet or whose read
+  failed**, so the box never flashes « empty »); the box is `firstStart` (both `none`), `empty` (no family `filled`) or `use`.
+  While the box is not in use the search field and « Filtres » are disabled, and the segmented control and the bottom bar are
+  not drawn: there is nothing to search or to select.
+  - **First start**: a « Pour commencer » block (three steps, and « Créer les deux dossiers suggérés », which makes the two
+    suggested folders one after the other and keeps the first if the second fails; the failure is said). Each family without a
+    folder is a setup block (`ExplorerFamilySetup`): the type line (« Documents : PDF, DOCX, ODT… »), the suggested folder in its
+    short form (the whole path and the reason it sits outside the user's own Documents are the **tooltip only**), and « Créer et
+    utiliser » beside « Choisir un dossier ». A family alone without a folder (the other one is chosen) shows its setup block
+    only, without the steps.
+  - **Folder created, still empty**: the family's header says the formats it reads in place of the counters, **Analyser** is
+    greyed with a tooltip, and the body is « Vide. Déposez-y vos fichiers. » with « Voir le dossier » (the existing reveal
+    command) and « Changer ». The box re-reads the folder when the window gets the focus back (existing behaviour).
+  - **The « ⋯ » menu** (`ExplorerFamilyMenu`): « Voir le dossier », « Changer de dossier », « Effacer l'analyse » (the confirmation
+    dialog of the old cards, same texts, its button now says « Effacer l'analyse »). It opens in **fixed coordinates**
+    (`lib/explorerMenu.ts`: under the button, above it when there is no room), because the box clips its overflow; it closes on a
+    click elsewhere, on Escape (focus back to the button), on Tab, and on a resize or a scroll; the arrows, Home and End move
+    between the entries. It is **not drawn while that family is being analysed**. The folder actions live in
+    `state/useExplorerFolders.ts` (the commands of the old cards, the same guard for the Documents folder).
+- **Not built yet** (later steps): the gauge, « Select. auto », the « Vues » switch.
 
 ## The work folder
 

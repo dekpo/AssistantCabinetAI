@@ -41,6 +41,7 @@ import {
   tickableRecords,
   usedCount,
 } from "../lib/explorerSelection";
+import { boxState, folderState, nothingToSearch } from "../lib/explorerStates";
 import { ROW_HEIGHT, rowBudget } from "../lib/explorerWindow";
 import {
   cancelAnalysis,
@@ -54,17 +55,20 @@ import {
 } from "../lib/ipc";
 import { dataPassLines, documentPassLines } from "../lib/passSummary";
 import { counted } from "../lib/plural";
+import { useExplorerFolders } from "../state/useExplorerFolders";
 import { useFinderSearch } from "../state/useFinderSearch";
 import { useFolderInventory } from "../state/useFolderInventory";
 import type { IndexingState } from "../state/useIndexing";
 import { useProfileStatus } from "../state/useProfileStatus";
 import { useVectorShare } from "../state/useVectorShare";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorBanner } from "./ErrorBanner";
 import { ExplorerActivePills } from "./ExplorerActivePills";
 import { ExplorerFilterPanel } from "./ExplorerFilterPanel";
 import { ExplorerBottomBar } from "./ExplorerBottomBar";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
 import { SearchGlyph } from "./ExplorerGlyphs";
+import { ExplorerFamilySetup, ExplorerFirstStart } from "./ExplorerSetup";
 
 /** The family filter of the segmented control: everything, or one family. */
 type FamilyChoice = "all" | Family;
@@ -82,6 +86,10 @@ const FAMILY_CHOICES: readonly FamilyChoice[] = ["all", "documents", "tables"];
 export function FileExplorer({
   workFolder,
   dataFolder,
+  suggestedWorkFolder,
+  suggestedDataFolder,
+  onWorkFolderChosen,
+  onDataFolderChosen,
   indexing,
   dataIndexing,
   scope,
@@ -99,6 +107,13 @@ export function FileExplorer({
 }: {
   workFolder: string | null;
   dataFolder: string | null;
+  /** The folders the software proposes (`~/AssistantCabinetAI/Docs` and `/Data`), or null when none. */
+  suggestedWorkFolder: string | null;
+  suggestedDataFolder: string | null;
+  /** A folder was chosen or made. The Documents one is the guarded change of `App` (unsaved notes
+   * ask first); the Data one just saves the setting. */
+  onWorkFolderChosen: (path: string) => void;
+  onDataFolderChosen: (path: string) => void;
   /** The documents' pass and the workbooks' pass: two folders, two passes. */
   indexing: IndexingState;
   dataIndexing: IndexingState;
@@ -125,6 +140,15 @@ export function FileExplorer({
      the panel. A filter only narrows the view; none of this state is the selection. */
   const [choices, setChoices] = useState<PanelChoices>(NO_CHOICES);
   const [panelOpen, setPanelOpen] = useState(false);
+  /* Clearing a family's analysis asks first; the question names the family. */
+  const [confirmingClear, setConfirmingClear] = useState<Family | null>(null);
+  const folders = useExplorerFolders({
+    indexing,
+    dataIndexing,
+    onWorkFolderChosen,
+    onDataFolderChosen,
+    onError: setError,
+  });
   const panelId = useId();
   const filtersButton = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -133,12 +157,13 @@ export function FileExplorer({
     workFolderInventory,
     workFolder,
     indexing.finishedPasses,
-    refreshToken,
+    refreshToken + folders.clears.documents,
   );
   const dataInventory = useFolderInventory(
     dataFolderInventory,
     dataFolder,
     dataIndexing.finishedPasses,
+    folders.clears.tables,
   );
   const merged = useMemo(
     () =>
@@ -294,7 +319,22 @@ export function FileExplorer({
       ? undefined
       : { text: t(keys[0] ?? ""), title: keys.map((key) => t(key)).join(", ") };
   };
-  const noFolders = workFolder === null && dataFolder === null;
+  /* Which situation the box is in, from the same two inventories: nothing chosen yet, folders chosen
+     but empty, or in use. Until a folder holds a file there is nothing to search or to filter. */
+  const documentsState = folderState({
+    folder: workFolder,
+    loaded: documentsInventory !== null,
+    folderFiles: documentsInventory?.files.length ?? 0,
+    familyFiles: counts.documents.total,
+  });
+  const tablesState = folderState({
+    folder: dataFolder,
+    loaded: dataInventory !== null,
+    folderFiles: dataInventory?.files.length ?? 0,
+    familyFiles: counts.tables.total,
+  });
+  const box = boxState(documentsState, tablesState);
+  const idle = nothingToSearch(box);
 
   /* The selection: the same two scopes the chat is sent with. A row's tick, the two links of the
      bottom bar and the counts all read them through the analysed files of each folder. */
@@ -385,7 +425,7 @@ export function FileExplorer({
               value={text}
               placeholder={t("explorer.searchPlaceholder")}
               aria-label={t("explorer.searchLabel")}
-              disabled={scopeLocked}
+              disabled={scopeLocked || idle}
               spellCheck={false}
               autoComplete="off"
               onChange={(event) => setText(event.target.value)}
@@ -397,7 +437,7 @@ export function FileExplorer({
             className="button button--compact"
             aria-expanded={panelOpen}
             aria-controls={panelOpen ? panelId : undefined}
-            disabled={noFolders}
+            disabled={idle}
             onClick={() => setPanelOpen((open) => !open)}
           >
             {t("explorer.filters")}
@@ -411,7 +451,7 @@ export function FileExplorer({
             )}
           </button>
         </div>
-        {panelOpen ? (
+        {panelOpen && !idle ? (
           <ExplorerFilterPanel
             id={panelId}
             panelRef={panel}
@@ -422,7 +462,7 @@ export function FileExplorer({
             chosenStates={choices.states}
             folders={folderOptions}
             chosenFolders={choices.folders}
-            disabled={noFolders}
+            disabled={idle}
             anyActive={pills.length > 0}
             onToggle={toggleFilter}
             onRemoveTyped={removeTyped}
@@ -430,20 +470,22 @@ export function FileExplorer({
             onClose={() => closePanel(true)}
           />
         ) : null}
-        <div className="explorer__segments" role="group" aria-label={t("explorer.segmentLabel")}>
-          {FAMILY_CHOICES.map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              className="explorer__segment"
-              aria-pressed={familyChoice === choice}
-              onClick={() => setFamilyChoice(choice)}
-            >
-              {familyLabels[choice]}
-              <small className="explorer__segment-count">{segmentCounts[choice]}</small>
-            </button>
-          ))}
-        </div>
+        {idle ? null : (
+          <div className="explorer__segments" role="group" aria-label={t("explorer.segmentLabel")}>
+            {FAMILY_CHOICES.map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                className="explorer__segment"
+                aria-pressed={familyChoice === choice}
+                onClick={() => setFamilyChoice(choice)}
+              >
+                {familyLabels[choice]}
+                <small className="explorer__segment-count">{segmentCounts[choice]}</small>
+              </button>
+            ))}
+          </div>
+        )}
         <ExplorerActivePills
           pills={pills}
           folders={folderOptions}
@@ -475,79 +517,132 @@ export function FileExplorer({
         ) : null}
       </header>
 
-      <ExplorerFamilySection
-        family="documents"
-        folder={workFolder}
-        counts={counts.documents}
-        entries={listed.documents}
-        allEntries={entries}
-        open={!folded.documents}
-        onToggleOpen={() => onFoldedChange("documents", !folded.documents)}
-        rows={budget.documents}
-        rowHeight={rowHeight}
-        indexing={indexing}
-        onStop={() => void cancelAnalysis()}
-        locked={scopeLocked}
-        isTicked={isTicked}
-        onToggleTick={toggleTick}
-        onOpenFile={open}
-        onRevealFile={(entry) => void reveal(entry)}
-        needsAnalyse={documentsProfile === "needsAnalyse"}
-        meaningPercent={unfinishedPercent(vectors)}
-        passLines={documentPassLines(t, indexing.summary)}
-        showKnowledgeLink={indexing.summary?.knowledge != null}
-        onOpenKnowledge={onOpenKnowledge}
-        filtering={isFiltering(filter)}
-        reasonOf={reasonOf}
-      />
-      <ExplorerFamilySection
-        family="tables"
-        folder={dataFolder}
-        counts={counts.tables}
-        entries={listed.tables}
-        allEntries={entries}
-        open={!folded.tables}
-        onToggleOpen={() => onFoldedChange("tables", !folded.tables)}
-        rows={budget.tables}
-        rowHeight={rowHeight}
-        indexing={dataIndexing}
-        locked={scopeLocked}
-        isTicked={isTicked}
-        onToggleTick={toggleTick}
-        onOpenFile={open}
-        onRevealFile={(entry) => void reveal(entry)}
-        needsAnalyse={dataProfile === "needsAnalyse"}
-        meaningPercent={null}
-        passLines={dataPassLines(t, dataIndexing.summary)}
-        showKnowledgeLink={dataIndexing.summary?.knowledge != null}
-        onOpenKnowledge={onOpenKnowledge}
-        filtering={isFiltering(filter)}
-        reasonOf={reasonOf}
-      />
+      {box === "firstStart" ? (
+        <ExplorerFirstStart
+          busy={folders.busy}
+          canCreate={suggestedWorkFolder !== null || suggestedDataFolder !== null}
+          onCreateBoth={() => void folders.createBoth()}
+        />
+      ) : null}
+
+      {workFolder === null ? (
+        <ExplorerFamilySetup
+          family="documents"
+          suggested={suggestedWorkFolder}
+          busy={folders.busy}
+          onCreate={() => void folders.createSuggested("documents")}
+          onChoose={() => void folders.choose("documents")}
+        />
+      ) : (
+        <ExplorerFamilySection
+          family="documents"
+          folder={workFolder}
+          isEmpty={documentsState === "empty"}
+          folderActions={{
+            reveal: () => void folders.reveal("documents"),
+            change: () => void folders.choose("documents"),
+            clear: () => setConfirmingClear("documents"),
+          }}
+          counts={counts.documents}
+          entries={listed.documents}
+          allEntries={entries}
+          open={!folded.documents}
+          onToggleOpen={() => onFoldedChange("documents", !folded.documents)}
+          rows={budget.documents}
+          rowHeight={rowHeight}
+          indexing={indexing}
+          onStop={() => void cancelAnalysis()}
+          locked={scopeLocked}
+          isTicked={isTicked}
+          onToggleTick={toggleTick}
+          onOpenFile={open}
+          onRevealFile={(entry) => void reveal(entry)}
+          needsAnalyse={documentsProfile === "needsAnalyse"}
+          meaningPercent={unfinishedPercent(vectors)}
+          passLines={documentPassLines(t, indexing.summary)}
+          showKnowledgeLink={indexing.summary?.knowledge != null}
+          onOpenKnowledge={onOpenKnowledge}
+          filtering={isFiltering(filter)}
+          reasonOf={reasonOf}
+        />
+      )}
+      {dataFolder === null ? (
+        <ExplorerFamilySetup
+          family="tables"
+          suggested={suggestedDataFolder}
+          busy={folders.busy}
+          onCreate={() => void folders.createSuggested("tables")}
+          onChoose={() => void folders.choose("tables")}
+        />
+      ) : (
+        <ExplorerFamilySection
+          family="tables"
+          folder={dataFolder}
+          isEmpty={tablesState === "empty"}
+          folderActions={{
+            reveal: () => void folders.reveal("tables"),
+            change: () => void folders.choose("tables"),
+            clear: () => setConfirmingClear("tables"),
+          }}
+          counts={counts.tables}
+          entries={listed.tables}
+          allEntries={entries}
+          open={!folded.tables}
+          onToggleOpen={() => onFoldedChange("tables", !folded.tables)}
+          rows={budget.tables}
+          rowHeight={rowHeight}
+          indexing={dataIndexing}
+          locked={scopeLocked}
+          isTicked={isTicked}
+          onToggleTick={toggleTick}
+          onOpenFile={open}
+          onRevealFile={(entry) => void reveal(entry)}
+          needsAnalyse={dataProfile === "needsAnalyse"}
+          meaningPercent={null}
+          passLines={dataPassLines(t, dataIndexing.summary)}
+          showKnowledgeLink={dataIndexing.summary?.knowledge != null}
+          onOpenKnowledge={onOpenKnowledge}
+          filtering={isFiltering(filter)}
+          reasonOf={reasonOf}
+        />
+      )}
 
       {error === null ? null : <ErrorBanner error={error} />}
       {indexing.error === null ? null : <ErrorBanner error={indexing.error} />}
       {dataIndexing.error === null ? null : <ErrorBanner error={dataIndexing.error} />}
 
-      <ExplorerBottomBar
-        documentsUsed={documentsUsed}
-        tablesUsed={tablesUsed}
-        toTick={toTick.length}
-        onTick={() => {
-          const next = addEntriesToScopes(scopes, toTick, entries, Date.now());
-          onScopeChange(next.documents);
-          onDataScopeChange(next.data);
-        }}
-        canClear={selectionOf(scope) !== "none" || selectionOf(dataScope) !== "none"}
-        onClear={() => {
-          const next = clearedScopes(Date.now());
-          onScopeChange(next.documents);
-          onDataScopeChange(next.data);
-        }}
-        locked={scopeLocked}
-        notes={selectionNotes(selectionOf(scope), selectionOf(dataScope))}
-        unsupported={merged.unsupported}
-      />
+      {idle ? null : (
+        <ExplorerBottomBar
+          documentsUsed={documentsUsed}
+          tablesUsed={tablesUsed}
+          toTick={toTick.length}
+          onTick={() => {
+            const next = addEntriesToScopes(scopes, toTick, entries, Date.now());
+            onScopeChange(next.documents);
+            onDataScopeChange(next.data);
+          }}
+          canClear={selectionOf(scope) !== "none" || selectionOf(dataScope) !== "none"}
+          onClear={() => {
+            const next = clearedScopes(Date.now());
+            onScopeChange(next.documents);
+            onDataScopeChange(next.data);
+          }}
+          locked={scopeLocked}
+          notes={selectionNotes(selectionOf(scope), selectionOf(dataScope))}
+          unsupported={merged.unsupported}
+        />
+      )}
+      {confirmingClear === null ? null : (
+        <ConfirmDialog
+          title={t(confirmingClear === "documents" ? "workFolder.resetTitle" : "dataFolder.resetTitle")}
+          body={t(confirmingClear === "documents" ? "workFolder.resetBody" : "dataFolder.resetBody")}
+          confirmLabel={t("explorer.menuClear")}
+          destructive
+          busy={folders.resetting}
+          onConfirm={() => void folders.clear(confirmingClear).then(() => setConfirmingClear(null))}
+          onCancel={() => setConfirmingClear(null)}
+        />
+      )}
     </section>
   );
 }

@@ -15,18 +15,30 @@ import {
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
-import type { TabActions } from "./components/WorkspacePanel";
+import type { OverviewActions } from "./components/OverviewPage";
+import type { Centre, TabActions } from "./components/WorkspacePanel";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import { effectiveSection, shownCentre, type CentreSection } from "./lib/centreSection";
+import { normaliseError, type AppError } from "./lib/errors";
 import {
   addScopeFiles,
   combineScopes,
   noDocumentsScope,
 } from "./lib/analysisScope";
+import type { ExplorerEntry } from "./lib/explorerModel";
+import { checkView, overviewInput, overviewModel, type ExplorerFacts } from "./lib/overviewModel";
+import {
+  familiesToUnfold,
+  foldsToRestore,
+  NO_VIEW,
+  type ExplorerView,
+} from "./lib/explorerView";
+import type { Family } from "./lib/explorerModel";
 import {
   dataFolderInventory,
   type FileRecord,
   indexDataFolder,
+  revealDataFile,
   revealWorkFile,
   workFolderInventory,
   type AnalysisScope,
@@ -54,7 +66,7 @@ import {
   viewOf,
   type TabsState,
 } from "./lib/viewerTabs";
-import type { OpenWorkspace, ViewerFolder, WorkspaceView } from "./lib/workspaceView";
+import type { ViewerFolder, WorkspaceView } from "./lib/workspaceView";
 import { useAppSettings } from "./state/useAppSettings";
 import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
@@ -117,10 +129,6 @@ function AppContent() {
      as it was), and anything that opens a file shows it again (`docs/CLIENT.md`, "Layout"). */
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
   const [workspaceHidden, setWorkspaceHidden] = useState(false);
-  const openWorkspace = useCallback<OpenWorkspace>((view) => {
-    setWorkspace(view);
-    setWorkspaceHidden(false);
-  }, []);
   const hideWorkspace = useCallback(() => setWorkspaceHidden(true), []);
   /* The Notes section of the centre. The notes live in a session held here, in memory only, so a
      switch of section or a hidden centre never loses them; `section` is which of the two sections
@@ -136,6 +144,8 @@ function AppContent() {
     }),
   );
   const notes = useSyncExternalStore(notesSession.subscribe, notesSession.getSnapshot);
+  /* Files at launch, where the zone is closed; the title-bar button, « Voir le rapport » and the
+     switch bring the overview, opening a file brings Files. */
   const [section, setSection] = useState<CentreSection>("files");
   const notesEnabled = snapshot?.settings.speech.notesEnabled ?? false;
   const shownSection = effectiveSection(section, notesEnabled);
@@ -190,6 +200,13 @@ function AppContent() {
   );
   const showNotes = useCallback(() => {
     setSection("notes");
+    setWorkspaceHidden(false);
+  }, []);
+  /* Opens the zone on its overview: the way « Voir le rapport » and the title-bar button, with no
+     file open, lead there. Nothing opens the zone by itself: a finished analysis only changes what
+     the overview says. */
+  const showOverview = useCallback(() => {
+    setSection("overview");
     setWorkspaceHidden(false);
   }, []);
   /* The cross of the window: a note that is not saved keeps it open until the user has answered. */
@@ -276,6 +293,7 @@ function AppContent() {
     nonce: number;
   } | null>(null);
   const workFolder = snapshot?.settings.workFolder ?? null;
+  const dataFolder = snapshot?.settings.dataFolder ?? null;
   const notesActions = useMemo<NotesActions>(
     () => ({
       select: notesSession.select,
@@ -319,7 +337,6 @@ function AppContent() {
      every question would be refused. A different folder starts from no document again. Analyse
      leaves the selection alone: each ticked file is pinned to its content and survives a pass. */
   useEffect(() => setScope(noDocumentsScope(Date.now())), [workFolder]);
-  const dataFolder = snapshot?.settings.dataFolder ?? null;
   /* The same rule for the Data Folder: another folder, no workbook chosen. */
   useEffect(() => setDataScope(noDocumentsScope(Date.now())), [dataFolder]);
   /* The tabs of a folder that was replaced would show another folder's file under the same path:
@@ -381,6 +398,111 @@ function AppContent() {
     }),
     [notes, notesActions, workFolder, notesDictation],
   );
+  /* The explorer's filter, held here so that the overview's link can set what the panel sets, and
+     the counter that asks the typed search to be emptied with it. Neither is the selection. */
+  const [explorerView, setExplorerView] = useState<ExplorerView>(NO_VIEW);
+  const [searchClears, setSearchClears] = useState(0);
+  /* What the explorer read of the two folders, for the overview. */
+  const [explorerFacts, setExplorerFacts] = useState<ExplorerFacts | null>(null);
+  /* Read by the overview's link at the moment it is pressed, so its action stays one stable value. */
+  /* The lists the overview's link opened: they close again when the filter it set is removed. */
+  const [linkOpened, setLinkOpened] = useState<Family[]>([]);
+  const explorerFactsRef = useRef(explorerFacts);
+  explorerFactsRef.current = explorerFacts;
+  const settingsRef = useRef(snapshot?.settings);
+  settingsRef.current = snapshot?.settings;
+  const overviewOnScreen = shownWorkspace !== null && shownSection === "overview";
+  const overviewPage = useMemo(
+    () =>
+      overviewOnScreen
+        ? overviewModel(
+            overviewInput(
+              explorerFacts,
+              { documents: workFolder, tables: dataFolder },
+              {
+                summary: indexing.summary,
+                durationMs: indexing.durationMs,
+                finishedAt: indexing.finishedAt,
+                running: indexing.running,
+                error: indexing.error,
+              },
+              {
+                summary: dataIndexing.summary,
+                durationMs: dataIndexing.durationMs,
+                finishedAt: dataIndexing.finishedAt,
+                running: dataIndexing.running,
+                error: dataIndexing.error,
+              },
+            ),
+          )
+        : null,
+    [
+      overviewOnScreen,
+      explorerFacts,
+      workFolder,
+      dataFolder,
+      indexing.summary,
+      indexing.durationMs,
+      indexing.finishedAt,
+      indexing.running,
+      indexing.error,
+      dataIndexing.summary,
+      dataIndexing.durationMs,
+      dataIndexing.finishedAt,
+      dataIndexing.running,
+      dataIndexing.error,
+    ],
+  );
+  /* Removing the filter the link set closes what the link opened, and only that. */
+  useEffect(() => {
+    const close = foldsToRestore(linkOpened, explorerView);
+    if (close.length === 0) {
+      return;
+    }
+    setLinkOpened([]);
+    void saveExplorer((current) => ({
+      ...current,
+      documentsFolded: close.includes("documents") ? true : current.documentsFolded,
+      tablesFolded: close.includes("tables") ? true : current.tablesFolded,
+    }));
+  }, [linkOpened, explorerView, saveExplorer]);
+  const overviewActions = useMemo<OverviewActions>(
+    () => ({
+      onShowUnreadable: () => {
+        setExplorerView(checkView());
+        setSearchClears((count) => count + 1);
+        /* A folded list that holds some of these files is opened: that is what the link was
+           pressed for. Nothing else ever opens or closes a list by itself. */
+        const open = familiesToUnfold(explorerFactsRef.current?.entries ?? [], "unreadable", {
+          documents: settingsRef.current?.explorer.documentsFolded ?? false,
+          tables: settingsRef.current?.explorer.tablesFolded ?? false,
+        });
+        if (open.length > 0) {
+          setLinkOpened((current) => [...new Set([...current, ...open])]);
+          void saveExplorer((current) => ({
+            ...current,
+            documentsFolded: open.includes("documents") ? false : current.documentsFolded,
+            tablesFolded: open.includes("tables") ? false : current.tablesFolded,
+          }));
+        }
+      },
+      onOpenKnowledge: () => setKnowledgeOpen(true),
+      onOpenFile: (entry: ExplorerEntry) =>
+        entry.root === "documents" ? openDocument(entry.record) : openTable(entry.record),
+      onRevealFile: (entry: ExplorerEntry, onFailure: (error: AppError) => void) =>
+        void (entry.root === "documents" ? revealWorkFile(entry.path) : revealDataFile(entry.path)).catch(
+          (raw: unknown) => onFailure(normaliseError(raw)),
+        ),
+    }),
+    [saveExplorer, openDocument, openTable],
+  );
+  const centreProps: Centre = {
+    section: shownSection,
+    onSection: chooseSection,
+    recording: longDictation?.recording ?? false,
+    notes: notesEnabled ? notesBundle : undefined,
+    overview: { page: overviewPage, actions: overviewActions },
+  };
   /* "Add to my selection", under the name picker: the files of a name that is only in analysed
      files she did not tick. Her own click, and the same ticking as the listing's checkboxes
      (`addScopeFiles` shares its rule with `toggleScopeFile`). The ids come from a fresh read of each
@@ -476,7 +598,7 @@ function AppContent() {
             if (shownWorkspace !== null) {
               guardLeaving({ kind: "hide-zone" }, hideWorkspace);
             } else if (workspace === null) {
-              openWorkspace({ kind: "welcome" });
+              showOverview();
             } else {
               setWorkspaceHidden(false);
             }
@@ -507,16 +629,7 @@ function AppContent() {
             }}
             viewStates={viewStates}
             tabActions={tabActions}
-            notes={
-              notesEnabled
-                ? {
-                    section: shownSection,
-                    onSection: chooseSection,
-                    recording: longDictation?.recording ?? false,
-                    bundle: notesBundle,
-                  }
-                : undefined
-            }
+            centre={centreProps}
             restoreNonce={layoutRestores}
             resources={
               <aside className="app__side">
@@ -539,14 +652,21 @@ function AppContent() {
                     documents: snapshot.settings.explorer.documentsFolded,
                     tables: snapshot.settings.explorer.tablesFolded,
                   }}
-                  onFoldedChange={(family, isFolded) =>
+                  view={explorerView}
+                  onViewChange={setExplorerView}
+                  searchClears={searchClears}
+                  onFacts={setExplorerFacts}
+                  onOpenReport={showOverview}
+                  notesFolder={snapshot.settings.speech.notesFolderName}
+                  onFoldedChange={(family, isFolded) => {
+                    /* A fold she makes herself is hers: the link's memory is dropped. */
+                    setLinkOpened([]);
                     void saveExplorer((current) =>
                       family === "documents"
                         ? { ...current, documentsFolded: isFolded }
                         : { ...current, tablesFolded: isFolded },
-                    )
-                  }
-                  onOpenKnowledge={() => setKnowledgeOpen(true)}
+                    );
+                  }}
                   onOpenDocument={openDocument}
                   onOpenTable={openTable}
                   refreshToken={notes.writes}

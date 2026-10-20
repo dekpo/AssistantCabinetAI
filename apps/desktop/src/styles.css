@@ -996,6 +996,29 @@ body {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+/* « Mes notes »: the shortcut to the Notes folder, under the segmented control. */
+.explorer__notes {
+  display: flex;
+}
+
+.explorer__notes-chip {
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer__notes-chip[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
 .explorer__segment-count {
   margin-left: 4px;
   color: var(--text-quiet);
@@ -1064,7 +1087,27 @@ body {
   min-width: 0;
 }
 
+/* The family's name, then its folder's short name in grey (the mock-up's « …\Docs »): the folder is
+   what gives way, the name stays whole. The whole path is the header's tooltip. */
+.explorer-family__title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.explorer-family__location {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .explorer-family__name {
+  flex: none;
   overflow: hidden;
   color: var(--family);
   font-size: 13px;
@@ -1218,6 +1261,12 @@ body {
 .explorer-family__run--end {
   background: none;
   padding-top: 0;
+}
+
+/* « Voir le rapport »: alone on its line under the end of a pass. */
+.explorer-family__report {
+  margin: 0;
+  padding: 0 10px 4px;
 }
 
 /* The thin line under the header, filled to the stage's percentage (`PROGRESS_HAIRLINE`). */
@@ -1407,21 +1456,6 @@ body {
   white-space: nowrap;
 }
 
-.explorer-pass {
-  padding: 0 10px 4px;
-  color: var(--text-quiet);
-  font-size: 11px;
-}
-
-.explorer-pass__summary {
-  cursor: pointer;
-}
-
-.explorer-pass__lines {
-  margin: 3px 0 0;
-  line-height: 1.45;
-}
-
 /* One list per family, with its own scroll bar. The height is set inline from the row budget, and
    the rows are a fixed height, so the list can draw only the ones in view. */
 .explorer-list {
@@ -1450,6 +1484,11 @@ body {
 
 .explorer-row:hover {
   background: var(--surface);
+}
+
+/* A row that can be ticked is ticked by a click anywhere on it. */
+.explorer-row--tickable {
+  cursor: pointer;
 }
 
 .explorer-row__check {
@@ -1550,6 +1589,11 @@ body {
 
 .explorer-bottom__label {
   font-weight: 600;
+}
+
+.explorer-bottom__hint {
+  color: var(--text-quiet);
+  font-size: 11px;
 }
 
 .explorer-bottom__note {
@@ -3376,6 +3420,268 @@ body {
   position: relative;
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* The Aperçu section of the centre: one page that scrolls on its own, with no scroll area inside it.
+   It reads down to the centre's minimum width (320 px): long names break, nothing is cut. */
+.overview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+
+.overview__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.overview__block--alert {
+  padding: 8px 10px;
+  color: var(--alert-text);
+  background: var(--alert-surface);
+  border: 1px solid var(--alert-border);
+  border-radius: var(--radius);
+}
+
+.overview__heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.overview__text {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.overview__text--strong {
+  color: var(--text);
+}
+
+.overview__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview__card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--family);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.overview__card--documents,
+.overview__family--documents {
+  --family: var(--family-documents);
+  --family-soft: var(--family-documents-soft);
+}
+
+.overview__card--tables,
+.overview__family--tables {
+  --family: var(--family-tables);
+  --family-soft: var(--family-tables-soft);
+}
+
+.overview__family {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--family);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* The folder's whole path: it matters as much as the counts, and this page has the room. */
+.overview__path {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.overview__counters,
+.overview__list,
+.overview__files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview__counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview__counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.overview__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-quiet);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* The three steps: a number (a tick once done) and the words beside it. */
+.overview__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.overview__mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-quiet);
+  font-size: 12px;
+}
+
+.overview__step[aria-current="step"] .overview__mark {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.overview__step--done .overview__mark {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.overview__check {
+  width: 13px;
+  height: 13px;
+}
+
+.overview__step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.overview__step-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.overview__step-detail {
+  color: var(--text-quiet);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* A file to check: its name, where it sits and why, then its buttons. The buttons go under the text
+   at the narrowest width. */
+.overview__files {
+  display: flex;
+  flex-direction: column;
+}
+
+.overview__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.overview__file:first-child {
+  border-top: 0;
+}
+
+.overview__file-text {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.overview__file-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.overview__file-folder,
+.overview__file-reason {
+  color: var(--text-quiet);
+  font-size: 11.5px;
+}
+
+.overview__file-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.overview__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.overview__chip {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-quiet);
+  background: var(--surface);
+  font-size: 11.5px;
+}
+
+/* Said to a screen reader only. */
+.overview__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* A recording is running while the other section is on screen. */

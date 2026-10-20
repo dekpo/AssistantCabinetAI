@@ -4,6 +4,8 @@ import {
   DOCUMENT_EXTENSIONS,
   duplicateNames,
   explorerKey,
+  folderKey,
+  listSort,
   familyOf,
   filterEntries,
   folderHint,
@@ -325,5 +327,54 @@ describe("two files that share a name", () => {
     expect(folderHint(all[0] as ExplorerEntry)).toBe("dupont");
     expect(folderHint(all[1] as ExplorerEntry)).toBe("admin");
     expect(folderHint(all[2] as ExplorerEntry)).toBe("");
+  });
+});
+
+describe("the order a list takes", () => {
+  const rows = entries(
+    [record("b.pdf"), record("a.pdf"), record("c.pdf"), record("Notes/2026-10-20_18-51-28.md")],
+    [],
+  );
+
+  it("follows the finder's ranking while a search is active, the unranked last by name", () => {
+    const rank = new Map([
+      [explorerKey("documents", "Notes/2026-10-20_18-51-28.md"), 0],
+      [explorerKey("documents", "c.pdf"), 1],
+    ]);
+
+    expect(sortEntries(rows, "relevance", rank).map((entry) => entry.path)).toStrictEqual([
+      "Notes/2026-10-20_18-51-28.md",
+      "c.pdf",
+      "a.pdf",
+      "b.pdf",
+    ]);
+  });
+
+  it("is relevance while searching, the newest first for the Notes folder alone, else by name", () => {
+    const notes = folderKey("documents", "Notes");
+
+    expect(listSort({ searching: true, folders: new Set(), notesKey: notes })).toBe("relevance");
+    expect(listSort({ searching: false, folders: new Set([notes]), notesKey: notes })).toBe("date");
+    expect(listSort({ searching: false, folders: new Set(), notesKey: notes })).toBe("name");
+    expect(
+      listSort({ searching: false, folders: new Set([notes, "documents:2025"]), notesKey: notes }),
+    ).toBe("name");
+    expect(listSort({ searching: false, folders: new Set([notes]), notesKey: null })).toBe("name");
+  });
+
+  it("counts the Notes folder and what is under it, not a folder of the same name elsewhere", () => {
+    const all = entries(
+      [
+        record("Notes/2026-10-20_18-51-28.md"),
+        record("Notes/old/2026-01-01_a.md"),
+        record("administratif/notes/2026-02-10_note-interne.docx"),
+        record("a.pdf"),
+      ],
+      [],
+    );
+
+    expect(
+      filterEntries(all, { folders: new Set([folderKey("documents", "Notes")]) }).map((e) => e.path),
+    ).toStrictEqual(["Notes/2026-10-20_18-51-28.md", "Notes/old/2026-01-01_a.md"]);
   });
 });

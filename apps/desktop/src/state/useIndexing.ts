@@ -20,6 +20,8 @@ export interface IndexingState {
   trace: ProgressTrace | null;
   /** How long the last finished pass took, from the press to its end. Cleared when a new pass starts. */
   durationMs: number | null;
+  /** When the last finished pass ended (epoch milliseconds). Cleared with `durationMs`. */
+  finishedAt: number | null;
   /** What the last finished pass did. Cleared when a new pass starts. */
   summary: IndexSummary | null;
   error: AppError | null;
@@ -41,6 +43,7 @@ export function useIndexing(
   const [progress, setProgress] = useState<IndexProgress | null>(null);
   const [trace, setTrace] = useState<ProgressTrace | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [summary, setSummary] = useState<IndexSummary | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [finishedPasses, setFinishedPasses] = useState(0);
@@ -56,6 +59,7 @@ export function useIndexing(
     setSummary(null);
     setProgress(null);
     setDurationMs(null);
+    setFinishedAt(null);
     const startedAt = Date.now();
     setTrace(initialTrace(startedAt));
     setRunning(true);
@@ -75,7 +79,9 @@ export function useIndexing(
       return false;
     } finally {
       inFlight.current = false;
-      setDurationMs(Date.now() - startedAt);
+      const endedAt = Date.now();
+      setDurationMs(endedAt - startedAt);
+      setFinishedAt(endedAt);
       setRunning(false);
       setProgress(null);
       setTrace(null);
@@ -87,7 +93,19 @@ export function useIndexing(
     setSummary(null);
     setError(null);
     setDurationMs(null);
+    setFinishedAt(null);
   }, []);
 
-  return { running, progress, trace, durationMs, summary, error, finishedPasses, run, reset };
+  return {
+    running,
+    progress,
+    trace,
+    durationMs,
+    finishedAt,
+    summary,
+    error,
+    finishedPasses,
+    run,
+    reset,
+  };
 }

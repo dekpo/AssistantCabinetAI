@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveSection, shownCentre } from "./centreSection";
+import { effectiveSection, offeredSections, shownCentre, type CentreSection } from "./centreSection";
 import type { WorkspaceView } from "./workspaceView";
 
 const FILES: WorkspaceView = { kind: "files", tabs: [], activeId: null };
@@ -47,5 +47,71 @@ describe("the section on screen", () => {
     expect(effectiveSection("notes", false)).toBe("files");
     expect(effectiveSection("notes", true)).toBe("notes");
     expect(effectiveSection("files", true)).toBe("files");
+  });
+});
+
+describe("the overview section", () => {
+  it("opens the zone with no file tab and no note, with Notes on or off", () => {
+    for (const notesEnabled of [true, false]) {
+      expect(shownCentre({ ...base, notesEnabled, section: "overview" })).toStrictEqual(WELCOME);
+    }
+  });
+
+  it("is closed when the user hid the zone, and never opens by itself", () => {
+    expect(shownCentre({ ...base, section: "overview", hidden: true })).toBeNull();
+    expect(shownCentre({ ...base, section: "overview", hidden: true, workspace: FILES })).toBeNull();
+    // At launch the section is Files: nothing is open.
+    expect(shownCentre({ ...base, notesEnabled: false })).toBeNull();
+  });
+
+  it("keeps the file tabs' view behind it, so the tabs come back as they were", () => {
+    expect(shownCentre({ ...base, section: "overview", workspace: FILES })).toBe(FILES);
+  });
+
+  it("is a section whatever the Notes switch says", () => {
+    expect(effectiveSection("overview", false)).toBe("overview");
+    expect(effectiveSection("overview", true)).toBe("overview");
+  });
+
+  it("is offered first, Notes only while enabled", () => {
+    expect(offeredSections(false)).toStrictEqual(["overview", "files"]);
+    expect(offeredSections(true)).toStrictEqual(["overview", "files", "notes"]);
+  });
+});
+
+describe("every combination of the centre's inputs", () => {
+  const sections: CentreSection[] = ["overview", "files", "notes"];
+  const flags = [true, false];
+
+  it("is closed exactly when hidden, or when nothing asks for the zone", () => {
+    for (const section of sections) {
+      for (const notesEnabled of flags) {
+        for (const hidden of flags) {
+          for (const notesHold of flags) {
+            for (const workspace of [null, FILES]) {
+              const shown = shownCentre({ section, notesEnabled, hidden, notesHold, workspace });
+              const asked =
+                workspace !== null ||
+                section === "overview" ||
+                (notesEnabled && (section === "notes" || notesHold));
+              expect(shown !== null, `${section} ${notesEnabled} ${hidden} ${notesHold} ${workspace === null}`).toBe(
+                asked && !hidden,
+              );
+              if (shown !== null && workspace !== null) {
+                expect(shown).toBe(workspace);
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("shows only a section on offer", () => {
+    for (const section of sections) {
+      for (const notesEnabled of flags) {
+        expect(offeredSections(notesEnabled)).toContain(effectiveSection(section, notesEnabled));
+      }
+    }
   });
 });

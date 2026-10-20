@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { endLine, gaugeLabel, runLine } from "../lib/analysisLines";
 import { progressView, type PassFamily } from "../lib/analysisProgress";
@@ -11,6 +11,7 @@ import {
   type Family,
   type FamilyCounts,
 } from "../lib/explorerModel";
+import { abbreviateFolderPath } from "../lib/folderPath";
 import { counted } from "../lib/plural";
 import type { IndexingState } from "../state/useIndexing";
 import { ExplorerFamilyMenu } from "./ExplorerFamilyMenu";
@@ -18,7 +19,7 @@ import { FamilyFolderGlyph, FoldGlyph, StateGlyph } from "./ExplorerGlyphs";
 import { ExplorerFileRow } from "./ExplorerFileRow";
 import { ExplorerList } from "./ExplorerList";
 import { AnalysisGauge } from "./AnalysisGauge";
-import { AnalyseButton, KnowledgeLink } from "./FolderCardParts";
+import { AnalyseButton } from "./FolderCardParts";
 
 /**
  * The thin line under the header of a running family, filled to the stage's percentage. Built behind
@@ -37,8 +38,9 @@ const COUNTERS: readonly { state: ExplorerState; one: string; many: string }[] =
 /**
  * One family of the explorer: a two-line header (the folder's icon, the family's name and its three
  * counters, the Analyser button, the « ⋯ » menu and the fold button), the line of the running
- * analysis (the Analyser button is then the gauge with its Stop, and the menu is gone), a few quiet notes, what the last pass did, and the bounded list. The folder's path is the
- * header's tooltip. A folder that holds nothing says so in place of the list, with the two things to
+ * analysis (the Analyser button is then the gauge with its Stop, and the menu is gone), the line of
+ * the pass that just ended with its « Voir le rapport » link (the report itself is in the centre), a
+ * quiet note, and the bounded list. The folder's path is the header's tooltip. A folder that holds nothing says so in place of the list, with the two things to
  * do about it, and its header says which formats go in.
  *
  * A file of the other family sits in this list, tagged, and is not counted by Analyser: its own
@@ -65,10 +67,7 @@ export function ExplorerFamilySection({
   onOpenFile,
   onRevealFile,
   needsAnalyse,
-  meaningPercent,
-  passLines,
-  showKnowledgeLink,
-  onOpenKnowledge,
+  onOpenReport,
   filtering,
   reasonOf,
 }: {
@@ -102,12 +101,8 @@ export function ExplorerFamilySection({
   onRevealFile: (entry: ExplorerEntry) => void;
   /** The index predates the file profile: only Analyse fills it. */
   needsAnalyse: boolean;
-  /** The share of the meaning search computed, while it is incomplete. */
-  meaningPercent: number | null;
-  /** What the last pass did, one short line each. */
-  passLines: readonly string[];
-  showKnowledgeLink: boolean;
-  onOpenKnowledge?: () => void;
+  /** « Voir le rapport »: opens the centre on its overview. */
+  onOpenReport: () => void;
   /** The view is narrowed: an empty list then means "nothing matches", not "nothing here". */
   filtering: boolean;
   /** Why a text search found an entry, or undefined when none is active or it said nothing. */
@@ -146,7 +141,10 @@ export function ExplorerFamilySection({
       <div className="explorer-family__head" title={folder}>
         <FamilyFolderGlyph family={family} />
         <div className="explorer-family__text">
-          <span className="explorer-family__name">{familyName}</span>
+          <span className="explorer-family__title">
+            <span className="explorer-family__name">{familyName}</span>
+            <span className="explorer-family__location">{abbreviateFolderPath(folder)}</span>
+          </span>
           {isEmpty ? (
             <span className="explorer-family__types">{typesLine}</span>
           ) : (
@@ -220,6 +218,18 @@ export function ExplorerFamilySection({
           {line}
         </p>
       )}
+      {!running && indexing.summary !== null ? (
+        <p className="explorer-family__report">
+          <button
+            type="button"
+            className="button button--quiet button--compact"
+            title={t("overview.viewReportHint")}
+            onClick={onOpenReport}
+          >
+            {t("overview.viewReport")}
+          </button>
+        </p>
+      ) : null}
       {running && view?.stage === "meaning" ? (
         <p className="explorer-note">{t("explorer.runWordsWork")}</p>
       ) : null}
@@ -230,31 +240,6 @@ export function ExplorerFamilySection({
               {t("finder.needsAnalyse")}
             </p>
           ) : null}
-          {meaningPercent === null || running ? null : (
-            <p className="explorer-note" role="status">
-              {t("workFolder.meaningShare", { percent: meaningPercent })}
-            </p>
-          )}
-          {passLines.length === 0 ? null : (
-            <details
-              key={indexing.finishedPasses}
-              className="explorer-pass"
-              open={(indexing.summary?.failedFiles.length ?? 0) > 0}
-            >
-              <summary className="explorer-pass__summary">{t("explorer.passDetails")}</summary>
-              <p className="explorer-pass__lines">
-                {passLines.map((line, index) => (
-                  <Fragment key={index}>
-                    {index > 0 ? <br /> : null}
-                    {line}
-                  </Fragment>
-                ))}
-              </p>
-              {showKnowledgeLink && onOpenKnowledge !== undefined ? (
-                <KnowledgeLink onOpen={onOpenKnowledge} />
-              ) : null}
-            </details>
-          )}
           {isEmpty ? (
             <div className="explorer-empty explorer-empty--folder">
               <span className="explorer-empty__text">{t("explorer.emptyFolder")}</span>

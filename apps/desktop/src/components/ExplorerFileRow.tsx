@@ -1,12 +1,13 @@
 import { useTranslation } from "../i18n/I18nProvider";
 import type { ExplorerEntry } from "../lib/explorerModel";
+import { rowClickTicks } from "../lib/explorerSelection";
 import { StateGlyph } from "./ExplorerGlyphs";
 
 /**
  * One file of the explorer: a checkbox, the state glyph, the stem with an ellipsis and the extension
  * as a badge that is never cut, the grey sub-folder when two files share a name, the reason of a text hit, a tag on a file that
  * sits in the other family's folder, and the "Open" and "See" buttons that show on hover and focus.
- * The full path is the row's tooltip. The row's height is the list's (`--explorer-row`): rows have a
+ * A click anywhere on a tickable row ticks it (the checkbox is the keyboard's way). The full path is the row's tooltip. The row's height is the list's (`--explorer-row`): rows have a
  * fixed height so the list can draw only the ones in view.
  */
 export function ExplorerFileRow({
@@ -45,10 +46,22 @@ export function ExplorerFileRow({
 
   return (
     <li
-      className={
-        entry.native ? "explorer-row" : "explorer-row explorer-row--foreign"
-      }
+      className={[
+        "explorer-row",
+        entry.native ? "" : "explorer-row--foreign",
+        checkDisabled ? "" : "explorer-row--tickable",
+      ]
+        .filter((name) => name !== "")
+        .join(" ")}
       title={entry.path}
+      onClick={(event) => {
+        /* A click anywhere on the row ticks the file, as the old lists did; the checkbox and the two
+           buttons keep their own behaviour. */
+        const onControl = (event.target as HTMLElement).closest("button, input, a") !== null;
+        if (rowClickTicks({ onControl, tickable: !checkDisabled })) {
+          onToggle();
+        }
+      }}
     >
       <input
         type="checkbox"

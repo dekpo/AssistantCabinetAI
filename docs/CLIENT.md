@@ -40,13 +40,15 @@ untouched and shown clamped to 320 px by the panel library; it is never rewritte
 user is saved (`isUserInteraction`).
 
 **The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
-a discriminated union with two kinds today, `welcome` and `files` (a list of tabs, see "The document viewer")) and passes
-`openWorkspace(view)` and `closeWorkspace()` around. **The centre is visible exactly while `workspace !== null`.** Nothing
-is open at launch, so the user sees two columns. A new use of the zone (a calendar, say) adds a kind to the union and a case
-to `WorkspacePanel`, and touches nothing else. **Voice notes are not a kind of view:** they are a *section* of the zone, reached
-by a Files / Notes switch (see "Voice in the window" at the end of this file). A button in the title bar (`aria-pressed`) opens the welcome view or
-closes the zone; the user can also close it by dragging it below its minimum or by pressing Enter on a
-separator beside it.
+a discriminated union with two kinds today, `welcome` (the empty state of the Files section: no file open) and `files` (a list
+of tabs, see "The document viewer")). **The centre is visible exactly while `shownCentre(...)` is not `null`**
+(`lib/centreSection.ts`, pure, tested over every combination): the open tabs, or the Overview section, or the Notes section while
+it holds a note. Nothing is open at launch (the section is Files), so the user sees two columns. A new use of the zone (a
+calendar, say) adds a kind to the union and a case to `WorkspacePanel`, and touches nothing else. **Overview and voice notes are
+not kinds of view:** they are *sections* of the zone, reached by a switch **Aperçu · Fichiers · Notes** that is drawn whenever
+the zone is open (`Notes` only while enabled; see "The overview of the centre" below and "Voice in the window" at the end of this
+file). A button in the title bar (`aria-pressed`) opens the zone, on the Overview when no file is open, or closes it; the user
+can also close it by dragging it below its minimum or by pressing Enter on a separator beside it.
 
 **The workspace panel is always rendered**, collapsed to size 0 when closed, so the group always holds three
 panels and `ChatPanel` keeps its place in the tree: the conversation is never remounted by a resize, an open or a
@@ -136,7 +138,7 @@ adds a tab or activates the one that exists (see "Tabs" below). The centre shows
 file's relative path) and the content; closing the last tab collapses the zone. The title-bar button and dragging
 the centre closed only **hide** it: the tabs stay open, nothing is closed, and the button (or opening any file)
 shows them again, each tab coming back as it was left (the viewers are unmounted while hidden and restored from the
-tab's remembered view). With nothing open, the button shows the welcome view.
+tab's remembered view). With nothing open, the button shows the Overview.
 
 **Tabs.** Several files can be open at once, one tab each (`src/components/viewer/TabStrip.tsx`, pure logic in
 `src/lib/viewerTabs.ts`). A tab's identity is the folder plus the relative path (`tabId`, joined by a NUL
@@ -256,9 +258,10 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   and is **not counted** by its family's **Analyser (n)**; the button's tooltip says so. Analysing it in place is a later step.
 - **Per family:** a two-line header (the family's folder icon, its name, the three counters; **Analyser (n)**; a fold
   button), the analysis gauge while a pass runs (below), and
-  a flat list with **its own scroll bar**. The folder's path is the header's tooltip. A **Dernière analyse** disclosure under the
-  header carries the lines the cards showed after a pass (`lib/passSummary.ts`, shared with the cards of the
-  Settings panel); it opens by itself when a file failed. Choosing, changing and clearing a folder are in the
+  a flat list with **its own scroll bar**. A click anywhere on a tickable row ticks it (`rowClickTicks`). **« Mes notes (N) »** (under the segmented control, only while the Notes folder holds a file) is a one-click origin-folder choice; while a text search is active the lists follow the finder's ranking, not the alphabet (`listSort`). The folder's short name (« …\Docs ») sits in grey after the family's name and gives way first; the whole path is the header's tooltip. The long text of a pass is **not** in the
+  box any more (step 6): after a pass the box keeps its one end-of-pass line and, on its own line under it, **« Voir le
+  rapport »**, which opens the centre on the Overview; the lines themselves (`lib/passSummary.ts`) stay for the two old cards
+  of the Settings panel. Choosing, changing and clearing a folder are in the
   box itself since step 4 (below); the Settings panel still draws the two old cards untouched until step 10.
 - **The gauge (step 5).** While a family's pass runs, **Analyser** is replaced by `AnalysisGauge`: a spinner, « Lecture 45 % »
   then « Sens 63 % » (« Noms n % » while the stored documents are read again for new names), a fill that follows the
@@ -331,7 +334,35 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
     click elsewhere, on Escape (focus back to the button), on Tab, and on a resize or a scroll; the arrows, Home and End move
     between the entries. It is **not drawn while that family is being analysed**. The folder actions live in
     `state/useExplorerFolders.ts` (the commands of the old cards, the same guard for the Documents folder).
-- **Not built yet** (later steps): the gauge, « Select. auto », the « Vues » switch.
+- **The filter is held by `App`** (step 6): `ExplorerView { family, choices }` (`lib/explorerView.ts`) is the segmented
+  control's family and the filter panel's three sets, passed to the box as `view` / `onViewChange`, so the Overview's link sets
+  exactly what the panel sets. The typed search stays in the box (`searchClears` asks it to empty). The box reports what the
+  Overview needs from its inventories (`ExplorerFacts`: the merged entries, the situation of each folder, the share of the meaning
+  search, the profile note) through `onFacts`.
+- **Not built yet** (later steps): « Select. auto », the « Vues » switch.
+
+### The overview of the centre (explorer step 6, 20 October 2026)
+
+The **Aperçu** section is a page that each analysis updates; it is never opened by force (a finished pass changes what it says,
+nothing more). Rules and code: `lib/overviewModel.ts` (pure, tested: the inventories and the two passes' summaries in, an ordered
+list of blocks out), `components/OverviewPage.tsx` (draws the blocks through the catalogues; its own page scroll is the only
+scroll bar), `lib/centreSection.ts` (the section and when the zone is open).
+
+- **Four phases.** No folder at all: the first-start guidance, pointing at the left. Folders chosen, nothing analysed in either:
+  the three steps (folders chosen, files found, « Appuyez sur Analyser » with one sentence on what the analysis does) and a card per
+  family (what it reads, how many files wait). Otherwise the report: per family the three counters, the date and length of the last
+  pass of this session (« Analysé avant cette session. » when none ran), the meaning-search share and the profile note; then
+  **À vérifier**, the files dropped from the index because they left the folder (a count, as the old cards say it), the cleaned names **in full**, the files read by text recognition, the unread formats, the knowledge-base lines with
+  « Gérer », the capabilities that did not start, and where the time went.
+- **À vérifier** lists the unreadable files of their own folder and the files the last pass could not read (a pass retries those,
+  so the inventory still shows them as to analyse), with the reason from the error catalogue (or « Aucun texte lisible. », « Trop peu
+  lisible pour être indexé. », « La reconnaissance de texte n'a trouvé aucun texte lisible. », « Aucun texte trouvé dans ce fichier. », « Aucun tableau exploitable. »; the index alone gives the last four, so no pass is needed), the first twenty and a count of the rest. **Voir** shows the file in
+  the file manager; **Ouvrir** appears only where the explorer's own rows open a file (analysed, in its own folder), so it is not
+  there for an unreadable one until step 9. « Afficher les N dans la liste de gauche » sets the explorer's state filter to
+  unreadable for both families, empties the typed search and unfolds the folded lists that hold some of those files; N is what that filter shows. Each family's card shows its folder's **whole path**.
+- **The unread formats are text, not filters:** a file no pipeline reads is not an entry of the explorer, so a chip cannot filter the
+  list (its tooltip says so).
+- The report is held for the session, like the summaries it comes from; a new pass clears its family's report while it runs.
 
 ## The work folder
 
@@ -487,14 +518,15 @@ Not built yet; this is what the phases will build, so that the layout rules abov
 
 - **Notes: a section of the centre, not a kind of view.** A title-bar button beside Settings (its own switch `notesEnabled`, on by
   default, independent of the voice master switch) opens the centre on the **Notes** section, or hides the zone when it is already
-  there. A two-position switch **Files | Notes** (role `tablist`) sits at the top of the centre zone and is shown only while
-  `notesEnabled` is on; with it off the centre renders exactly as today. The file tabs are kept and `WorkspaceView` is not
-  changed: `App` holds the section (`"files" | "notes"`) and the drafts, and passes `AppLayout` a value derived from both, in one
+  there. A switch **Aperçu · Fichiers · Notes** (role `tablist`) sits at the top of the centre zone and is drawn whenever the
+  zone is open since the overview (step 6); `Notes` is in it only while `notesEnabled` is on. The file tabs are kept and
+  `WorkspaceView` is not changed: `App` holds the section (`"overview" | "files" | "notes"`) and the drafts, and passes `AppLayout` a value derived from both, in one
   pure function, so that the rule "the centre is visible exactly while there is something to show" keeps working while a note holds
   a draft or a recording. Both sections stay mounted while the zone is open (the inactive one is hidden), so open file tabs keep
   their scroll, zoom and sheet while she writes, and an unsaved note and a recording in progress survive a switch. Opening a file
   from a list shows the Files section. A red dot marks the Notes segment while recording. The welcome view is the empty state of the
-  Files section.
+  Files section (« Aucun fichier n'est ouvert. »). A note saved from here starts the application's own Analyse; its report is read
+  in the Overview like any other, and the zone is not opened for it.
 - **The Notes pane.** The text fills the pane and is editable, with the viewer's Raw / Preview switch (Markdown rendered by the
   application's own component); a dark pill button centred at the bottom (microphone at rest, an animated waveform driven by the input
   level while recording, "click again to finish"); under the text, a save block (a name field whose placeholder shows the timestamp,

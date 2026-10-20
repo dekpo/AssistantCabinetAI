@@ -8,6 +8,7 @@ import type { IndexingState } from "../state/useIndexing";
 import { ExplorerFamilyMenu, ExplorerMenuList } from "./ExplorerFamilyMenu";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
 import { ExplorerFamilySetup, ExplorerFirstStart } from "./ExplorerSetup";
+import { NO_VIEW } from "../lib/explorerView";
 import { FileExplorer } from "./FileExplorer";
 
 /* The three situations of the box and its menu, drawn to static markup with the real catalogues. The
@@ -30,6 +31,7 @@ const IDLE: IndexingState = {
   progress: null,
   trace: null,
   durationMs: null,
+  finishedAt: null,
   summary: null,
   error: null,
   finishedPasses: 0,
@@ -57,7 +59,12 @@ function box(overrides: Record<string, unknown> = {}, locale = "fr-FR") {
       density: "compact",
       folded: { documents: false, tables: false },
       onFoldedChange: NOOP,
-      onOpenKnowledge: NOOP,
+      view: NO_VIEW,
+      onViewChange: NOOP,
+      notesFolder: "Notes",
+      searchClears: 0,
+      onFacts: NOOP,
+      onOpenReport: NOOP,
       onOpenDocument: NOOP,
       onOpenTable: NOOP,
       refreshToken: 0,
@@ -219,9 +226,7 @@ function section(overrides: Record<string, unknown> = {}, family: "documents" | 
       onOpenFile: NOOP,
       onRevealFile: NOOP,
       needsAnalyse: false,
-      meaningPercent: null,
-      passLines: [],
-      showKnowledgeLink: false,
+      onOpenReport: NOOP,
       filtering: false,
       ...overrides,
     }),
@@ -343,9 +348,7 @@ describe("the menu of a family, drawn", () => {
         onOpenFile: NOOP,
         onRevealFile: NOOP,
         needsAnalyse: false,
-        meaningPercent: null,
-        passLines: [],
-        showKnowledgeLink: false,
+        onOpenReport: NOOP,
         filtering: false,
       }),
     );
@@ -353,5 +356,16 @@ describe("the menu of a family, drawn", () => {
     expect(html).toContain("Empty. Drop your files in it.");
     expect(html).toContain("Show the folder");
     expect(html).toContain("Folder actions: Documents");
+  });
+});
+
+describe("a family header says which folder it is", () => {
+  it("shows the folder's short name beside the family's, the whole path in the tooltip", () => {
+    const html = section({ folder: "C:\\Users\\x\\Docs" });
+
+    expect(html).toContain('class="explorer-family__location"');
+    expect(html).toContain("…\\Docs");
+    expect(html).toContain('title="C:\\Users\\x\\Docs"');
+    expect(html.indexOf("explorer-family__name")).toBeLessThan(html.indexOf("explorer-family__location"));
   });
 });

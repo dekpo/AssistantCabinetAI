@@ -138,6 +138,7 @@ FinderQuery  { text: Option<String>,                 // a word, a phrase, an ide
                limit, offset }
 FinderScope  { WholeFolder | Selection(paths) }
 FinderResult { total, files: Vec<FileHit>, facets: Facets, coverage: Coverage }
+               // + typed_formats: the file extensions the command read out of the typed text (`.docx`, `xlsx`) and applied as a format filter; the panel lights the matching choice (explorer step 3)
 FileHit      { relative_path, card: FileCard,        // title, type, date, format, top entities with roles, state
                reasons: Vec<Reason>,                 // word | phrase | identifier | entity | field(name)
                excerpt, locator }                    // the passage that matched, page or section

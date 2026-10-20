@@ -1,4 +1,4 @@
-import { useId, useState, type Ref } from "react";
+import { useId, useState, type ReactNode, type Ref } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import {
   STATE_CHOICES,
@@ -94,6 +94,7 @@ export function ExplorerFilterPanel({
   onClear,
   onClose,
   panelRef,
+  knowledge,
 }: {
   id: string;
   formats: readonly FormatChoice[];
@@ -111,6 +112,9 @@ export function ExplorerFilterPanel({
   onClear: () => void;
   onClose: () => void;
   panelRef?: Ref<HTMLDivElement>;
+  /** The blocks of the knowledge base (type, year, people, organisations), drawn between the states
+   * and the origin folder; absent when the box has none to offer. */
+  knowledge?: ReactNode;
 }) {
   const { t } = useTranslation();
   const fieldId = useId();
@@ -168,6 +172,7 @@ export function ExplorerFilterPanel({
           })}
         </div>
       </div>
+      {knowledge}
       <div className="explorer-filters__block">
         <label className="explorer-filters__title" htmlFor={fieldId}>
           {t("explorer.filterFolder")}

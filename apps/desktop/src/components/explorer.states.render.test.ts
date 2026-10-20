@@ -65,6 +65,8 @@ function box(overrides: Record<string, unknown> = {}, locale = "fr-FR") {
       searchClears: 0,
       onFacts: NOOP,
       onOpenReport: NOOP,
+      savedViews: [],
+      onSavedViewsChange: NOOP,
       onOpenDocument: NOOP,
       onOpenTable: NOOP,
       refreshToken: 0,

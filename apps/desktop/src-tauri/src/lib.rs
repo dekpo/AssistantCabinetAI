@@ -109,6 +109,7 @@ pub fn run() {
             commands::cancel_analysis,
             commands::vector_share,
             commands::find_files,
+            commands::file_knowledge_facts,
             commands::work_folder_inventory,
             commands::reveal_work_folder,
             commands::reveal_work_file,

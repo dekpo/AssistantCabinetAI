@@ -60,6 +60,26 @@ export function familyOf(extension: string): Family | null {
   return null;
 }
 
+/** One person or organisation a file is linked to, with every role that links them. */
+export interface EntryLink {
+  entityId: number;
+  /** Machine codes: `author`, `subject`, `recipient`, `mention`... */
+  roles: readonly string[];
+}
+
+/**
+ * What the knowledge base and the profile know of an analysed file, as the filters read it. Attached
+ * to the entries once it has been read (`attachFacts`); an entry without it (not analysed, or not read
+ * yet) passes no filter of the knowledge base.
+ */
+export interface EntryFacts {
+  /** The business type code, or null when the profile gave none. */
+  type: string | null;
+  /** `YYYY`, ascending. */
+  years: readonly string[];
+  links: readonly EntryLink[];
+}
+
 /** One file as the explorer lists it. */
 export interface ExplorerEntry {
   /** `explorerKey(root, path)`: never the path alone, two folders can hold the same relative path. */
@@ -82,6 +102,8 @@ export interface ExplorerEntry {
   folder: string;
   /** The inventory's own record: what opening, revealing and ticking the file need. */
   record: FileRecord;
+  /** What the knowledge base knows of the file; absent until it has been read. */
+  facts?: EntryFacts;
 }
 
 /** The key of a file: the root and the path, so the same relative path in both folders stays two. */
@@ -216,8 +238,46 @@ export interface ExplorerFilter {
   /** Origin folders, as `folderKey(root, folder)`: a file passes when it sits in one of them or under
    * one of them. Empty keeps every folder. */
   folders?: ReadonlySet<string>;
+  /** People, as `entityId` (any role) or `entityId:role`: a file passes when it is linked to one of them
+   * in that way. Empty keeps every file. */
+  people?: ReadonlySet<string>;
+  /** Organisations, written like `people`. */
+  organisations?: ReadonlySet<string>;
+  /** Business type codes. */
+  types?: ReadonlySet<string>;
+  /** Years, `YYYY`: a file passes when one of its years is among them. */
+  years?: ReadonlySet<string>;
   /** The keys the typed search found, or null while no search is active. */
   found?: ReadonlySet<string> | null;
+  /** The keys of the files the conversation uses now, while the filter « Dans la conversation » is on;
+   * null otherwise. */
+  ticked?: ReadonlySet<string> | null;
+}
+
+/** An entity choice: `12` for any role, `12:author` for one role. */
+export function entityChoice(entityId: number, role: string | null = null): string {
+  return role === null ? String(entityId) : `${entityId}:${role}`;
+}
+
+/** The entity and the role (null for any role) of a choice made by `entityChoice`. */
+export function parseEntityChoice(value: string): { entityId: number; role: string | null } {
+  const cut = value.indexOf(":");
+  const id = Number(cut < 0 ? value : value.slice(0, cut));
+  return { entityId: Number.isFinite(id) ? id : -1, role: cut < 0 ? null : value.slice(cut + 1) };
+}
+
+/** Whether a file is linked to one of the chosen people or organisations (an empty choice keeps all). */
+function linkedTo(entry: ExplorerEntry, chosen: ReadonlySet<string> | undefined): boolean {
+  if (chosen === undefined || chosen.size === 0) {
+    return true;
+  }
+  const links = entry.facts?.links ?? [];
+  return [...chosen].some((value) => {
+    const { entityId, role } = parseEntityChoice(value);
+    return links.some(
+      (link) => link.entityId === entityId && (role === null || link.roles.includes(role)),
+    );
+  });
 }
 
 /** The identity of an origin folder: the root and the folder inside it, because the two roots can
@@ -247,6 +307,15 @@ export function filterEntries(
       (filter.folders === undefined ||
         filter.folders.size === 0 ||
         [...filter.folders].some((key) => inFolder(entry, key))) &&
+      linkedTo(entry, filter.people) &&
+      linkedTo(entry, filter.organisations) &&
+      (filter.types === undefined ||
+        filter.types.size === 0 ||
+        (entry.facts?.type != null && filter.types.has(entry.facts.type))) &&
+      (filter.years === undefined ||
+        filter.years.size === 0 ||
+        (entry.facts?.years ?? []).some((year) => filter.years?.has(year))) &&
+      (filter.ticked == null || filter.ticked.has(entry.key)) &&
       (filter.found == null || filter.found.has(entry.key)),
   );
 }
@@ -383,14 +452,21 @@ export function folderHint(entry: ExplorerEntry): string {
  * The order the lists take. While a text search is active, the finder's ranking (the best match
  * first, not the alphabet: the file looked for must not be the last of the list). With no search and
  * the Notes folder as the only folder choice, the newest first (a note is looked for by when it was
- * written). Otherwise by name.
+ * written). Otherwise by name. The « Récents » order, when asked for, is the newest first whatever the
+ * rest.
  */
 export function listSort(input: {
   searching: boolean;
   /** The folder choices (`folderKey`) and the key of the Notes folder, or null when there is none. */
   folders: ReadonlySet<string>;
   notesKey: string | null;
+  /** The « Récents » order was asked for (a pill says so): it wins over the others, since the user
+   * chose it and can remove it. */
+  recent?: boolean;
 }): ExplorerSort {
+  if (input.recent === true) {
+    return "date";
+  }
   if (input.searching) {
     return "relevance";
   }

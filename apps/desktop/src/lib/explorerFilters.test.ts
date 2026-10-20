@@ -266,6 +266,7 @@ describe("the active pills", () => {
 
   it("are removed one at a time, a typed one leaving the sets alone", () => {
     const choices = {
+      ...NO_CHOICES,
       formats: filter.formats ?? new Set<string>(),
       states: filter.states ?? new Set(),
       folders: filter.folders ?? new Set<string>(),

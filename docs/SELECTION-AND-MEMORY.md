@@ -142,6 +142,30 @@ that replaced the folder listing's "Detail":
   answers do not rest on her folder, and with every document the model has more to sift than it can use well.
 - Only analysed files can be ticked. The rest of the listing is there to be seen, with its state dot.
 
+## Automatic selection (« Select. auto », explorer step 7, 21 October 2026)
+
+An **optional** switch in the explorer that makes the selection follow the filters. It is a convenience on top of the three states
+above, never a fourth one: what it produces is an ordinary explicit selection (or « tous » when every analysed file is in the
+result), pinned the same way. Owner specification of 18 October 2026, built as the pure state machine `lib/autoSelect.ts` (tested
+before any component):
+
+- **Off by default and off at every launch**; nothing is stored.
+- **When on**, the selection becomes the **analysed files of the current result**, after the result has arrived (the finder answer
+  after the pause in typing, or a filter change), never per keystroke. A result no filter narrows is every analysed file, as any
+  ticking of them all is « tous ». The same result is never applied twice.
+- **Turning it on records the selection as it was: one snapshot.** Turning it on again records a new one.
+- **A manual tick, untick, « Décocher » or « Cocher les N » turns it off** and drops nothing else: the snapshot stays.
+- **« Rétablir la sélection précédente (n) »** restores the snapshot (both sides, as they were), turns the switch off and forgets
+  the snapshot. It shows only while a snapshot exists.
+- **An empty result gives « aucun »**, and the bar says so with the existing warning (« Aucun fichier pour l'IA »).
+- **The results that are not analysed cannot be ticked**: the bar says how many (« N résultats ne peuvent pas être cochés : ils ne
+  sont pas analysés. »), whatever their family.
+- **Locked while a question is being answered, like the selection**: the switch, the restore link and every change are refused; a
+  result that arrived meanwhile is followed when the question ends, if the switch is still on.
+- The bar always says the mode (« Mode : automatique (suit les filtres) » / « Mode : manuel »), and « Cocher les N » is
+  hidden while the switch is on.
+- It changes only the ticked files: never a file, never the folds, never the filters.
+
 ## The Rust rule, changed
 
 **Before:** an explicit scope with no survivors "allows nothing". **Now:** an explicit selection with **no

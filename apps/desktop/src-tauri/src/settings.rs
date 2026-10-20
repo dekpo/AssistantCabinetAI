@@ -181,6 +181,128 @@ where
     Ok(ExplorerSettings::from_value(&value))
 }
 
+/// The most saved views kept; the rest of a longer hand-edited list is dropped.
+pub const MAX_SAVED_VIEWS: usize = 50;
+/// The longest name of a saved view, in characters.
+const MAX_VIEW_NAME_CHARS: usize = 60;
+/// The most choices kept in one list of a saved view, and the longest one, against a degenerate file.
+const MAX_VIEW_CHOICES: usize = 200;
+const MAX_VIEW_CHOICE_CHARS: usize = 400;
+
+/// One saved view of the file explorer: a name and the filters of the left panel, nothing else. It never
+/// holds a file, a path of a file or a selection, and the typed search text is not part of it. A person or an
+/// organisation is kept by the id the knowledge base gave it (never by name, so that no name of a person is
+/// written into this file): `12` for any role, `12:author` for one role. A convenience of the interface, so
+/// anything unusable is dropped on reading, entry by entry, and never makes the file unreadable.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedView {
+    pub id: String,
+    pub name: String,
+    /// `all`, `documents` or `tables`.
+    pub family: String,
+    pub formats: Vec<String>,
+    /// `analysed`, `toAnalyse` or `unreadable`.
+    pub states: Vec<String>,
+    /// Origin-folder keys, `<root>:<folder>`.
+    pub folders: Vec<String>,
+    pub people: Vec<String>,
+    pub organisations: Vec<String>,
+    /// Business type codes.
+    pub types: Vec<String>,
+    /// `YYYY`.
+    pub years: Vec<String>,
+    /// The newest files first.
+    pub recent: bool,
+    /// Only the files the conversation uses now.
+    pub in_conversation: bool,
+}
+
+impl SavedView {
+    /// A view read from one stored value, or `None` when it has no usable id or name.
+    fn from_value(value: &serde_json::Value) -> Option<Self> {
+        let text = |name: &str, longest: usize| {
+            value
+                .get(name)
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .map(|text| text.chars().take(longest).collect::<String>())
+        };
+        let list = |name: &str, allowed: Option<&[&str]>| -> Vec<String> {
+            let mut kept: Vec<String> = Vec::new();
+            for item in value
+                .get(name)
+                .and_then(serde_json::Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+            {
+                let Some(text) = item.as_str().map(str::trim).filter(|t| !t.is_empty()) else {
+                    continue;
+                };
+                if text.chars().count() > MAX_VIEW_CHOICE_CHARS
+                    || allowed.is_some_and(|known| !known.contains(&text))
+                    || kept.iter().any(|already| already == text)
+                {
+                    continue;
+                }
+                kept.push(text.to_string());
+                if kept.len() >= MAX_VIEW_CHOICES {
+                    break;
+                }
+            }
+            kept
+        };
+        let flag = |name: &str| {
+            value
+                .get(name)
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        };
+        Some(Self {
+            id: text("id", 64)?,
+            name: text("name", MAX_VIEW_NAME_CHARS)?,
+            family: match value.get("family").and_then(serde_json::Value::as_str) {
+                Some("documents") => "documents".to_string(),
+                Some("tables") => "tables".to_string(),
+                _ => "all".to_string(),
+            },
+            formats: list("formats", None),
+            states: list("states", Some(&["analysed", "toAnalyse", "unreadable"])),
+            folders: list("folders", None),
+            people: list("people", None),
+            organisations: list("organisations", None),
+            types: list("types", None),
+            years: list("years", None),
+            recent: flag("recent"),
+            in_conversation: flag("inConversation"),
+        })
+    }
+}
+
+/// The saved views of a stored value: every usable entry, once per id, at most `MAX_SAVED_VIEWS`. A value of
+/// any other shape is no view at all.
+fn saved_views_of(value: &serde_json::Value) -> Vec<SavedView> {
+    let mut views: Vec<SavedView> = Vec::new();
+    for item in value.as_array().map(Vec::as_slice).unwrap_or_default() {
+        if let Some(view) = SavedView::from_value(item) {
+            if views.len() < MAX_SAVED_VIEWS && !views.iter().any(|known| known.id == view.id) {
+                views.push(view);
+            }
+        }
+    }
+    views
+}
+
+/// A hand-edited `explorerViews` value of any shape reads as the views that can be kept, possibly none.
+fn lenient_saved_views<'de, D>(deserializer: D) -> Result<Vec<SavedView>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(saved_views_of(&value))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -263,6 +385,10 @@ pub struct Settings {
     /// The file explorer's row density and folded lists. Always readable: see `lenient_explorer`.
     #[serde(deserialize_with = "lenient_explorer")]
     pub explorer: ExplorerSettings,
+    /// The views the user saved in the explorer: filters under a name, never files. Always readable: see
+    /// `lenient_saved_views`; kept valid by `sanitised_views` on the way out.
+    #[serde(deserialize_with = "lenient_saved_views")]
+    pub explorer_views: Vec<SavedView>,
     /// Local voice: dictation, read-aloud and voice notes. One nested field, kept valid by
     /// `SpeechSettings::sanitised` on the way in and on the way out (`docs/SPEECH.md`, section 4).
     pub speech: SpeechSettings,
@@ -295,12 +421,20 @@ impl Default for Settings {
             own_names: Vec::new(),
             layout: PanelLayouts::default(),
             explorer: ExplorerSettings::default(),
+            explorer_views: Vec::new(),
             speech: SpeechSettings::default(),
         }
     }
 }
 
 impl Settings {
+    /// The saved views as they would be read back: what the webview sent, cleaned the way a stored file is.
+    pub fn sanitised_views(&self) -> Vec<SavedView> {
+        serde_json::to_value(&self.explorer_views)
+            .map(|value| saved_views_of(&value))
+            .unwrap_or_default()
+    }
+
     /// The pack ids to load: the stored ones that this build ships, once each, in the stored order.
     /// A `settings.json` edited by hand, or written by a newer build, cannot make the knowledge base
     /// refuse to start over a pack that does not exist.
@@ -418,6 +552,7 @@ pub fn save(
     checked.knowledge_packs = checked.knowledge_pack_ids();
     checked.own_names = clean_own_names(&checked.own_names);
     checked.layout = checked.layout.sanitised();
+    checked.explorer_views = checked.sanitised_views();
     checked.speech = checked.speech.sanitised();
     let targeting = checked.targeting_policy();
     checked.knowledge_min_scope_files = targeting.min_scope_files;
@@ -568,6 +703,7 @@ mod tests {
                 collapsed: Some([25.0, 0.0, 75.0]),
             },
             explorer: ExplorerSettings::default(),
+            explorer_views: Vec::new(),
             speech: SpeechSettings {
                 enabled: true,
                 notes_folder_name: "Dictees".into(),
@@ -752,6 +888,101 @@ mod tests {
         assert_eq!(mixed.explorer.density, ExplorerDensity::Comfortable);
         assert!(!mixed.explorer.documents_folded);
         assert!(mixed.explorer.tables_folded);
+    }
+
+    fn a_view() -> SavedView {
+        SavedView {
+            id: "v1".into(),
+            name: "Invoices of 2026".into(),
+            family: "documents".into(),
+            formats: vec!["pdf".into()],
+            states: vec!["analysed".into()],
+            folders: vec!["documents:Invoices".into()],
+            people: vec!["12".into(), "14:author".into()],
+            organisations: vec!["40".into()],
+            types: vec!["invoice".into()],
+            years: vec!["2026".into()],
+            recent: true,
+            in_conversation: false,
+        }
+    }
+
+    #[test]
+    fn a_file_without_saved_views_loads_none() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+        assert!(settings.explorer_views.is_empty());
+        assert!(Settings::default().explorer_views.is_empty());
+    }
+
+    #[test]
+    fn the_saved_views_survive_a_round_trip_and_are_written_in_camel_case() {
+        let settings = Settings {
+            explorer_views: vec![a_view()],
+            ..Settings::default()
+        };
+
+        let text = serde_json::to_string(&settings).expect("serialises");
+        let restored: Settings = serde_json::from_str(&text).expect("deserialises");
+
+        assert_eq!(restored.explorer_views, settings.explorer_views);
+        let json: serde_json::Value = serde_json::from_str(&text).expect("json");
+        assert_eq!(json["explorerViews"][0]["inConversation"], false);
+        assert_eq!(json["explorerViews"][0]["recent"], true);
+        assert_eq!(json["explorerViews"][0]["people"][1], "14:author");
+        assert_eq!(json["explorerViews"][0]["organisations"][0], "40");
+    }
+
+    #[test]
+    fn a_corrupted_saved_views_value_falls_back_and_never_breaks_the_file() {
+        for body in [
+            r#"{"explorerViews":"x"}"#,
+            r#"{"explorerViews":null}"#,
+            r#"{"explorerViews":{"id":"v1","name":"a"}}"#,
+            r#"{"explorerViews":[1,"a",null,[]]}"#,
+            r#"{"explorerViews":[{"name":"no id"},{"id":"no name"},{"id":" ","name":"blank"}]}"#,
+        ] {
+            let settings: Settings = serde_json::from_str(body).expect(body);
+            assert!(settings.explorer_views.is_empty(), "{body}");
+        }
+    }
+
+    #[test]
+    fn a_saved_view_keeps_what_is_usable_field_by_field() {
+        let settings: Settings = serde_json::from_str(
+            r#"{"explorerViews":[
+                {"id":"a","name":"  Kept  ","family":"huge","states":["analysed","bogus",7],
+                 "formats":["pdf","pdf",""],"people":"12","recent":"yes","inConversation":true},
+                {"id":"a","name":"A second view with the same id"},
+                {"id":"b","name":"Second"}
+            ]}"#,
+        )
+        .expect("loads");
+
+        assert_eq!(settings.explorer_views.len(), 2);
+        let first = &settings.explorer_views[0];
+        assert_eq!(first.name, "Kept");
+        assert_eq!(first.family, "all");
+        assert_eq!(first.states, vec!["analysed".to_string()]);
+        assert_eq!(first.formats, vec!["pdf".to_string()]);
+        assert!(first.people.is_empty());
+        assert!(!first.recent);
+        assert!(first.in_conversation);
+        assert_eq!(settings.explorer_views[1].id, "b");
+    }
+
+    #[test]
+    fn the_saved_views_are_capped_and_a_long_name_is_cut() {
+        let many: Vec<serde_json::Value> = (0..MAX_SAVED_VIEWS + 10)
+            .map(|n| serde_json::json!({"id": format!("v{n}"), "name": "n".repeat(200)}))
+            .collect();
+        let settings: Settings =
+            serde_json::from_value(serde_json::json!({ "explorerViews": many })).expect("loads");
+
+        assert_eq!(settings.explorer_views.len(), MAX_SAVED_VIEWS);
+        assert_eq!(settings.explorer_views[0].name.chars().count(), 60);
+        // Cleaning twice changes nothing.
+        assert_eq!(settings.sanitised_views(), settings.explorer_views);
     }
 
     #[test]

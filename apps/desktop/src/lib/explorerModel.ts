@@ -269,7 +269,7 @@ export function foundKeys(
   return keys;
 }
 
-export type ExplorerSort = "name" | "date" | "state";
+export type ExplorerSort = "name" | "date" | "state" | "relevance";
 
 /** Analysed last: what asks for something comes first. */
 const STATE_ORDER: Readonly<Record<ExplorerState, number>> = {
@@ -289,9 +289,18 @@ function byName(a: ExplorerEntry, b: ExplorerEntry): number {
 export function sortEntries(
   entries: readonly ExplorerEntry[],
   sort: ExplorerSort,
+  /** For `relevance`: the position the finder gave each file (`explorerKey`), best first. */
+  rank?: ReadonlyMap<string, number>,
 ): ExplorerEntry[] {
   const copy = [...entries];
   switch (sort) {
+    case "relevance":
+      /* The finder's own order (best match first); a file it did not rank goes last, by name. */
+      return copy.sort(
+        (a, b) =>
+          (rank?.get(a.key) ?? Number.MAX_SAFE_INTEGER) -
+            (rank?.get(b.key) ?? Number.MAX_SAFE_INTEGER) || byName(a, b),
+      );
     case "name":
       return copy.sort(byName);
     case "date":
@@ -368,4 +377,24 @@ export function duplicateNames(entries: readonly ExplorerEntry[]): Set<string> {
 export function folderHint(entry: ExplorerEntry): string {
   const cut = entry.folder.lastIndexOf("/");
   return cut < 0 ? entry.folder : entry.folder.slice(cut + 1);
+}
+
+/**
+ * The order the lists take. While a text search is active, the finder's ranking (the best match
+ * first, not the alphabet: the file looked for must not be the last of the list). With no search and
+ * the Notes folder as the only folder choice, the newest first (a note is looked for by when it was
+ * written). Otherwise by name.
+ */
+export function listSort(input: {
+  searching: boolean;
+  /** The folder choices (`folderKey`) and the key of the Notes folder, or null when there is none. */
+  folders: ReadonlySet<string>;
+  notesKey: string | null;
+}): ExplorerSort {
+  if (input.searching) {
+    return "relevance";
+  }
+  const onlyNotes =
+    input.notesKey !== null && input.folders.size === 1 && input.folders.has(input.notesKey);
+  return onlyNotes ? "date" : "name";
 }

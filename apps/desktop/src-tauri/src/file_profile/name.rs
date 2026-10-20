@@ -234,10 +234,43 @@ impl NameProfile {
         if self.exact_keys.contains(&wanted) {
             return true;
         }
-        let (wanted_date, rest) = split_date_prefix(wanted.trim());
-        // A date typed in front of the name is that file's date: a file dated otherwise is not it.
+        // A whole date typed anywhere in the query (`notes/2026-10-20`, `2026-10-20 courrier`) is a date,
+        // not four words: the first segment that starts with one gives it, the others stay words.
+        let mut wanted_date = None;
+        let mut wanted_month: Option<&str> = None;
+        let mut kept: Vec<&str> = Vec::new();
+        for segment in wanted
+            .split(|c: char| c == '/' || c.is_whitespace())
+            .filter(|segment| !segment.is_empty())
+        {
+            if wanted_date.is_none() {
+                let (date, remainder) = split_date_prefix(segment);
+                if date.is_some() {
+                    wanted_date = date;
+                    if !remainder.is_empty() {
+                        kept.push(remainder);
+                    }
+                    continue;
+                }
+            }
+            if wanted_month.is_none() && is_year_month(segment) {
+                wanted_month = Some(segment);
+                continue;
+            }
+            kept.push(segment);
+        }
+        let rest = kept.join(" ");
+        let rest = rest.as_str();
+        // A date typed in the query is that file's date: a file dated otherwise is not it.
         if let (Some(typed), Some(own)) = (&wanted_date, &self.date) {
             if *typed != own.value {
+                return false;
+            }
+        }
+        // `2026-10` typed whole is a month: the file's date (or its folder's) must be in it.
+        if let Some(month) = wanted_month {
+            let own = self.date.iter().chain(&self.folder_period).next();
+            if own.is_some_and(|own| !own.value.starts_with(month)) {
                 return false;
             }
         }
@@ -249,7 +282,16 @@ impl NameProfile {
         let Some((last, others)) = tokens.split_last() else {
             return false;
         };
-        let words: Vec<&str> = self.all_words().collect();
+        // The date the name starts with, and the year or month a folder is, are not words of the name
+        // (`name_words` leaves them out), but a person who types `notes 2026` means the file dated
+        // 2026 in the folder `notes`: each piece of those dates (`2026`, `10`, `20`) is a word here.
+        let date_pieces: Vec<&str> = self
+            .date
+            .iter()
+            .chain(&self.folder_period)
+            .flat_map(|date| date.value.split('-'))
+            .collect();
+        let words: Vec<&str> = self.all_words().chain(date_pieces).collect();
         let exact_word = |token: &str| words.contains(&token);
         others.iter().all(|token| exact_word(token))
             && (exact_word(last)
@@ -257,6 +299,19 @@ impl NameProfile {
                     && last.chars().count() >= MIN_PREFIX_LETTERS
                     && words.iter().any(|word| word.starts_with(last.as_str()))))
     }
+}
+
+/// `2026-03` as typed: a year and a month that exists, nothing else.
+fn is_year_month(segment: &str) -> bool {
+    let bytes = segment.as_bytes();
+    bytes.len() == 7
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && matches!(
+            &segment[5..],
+            "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12"
+        )
+        && (1990..=2100).contains(&segment[..4].parse::<i32>().unwrap_or(0))
 }
 
 /// `2026` or `2026-03` (or `2026_03`) as a folder: a period, not words.
@@ -480,6 +535,61 @@ mod tests {
         ] {
             assert!(!profile.matches(query), "{query:?} must not find the file");
         }
+    }
+
+    #[test]
+    fn the_pieces_of_the_date_a_name_starts_with_are_words_beside_other_words() {
+        // The note a saved voice note makes: a folder, then a name that is only a date and a time.
+        let note = profile("Notes/2026-10-20_18-51-28.md");
+        for query in [
+            "Notes/2026",
+            "notes 2026",
+            "Notes/2026-10",
+            "notes 2026 10 20",
+            "notes/2026-10-20_18-51-28",
+            "Notes/2026-10-20_18-51-28.md",
+            "2026",
+            "18-51",
+        ] {
+            assert!(note.matches(query), "{query:?} must find the note");
+        }
+        for query in [
+            "notes 2025",
+            "Notes/2026-11",
+            "notes 2026 10 21",
+            "documents 2026",
+        ] {
+            assert!(!note.matches(query), "{query:?} must not find the note");
+        }
+        // The year or the month a folder is counts the same way.
+        let sorted = profile("courriers/2026-02/rapport-orl.pdf");
+        assert!(sorted.matches("rapport 2026"));
+        assert!(sorted.matches("courriers 2026-02"));
+        assert!(!sorted.matches("rapport 2025"));
+    }
+
+    #[test]
+    fn a_whole_date_typed_beside_other_words_is_the_files_own_date() {
+        let note = profile("Notes/2026-10-20_18-51-28.md");
+        // Another note of the same folder name, dated otherwise, and a file whose folder is called `notes`.
+        let other = profile("administratif/notes/2026-02-10_note-interne-fermeture.docx");
+        let october = profile("administratif/notes/2026-10-05_note-interne-informatique.pdf");
+        for query in ["Notes/2026-10-20", "notes 2026-10-20", "2026-10-20 notes"] {
+            assert!(note.matches(query), "{query:?} must find the note");
+            assert!(
+                !other.matches(query),
+                "{query:?} must not find {}",
+                other.relative_path
+            );
+            assert!(
+                !october.matches(query),
+                "{query:?} must not find {}",
+                october.relative_path
+            );
+        }
+        // Typed in part, the date is only words, as before: the start `20` still reads as a year's start.
+        assert!(other.matches("notes 2026-02"));
+        assert!(!other.matches("notes 2026-10"));
     }
 
     #[test]

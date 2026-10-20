@@ -33,8 +33,10 @@ export function ExplorerBottomBar({
   unsupported: number;
 }) {
   const { t } = useTranslation();
-  const noteKey: Record<SelectionNote, string> = {
-    none: "explorer.noteNone",
+  /* « Aucun fichier pour l'IA » is short enough to sit on the first line beside « aucun » (two lines
+     in all, so the box never grows a third and no scroll bar appears); the whole-family warnings
+     keep their own line. */
+  const noteKey: Record<Exclude<SelectionNote, "none">, string> = {
     wholeDocuments: "explorer.noteWholeDocuments",
     wholeTables: "explorer.noteWholeTables",
   };
@@ -48,6 +50,9 @@ export function ExplorerBottomBar({
             ? t("explorer.usedNone")
             : t("explorer.usedCount", { documents: documentsUsed, tables: tablesUsed })}
         </span>
+        {notes.includes("none") ? (
+          <span className="explorer-bottom__hint">{t("explorer.noteNone")}</span>
+        ) : null}
         {toTick > 0 ? (
           <button type="button" className="explorer-link" disabled={locked} onClick={onTick}>
             {toTick === 1 ? t("explorer.tickOne") : t("explorer.tickMany", { count: toTick })}
@@ -64,11 +69,15 @@ export function ExplorerBottomBar({
           </button>
         ) : null}
       </div>
-      {notes.map((note) => (
-        <p key={note} className="explorer-bottom__note">
-          {t(noteKey[note])}
-        </p>
-      ))}
+      {notes.flatMap((note) =>
+        note === "none"
+          ? []
+          : [
+              <p key={note} className="explorer-bottom__note">
+                {t(noteKey[note])}
+              </p>,
+            ],
+      )}
       {unsupported > 0 ? (
         <p className="explorer-bottom__note">
           {t(unsupported > 1 ? "explorer.unsupportedMany" : "explorer.unsupportedOne", {

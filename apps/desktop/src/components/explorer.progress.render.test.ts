@@ -48,6 +48,7 @@ const IDLE: IndexingState = {
   progress: null,
   trace: null,
   durationMs: null,
+  finishedAt: null,
   summary: null,
   error: null,
   finishedPasses: 0,
@@ -89,9 +90,7 @@ function section(
       onOpenFile: NOOP,
       onRevealFile: NOOP,
       needsAnalyse: false,
-      meaningPercent: null,
-      passLines: [],
-      showKnowledgeLink: false,
+      onOpenReport: NOOP,
       filtering: false,
       ...overrides,
     }),
@@ -190,15 +189,13 @@ describe("a family while its pass runs", () => {
     expect(html).toContain("2 s écoulées");
   });
 
-  it("hides the notes about the last index while the pass runs", () => {
+  it("hides the note about the last index while the pass runs", () => {
     const html = section(running(steady(10, 1, 4)), 4000, "documents", "fr-FR", {
       needsAnalyse: true,
-      meaningPercent: 0,
     });
 
     expect(html).not.toContain("L'index doit être refait");
-    expect(html).not.toContain("Recherche par sens : 0 %");
-    const idle = section(IDLE, 0, "documents", "fr-FR", { needsAnalyse: true, meaningPercent: 0 });
+    const idle = section(IDLE, 0, "documents", "fr-FR", { needsAnalyse: true });
     expect(idle).toContain("L'index doit être refait");
   });
 
@@ -236,7 +233,40 @@ describe("a family after its pass", () => {
     expect(html).toContain("Terminé · 1 245 analysés, 3 illisibles · 6 min 49 s");
     expect(html).not.toContain('class="gauge"');
     expect(html).toContain(">Analyser");
-    expect(html).not.toContain("Voir le rapport");
+  });
+
+  it("gives the report on its own line under the end of the pass, not before", () => {
+    const html = section(
+      { ...IDLE, durationMs: 409_000, summary: summary({ indexedFiles: 3 }) },
+      0,
+    );
+
+    expect(html).toContain("Terminé · 3 analysés · 6 min 49 s");
+    expect(html).toContain('<p class="explorer-family__report">');
+    expect(html).toContain(">Voir le rapport</button>");
+    expect(html.indexOf("Terminé")).toBeLessThan(html.indexOf("Voir le rapport"));
+    expect(section(IDLE, 0)).not.toContain("Voir le rapport");
+    expect(section(running(steady(10, 1, 4)), 4000)).not.toContain("Voir le rapport");
+  });
+
+  it("says a stopped pass has a report too, and draws none of the pass's long text", () => {
+    const html = section(
+      {
+        ...IDLE,
+        durationMs: 5000,
+        summary: summary({
+          indexedFiles: 2,
+          failedFiles: [{ path: "c.pdf", code: "x", data: {} }],
+          renamedFiles: [{ from: "a b.pdf", to: "a-b.pdf" }],
+        }),
+      },
+      0,
+    );
+
+    expect(html).toContain("Voir le rapport");
+    expect(html).not.toContain("explorer-pass");
+    expect(html).not.toContain("a-b.pdf");
+    expect(html).not.toContain("c.pdf");
   });
 
   it("says a stopped pass is stopped and what is kept", () => {

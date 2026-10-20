@@ -101,3 +101,13 @@ export function selectionNotes(documents: Selection, data: Selection): Selection
   }
   return notes;
 }
+
+/**
+ * Whether a click on a file's row ticks it: anywhere on the row (the name, the badge, the empty part),
+ * as the old lists did, except on a control of the row itself (the checkbox ticks itself, the Ouvrir
+ * and Voir buttons do their own thing) and while the row cannot be ticked (not analysed, not its
+ * folder, or a question being answered).
+ */
+export function rowClickTicks(click: { onControl: boolean; tickable: boolean }): boolean {
+  return click.tickable && !click.onControl;
+}

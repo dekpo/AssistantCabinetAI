@@ -18,6 +18,7 @@ import { ExplorerActivePills } from "./ExplorerActivePills";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
 import { ExplorerFilterPanel, FolderSuggestionList } from "./ExplorerFilterPanel";
 import { ExplorerFileRow } from "./ExplorerFileRow";
+import { NO_VIEW } from "../lib/explorerView";
 import { FileExplorer } from "./FileExplorer";
 
 /* Each component is drawn to static markup with the real catalogues, to read what the user would
@@ -53,6 +54,7 @@ const IDLE: IndexingState = {
   progress: null,
   trace: null,
   durationMs: null,
+  finishedAt: null,
   summary: null,
   error: null,
   finishedPasses: 0,
@@ -103,6 +105,13 @@ describe("a file row, drawn", () => {
     // The badge comes after the stem and is its own element: only the stem carries the ellipsis.
     expect(html.indexOf("explorer-row__ext")).toBeGreaterThan(html.indexOf("explorer-row__stem"));
     expect(html).toContain('<span class="explorer-row__ext">.docx</span>');
+  });
+
+  it("is a row a click ticks only while the file can be ticked", () => {
+    const [entry] = entriesOf([record("a.pdf")], []);
+
+    expect(row(entry as ExplorerEntry)).toContain("explorer-row explorer-row--tickable");
+    expect(row(entry as ExplorerEntry, { checkDisabled: true })).not.toContain("explorer-row--tickable");
   });
 
   it("puts the full relative path in the tooltip", () => {
@@ -200,9 +209,7 @@ function section(
       onOpenFile: NOOP,
       onRevealFile: NOOP,
       needsAnalyse: false,
-      meaningPercent: null,
-      passLines: [],
-      showKnowledgeLink: false,
+      onOpenReport: NOOP,
       filtering: false,
       ...overrides,
     }),
@@ -316,8 +323,44 @@ describe("the bottom bar, drawn", () => {
 
   it("draws a second line only when there is something to say", () => {
     expect(bar()).not.toContain("explorer-bottom__note");
-    expect(bar({ notes: ["none"] })).toContain("les réponses ne s&#x27;appuient pas sur vos fichiers");
     expect(bar({ unsupported: 3 })).toContain("3 fichiers d&#x27;un format non lu ne sont pas listés");
+  });
+});
+
+describe("the bottom bar with nothing used", () => {
+  const bar = (overrides: Record<string, unknown> = {}) =>
+    page(
+      "fr-FR",
+      createElement(ExplorerBottomBar, {
+        documentsUsed: 0,
+        tablesUsed: 0,
+        toTick: 0,
+        onTick: NOOP,
+        canClear: false,
+        onClear: NOOP,
+        locked: false,
+        notes: ["none"],
+        unsupported: 1,
+        ...overrides,
+      }),
+    );
+
+  it("says « Aucun fichier pour l'IA » on the first line, so the bar stays at two lines", () => {
+    const html = bar();
+    const first = html.slice(html.indexOf("explorer-bottom__line"), html.indexOf("</div>"));
+
+    expect(first).toContain("aucun");
+    expect(first).toContain("Aucun fichier pour l&#x27;IA");
+    // The only other line is the unread-format note: two lines in all.
+    expect(html.match(/explorer-bottom__note/g)).toHaveLength(1);
+    expect(html).not.toContain("les réponses ne s");
+  });
+
+  it("keeps the whole-family warnings on their own line", () => {
+    const html = bar({ notes: ["wholeDocuments"], unsupported: 0, documentsUsed: 3 });
+
+    expect(html).toContain("Tous les documents analysés sont utilisés.");
+    expect(html).not.toContain("Aucun fichier pour l");
   });
 });
 
@@ -339,7 +382,12 @@ describe("the whole box, drawn", () => {
         density: "compact",
         folded: { documents: false, tables: false },
         onFoldedChange: NOOP,
-        onOpenKnowledge: NOOP,
+        view: NO_VIEW,
+        onViewChange: NOOP,
+        notesFolder: "Notes",
+        searchClears: 0,
+        onFacts: NOOP,
+        onOpenReport: NOOP,
         onOpenDocument: NOOP,
         onOpenTable: NOOP,
         refreshToken: 0,
@@ -388,7 +436,12 @@ describe("the whole box, drawn", () => {
         density: "compact",
         folded: { documents: false, tables: false },
         onFoldedChange: NOOP,
-        onOpenKnowledge: NOOP,
+        view: NO_VIEW,
+        onViewChange: NOOP,
+        notesFolder: "Notes",
+        searchClears: 0,
+        onFacts: NOOP,
+        onOpenReport: NOOP,
         onOpenDocument: NOOP,
         onOpenTable: NOOP,
         refreshToken: 0,

@@ -9,6 +9,7 @@ import {
   selectionNotes,
   tickableRecords,
   usedCount,
+  rowClickTicks,
 } from "./explorerSelection";
 import type { FileRecord, ProcessingStatus } from "./ipc";
 
@@ -136,5 +137,17 @@ describe("the second line of the bottom bar", () => {
   it("says nothing for a chosen list", () => {
     expect(selectionNotes("some", "none")).toStrictEqual([]);
     expect(selectionNotes("some", "some")).toStrictEqual([]);
+  });
+});
+
+describe("a click on a file's row", () => {
+  it("ticks a tickable row wherever it lands, except on a control of the row", () => {
+    expect(rowClickTicks({ onControl: false, tickable: true })).toBe(true);
+    expect(rowClickTicks({ onControl: true, tickable: true })).toBe(false);
+  });
+
+  it("ticks nothing while the row cannot be ticked", () => {
+    expect(rowClickTicks({ onControl: false, tickable: false })).toBe(false);
+    expect(rowClickTicks({ onControl: true, tickable: false })).toBe(false);
   });
 });

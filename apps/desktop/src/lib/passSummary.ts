@@ -14,7 +14,7 @@ import { unreadFormatsLines } from "./unreadFormats";
 /** The machine codes a pass can report, and the sentence each one deserves. A code we do not
     recognise is dropped rather than shown raw: Rust names capabilities, this file names them in
     her language (`docs/LANGUAGE-AND-LOCALE.md`). */
-const CAPABILITY_KEYS: Record<string, string> = {
+export const CAPABILITY_KEYS: Record<string, string> = {
   ocrEngine: "workFolder.ocrEngineUnavailable",
   pageRasterizer: "workFolder.pageRasterizerUnavailable",
 };

@@ -1,4 +1,13 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { unfinishedPercent } from "../lib/analysis";
 import { selectionOf, tickedPaths, toggleScopeFile } from "../lib/analysisScope";
@@ -27,6 +36,8 @@ import {
   foundKeys,
   isTickable,
   mergeInventories,
+  folderKey,
+  listSort,
   sortEntries,
   type ExplorerEntry,
   type ExplorerFilter,
@@ -43,6 +54,7 @@ import {
 } from "../lib/explorerSelection";
 import { boxState, folderState, nothingToSearch } from "../lib/explorerStates";
 import { ROW_HEIGHT, rowBudget } from "../lib/explorerWindow";
+import type { ExplorerView, FamilyChoice } from "../lib/explorerView";
 import {
   cancelAnalysis,
   dataFolderInventory,
@@ -53,7 +65,7 @@ import {
   type ExplorerDensity,
   type FileRecord,
 } from "../lib/ipc";
-import { dataPassLines, documentPassLines } from "../lib/passSummary";
+import type { ExplorerFacts } from "../lib/overviewModel";
 import { counted } from "../lib/plural";
 import { useExplorerFolders } from "../state/useExplorerFolders";
 import { useFinderSearch } from "../state/useFinderSearch";
@@ -70,9 +82,6 @@ import { ExplorerBottomBar } from "./ExplorerBottomBar";
 import { ExplorerFamilySection } from "./ExplorerFamilySection";
 import { SearchGlyph } from "./ExplorerGlyphs";
 import { ExplorerFamilySetup, ExplorerFirstStart } from "./ExplorerSetup";
-
-/** The family filter of the segmented control: everything, or one family. */
-type FamilyChoice = "all" | Family;
 
 const FAMILY_CHOICES: readonly FamilyChoice[] = ["all", "documents", "tables"];
 
@@ -100,11 +109,16 @@ export function FileExplorer({
   scopeLocked,
   density,
   folded,
+  notesFolder,
   onFoldedChange,
-  onOpenKnowledge,
   onOpenDocument,
   onOpenTable,
   refreshToken,
+  view,
+  onViewChange,
+  searchClears,
+  onFacts,
+  onOpenReport,
 }: {
   workFolder: string | null;
   dataFolder: string | null;
@@ -127,19 +141,36 @@ export function FileExplorer({
   scopeLocked: boolean;
   density: ExplorerDensity;
   folded: Record<Family, boolean>;
+  /** The name of the Notes folder inside the Documents folder (a setting). */
+  notesFolder: string;
   onFoldedChange: (family: Family, folded: boolean) => void;
-  onOpenKnowledge: () => void;
   onOpenDocument: (record: FileRecord) => void;
   onOpenTable: (record: FileRecord) => void;
   /** Counted up when the software itself wrote a file into the Documents folder (a saved note). */
   refreshToken: number;
+  /** The family of the segmented control and the choices of the filter panel. Held by `App`, so the
+   * centre's overview can set them too. A filter only narrows the view; none of this is the
+   * selection. */
+  view: ExplorerView;
+  onViewChange: Dispatch<SetStateAction<ExplorerView>>;
+  /** Counted up when something outside asks for the typed search to be emptied. */
+  searchClears: number;
+  /** What the overview of the centre needs from the inventories read here. */
+  onFacts: (facts: ExplorerFacts) => void;
+  /** « Voir le rapport »: opens the centre on its overview. */
+  onOpenReport: () => void;
 }) {
   const { t } = useTranslation();
-  const [familyChoice, setFamilyChoice] = useState<FamilyChoice>("all");
+  const familyChoice = view.family;
+  const choices = view.choices;
+  const setFamilyChoice = (family: FamilyChoice) =>
+    onViewChange((current) => ({ ...current, family }));
+  const setChoices = (change: PanelChoices | ((now: PanelChoices) => PanelChoices)) =>
+    onViewChange((current) => ({
+      ...current,
+      choices: typeof change === "function" ? change(current.choices) : change,
+    }));
   const [error, setError] = useState<AppError | null>(null);
-  /* The choices of the filter panel. The family is held apart: it is the segmented control, outside
-     the panel. A filter only narrows the view; none of this state is the selection. */
-  const [choices, setChoices] = useState<PanelChoices>(NO_CHOICES);
   const [panelOpen, setPanelOpen] = useState(false);
   /* Clearing a family's analysis asks first; the question names the family. */
   const [confirmingClear, setConfirmingClear] = useState<Family | null>(null);
@@ -205,6 +236,12 @@ export function FileExplorer({
     documentsFinder.setText(next);
     dataFinder.setText(next);
   };
+  /* The overview's link shows the unreadable files: a typed search would hide some of them. */
+  useEffect(() => {
+    if (searchClears > 0) {
+      setText("");
+    }
+  }, [searchClears]);
 
   /* What the finders read out of the text as extensions: they light the matching format pills. */
   const typedFormats = useMemo(
@@ -226,18 +263,40 @@ export function FileExplorer({
     () => filterEntries(entries, filter),
     [entries, familyChoice, choices, found],
   );
+  /* The Notes folder, as an origin-folder choice: one click shows the notes the user wrote. */
+  const notesKey = notesFolder.trim() === "" ? null : folderKey("documents", notesFolder);
+  const notesCount = useMemo(
+    () =>
+      notesKey === null ? 0 : filterEntries(entries, { folders: new Set([notesKey]) }).length,
+    [entries, notesKey],
+  );
+  /* While a text search is active the lists follow the finder's ranking, so the file looked for is
+     not the last of the list; the position is the one each finder gave its own folder's files. */
+  const rankByKey = useMemo(() => {
+    const rank = new Map<string, number>();
+    for (const [root, finder] of [
+      ["documents", documentsFinder],
+      ["data", dataFinder],
+    ] as const) {
+      (finder.found ?? []).forEach((path, position) => rank.set(explorerKey(root, path), position));
+    }
+    return rank;
+  }, [documentsFinder.found, dataFinder.found]);
+  const sort = listSort({ searching: found !== null, folders: choices.folders, notesKey });
   const listed = useMemo(
     () => ({
       documents: sortEntries(
         shown.filter((entry) => entry.family === "documents"),
-        "name",
+        sort,
+        rankByKey,
       ),
       tables: sortEntries(
         shown.filter((entry) => entry.family === "tables"),
-        "name",
+        sort,
+        rankByKey,
       ),
     }),
-    [shown],
+    [shown, sort, rankByKey],
   );
   const counts = useMemo(() => countsByFamily(entries), [entries]);
   /* The number beside a segment is what the other filters leave for it: the family left out. */
@@ -373,6 +432,22 @@ export function FileExplorer({
   const documentsProfile = useProfileStatus("documents", workFolder, indexing.finishedPasses);
   const dataProfile = useProfileStatus("data", dataFolder, dataIndexing.finishedPasses);
   const vectors = useVectorShare(workFolder, indexing.finishedPasses);
+  const meaningPercent = unfinishedPercent(vectors);
+  const documentsNeedsAnalyse = documentsProfile === "needsAnalyse";
+  const tablesNeedsAnalyse = dataProfile === "needsAnalyse";
+  /* What the overview of the centre reads from here, reported when one of them changes. */
+  const facts = useMemo<ExplorerFacts>(
+    () => ({
+      entries,
+      documentsState,
+      tablesState,
+      meaningPercent,
+      documentsNeedsAnalyse,
+      tablesNeedsAnalyse,
+    }),
+    [entries, documentsState, tablesState, meaningPercent, documentsNeedsAnalyse, tablesNeedsAnalyse],
+  );
+  useEffect(() => onFacts(facts), [facts, onFacts]);
 
   const reveal = async (entry: ExplorerEntry) => {
     setError(null);
@@ -489,6 +564,20 @@ export function FileExplorer({
             ))}
           </div>
         )}
+        {idle || notesKey === null || notesCount === 0 ? null : (
+          <div className="explorer__notes">
+            <button
+              type="button"
+              className="explorer__notes-chip"
+              aria-pressed={choices.folders.has(notesKey)}
+              title={t("explorer.notesHint")}
+              onClick={() => toggleFilter("folder", notesKey)}
+            >
+              {t("explorer.notesChip")}
+              <small className="explorer__segment-count">{notesCount}</small>
+            </button>
+          </div>
+        )}
         <ExplorerActivePills
           pills={pills}
           folders={folderOptions}
@@ -561,11 +650,8 @@ export function FileExplorer({
           onToggleTick={toggleTick}
           onOpenFile={open}
           onRevealFile={(entry) => void reveal(entry)}
-          needsAnalyse={documentsProfile === "needsAnalyse"}
-          meaningPercent={unfinishedPercent(vectors)}
-          passLines={documentPassLines(t, indexing.summary)}
-          showKnowledgeLink={indexing.summary?.knowledge != null}
-          onOpenKnowledge={onOpenKnowledge}
+          needsAnalyse={documentsNeedsAnalyse}
+          onOpenReport={onOpenReport}
           filtering={isFiltering(filter)}
           reasonOf={reasonOf}
         />
@@ -603,11 +689,8 @@ export function FileExplorer({
           onToggleTick={toggleTick}
           onOpenFile={open}
           onRevealFile={(entry) => void reveal(entry)}
-          needsAnalyse={dataProfile === "needsAnalyse"}
-          meaningPercent={null}
-          passLines={dataPassLines(t, dataIndexing.summary)}
-          showKnowledgeLink={dataIndexing.summary?.knowledge != null}
-          onOpenKnowledge={onOpenKnowledge}
+          needsAnalyse={tablesNeedsAnalyse}
+          onOpenReport={onOpenReport}
           filtering={isFiltering(filter)}
           reasonOf={reasonOf}
         />

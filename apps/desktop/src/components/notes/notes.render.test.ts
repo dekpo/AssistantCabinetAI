@@ -3,7 +3,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../../i18n/I18nProvider";
-import type { CentreSection } from "../../lib/centreSection";
+import { offeredSections, type CentreSection } from "../../lib/centreSection";
 import { createNotesSession, type NotesSnapshot } from "../../lib/notesSession";
 import type { NoteFile } from "../../speech/ipc";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -251,23 +251,50 @@ describe("the dictation pill", () => {
   });
 });
 
-describe("the Files | Notes switch", () => {
-  it("is a two-position tab list with the chosen section selected", () => {
-    const html = page(createElement(CentreSwitch, { section: "notes", onChange: () => {} }));
+describe("the switch of the centre", () => {
+  const ALL: readonly CentreSection[] = ["overview", "files", "notes"];
+
+  it("is a tab list with the chosen section selected, in the order Aperçu, Fichiers, Notes", () => {
+    const html = page(
+      createElement(CentreSwitch, { sections: ALL, section: "notes", onChange: () => {} }),
+    );
 
     expect(html).toContain('role="tablist"');
+    expect(html).toMatch(/id="centre-tab-overview"[^>]*aria-selected="false"/);
     expect(html).toMatch(/id="centre-tab-files"[^>]*aria-selected="false"/);
     expect(html).toMatch(/id="centre-tab-notes"[^>]*aria-selected="true"/);
+    expect(html.indexOf("centre-tab-overview")).toBeLessThan(html.indexOf("centre-tab-files"));
+    expect(html.indexOf("centre-tab-files")).toBeLessThan(html.indexOf("centre-tab-notes"));
     expect(html).not.toContain("centre__dot");
   });
 
   it("carries the red dot on Notes while a recording runs", () => {
     const html = page(
-      createElement(CentreSwitch, { section: "files", recording: true, onChange: () => {} }),
+      createElement(CentreSwitch, {
+        sections: ALL,
+        section: "files",
+        recording: true,
+        onChange: () => {},
+      }),
     );
 
     expect(html).toContain("centre__dot");
     expect(html).toContain("Recording in progress");
+  });
+
+  it("has no Notes tab while the Notes switch is off", () => {
+    const html = page(
+      createElement(CentreSwitch, {
+        sections: offeredSections(false),
+        section: "overview",
+        onChange: () => {},
+      }),
+    );
+
+    expect(html).toContain("centre-tab-overview");
+    expect(html).toContain("centre-tab-files");
+    expect(html).not.toContain("centre-tab-notes");
+    expect(html).toContain("Overview");
   });
 });
 
@@ -280,40 +307,72 @@ describe("the centre zone", () => {
     hasFolder: true,
     dictation: null,
   };
+  const overview = {
+    page: null,
+    actions: {
+      onShowUnreadable: () => {},
+      onOpenKnowledge: () => {},
+      onOpenFile: () => {},
+      onRevealFile: () => {},
+    },
+  };
 
-  function centre(notes: { section: CentreSection } | undefined): string {
+  function centre(section: CentreSection, notesOn: boolean): string {
     return page(
       createElement(WorkspacePanel, {
         view: { kind: "welcome" },
         viewStates,
         actions: tabActions,
-        notes:
-          notes === undefined
-            ? undefined
-            : { section: notes.section, onSection: () => {}, recording: false, bundle },
+        centre: {
+          section,
+          onSection: () => {},
+          recording: false,
+          notes: notesOn ? bundle : undefined,
+          overview,
+        },
       }),
     );
   }
 
-  it("draws exactly the files' content when the Notes switch is off", () => {
-    const html = centre(undefined);
+  it("draws the switch and the files' own content when the Notes switch is off", () => {
+    const html = centre("files", false);
 
-    expect(html.startsWith('<section class="workspace">')).toBe(true);
-    expect(html).not.toContain("centre");
-    expect(html).not.toContain("notes");
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain("centre-tab-overview");
+    expect(html).toContain("centre-tab-files");
+    expect(html).not.toContain("centre-tab-notes");
+    expect(html).not.toContain("centre-panel-notes");
+    expect(html).not.toContain("notes__text");
+    expect(html).toContain("workspace__title");
   });
 
-  it("keeps both sections mounted and hides the one that is not shown", () => {
-    const onNotes = centre({ section: "notes" });
-    const onFiles = centre({ section: "files" });
+  it("keeps Files and Notes mounted and hides the ones that are not shown", () => {
+    const onNotes = centre("notes", true);
+    const onFiles = centre("files", true);
+    const onOverview = centre("overview", true);
 
     expect(onNotes).toMatch(/id="centre-panel-files"[^>]*hidden=""/);
+    expect(onNotes).toMatch(/id="centre-panel-overview"[^>]*hidden=""/);
     expect(onNotes).not.toMatch(/id="centre-panel-notes"[^>]*hidden=""/);
     expect(onFiles).toMatch(/id="centre-panel-notes"[^>]*hidden=""/);
+    expect(onFiles).toMatch(/id="centre-panel-overview"[^>]*hidden=""/);
     expect(onFiles).not.toMatch(/id="centre-panel-files"[^>]*hidden=""/);
-    for (const html of [onNotes, onFiles]) {
+    expect(onOverview).toMatch(/id="centre-panel-files"[^>]*hidden=""/);
+    expect(onOverview).toMatch(/id="centre-panel-notes"[^>]*hidden=""/);
+    expect(onOverview).not.toMatch(/id="centre-panel-overview"[^>]*hidden=""/);
+    for (const html of [onNotes, onFiles, onOverview]) {
       expect(html).toContain("Workspace");
       expect(html).toContain("notes__text");
+    }
+  });
+
+  it("labels every panel by its tab", () => {
+    const html = centre("overview", true);
+
+    for (const section of ["overview", "files", "notes"]) {
+      expect(html).toMatch(
+        new RegExp(`role="tabpanel" id="centre-panel-${section}" aria-labelledby="centre-tab-${section}"`),
+      );
     }
   });
 });

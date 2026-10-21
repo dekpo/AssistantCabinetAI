@@ -13,7 +13,8 @@ import {
 } from "./autoSelect";
 import { selectionOf, tickedPaths } from "./analysisScope";
 import { mergeInventories, type ExplorerEntry } from "./explorerModel";
-import { clearedScopes, tickableRecords, type ScopesByRoot } from "./explorerSelection";
+import { scopedPaths } from "./analysisScope";
+import { clearedScopes, tickableRecords, type ScopesByFamily } from "./explorerSelection";
 import type { FileRecord, ProcessingStatus } from "./ipc";
 
 function record(relativePath: string, status: ProcessingStatus = "indexed"): FileRecord {
@@ -48,13 +49,13 @@ const named = (...names: string[]): ExplorerEntry[] =>
 
 const NOW = 1000;
 const target = (...names: string[]): AutoTarget => targetOf(named(...names), entries, NOW);
-const documentsOf = (scopes: ScopesByRoot) =>
+const documentsOf = (scopes: ScopesByFamily) =>
   tickedPaths(scopes.documents, tickableRecords(entries, "documents")).sort();
 
 function run(events: AutoEvent[], from: AutoState = AUTO_OFF) {
   let state = from;
-  let applied: ScopesByRoot | null = null;
-  const applications: (ScopesByRoot | null)[] = [];
+  let applied: ScopesByFamily | null = null;
+  const applications: (ScopesByFamily | null)[] = [];
   for (const event of events) {
     const step = autoStep(state, event);
     state = step.state;
@@ -65,7 +66,7 @@ function run(events: AutoEvent[], from: AutoState = AUTO_OFF) {
 }
 
 /* The selection before the switch is turned on: only c.pdf ticked. */
-const before: ScopesByRoot = targetOf(named("c.pdf"), entries, NOW).scopes;
+const before: ScopesByFamily = targetOf(named("c.pdf"), entries, NOW).scopes;
 const switchOn = (...names: string[]): AutoEvent => ({
   type: "switchOn",
   scopes: before,
@@ -117,6 +118,22 @@ describe("the automatic selection", () => {
     expect(state.on).toBe(true);
     expect(applied && selectionOf(applied.documents)).toBe("none");
     expect(applied && selectionOf(applied.data)).toBe("none");
+  });
+
+  it("ticks a file of the other folder once it is analysed and splits the selection by family", () => {
+    const all = mergeInventories(
+      [record("a.pdf"), record("grid.xlsx"), record("plan.xlsx", "discovered")],
+      [record("t1.csv"), record("note.docx"), record("brouillon.docx", "discovered")],
+    ).entries;
+    const shown = all.filter((entry) => ["grid.xlsx", "note.docx", "plan.xlsx"].includes(entry.name));
+    const { scopes } = targetOf(shown, all, NOW);
+
+    // The workbook of the Documents folder goes to the tables, the document of the Data folder to the
+    // documents; each under the key the index knows it by.
+    expect(scopedPaths(scopes.data)).toStrictEqual(["/documents/grid.xlsx"]);
+    expect(scopedPaths(scopes.documents)).toStrictEqual(["/data/note.docx"]);
+    // The one not analysed yet is not ticked, and the bar counts it.
+    expect(unreachableCount(shown)).toBe(1);
   });
 
   it("gives a result with no filter at all as every analysed file, as any ticking does", () => {
@@ -181,7 +198,7 @@ describe("the automatic selection", () => {
   });
 
   it("takes a new snapshot each time it is turned on", () => {
-    const second: ScopesByRoot = clearedScopes(NOW);
+    const second: ScopesByFamily = clearedScopes(NOW);
     const { state } = run([
       switchOn("a.pdf"),
       { type: "switchOff" },

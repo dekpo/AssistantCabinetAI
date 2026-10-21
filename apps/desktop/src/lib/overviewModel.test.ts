@@ -133,12 +133,12 @@ describe("the page before the first analysis", () => {
     expect(cards[1]).toMatchObject({ folderChosen: false, folderState: "none" });
   });
 
-  it("does not count a file of the other folder as waiting for its family", () => {
+  it("counts a file of the other folder as waiting for its family: that family reads it in place", () => {
     const page = overviewModel(input([record("sheet.xlsx", "discovered")], []));
 
     expect(blocksOf(page, "familyCard").map((card) => [card.family, card.total, card.waiting])).toStrictEqual([
       ["documents", 0, 0],
-      ["tables", 1, 0],
+      ["tables", 1, 1],
     ]);
   });
 
@@ -406,10 +406,14 @@ describe("the files to check", () => {
     expect(blocksOf(overviewModel(input([record("a.pdf")], [])), "check")).toHaveLength(0);
   });
 
-  it("leaves out a file of the other folder: its own pipeline did not run on it", () => {
+  it("lists an unreadable file of the other folder too: its own family has read it there", () => {
     const page = overviewModel(input([record("sheet.xlsx", "failed"), record("a.pdf")], []));
 
-    expect(blocksOf(page, "check")).toHaveLength(0);
+    const [check] = blocksOf(page, "check");
+    expect(check?.items.map((item) => item.entry.name)).toStrictEqual(["sheet.xlsx"]);
+    expect(check?.items[0]?.reason).toStrictEqual({ kind: "noTable" });
+    // Reading is where it sits; opening and showing it from here is the next step.
+    expect(check?.items[0]?.actions).toStrictEqual({ open: false, reveal: false });
   });
 });
 

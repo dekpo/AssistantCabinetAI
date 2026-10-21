@@ -24,6 +24,8 @@ use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::discovery;
+use crate::file_key::{index_key, Root};
+use crate::file_profile::build::Domain;
 
 /// The name a file should have. Idempotent: a clean name comes back unchanged.
 ///
@@ -127,6 +129,28 @@ pub fn sanitize_folder(work_folder: &Path) -> SanitizeReport {
             }
             Err(_) => report.failed.push(file.relative_path),
         }
+    }
+    report
+}
+
+/// The document pass's rename: the documents of the work folder, and the documents found in the other
+/// folder too, wherever they sit (`docs/DECISIONS.md`, "clean file names"). The rule is by **family**:
+/// it renames a document and never a workbook, in either folder, because `sanitize_folder` only
+/// considers the document extensions. A file of the other folder is reported under its key
+/// (`file_key`), so the log and the profile's original names cannot confuse it with a file of the same
+/// path in the work folder.
+pub fn sanitize_documents(work_folder: &Path, other_folder: Option<&Path>) -> SanitizeReport {
+    let mut report = sanitize_folder(work_folder);
+    if let Some(other) = other_folder {
+        let second = sanitize_folder(other);
+        let key = |path: String| index_key(Root::Data, Domain::Documents, &path);
+        report
+            .renamed
+            .extend(second.renamed.into_iter().map(|entry| Renamed {
+                from: key(entry.from),
+                to: key(entry.to),
+            }));
+        report.failed.extend(second.failed.into_iter().map(key));
     }
     report
 }
@@ -322,6 +346,70 @@ mod tests {
         assert!(root.path().join("notes perso.pages").is_file());
         assert!(root.path().join(".cache file.txt").is_file());
         assert!(root.path().join("~$Mon doc.docx").is_file());
+    }
+
+    // Owner decision of 18 October 2026 (`docs/DECISIONS.md`, "clean file names"): a workbook is never
+    // renamed, whichever folder it sits in, because other programs and other workbooks refer to it by
+    // name. The rule is by family, so the pin covers both folders and every workbook format.
+    #[test]
+    fn a_workbook_is_never_renamed_in_either_folder() {
+        let names = [
+            "Factures 2025.xlsx",
+            "Relev\u{e9} mars.csv",
+            "Budget \u{e9}t\u{e9}.ods",
+            "Anciennes donn\u{e9}es.xls",
+            "Macro suivi.xlsm",
+            "inbox/Tableau de bord.xlsx",
+        ];
+        let documents = folder_with(&names);
+        let data = folder_with(&names);
+
+        let report = sanitize_documents(documents.path(), Some(data.path()));
+
+        assert!(report.renamed.is_empty(), "{:?}", report.renamed);
+        assert!(report.failed.is_empty());
+        for root in [documents.path(), data.path()] {
+            for name in names {
+                assert!(root.join(name).is_file(), "{name} must keep its name");
+            }
+        }
+    }
+
+    #[test]
+    fn a_document_is_renamed_in_the_other_folder_and_reported_under_its_key() {
+        let documents = folder_with(&["Lettre du jour.txt"]);
+        let data = folder_with(&["Lettre du jour.txt", "Tableau mars.xlsx"]);
+
+        let report = sanitize_documents(documents.path(), Some(data.path()));
+
+        assert!(documents.path().join("Lettre-du-jour.txt").is_file());
+        assert!(data.path().join("Lettre-du-jour.txt").is_file());
+        assert!(data.path().join("Tableau mars.xlsx").is_file());
+        let mut renamed = report.renamed.clone();
+        renamed.sort_by(|a, b| a.from.cmp(&b.from));
+        assert_eq!(
+            renamed,
+            vec![
+                Renamed {
+                    from: "/data/Lettre du jour.txt".into(),
+                    to: "/data/Lettre-du-jour.txt".into()
+                },
+                Renamed {
+                    from: "Lettre du jour.txt".into(),
+                    to: "Lettre-du-jour.txt".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn without_the_other_folder_only_the_work_folder_is_renamed() {
+        let documents = folder_with(&["Lettre du jour.txt"]);
+
+        let report = sanitize_documents(documents.path(), None);
+
+        assert_eq!(report.renamed.len(), 1);
+        assert_eq!(report.renamed[0].from, "Lettre du jour.txt");
     }
 
     #[test]

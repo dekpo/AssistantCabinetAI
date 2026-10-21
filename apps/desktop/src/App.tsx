@@ -3,7 +3,6 @@ import { AppLayout } from "./components/AppLayout";
 import { ChatPanel } from "./components/ChatPanel";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { FileExplorer } from "./components/FileExplorer";
-import { isSelectable } from "./components/FolderCardParts";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import type { NotesActions, NotesBundle } from "./components/notes/NotesPanel";
 import type { NotesDictation } from "./components/notes/LiveDictation";
@@ -26,6 +25,7 @@ import {
   noDocumentsScope,
 } from "./lib/analysisScope";
 import type { ExplorerEntry } from "./lib/explorerModel";
+import { analysedByFamily } from "./lib/explorerSelection";
 import { checkView, overviewInput, overviewModel, type ExplorerFacts } from "./lib/overviewModel";
 import {
   familiesToUnfold,
@@ -516,15 +516,25 @@ function AppContent() {
       }
       const now = Date.now();
       try {
+        /* The names the base holds are in files by the key the index knows them by, which names the
+           folder of a file that sits in the other one: the analysed files of each family come from
+           both folders (`analysedByFamily`). */
+        const [documentsRead, dataRead] = await Promise.all([
+          workFolderInventory().catch(() => null),
+          dataFolderInventory().catch(() => null),
+        ]);
+        const analysed = analysedByFamily(documentsRead?.files ?? [], dataRead?.files ?? []);
         if (outside.documents.length > 0) {
-          const analysed = (await workFolderInventory()).files.filter(isSelectable);
-          const wanted = analysed.filter((file) => outside.documents.includes(file.relativePath));
-          setScope((current) => addScopeFiles(current, wanted, analysed, now));
+          const wanted = analysed.documents.filter((file) =>
+            outside.documents.includes(file.relativePath),
+          );
+          setScope((current) => addScopeFiles(current, wanted, analysed.documents, now));
         }
         if (outside.workbooks.length > 0) {
-          const analysed = (await dataFolderInventory()).files.filter(isSelectable);
-          const wanted = analysed.filter((file) => outside.workbooks.includes(file.relativePath));
-          setDataScope((current) => addScopeFiles(current, wanted, analysed, now));
+          const wanted = analysed.data.filter((file) =>
+            outside.workbooks.includes(file.relativePath),
+          );
+          setDataScope((current) => addScopeFiles(current, wanted, analysed.data, now));
         }
       } catch {
         // Nothing was changed; see above.
@@ -640,6 +650,7 @@ function AppContent() {
                   suggestedDataFolder={snapshot.suggestedDataFolder}
                   onWorkFolderChosen={chooseWorkFolder}
                   onDataFolderChosen={(path) => void update({ dataFolder: path })}
+                  folderError={saveError?.code === "folders_overlap" ? saveError : null}
                   indexing={indexing}
                   dataIndexing={dataIndexing}
                   scope={scope}

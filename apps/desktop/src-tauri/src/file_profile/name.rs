@@ -147,6 +147,9 @@ impl NameProfile {
     /// Build the profile of `relative_path` (forward slashes, as the inventory writes it).
     /// `original_name` is the name the file had before the Analyse cleaned it, from the rename log.
     pub fn build(relative_path: &str, original_name: Option<&str>) -> Self {
+        // A file of the other folder comes with a key (`file_key`): its name is made of its own path, never
+        // of the folder it was found in.
+        let relative_path = crate::file_key::plain_path(relative_path);
         let (folders, name) = match relative_path.rsplit_once('/') {
             Some((folders, name)) => (folders, name),
             None => ("", relative_path),
@@ -791,5 +794,17 @@ mod tests {
             "nothing known is not created"
         );
         assert!(link_name_words(&[], &gazetteer()).is_empty());
+    }
+
+    #[test]
+    fn a_file_of_the_other_folder_is_named_by_its_own_path_not_by_the_folder_it_was_found_in() {
+        let foreign = NameProfile::build("/data/Courriers/2026-02-06_lettre.pdf", None);
+        let native = NameProfile::build("Courriers/2026-02-06_lettre.pdf", None);
+
+        assert_eq!(foreign.name_words, native.name_words);
+        assert_eq!(foreign.folder_words, native.folder_words);
+        assert_eq!(foreign.exact_keys, native.exact_keys);
+        assert_eq!(foreign.date, native.date);
+        assert!(!foreign.folder_words.contains(&"data".to_string()));
     }
 }

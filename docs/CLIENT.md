@@ -254,8 +254,10 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   **or changed since**, or being analysed), unreadable (triangle). The shape carries the state, the colour repeats it, and
   every glyph has a text for screen readers (`StateGlyph`, a small SVG component; no emoji, no text character).
 - **A file of the other family** (a workbook in the Documents folder, a document in the Data folder) is shown under its
-  family with a tag « depuis Docs » / « depuis Data », is always « to analyse », cannot be ticked, opened or revealed,
-  and is **not counted** by its family's **Analyser (n)**; the button's tooltip says so. Analysing it in place is a later step.
+  family with a tag « depuis Docs » / « depuis Data », in its real state (to analyse until its family's pass has read it
+  there, then analysed or unreadable), and is **counted** by its family's **Analyser (n)**, which reads it in place
+  (explorer step 8). It can be ticked once analysed; opening and showing it wait for step 9. The search, the facts and
+  the selection are by family and place each file by the folder its key names (`lib/indexKey.ts`).
 - **Per family:** a two-line header (the family's folder icon, its name, the three counters; **Analyser (n)**; a fold
   button), the analysis gauge while a pass runs (below), and
   a flat list with **its own scroll bar**. A click anywhere on a tickable row ticks it (`rowClickTicks`). **« Mes notes (N) »** (under the segmented control, only while the Notes folder holds a file) is a one-click origin-folder choice; while a text search is active the lists follow the finder's ranking, not the alphabet (`listSort`). The folder's short name (« …\Docs ») sits in grey after the family's name and gives way first; the whole path is the header's tooltip. The long text of a pass is **not** in the

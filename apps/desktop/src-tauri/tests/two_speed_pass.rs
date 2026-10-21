@@ -40,6 +40,7 @@ async fn pass(
         lab.work.path(),
         None,
         None,
+        None,
         lab.locale,
         &|step| progress.lock().unwrap().push(step),
         Some(&mut context),

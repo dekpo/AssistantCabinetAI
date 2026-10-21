@@ -3,11 +3,15 @@ import { noDocumentsScope, scopedPaths, selectionOf, wholeFolderScope } from "./
 import { mergeInventories } from "./explorerModel";
 import {
   addEntriesToScopes,
+  analysedByFamily,
   clearedScopes,
   entriesToTick,
   isFiltering,
+  scopeFamilyOf,
+  scopeRecord,
   selectionNotes,
   tickableRecords,
+  tickedKeysOf,
   usedCount,
   rowClickTicks,
 } from "./explorerSelection";
@@ -34,30 +38,64 @@ const merged = mergeInventories(
 ).entries;
 
 describe("the files a scope is worked out over", () => {
-  it("are the analysed files of that folder's own family, never a foreign one", () => {
+  it("are the analysed files of that family wherever they sit, a foreign one under its key", () => {
     expect(tickableRecords(merged, "documents").map((r) => r.relativePath)).toStrictEqual([
       "a.pdf",
       "b.pdf",
+      "/data/note.docx",
     ]);
-    expect(tickableRecords(merged, "data").map((r) => r.relativePath)).toStrictEqual(["t1.csv"]);
+    expect(tickableRecords(merged, "data").map((r) => r.relativePath)).toStrictEqual([
+      "/documents/grid.xlsx",
+      "t1.csv",
+    ]);
   });
 
   it("count as every analysed file for 'tous' and as the ticked ones otherwise", () => {
     const documents = tickableRecords(merged, "documents");
 
     expect(usedCount(noDocumentsScope(1), documents)).toBe(0);
-    expect(usedCount(wholeFolderScope(1), documents)).toBe(2);
+    expect(usedCount(wholeFolderScope(1), documents)).toBe(3);
+  });
+
+  it("belong to the scope of their family, not of the folder they sit in", () => {
+    const byName = Object.fromEntries(merged.map((e) => [e.name, e]));
+
+    expect(scopeFamilyOf(byName["note.docx"]!)).toBe("documents");
+    expect(scopeFamilyOf(byName["grid.xlsx"]!)).toBe("data");
+    expect(scopeRecord(byName["note.docx"]!).relativePath).toBe("/data/note.docx");
+    expect(scopeRecord(byName["a.pdf"]!).relativePath).toBe("a.pdf");
+    // The record keeps the content id the scope pins.
+    expect(scopeRecord(byName["grid.xlsx"]!).id).toBe("id-grid.xlsx");
+  });
+
+  it("tell two files of one path apart: one in each folder", () => {
+    const twins = mergeInventories([record("x.csv"), record("a.pdf")], [record("x.csv")]).entries;
+
+    expect(tickableRecords(twins, "data").map((r) => r.relativePath)).toStrictEqual([
+      "/documents/x.csv",
+      "x.csv",
+    ]);
+    const ticked = tickedKeysOf(
+      addEntriesToScopes(
+        { documents: noDocumentsScope(1), data: noDocumentsScope(1) },
+        twins.filter((e) => e.key === "documents:x.csv"),
+        twins,
+        2,
+      ),
+      twins,
+    );
+    expect([...ticked.data]).toStrictEqual(["/documents/x.csv"]);
   });
 });
 
 describe("the files 'Cocher les N' adds", () => {
   const none = { documents: noDocumentsScope(1), data: noDocumentsScope(1) };
 
-  it("are the shown files that can be ticked, in both folders, and not a foreign one", () => {
+  it("are the shown files that can be ticked, in both folders, a foreign one once analysed", () => {
     const toTick = entriesToTick(merged, merged, none);
 
     expect(toTick.map((e) => e.key).sort()).toStrictEqual(
-      ["data:t1.csv", "documents:a.pdf", "documents:b.pdf"].sort(),
+      ["data:note.docx", "data:t1.csv", "documents:a.pdf", "documents:b.pdf", "documents:grid.xlsx"].sort(),
     );
   });
 
@@ -73,13 +111,16 @@ describe("the files 'Cocher les N' adds", () => {
     expect(entriesToTick(merged, merged, first).map((e) => e.key)).not.toContain("documents:a.pdf");
     expect(
       entriesToTick(merged, merged, { ...first, documents: wholeFolderScope(1) }).map((e) => e.key),
-    ).toStrictEqual(["data:t1.csv"]);
+    ).toStrictEqual(["documents:grid.xlsx", "data:t1.csv"]);
   });
 
   it("only add the shown files: a narrowed view adds only what it shows", () => {
     const shown = merged.filter((e) => e.family === "tables");
 
-    expect(entriesToTick(shown, merged, none).map((e) => e.key)).toStrictEqual(["data:t1.csv"]);
+    expect(entriesToTick(shown, merged, none).map((e) => e.key)).toStrictEqual([
+      "documents:grid.xlsx",
+      "data:t1.csv",
+    ]);
   });
 
   it("pin each file added, side by side, with that folder's own rule", () => {
@@ -90,9 +131,18 @@ describe("the files 'Cocher les N' adds", () => {
     expect(selectionOf(next.data)).toBe("all");
   });
 
-  it("never add a file of the other family", () => {
-    const foreign = merged.filter((e) => !e.native);
+  it("add a file of the other folder to its own family's scope, under its key", () => {
+    const foreign = merged.filter((e) => !e.native && e.state === "analysed");
     const next = addEntriesToScopes(none, foreign, merged, 9);
+
+    expect(scopedPaths(next.documents)).toStrictEqual(["/data/note.docx"]);
+    expect(scopedPaths(next.data)).toStrictEqual(["/documents/grid.xlsx"]);
+  });
+
+  it("never add a file that is not analysed yet, whichever folder it sits in", () => {
+    const waiting = mergeInventories([record("x.xlsx", "discovered")], [record("y.pdf", "pending")])
+      .entries;
+    const next = addEntriesToScopes(none, waiting, waiting, 9);
 
     expect(next.documents).toStrictEqual(none.documents);
     expect(next.data).toStrictEqual(none.data);
@@ -149,5 +199,17 @@ describe("a click on a file's row", () => {
   it("ticks nothing while the row cannot be ticked", () => {
     expect(rowClickTicks({ onControl: false, tickable: false })).toBe(false);
     expect(rowClickTicks({ onControl: true, tickable: false })).toBe(false);
+  });
+});
+
+describe("the analysed files of each family, from the two folders' inventories", () => {
+  it("are the files the index knows by key: a file of the other folder under its folder's name", () => {
+    const found = analysedByFamily(
+      [record("a.pdf"), record("grid.xlsx"), record("c.pdf", "discovered")],
+      [record("t1.csv"), record("note.docx"), record("noext", "indexed")],
+    );
+
+    expect(found.documents.map((r) => r.relativePath)).toStrictEqual(["a.pdf", "/data/note.docx"]);
+    expect(found.data.map((r) => r.relativePath)).toStrictEqual(["/documents/grid.xlsx", "t1.csv"]);
   });
 });

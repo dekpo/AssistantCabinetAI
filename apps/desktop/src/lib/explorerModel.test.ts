@@ -10,6 +10,7 @@ import {
   filterEntries,
   folderHint,
   foundKeys,
+  isOpenable,
   isTickable,
   mergeInventories,
   sortEntries,
@@ -71,19 +72,20 @@ describe("the key of a file", () => {
 
 describe("the state of a file", () => {
   it("maps the inventory's status to the three states of the screen", () => {
-    expect(stateOf(record("a.pdf", "indexed"), true)).toBe("analysed");
-    expect(stateOf(record("a.pdf", "failed"), true)).toBe("unreadable");
+    expect(stateOf(record("a.pdf", "indexed"))).toBe("analysed");
+    expect(stateOf(record("a.pdf", "failed"))).toBe("unreadable");
     for (const status of ["discovered", "pending", "processing"] as const) {
-      expect(stateOf(record("a.pdf", status), true)).toBe("toAnalyse");
+      expect(stateOf(record("a.pdf", status))).toBe("toAnalyse");
     }
   });
 
-  it("is always 'to analyse' for a file of the other family, whatever its own folder says", () => {
-    // A document in the Data folder is forced to failed there; a workbook in the Documents folder
-    // is not assessed: neither says anything about a pipeline that is not theirs.
-    expect(stateOf(record("a.docx", "failed"), false)).toBe("toAnalyse");
-    expect(stateOf(record("a.xlsx", "discovered"), false)).toBe("toAnalyse");
-    expect(stateOf(record("a.xlsx", "indexed"), false)).toBe("toAnalyse");
+  it("reads the folder's verdict for a file of the other family: its own family has analysed it there", () => {
+    // Each inventory joins a file to what its own family made of it, wherever it sits: a workbook of
+    // the Documents folder is green once the tabular pass has read it, a document of the Data folder
+    // once the document pass has.
+    expect(stateOf(record("a.docx", "failed"))).toBe("unreadable");
+    expect(stateOf(record("a.xlsx", "discovered"))).toBe("toAnalyse");
+    expect(stateOf(record("a.xlsx", "indexed"))).toBe("analysed");
   });
 });
 
@@ -97,13 +99,15 @@ describe("merging the two inventories", () => {
     expect(entry?.state).toBe("toAnalyse");
   });
 
-  it("lists a document of the Data folder under Documents, as 'to analyse' not 'unreadable'", () => {
-    const [entry] = entries([], [record("lettre.docx", "failed")]);
+  it("lists a document of the Data folder under Documents, tagged as foreign, in its own state", () => {
+    const [waiting] = entries([], [record("lettre.docx", "discovered")]);
+    const [read] = entries([], [record("lettre.docx", "indexed")]);
 
-    expect(entry?.family).toBe("documents");
-    expect(entry?.root).toBe("data");
-    expect(entry?.native).toBe(false);
-    expect(entry?.state).toBe("toAnalyse");
+    expect(waiting?.family).toBe("documents");
+    expect(waiting?.root).toBe("data");
+    expect(waiting?.native).toBe(false);
+    expect(waiting?.state).toBe("toAnalyse");
+    expect(read?.state).toBe("analysed");
   });
 
   it("keeps a file of its own family native", () => {
@@ -174,7 +178,7 @@ describe("filtering", () => {
       record("c.pdf", "failed"),
       record("grid.xlsx", "discovered"),
     ],
-    [record("t1.csv", "indexed"), record("t2.xlsx", "pending"), record("note.docx", "failed")],
+    [record("t1.csv", "indexed"), record("t2.xlsx", "pending"), record("note.docx", "discovered")],
   );
   const names = (list: ExplorerEntry[]) => list.map((e) => e.name);
 
@@ -213,17 +217,21 @@ describe("filtering", () => {
       states: new Set(["toAnalyse"]),
     });
 
-    // b.docx (Documents folder, pending) and note.docx (foreign, always to analyse).
+    // b.docx (Documents folder, pending) and note.docx (foreign, not analysed yet).
     expect(names(result).sort()).toStrictEqual(["b.docx", "note.docx"]);
   });
 
-  it("joins the two folders' search answers by (folder, path)", () => {
+  it("joins the two families' search answers by (folder, path), the folder being the one the key names", () => {
     expect(foundKeys(null, null)).toBeNull();
     expect([...(foundKeys(["a.pdf"], null) ?? [])]).toStrictEqual(["documents:a.pdf"]);
     expect([...(foundKeys(["x.csv"], ["x.csv"]) ?? [])].sort()).toStrictEqual([
       "data:x.csv",
       "documents:x.csv",
     ]);
+    // A workbook of the Documents folder and a document of the Data folder come back as keys.
+    expect(
+      [...(foundKeys(["/data/lettre.pdf", "a.pdf"], ["/documents/x.csv", "x.csv"]) ?? [])].sort(),
+    ).toStrictEqual(["data:lettre.pdf", "data:x.csv", "documents:a.pdf", "documents:x.csv"]);
   });
 });
 
@@ -280,7 +288,7 @@ describe("counts", () => {
       record("c.pdf", "failed"),
       record("grid.xlsx", "discovered"),
     ],
-    [record("t1.csv", "indexed"), record("note.docx", "failed"), record("t2.csv", "pending")],
+    [record("t1.csv", "indexed"), record("note.docx", "discovered"), record("t2.csv", "pending")],
   );
 
   it("counts each family by state", () => {
@@ -290,23 +298,32 @@ describe("counts", () => {
     expect(counts.tables).toMatchObject({ total: 3, analysed: 1, toAnalyse: 2, unreadable: 0 });
   });
 
-  it("leaves the foreign files out of what Analyser counts, and says how many there are", () => {
+  it("counts the foreign files in what Analyser does, and still says how many there are", () => {
     const counts = countsByFamily(all);
 
-    // Documents: b.pdf only (note.docx is a document sitting in the Data folder).
-    expect(counts.documents.analysable).toBe(1);
+    // Documents: b.pdf and note.docx (a document sitting in the Data folder, read there).
+    expect(counts.documents.analysable).toBe(2);
     expect(counts.documents.foreign).toBe(1);
-    // Tables: t2.csv only (grid.xlsx sits in the Documents folder).
-    expect(counts.tables.analysable).toBe(1);
+    // Tables: t2.csv and grid.xlsx (a workbook sitting in the Documents folder, read there).
+    expect(counts.tables.analysable).toBe(2);
     expect(counts.tables.foreign).toBe(1);
   });
 
-  it("only lets an analysed file of its own folder be ticked", () => {
-    const byName = Object.fromEntries(all.map((e) => [e.name, e]));
+  it("lets an analysed file be ticked wherever it sits, and opened only from the folder of its family", () => {
+    const withForeign = entries(
+      [record("a.pdf", "indexed"), record("b.pdf", "discovered"), record("grid.xlsx", "indexed")],
+      [record("note.docx", "indexed")],
+    );
+    const byName = Object.fromEntries(withForeign.map((e) => [e.name, e]));
 
     expect(isTickable(byName["a.pdf"] as ExplorerEntry)).toBe(true);
     expect(isTickable(byName["b.pdf"] as ExplorerEntry)).toBe(false);
-    expect(isTickable(byName["grid.xlsx"] as ExplorerEntry)).toBe(false);
+    expect(isTickable(byName["grid.xlsx"] as ExplorerEntry)).toBe(true);
+    expect(isTickable(byName["note.docx"] as ExplorerEntry)).toBe(true);
+    // Opening and showing a foreign file is the next step.
+    expect(isOpenable(byName["a.pdf"] as ExplorerEntry)).toBe(true);
+    expect(isOpenable(byName["grid.xlsx"] as ExplorerEntry)).toBe(false);
+    expect(isOpenable(byName["note.docx"] as ExplorerEntry)).toBe(false);
   });
 });
 

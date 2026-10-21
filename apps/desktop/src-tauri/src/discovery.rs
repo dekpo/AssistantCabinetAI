@@ -9,6 +9,9 @@ use std::path::Path;
 use serde::Serialize;
 use walkdir::WalkDir;
 
+use crate::file_key::{family_of_extension, home_root, index_key, Root};
+use crate::file_profile::build::Domain;
+
 /// Extensions this session's extractor understands: the four it reads itself, the pictures it sends to OCR, and
 /// the ones `readers` opens (subtitles, RTF, e-mail, OpenDocument, PowerPoint). Workbooks (`.csv`, `.xlsx`,
 /// `.ods`) are the tabular pipeline's (`docs/RETRIEVAL.md`), not this one, so they are deliberately absent here.
@@ -80,6 +83,43 @@ pub fn discover_all(work_folder: &Path) -> Vec<DiscoveredFile> {
     }
 
     found.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    found
+}
+
+/// The files of `family` found under `foreign`, the folder that is **not** the family's own (a
+/// workbook under the Documents folder, a document under the Data folder), each given its key
+/// (`file_key::index_key`) as `relative_path`. Same walk and same refusals as `discover_all`; the
+/// absolute path stays the real one, so reading, hashing and extraction need no change. Nothing is
+/// copied or moved: the file is read where it sits.
+pub fn discover_foreign(foreign: &Path, root: Root, family: Domain) -> Vec<DiscoveredFile> {
+    let mut found: Vec<DiscoveredFile> = discover_all(foreign)
+        .into_iter()
+        .filter(|file| family_of_extension(&file.extension) == Some(family))
+        .map(|file| DiscoveredFile {
+            relative_path: index_key(root, family, &file.relative_path),
+            ..file
+        })
+        .collect();
+    found.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    found
+}
+
+/// Every file of `family` in both folders: the family's own folder (`native`) with plain paths, and the
+/// other one (`foreign`, when it is chosen) with keys. What a search or a pass over one family reads;
+/// a file no pipeline reads is in neither.
+pub fn discover_family(
+    native: &Path,
+    foreign: Option<&Path>,
+    family: Domain,
+) -> Vec<DiscoveredFile> {
+    let mut found: Vec<DiscoveredFile> = discover_all(native)
+        .into_iter()
+        .filter(|file| family_of_extension(&file.extension) == Some(family))
+        .collect();
+    if let Some(foreign) = foreign {
+        found.extend(discover_foreign(foreign, home_root(family).other(), family));
+        found.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    }
     found
 }
 
@@ -183,6 +223,44 @@ mod tests {
 
         assert_eq!(names, vec!["NOTICE", "archive.zip", "letter.pdf", "planning.csv"]);
         assert_eq!(discover(root.path()).len(), 1);
+    }
+
+    #[test]
+    fn foreign_files_are_found_where_they_sit_and_keyed_by_their_folder() {
+        let root = tempfile::tempdir().expect("temp dir");
+        std::fs::create_dir(root.path().join("Factures")).unwrap();
+        std::fs::write(root.path().join("Factures").join("2025.xlsx"), b"x").unwrap();
+        std::fs::write(root.path().join("letter.pdf"), b"pdf").unwrap();
+        std::fs::write(root.path().join("planning.csv"), b"csv").unwrap();
+
+        let tables = discover_foreign(root.path(), Root::Documents, Domain::Data);
+        let keys: Vec<_> = tables.iter().map(|f| f.relative_path.clone()).collect();
+        assert_eq!(
+            keys,
+            vec!["/documents/Factures/2025.xlsx", "/documents/planning.csv"]
+        );
+        // The real file is still where it was found.
+        assert!(Path::new(&tables[0].absolute_path).is_file());
+
+        let documents = discover_foreign(root.path(), Root::Data, Domain::Documents);
+        let keys: Vec<_> = documents.iter().map(|f| f.relative_path.clone()).collect();
+        assert_eq!(keys, vec!["/data/letter.pdf"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symbolic_link_in_the_other_folder_is_refused_too() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let outside = tempfile::tempdir().expect("temp dir");
+        std::fs::write(outside.path().join("secret.xlsx"), b"x").unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.xlsx"),
+            root.path().join("link.xlsx"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("folder")).unwrap();
+
+        assert!(discover_foreign(root.path(), Root::Documents, Domain::Data).is_empty());
     }
 
     #[test]

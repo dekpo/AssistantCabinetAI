@@ -23,6 +23,8 @@ use serde::Serialize;
 
 use crate::discovery;
 use crate::error::AppError;
+use crate::file_key::Root;
+use crate::file_profile::build::Domain;
 use crate::file_record::{FileKind, FileRecord, ProcessingStatus, Readability};
 use crate::index_store::IndexStore;
 use crate::indexing::{IndexProgress, IndexSummary};
@@ -70,61 +72,26 @@ pub struct DataFolder {
 }
 
 impl DataFolder {
+    /// The Data folder as a physical folder: every file of it, each joined to what its own family made
+    /// of it (`WorkFolderInventory::discover_in`). A workbook is green, orange or red by the tabular
+    /// analysis; a document sitting here is joined to the document index under its key
+    /// (`file_key`), and never to a document of the Documents folder that shares its path.
     pub fn discover(
         root: &Path,
         index: Option<&IndexStore>,
         cache: &FileHashCache,
     ) -> Result<Self, AppError> {
-        // No index: a document row must never be joined onto a file of this folder.
-        let on_disk = WorkFolderInventory::discover_with_cache(root, None, cache)?;
-        let analysed: BTreeMap<String, String> = match index {
-            Some(store) => store
-                .all_tabular_inventories()?
-                .into_iter()
-                .map(|row| (row.relative_path, row.workbook_id))
-                .collect(),
-            None => BTreeMap::new(),
-        };
+        let (files, usable) = WorkFolderInventory::discover_in(Root::Data, root, index, cache)?;
+        Ok(Self { files, usable })
+    }
 
-        let mut usable = BTreeMap::new();
-        let mut files = Vec::with_capacity(on_disk.file_count());
-        for record in on_disk.all_files() {
-            let mut record = record.clone();
-            let (readability, status) = if record.kind != FileKind::TabularCandidate {
-                (Readability::Unreadable, ProcessingStatus::Failed)
-            } else {
-                match analysed.get(&record.relative_path) {
-                    None => (Readability::NotAssessed, ProcessingStatus::Discovered),
-                    Some(workbook_id) if record.sha256.as_deref() != Some(workbook_id) => {
-                        (Readability::NotAssessed, ProcessingStatus::Pending)
-                    }
-                    Some(workbook_id) => {
-                        let cached = match index {
-                            Some(store) => store.tabular_inventory_by_hash(workbook_id)?,
-                            None => None,
-                        };
-                        match cached {
-                            Some(inventory) if inventory.has_a_usable_sheet() => {
-                                usable.insert(record.relative_path.clone(), inventory);
-                                (Readability::Readable, ProcessingStatus::Indexed)
-                            }
-                            Some(_) => (Readability::Unreadable, ProcessingStatus::Failed),
-                            None => (Readability::NotAssessed, ProcessingStatus::Discovered),
-                        }
-                    }
-                }
-            };
-            record.readability = readability;
-            record.processing_status = status;
-            record.indexed = false;
-            record.index_metadata = None;
-            files.push(record);
-        }
-
-        Ok(Self {
-            files: WorkFolderInventory::from_records(on_disk.root(), files),
-            usable,
-        })
+    /// Built from parts that were already joined: the tabular family across both folders
+    /// (`family_view`).
+    pub(crate) fn from_parts(
+        files: WorkFolderInventory,
+        usable: BTreeMap<String, TabularInventory>,
+    ) -> Self {
+        Self { files, usable }
     }
 
     /// The files, with their tabular state. A `WorkFolderInventory` so the file-reference
@@ -199,7 +166,7 @@ pub fn analyse_with_knowledge(
     on_progress: &dyn Fn(IndexProgress),
     knowledge: Option<&mut KnowledgeContext>,
 ) -> Result<IndexSummary, AppError> {
-    analyse_cancellable(root, index, locale, on_progress, knowledge, &|| false)
+    analyse_cancellable(root, None, index, locale, on_progress, knowledge, &|| false)
 }
 
 /// [`analyse_with_knowledge`] that stops, between two workbooks, when `cancelled()` is true; the
@@ -213,6 +180,9 @@ pub fn analyse_with_knowledge(
 /// next pass does, as for the Documents pass.
 pub fn analyse_cancellable(
     root: &Path,
+    // The other folder (the Documents folder) when it is chosen: the workbooks found there are read
+    // too, in place, under their own key (`file_key`). `None` reads the Data folder alone.
+    foreign_root: Option<&Path>,
     index: &mut IndexStore,
     locale: &str,
     on_progress: &dyn Fn(IndexProgress),
@@ -232,10 +202,18 @@ pub fn analyse_cancellable(
     let (cleared, clear_ms) = timed_ms(|| index.clear_tabular_workbooks());
     cleared?;
 
-    let workbooks: Vec<discovery::DiscoveredFile> = discovery::discover_all(root)
+    let mut workbooks: Vec<discovery::DiscoveredFile> = discovery::discover_all(root)
         .into_iter()
         .filter(|file| FileKind::from_extension(&file.extension) == FileKind::TabularCandidate)
         .collect();
+    if let Some(foreign) = foreign_root {
+        workbooks.extend(discovery::discover_foreign(
+            foreign,
+            Root::Documents,
+            Domain::Data,
+        ));
+        workbooks.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    }
     let total_files = workbooks.len();
     // `build_inventory_ms` is parsing every workbook; `write_ms` is storing the inventories (and
     // forgetting the typed cache up front). Per workbook, only its position is kept.
@@ -395,7 +373,13 @@ pub fn analyse_cancellable(
     let profile = if was_cancelled {
         None
     } else {
-        crate::file_profile::store::run_workbooks(index, root, knowledge.as_deref(), locale)
+        crate::file_profile::store::run_workbooks_across(
+            index,
+            root,
+            foreign_root,
+            knowledge.as_deref(),
+            locale,
+        )
     };
 
     Ok(IndexSummary {
@@ -524,15 +508,32 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_file_that_is_not_a_spreadsheet_is_red_and_never_parsed() {
+    fn a_document_in_the_data_folder_waits_for_the_document_pass_and_is_never_parsed_as_a_table() {
         let (data, _app, mut index) = setup();
         write(data.path(), "courrier.pdf", b"%PDF-1.4");
 
         let summary = analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
         let folder = open(data.path(), &index);
 
+        assert_eq!(
+            summary.scanned_files, 0,
+            "the tabular pass reads no document"
+        );
+        // Its own family reads it (`indexing::run_cancellable` with this folder as the other one): until
+        // then it is simply not analysed, not a failure of this folder.
+        assert_eq!(state(&folder, "courrier.pdf"), ORANGE);
+    }
+
+    #[test]
+    fn a_file_no_pipeline_reads_is_red_in_the_data_folder_and_never_parsed() {
+        let (data, _app, mut index) = setup();
+        write(data.path(), "archive.zip", b"PK");
+
+        let summary = analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
+        let folder = open(data.path(), &index);
+
         assert_eq!(summary.scanned_files, 0);
-        assert_eq!(state(&folder, "courrier.pdf"), RED);
+        assert_eq!(state(&folder, "archive.zip"), RED);
     }
 
     #[test]
@@ -593,7 +594,11 @@ pub(crate) mod tests {
         let record = folder.files().find_by_relative_path("notes.txt").unwrap();
         assert!(!record.indexed);
         assert!(record.index_metadata.is_none());
-        assert_eq!(state(&folder, "notes.txt"), RED, "not a spreadsheet");
+        assert_eq!(
+            state(&folder, "notes.txt"),
+            ORANGE,
+            "a document of this folder is not the document of the other one"
+        );
     }
 
     #[test]
@@ -619,6 +624,7 @@ pub(crate) mod tests {
         let sent = std::sync::atomic::AtomicUsize::new(0);
         analyse_cancellable(
             data,
+            None,
             index,
             "fr-FR",
             &|_| {
@@ -699,6 +705,7 @@ with no table in it
         let plain = analyse(data.path(), &mut index, "fr-FR", &|_| {}).unwrap();
         let guarded = analyse_cancellable(
             other.path(),
+            None,
             &mut other_index,
             "fr-FR",
             &|_| {},

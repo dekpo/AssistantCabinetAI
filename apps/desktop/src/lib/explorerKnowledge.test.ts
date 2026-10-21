@@ -119,6 +119,37 @@ describe("the facts joined to the entries", () => {
     expect(both.map((entry) => entry.facts?.type ?? null)).toStrictEqual(["letter", null]);
   });
 
+  it("place the facts of a file read in the other folder by the folder its key names", () => {
+    // A document of the Data folder is a file of the documents family stored as `/data/...`; a workbook of
+    // the Documents folder is a file of the tables family stored as `/documents/...`.
+    const placed = attachFacts(
+      mergeInventories([record("x.xlsx"), record("x.pdf")], [record("x.pdf"), record("y.pdf")]).entries,
+      joinFacts({
+        documents: {
+          files: [
+            { relativePath: "x.pdf", businessType: "letter", years: [], entities: [] },
+            { relativePath: "/data/x.pdf", businessType: "invoice", years: ["2026"], entities: [] },
+          ],
+          entities: [],
+        },
+        data: {
+          files: [
+            { relativePath: "/documents/x.xlsx", businessType: "register", years: [], entities: [] },
+          ],
+          entities: [],
+        },
+      }),
+    );
+
+    const byKey = Object.fromEntries(placed.map((entry) => [entry.key, entry.facts?.type ?? null]));
+    expect(byKey).toStrictEqual({
+      "documents:x.xlsx": "register",
+      "documents:x.pdf": "letter",
+      "data:x.pdf": "invoice",
+      "data:y.pdf": null,
+    });
+  });
+
   it("leave a file the facts do not know without any", () => {
     const d = entries.find((entry) => entry.name === "d.pdf");
 

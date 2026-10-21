@@ -5,6 +5,7 @@ import { progressView, type PassFamily } from "../lib/analysisProgress";
 import {
   duplicateNames,
   folderHint,
+  isOpenable,
   isTickable,
   type ExplorerEntry,
   type ExplorerState,
@@ -128,13 +129,6 @@ export function ExplorerFamilySection({
     : indexing.summary !== null
       ? endLine(t, locale, indexing.summary, indexing.durationMs)
       : null;
-  const foreignNote =
-    counts.foreign === 0
-      ? undefined
-      : t(
-          counts.foreign > 1 ? "explorer.foreignExcludedMany" : "explorer.foreignExcludedOne",
-          { count: counts.foreign },
-        );
 
   return (
     <section className={`explorer-family explorer-family--${family}`}>
@@ -179,7 +173,7 @@ export function ExplorerFamilySection({
             indexing={indexing}
             emphasised={counts.analysable > 0}
             pendingCount={counts.analysable}
-            title={isEmpty ? t("explorer.analyseEmptyHint") : foreignNote}
+            title={isEmpty ? t("explorer.analyseEmptyHint") : undefined}
             disabled={isEmpty}
           />
         )}
@@ -279,7 +273,7 @@ export function ExplorerFamilySection({
                   onToggle={() => onToggleTick(entry)}
                   hint={duplicates.has(entry.name.toLowerCase()) ? folderHint(entry) : ""}
                   reason={reasonOf?.(entry)}
-                  onOpen={isTickable(entry) ? () => onOpenFile(entry) : undefined}
+                  onOpen={isOpenable(entry) ? () => onOpenFile(entry) : undefined}
                   onReveal={entry.native ? () => onRevealFile(entry) : undefined}
                 />
               )}

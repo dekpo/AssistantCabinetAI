@@ -1,30 +1,76 @@
 import { addScopeFiles, noDocumentsScope, tickedPaths, type Selection } from "./analysisScope";
 import {
+  entryIndexKey,
+  familyOf,
   isTickable,
   type ExplorerEntry,
   type ExplorerFilter,
   type ExplorerRoot,
 } from "./explorerModel";
-import type { AnalysisScope, FileRecord } from "./ipc";
+import { indexKey } from "./indexKey";
+import type { AnalysisScope, FileRecord, FinderDomain } from "./ipc";
 
 /*
  * What the bottom bar of the explorer says and does about the selection, with no React: the number
  * of files used on each side, the files "Cocher les N" would add, and the short sentences for the
- * two ends of the choice. The selection itself is still the two scopes of `analysisScope.ts`, one per
- * folder, joined only when a question is sent (`docs/SELECTION-AND-MEMORY.md`); nothing here changes
- * that contract.
+ * two ends of the choice. The selection itself is still the two scopes of `analysisScope.ts`, joined
+ * only when a question is sent (`docs/SELECTION-AND-MEMORY.md`). Since explorer step 8 each scope is a
+ * **family**'s: the documents scope holds the documents wherever they sit, the tables scope the
+ * workbooks wherever they sit, each entry under the key the index knows the file by (`indexKey.ts`).
+ * The chat contract is unchanged.
  */
 
-/** The scope of each folder, as the application holds them. */
-export type ScopesByRoot = Record<ExplorerRoot, AnalysisScope>;
+/** The scope of each family, as the application holds them: `documents` is the documents' scope,
+ * `data` the tables' scope. */
+export type ScopesByFamily = Record<FinderDomain, AnalysisScope>;
 
-/** The analysed files of one folder that can be ticked, in their records: what a scope is worked out
- * over. A file of the other family is never among them. */
+/** The family whose scope holds a file: how it is read, not the folder it sits in. */
+export function scopeFamilyOf(entry: ExplorerEntry): FinderDomain {
+  return entry.family === "documents" ? "documents" : "data";
+}
+
+/** The record a scope is worked out over: the file's own, under the key the index knows it by. */
+export function scopeRecord(entry: ExplorerEntry): FileRecord {
+  return { ...entry.record, relativePath: entryIndexKey(entry) };
+}
+
+/** The analysed files of one family that can be ticked, in their records: what a scope is worked out
+ * over. A file of the family counts wherever it sits. */
 export function tickableRecords(
   entries: readonly ExplorerEntry[],
-  root: ExplorerRoot,
+  family: FinderDomain,
 ): FileRecord[] {
-  return entries.filter((entry) => entry.root === root && isTickable(entry)).map((e) => e.record);
+  return entries
+    .filter((entry) => scopeFamilyOf(entry) === family && isTickable(entry))
+    .map(scopeRecord);
+}
+
+/** The analysed files of each family, read from the two folders' inventories, each under the key the index
+ * knows it by (`indexKey.ts`): what a scope is worked out over when the explorer's own entries are not at
+ * hand (the names picker adds files by the keys the knowledge base holds). */
+export function analysedByFamily(
+  documents: readonly FileRecord[],
+  data: readonly FileRecord[],
+): Record<FinderDomain, FileRecord[]> {
+  const found: Record<FinderDomain, FileRecord[]> = { documents: [], data: [] };
+  const folders: readonly (readonly [ExplorerRoot, readonly FileRecord[]])[] = [
+    ["documents", documents],
+    ["data", data],
+  ];
+  for (const [root, records] of folders) {
+    for (const record of records) {
+      const family = familyOf(record.extension);
+      if (family === null || record.processingStatus !== "indexed") {
+        continue;
+      }
+      const scopeFamily: FinderDomain = family === "documents" ? "documents" : "data";
+      found[scopeFamily].push({
+        ...record,
+        relativePath: indexKey(root, scopeFamily, record.relativePath),
+      });
+    }
+  }
+  return found;
 }
 
 /** How many files the selection uses in one folder: the ones ticked, or every analysed file for
@@ -38,34 +84,47 @@ export function usedCount(scope: AnalysisScope, tickable: readonly FileRecord[])
 export function entriesToTick(
   shown: readonly ExplorerEntry[],
   all: readonly ExplorerEntry[],
-  scopes: ScopesByRoot,
+  scopes: ScopesByFamily,
 ): ExplorerEntry[] {
-  const ticked: Record<ExplorerRoot, Set<string>> = {
+  const ticked = tickedKeysOf(scopes, all);
+  return shown.filter(
+    (entry) =>
+      isTickable(entry) && !ticked[scopeFamilyOf(entry)].has(scopeRecord(entry).relativePath),
+  );
+}
+
+/** The index keys each family's scope ticks, over the analysed files of the box. */
+export function tickedKeysOf(
+  scopes: ScopesByFamily,
+  all: readonly ExplorerEntry[],
+): Record<FinderDomain, Set<string>> {
+  return {
     documents: new Set(tickedPaths(scopes.documents, tickableRecords(all, "documents"))),
     data: new Set(tickedPaths(scopes.data, tickableRecords(all, "data"))),
   };
-  return shown.filter((entry) => isTickable(entry) && !ticked[entry.root].has(entry.path));
 }
 
-/** Both scopes after `entries` were added: each folder's own ticking rule, one folder at a time. */
+/** Both scopes after `entries` were added: each family's own ticking rule, one family at a time. */
 export function addEntriesToScopes(
-  scopes: ScopesByRoot,
+  scopes: ScopesByFamily,
   entries: readonly ExplorerEntry[],
   all: readonly ExplorerEntry[],
   now: number,
-): ScopesByRoot {
-  const next = (root: ExplorerRoot): AnalysisScope =>
+): ScopesByFamily {
+  const next = (family: FinderDomain): AnalysisScope =>
     addScopeFiles(
-      scopes[root],
-      entries.filter((entry) => entry.root === root && isTickable(entry)).map((e) => e.record),
-      tickableRecords(all, root),
+      scopes[family],
+      entries
+        .filter((entry) => scopeFamilyOf(entry) === family && isTickable(entry))
+        .map(scopeRecord),
+      tickableRecords(all, family),
       now,
     );
   return { documents: next("documents"), data: next("data") };
 }
 
 /** "Décocher": nothing is used on either side. */
-export function clearedScopes(now: number): ScopesByRoot {
+export function clearedScopes(now: number): ScopesByFamily {
   return { documents: noDocumentsScope(now), data: noDocumentsScope(now) };
 }
 

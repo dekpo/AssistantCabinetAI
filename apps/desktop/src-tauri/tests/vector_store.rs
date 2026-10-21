@@ -35,6 +35,7 @@ async fn pass(lab: &mut Lab, alias: &str) {
         lab.work.path(),
         None,
         None,
+        None,
         lab.locale,
         &|step| progress.lock().unwrap().push(step),
         Some(&mut context),

@@ -165,6 +165,7 @@ async fn the_spreadsheet_tables_are_identical_after_every_kind_of_rebuild() {
         lab.work.path(),
         None,
         None,
+        None,
         lab.locale,
         &|step| progress.lock().unwrap().push(step),
         Some(&mut context),

@@ -22,7 +22,7 @@ export function ExplorerFileRow({
 }: {
   entry: ExplorerEntry;
   checked: boolean;
-  /** A question is being answered, or the file cannot be ticked (not analysed, or not its folder). */
+  /** A question is being answered, or the file cannot be ticked (not analysed yet). */
   checkDisabled: boolean;
   onToggle: () => void;
   /** The grey sub-folder shown beside a name two files share; empty for none. */
@@ -30,14 +30,14 @@ export function ExplorerFileRow({
   /** Why a text search found this file: the short label beside the name, every reason in its tooltip.
    * Absent without a search. The row keeps its height: the label gives way like the grey hint. */
   reason?: { text: string; title: string };
-  /** Present only where opening is allowed: an analysed file of its own folder. */
+  /** Present only where opening is allowed: an analysed file of the folder of its own family. */
   onOpen?: () => void;
   /** Present only where showing the file in the file manager is allowed. */
   onReveal?: () => void;
 }) {
   const { t } = useTranslation();
   const stateText = t(`explorer.state.${entry.state}`);
-  const stateLabel = entry.native ? stateText : t("explorer.foreignState");
+  const stateLabel = stateText;
   const tag = entry.native
     ? null
     : entry.root === "documents"

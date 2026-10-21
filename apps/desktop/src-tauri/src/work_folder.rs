@@ -349,6 +349,14 @@ fn components_for_comparison(path: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Whether two chosen folders are the same folder or one is inside the other. The documents folder and
+/// the Data folder must be two separate places: a file reachable from both would be one file with two
+/// keys, and a pass over one would also walk the other. Compared by components, case aside where the
+/// platform ignores it, like every other rule of this module.
+pub(crate) fn folders_overlap(first: &Path, second: &Path) -> bool {
+    is_same_or_inside(first, second) || is_same_or_inside(second, first)
+}
+
 fn is_same_or_inside(candidate: &Path, ancestor: &Path) -> bool {
     let ancestor = components_for_comparison(ancestor);
     let candidate = components_for_comparison(candidate);
@@ -445,6 +453,22 @@ mod tests {
         } else {
             PathBuf::from("/Users/practice")
         }
+    }
+
+    #[test]
+    fn two_folders_that_are_equal_or_nested_overlap_and_siblings_do_not() {
+        let documents = home_path().join("Cabinet").join("Documents");
+        let data = home_path().join("Cabinet").join("Data");
+
+        assert!(folders_overlap(&documents, &documents));
+        assert!(folders_overlap(&documents, &documents.join("Tables")));
+        assert!(folders_overlap(&documents.join("Tables"), &documents));
+        assert!(!folders_overlap(&documents, &data));
+        // A shared start of name is not a shared folder.
+        assert!(!folders_overlap(
+            &home_path().join("Cabinet").join("Doc"),
+            &home_path().join("Cabinet").join("Docs")
+        ));
     }
 
     /// A system tree neither the pilot's home nor `test_policy`'s cloud tree.

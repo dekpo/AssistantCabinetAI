@@ -1,3 +1,4 @@
+import { homeRoot, indexKey, parseIndexKey, type IndexFamily } from "./indexKey";
 import type { FileRecord, FinderDomain } from "./ipc";
 
 /*
@@ -40,8 +41,8 @@ export const DOCUMENT_EXTENSIONS: readonly string[] = [
 /** The extensions of the tabular pipeline; mirrors `FileKind::from_extension` in `file_record.rs`. */
 export const TABLE_EXTENSIONS: readonly string[] = ["csv", "xlsx", "xls", "xlsm", "ods"];
 
-/** The folder each family is analysed from today: its own. A file of the other family sits in the
- * other folder and cannot be analysed yet (`EXPLORER-08`). */
+/** The folder each family lives in: its own. A file of the other family can sit in the other folder; it
+ * is analysed there, in place, by its own family's pass, and tagged with the folder it sits in. */
 export const HOME_ROOT: Readonly<Record<Family, ExplorerRoot>> = {
   documents: "documents",
   tables: "data",
@@ -93,8 +94,8 @@ export interface ExplorerEntry {
   extension: string;
   family: Family;
   state: ExplorerState;
-  /** The file sits in the folder of its own family: it can be analysed and ticked. A file of the
-   * other family is shown under its family, tagged, and cannot be analysed yet. */
+  /** The file sits in the folder of its own family. A file of the other family is shown under its
+   * family, tagged with the folder it sits in, and analysed there by its own family's pass. */
   native: boolean;
   size: number;
   modified: number | null;
@@ -118,15 +119,11 @@ function parentOf(path: string): string {
 }
 
 /**
- * The state of a file as the screen shows it. A file of the other family is always "to analyse":
- * what its own inventory says about it (a document forced to `failed` in the Data folder, a workbook
- * "not assessed" in the Documents folder) describes a pipeline that is not its own. A file that
- * changed since the last analysis is "to analyse" too, so is one being analysed.
+ * The state of a file as the screen shows it, from what its inventory says: each folder's inventory
+ * joins a file to what its own family made of it, wherever it sits. A file that changed since the last
+ * analysis is "to analyse", so is one being analysed.
  */
-export function stateOf(record: FileRecord, native: boolean): ExplorerState {
-  if (!native) {
-    return "toAnalyse";
-  }
+export function stateOf(record: FileRecord): ExplorerState {
   switch (record.processingStatus) {
     case "indexed":
       return "analysed";
@@ -152,7 +149,7 @@ export function entryOf(root: ExplorerRoot, record: FileRecord): ExplorerEntry |
     stem: record.stem,
     extension: record.extension.toLowerCase(),
     family,
-    state: stateOf(record, native),
+    state: stateOf(record),
     native,
     size: record.sizeBytes,
     modified: record.modifiedAt,
@@ -320,7 +317,23 @@ export function filterEntries(
   );
 }
 
-/** The keys a search found in each folder, joined; null while no search is active in either. */
+/** The key the index knows a file by: its path when it sits in the folder of its own family, the folder
+ * and the path otherwise (`indexKey.ts`). What a scope, a pass summary and the finder call the file. */
+export function entryIndexKey(entry: ExplorerEntry): string {
+  return indexKey(entry.root, entry.family === "documents" ? "documents" : "data", entry.path);
+}
+
+/** The explorer key of a file the index knows under `key` as a file of `family`: the key says which
+ * folder it sits in (`indexKey.ts`), so a workbook found in the Documents folder is placed there. */
+export function explorerKeyOfIndexKey(family: IndexFamily, key: string): string {
+  const parsed = parseIndexKey(family, key);
+  return parsed === null
+    ? explorerKey(homeRoot(family), key)
+    : explorerKey(parsed.root, parsed.path);
+}
+
+/** The keys a search found in each family, joined by the folder each file sits in; null while no search
+ * is active in either. The finder searches by family across both folders, so a hit is an index key. */
 export function foundKeys(
   documents: readonly string[] | null,
   data: readonly string[] | null,
@@ -329,11 +342,11 @@ export function foundKeys(
     return null;
   }
   const keys = new Set<string>();
-  for (const path of documents ?? []) {
-    keys.add(explorerKey("documents", path));
+  for (const key of documents ?? []) {
+    keys.add(explorerKeyOfIndexKey("documents", key));
   }
-  for (const path of data ?? []) {
-    keys.add(explorerKey("data", path));
+  for (const key of data ?? []) {
+    keys.add(explorerKeyOfIndexKey("data", key));
   }
   return keys;
 }
@@ -396,9 +409,10 @@ export interface FamilyCounts {
   analysed: number;
   toAnalyse: number;
   unreadable: number;
-  /** What the family's Analyser button will do: files of its own folder still to analyse. */
+  /** What the family's Analyser button will do: every file of the family still to analyse, wherever it
+   * sits (a file of the other folder is read in place by its own family's pass). */
   analysable: number;
-  /** Files of the other folder waiting under this family: shown, not counted in `analysable`. */
+  /** Files of the other folder listed under this family, whatever their state. */
   foreign: number;
 }
 
@@ -418,15 +432,22 @@ export function countsByFamily(entries: readonly ExplorerEntry[]): Record<Family
     family[entry.state] += 1;
     if (!entry.native) {
       family.foreign += 1;
-    } else if (entry.state === "toAnalyse") {
+    }
+    if (entry.state === "toAnalyse") {
       family.analysable += 1;
     }
   }
   return counts;
 }
 
-/** Whether the file can be ticked: analysed, and in the folder of its own family. */
+/** Whether the file can be ticked: analysed, wherever it sits. */
 export function isTickable(entry: ExplorerEntry): boolean {
+  return entry.state === "analysed";
+}
+
+/** Whether the file can be opened in the centre: analysed and in the folder of its own family. Opening
+ * and showing a file of the other folder is the next step (`EXPLORER-09`). */
+export function isOpenable(entry: ExplorerEntry): boolean {
   return entry.native && entry.state === "analysed";
 }
 

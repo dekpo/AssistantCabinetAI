@@ -1088,16 +1088,24 @@ fn chosen_workbooks<'a>(
             })
             .collect()),
         ScopeMode::Explicit(entries) => {
-            let chosen: Vec<Chosen> = entries
-                .iter()
-                .filter_map(|entry| {
-                    let record = data.files().find_by_relative_path(&entry.relative_path)?;
-                    (record.id == entry.pinned_id).then(|| Chosen {
+            let mut chosen: Vec<Chosen> = Vec::new();
+            for entry in entries {
+                // By path (and folder, for a workbook of the other folder), then by the content it pinned
+                // when the path is gone: a renamed workbook keeps its place.
+                let Some(record) = entry.find_in(data.files()) else {
+                    continue;
+                };
+                if record.id == entry.pinned_id
+                    && !chosen
+                        .iter()
+                        .any(|each| each.record.relative_path == record.relative_path)
+                {
+                    chosen.push(Chosen {
                         record,
                         sheets: (!entry.sheet_names.is_empty()).then(|| entry.sheet_names.clone()),
-                    })
-                })
-                .collect();
+                    });
+                }
+            }
             // She chose workbooks and none of them is there as she chose it: say so rather than
             // answer from nothing, the same refusal as a document selection gets.
             if chosen.is_empty() {

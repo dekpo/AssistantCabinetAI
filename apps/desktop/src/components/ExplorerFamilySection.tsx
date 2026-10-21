@@ -274,7 +274,7 @@ export function ExplorerFamilySection({
                   hint={duplicates.has(entry.name.toLowerCase()) ? folderHint(entry) : ""}
                   reason={reasonOf?.(entry)}
                   onOpen={isOpenable(entry) ? () => onOpenFile(entry) : undefined}
-                  onReveal={entry.native ? () => onRevealFile(entry) : undefined}
+                  onReveal={() => onRevealFile(entry)}
                 />
               )}
             />

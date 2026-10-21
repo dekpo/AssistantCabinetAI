@@ -82,6 +82,19 @@ describe("openTab", () => {
   });
 });
 
+describe("a file of the other family", () => {
+  it("is keyed by the root it sits in, so the same path in the two roots is two tabs", () => {
+    const workbook = record("administratif/commandes.xlsx");
+    const state = openTab(openTab(NO_TABS, "documents", workbook), "data", workbook);
+
+    expect(ids(state)).toStrictEqual([
+      tabId("documents", "administratif/commandes.xlsx"),
+      tabId("data", "administratif/commandes.xlsx"),
+    ]);
+    expect(ids(openTab(state, "documents", workbook))).toStrictEqual(ids(state));
+  });
+});
+
 describe("activateTab", () => {
   it("shows another open tab and ignores an id that is not open", () => {
     const state = opened("a.pdf", "b.pdf");

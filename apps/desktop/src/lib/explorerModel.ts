@@ -456,12 +456,12 @@ export function isTickable(entry: ExplorerEntry): boolean {
   return entry.state === "analysed";
 }
 
-/** Whether the file can be opened in the centre: analysed and in the folder of its own family. Opening
- * and showing a file of the other folder is the next step (`EXPLORER-09`). */
+/** Whether the file can be opened in the centre: analysed, wherever it sits. The viewer reads it from
+ * its physical root (`entry.root`, `entry.path`), which the viewer commands already accept for any
+ * extension. */
 export function isOpenable(entry: ExplorerEntry): boolean {
-  return entry.native && entry.state === "analysed";
+  return entry.state === "analysed";
 }
-
 /** Names that two or more listed files share (case-insensitive), so a grey hint can say where each
  * sits. Counted over every entry, whatever the family or the folder. */
 export function duplicateNames(entries: readonly ExplorerEntry[]): Set<string> {

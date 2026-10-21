@@ -109,6 +109,19 @@ describe("copying the sources of an answer", () => {
     expect(copied).toContain("- factures.xlsx, feuille Factures, colonne montant");
   });
 
+  it("cites a file of the other folder by its path, never by its key", () => {
+    const foreign = entry({
+      sources: [evidence("/data/Test/modele_lettre.docx", 2)] as ChatEntry["sources"],
+      tabularSource: { file: "/documents/administratif/commandes.xlsx", sheet: "S1", column: null },
+    });
+    const lines = sourceLines(english, foreign).join(" ");
+
+    expect(lines).toContain("Test/modele_lettre.docx");
+    expect(lines).toContain("administratif/commandes.xlsx");
+    expect(lines).not.toContain("/data/");
+    expect(lines).not.toContain("/documents/");
+  });
+
   it("copies the sheet of a table answer and of a mixed answer", () => {
     const lines = sourceLines(
       english,

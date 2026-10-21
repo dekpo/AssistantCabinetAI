@@ -127,7 +127,7 @@ export function useAppSettings(): AppSettingsState {
 
   /* Not `update` with a hand-built patch: the defaults belong to Rust, which reads some of them
      from the environment. The stored result comes back and replaces what is on screen, so the
-     locale falls back to the system's again and the folder card returns to offering one. */
+     locale falls back to the system's again and the explorer returns to offering the suggested folders. */
   const reset = useCallback(async () => {
     setSaveError(null);
     try {

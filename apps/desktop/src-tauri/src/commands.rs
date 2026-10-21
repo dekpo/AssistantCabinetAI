@@ -307,7 +307,7 @@ pub fn save_settings(
 ///
 /// The local index is **not** touched. Documents stay analysed, and choosing the same folder
 /// again finds them exactly as they were - the index is keyed by path relative to the folder, not
-/// by the setting. Emptying it is the other button, in the folder card, on purpose.
+/// by the setting. Emptying it is the other action, in the folder menu of the explorer, on purpose.
 #[tauri::command]
 pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Result<Settings, AppError> {
     let stored = settings::save(&app, &work_folder_policy(&app), Settings::default())?;
@@ -884,9 +884,9 @@ pub fn read_data_file_readable_text(
         .map(tauri::ipc::Response::new)
 }
 
-/// Forget every workbook analysis, and nothing else: the Data Folder card's Reset. The documents
-/// index is left exactly as it is, as `reset_index` leaves the workbooks - two cards, two
-/// independent resets. No file in either folder is touched.
+/// Forget every workbook analysis, and nothing else: the Data folder's "clear the analysis". The
+/// documents index is left exactly as it is, as `reset_index` leaves the workbooks - two folders,
+/// two independent clears. No file in either folder is touched.
 #[tauri::command]
 pub fn reset_data_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
     let mut index = open_index(&app)?;

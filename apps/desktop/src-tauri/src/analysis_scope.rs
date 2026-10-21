@@ -74,8 +74,8 @@ impl ScopeEntry {
 }
 
 /// One conversation's scope, built from both selection lists before every question: the
-/// documents she ticked in the Documents Folder card (`mode`) and the workbooks she ticked in the
-/// Data Folder card (`data_mode`). Two modes rather than one mixed list, because each is relative
+/// documents she ticked in the explorer (`mode`) and the workbooks she ticked there
+/// (`data_mode`). Two modes rather than one mixed list, because each is relative
 /// to its own folder - the same relative path can exist in both - and because "tous" means the
 /// whole of one folder, never of the other.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

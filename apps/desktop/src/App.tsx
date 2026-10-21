@@ -107,20 +107,23 @@ function AppContent() {
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
   );
-  /* Owned here rather than inside the folder card, because two places start the same pass: the
-     card's own button, and the answer that had to say the documents have not been read yet. */
+  /* Owned here rather than inside the explorer, because two places start the same pass: the
+     explorer's own button, and the answer that had to say the documents have not been read yet. */
   const indexing = useIndexing();
   /* The Data Folder's own pass: two folders, two passes that never wait on each other. */
   const dataIndexing = useIndexing(indexDataFolder);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* Counted up when an analysis is cleared from the Settings panel: the sidebar's box, which holds its
+     own inventories, reads its folders again through its refresh token. */
+  const [settingsClears, setSettingsClears] = useState(0);
   /* The knowledge management dialog: opened from the settings or from an analysis summary, drawn
      over whichever is on screen. Never reachable from the conversation. */
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
-  /* The documents the conversation is about. Held here because it is chosen in the folder card and
+  /* The documents the conversation is about. Held here because it is chosen in the explorer and
      used by the chat: nothing persists a session yet, so nothing persists this. It starts with no
      document: the selection is built only from what she ticks (`docs/SELECTION-AND-MEMORY.md`). */
   const [scope, setScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
-  /* The workbooks, chosen the same way in the Data Folder card and starting from none too. */
+  /* The workbooks, chosen the same way in the explorer and starting from none too. */
   const [dataScope, setDataScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
   /* What the centre zone of the window holds: the open tabs, or the welcome view. Nothing is open at
@@ -681,7 +684,7 @@ function AppContent() {
                   }}
                   onOpenDocument={openDocument}
                   onOpenTable={openTable}
-                  refreshToken={notes.writes}
+                  refreshToken={notes.writes + settingsClears}
                 />
                 {snapshot.warnings.map((code) => (
                   <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -758,6 +761,11 @@ function AppContent() {
             }}
             onClose={() => setSettingsOpen(false)}
             onOpenKnowledge={() => setKnowledgeOpen(true)}
+            onOpenReport={() => {
+              setSettingsOpen(false);
+              showOverview();
+            }}
+            onFolderCleared={() => setSettingsClears((count) => count + 1)}
           />
         ) : null}
         {outsideNotice ? (

@@ -13,7 +13,6 @@ import { unfinishedPercent } from "../lib/analysis";
 import { selectionOf, toggleScopeFile } from "../lib/analysisScope";
 import { restoreCount, showsTickLink, targetOf, unreachableCount } from "../lib/autoSelect";
 import { normaliseError, type AppError } from "../lib/errors";
-import { inventoryRefresh } from "../lib/inventoryRefresh";
 import { attachFacts, type EntityKind } from "../lib/explorerFacts";
 import {
   activeFilterCount,
@@ -42,7 +41,6 @@ import {
   explorerKeyOfIndexKey,
   foundKeys,
   isTickable,
-  mergeInventories,
   folderKey,
   listSort,
   sortEntries,
@@ -76,10 +74,8 @@ import { ROW_HEIGHT, rowBudget } from "../lib/explorerWindow";
 import type { ExplorerView, FamilyChoice } from "../lib/explorerView";
 import {
   cancelAnalysis,
-  dataFolderInventory,
   revealDataFile,
   revealWorkFile,
-  workFolderInventory,
   type AnalysisScope,
   type ExplorerDensity,
   type FileRecord,
@@ -90,7 +86,7 @@ import { counted } from "../lib/plural";
 import { useAutoSelect } from "../state/useAutoSelect";
 import { useExplorerFolders } from "../state/useExplorerFolders";
 import { useFinderSearch } from "../state/useFinderSearch";
-import { useFolderInventory } from "../state/useFolderInventory";
+import { useFamilyInventories } from "../state/useFamilyInventories";
 import type { IndexingState } from "../state/useIndexing";
 import { useKnowledgeFacts } from "../state/useKnowledgeFacts";
 import { useNow } from "../state/useNow";
@@ -98,6 +94,7 @@ import { useProfileStatus } from "../state/useProfileStatus";
 import { useVectorShare } from "../state/useVectorShare";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorBanner } from "./ErrorBanner";
+import { ExplorerClearDialog } from "./ExplorerClearDialog";
 import { ExplorerActivePills } from "./ExplorerActivePills";
 import { ExplorerAutoSwitch } from "./ExplorerAutoSwitch";
 import { ExplorerKnowledgeFilters } from "./ExplorerKnowledgeFilters";
@@ -111,12 +108,12 @@ import { ExplorerFamilySetup, ExplorerFirstStart } from "./ExplorerSetup";
 const FAMILY_CHOICES: readonly FamilyChoice[] = ["all", "documents", "tables"];
 
 /**
- * The left panel: one compact box with the two families of files, replacing the two folder cards of
- * the sidebar. It lists every file of both folders under its family, by extension, flat and bounded;
- * the search field, the segmented control and the bottom bar narrow and select; the two Analyser
- * buttons start the two passes that already exist. Nothing here reads or writes a file: the
- * inventories, the finder and the passes are the ones the cards used, and the selection is still the
- * two scopes the chat is sent with (`docs/CLIENT.md`, "The left panel").
+ * The left panel: one compact box with the two families of files. It lists every file of both
+ * folders under its family, by extension, flat and bounded; the search field, the segmented control
+ * and the bottom bar narrow and select; the two Analyser buttons start the two passes. Nothing here
+ * reads or writes a file: the inventories, the finder and the passes are shared with the Settings
+ * panel's folder sections (`FolderSettings`), and the selection is the two scopes the chat is sent
+ * with (`docs/CLIENT.md`, "The left panel").
  */
 export function FileExplorer({
   workFolder,
@@ -222,35 +219,17 @@ export function FileExplorer({
   const filtersButton = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
-  /* A pass of one family changes what both inventories say (a workbook of the Documents folder is read
-     by the tabular pass), so both are read again after any pass or clear (`lib/inventoryRefresh.ts`). */
-  const refresh = inventoryRefresh({
+  /* The two inventories, read again after any pass or clear: the same hook the Settings panel's
+     folder sections use. */
+  const { documentsInventory, dataInventory, merged } = useFamilyInventories({
+    workFolder,
+    dataFolder,
     documentsPasses: indexing.finishedPasses,
     dataPasses: dataIndexing.finishedPasses,
     notesToken: refreshToken,
     documentsClears: folders.clears.documents,
     tablesClears: folders.clears.tables,
   });
-  const documentsInventory = useFolderInventory(
-    workFolderInventory,
-    workFolder,
-    refresh.passes,
-    refresh.token,
-  );
-  const dataInventory = useFolderInventory(
-    dataFolderInventory,
-    dataFolder,
-    refresh.passes,
-    refresh.token,
-  );
-  const merged = useMemo(
-    () =>
-      mergeInventories(documentsInventory?.files ?? [], dataInventory?.files ?? [], {
-        documents: workFolder,
-        data: dataFolder,
-      }),
-    [documentsInventory, dataInventory, workFolder, dataFolder],
-  );
   /* What the knowledge base knows of the files is read only when something shows or uses it: the open
      panel, the views, or a choice of the knowledge base already in force. */
   const knowledgeChosen =
@@ -956,11 +935,8 @@ export function FileExplorer({
         />
       )}
       {confirmingClear === null ? null : (
-        <ConfirmDialog
-          title={t(confirmingClear === "documents" ? "workFolder.resetTitle" : "dataFolder.resetTitle")}
-          body={t(confirmingClear === "documents" ? "workFolder.resetBody" : "dataFolder.resetBody")}
-          confirmLabel={t("explorer.menuClear")}
-          destructive
+        <ExplorerClearDialog
+          family={confirmingClear}
           busy={folders.resetting}
           onConfirm={() => void folders.clear(confirmingClear).then(() => setConfirmingClear(null))}
           onCancel={() => setConfirmingClear(null)}

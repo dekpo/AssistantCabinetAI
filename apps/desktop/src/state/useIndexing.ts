@@ -4,7 +4,7 @@ import { normaliseError, type AppError } from "../lib/errors";
 import { indexWorkFolder, type IndexProgress, type IndexSummary } from "../lib/ipc";
 
 /**
- * One analysis pass over the work folder, owned above both places that start it: the folder card
+ * One analysis pass over the work folder, owned above both places that start it: the explorer
  * in the sidebar, and the answer that had to say "analyse your documents first". Two buttons, one
  * pass - a second pass started while the first is running would re-embed the same files.
  *
@@ -25,7 +25,7 @@ export interface IndexingState {
   /** What the last finished pass did. Cleared when a new pass starts. */
   summary: IndexSummary | null;
   error: AppError | null;
-  /** How many passes have finished, successfully or not. The folder card re-reads its inventory
+  /** How many passes have finished, successfully or not. The explorer re-reads its inventories
    * from this rather than from `summary`, so a failed pass still refreshes what is on screen. */
   finishedPasses: number;
   /** Resolves true when the pass finished without failing, so a caller can go on to do the thing

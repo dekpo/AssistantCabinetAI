@@ -25,7 +25,7 @@ const WORKSPACE_MIN_PX = 320;
 const CHAT_MIN_PX = 340;
 
 /**
- * The three zones of the window, left to right: the resources (both folder cards), the workspace
+ * The three zones of the window, left to right: the resources (the file explorer), the workspace
  * and the chat. The workspace panel is **always rendered**: closed, it is collapsed to nothing, so
  * the group always holds three panels and the chat keeps its place in the tree (the conversation
  * lives in it and must never be remounted). The workspace is visible exactly while `workspace` is

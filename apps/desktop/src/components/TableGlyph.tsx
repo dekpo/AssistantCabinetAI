@@ -1,10 +1,10 @@
 /**
- * A grid of cells: the card is about tables (CSV, XLSX), as distinct from the text folder beside
- * it. Decorative - the heading next to it carries the words, in her language.
+ * A grid of cells: a table (CSV, XLSX), as distinct from a text document. Decorative - the title
+ * next to it carries the words, in her language.
  */
 export function TableGlyph() {
   return (
-    <svg className="card__glyph" viewBox="0 0 20 20" aria-hidden="true">
+    <svg className="file-glyph" viewBox="0 0 20 20" aria-hidden="true">
       <path
         d="M3 4 H17 V16 H3 Z"
         fill="none"

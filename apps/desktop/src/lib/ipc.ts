@@ -1183,7 +1183,7 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
  * from the environment, so it is read, never assumed.
  *
  * The local index is untouched - documents stay analysed, and choosing the same folder again
- * finds them. Emptying the index is `resetIndex`, in the folder card.
+ * finds them. Emptying the index is `resetIndex`, in the folder menu of the explorer.
  */
 export function resetSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("reset_settings");

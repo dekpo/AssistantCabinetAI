@@ -1,4 +1,8 @@
+import { ROWS_BOTH_OPEN, ROWS_ONE_OPEN } from "../config/layout";
 import type { ExplorerDensity } from "./ipc";
+
+/* The two numbers of the budget live in `config/layout.ts`; they stay importable from here. */
+export { ROWS_BOTH_OPEN, ROWS_ONE_OPEN };
 
 /*
  * The arithmetic of the explorer's lists, with no DOM: how tall a row is, how many rows each open
@@ -28,11 +32,8 @@ export interface RowBudget {
   tables: number;
 }
 
-/** Rows shared by the open lists: both open, six each; one open, twelve; none open, the headers
- * alone. Owner to confirm while building (`EXPLORER-00-PLAN.md`, section 2, point 10). */
-export const ROWS_BOTH_OPEN = 6;
-export const ROWS_ONE_OPEN = 12;
-
+/** Rows shared by the open lists: both open, `ROWS_BOTH_OPEN` each; one open, `ROWS_ONE_OPEN`; none
+ * open, the headers alone. */
 export function rowBudget(open: OpenLists): RowBudget {
   const openCount = Number(open.documents) + Number(open.tables);
   const rows = openCount === 2 ? ROWS_BOTH_OPEN : openCount === 1 ? ROWS_ONE_OPEN : 0;

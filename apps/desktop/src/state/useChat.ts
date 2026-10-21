@@ -192,7 +192,7 @@ export interface ChatState {
   /** Empty the conversation and start a fresh one. Temporary, until conversations can be saved and
    * listed: today the only way to a clean slate was restarting the whole application, which is
    * what this replaces. Refuses while a question is in flight - the caller should keep the control
-   * disabled then, the same way the folder card disables Reset while indexing runs - so a clear
+   * disabled then, the same way the explorer hides the folder menu while indexing runs - so a clear
    * never has to reason about a request that is still streaming into a conversation that no
    * longer exists on screen. */
   clear: () => void;

@@ -117,13 +117,6 @@ function scopeOfEntries(
   return { mode: { kind: "explicit", entries: next }, createdAt: scope.createdAt, updatedAt: now };
 }
 
-/** The header checkbox: from "tous" to "aucun", and from anything else to "tous". */
-export function toggleAll(scope: AnalysisScope, now: number): AnalysisScope {
-  return selectionOf(scope) === "all"
-    ? { ...noDocumentsScope(scope.createdAt), updatedAt: now }
-    : { ...wholeFolderScope(scope.createdAt), updatedAt: now };
-}
-
 /**
  * What is sent with a question: both lists, built fresh before each one. The timestamps are the
  * later of the two, since the combined choice last changed when either list did.

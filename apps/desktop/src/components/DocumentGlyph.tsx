@@ -1,11 +1,10 @@
 /**
- * A sheet with a folded corner and two lines of text: the card is about text documents, as
- * distinct from the tabular folder that will sit beside it. Decorative - the heading next to it
- * carries the words, in her language.
+ * A sheet with a folded corner and two lines of text: a text document, as distinct from a table.
+ * Decorative - the title next to it carries the words, in her language.
  */
 export function DocumentGlyph() {
   return (
-    <svg className="card__glyph" viewBox="0 0 20 20" aria-hidden="true">
+    <svg className="file-glyph" viewBox="0 0 20 20" aria-hidden="true">
       <path
         d="M5 2.5 H12 L15.5 6 V17.5 H5 Z"
         fill="none"

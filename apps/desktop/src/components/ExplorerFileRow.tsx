@@ -19,12 +19,18 @@ export function ExplorerFileRow({
   reason,
   onOpen,
   onReveal,
+  selectable = true,
+  detailed = false,
 }: {
   entry: ExplorerEntry;
   checked: boolean;
   /** A question is being answered, or the file cannot be ticked (not analysed yet). */
   checkDisabled: boolean;
   onToggle: () => void;
+  /** False in the Settings panel, where the list only shows the files: no checkbox, no tick by click. */
+  selectable?: boolean;
+  /** The Settings panel: the whole path relative to the folder the file sits in, not the bare name. */
+  detailed?: boolean;
   /** The grey sub-folder shown beside a name two files share; empty for none. */
   hint: string;
   /** Why a text search found this file: the short label beside the name, every reason in its tooltip.
@@ -49,7 +55,8 @@ export function ExplorerFileRow({
       className={[
         "explorer-row",
         entry.native ? "" : "explorer-row--foreign",
-        checkDisabled ? "" : "explorer-row--tickable",
+        selectable && !checkDisabled ? "explorer-row--tickable" : "",
+        selectable ? "" : "explorer-row--plain",
       ]
         .filter((name) => name !== "")
         .join(" ")}
@@ -58,21 +65,26 @@ export function ExplorerFileRow({
         /* A click anywhere on the row ticks the file, as the old lists did; the checkbox and the two
            buttons keep their own behaviour. */
         const onControl = (event.target as HTMLElement).closest("button, input, a") !== null;
-        if (rowClickTicks({ onControl, tickable: !checkDisabled })) {
+        if (rowClickTicks({ onControl, tickable: selectable && !checkDisabled })) {
           onToggle();
         }
       }}
     >
-      <input
-        type="checkbox"
-        className="explorer-row__check"
-        aria-label={t("explorer.useFile", { name: entry.name })}
-        checked={checked}
-        disabled={checkDisabled}
-        onChange={onToggle}
-      />
+      {selectable ? (
+        <input
+          type="checkbox"
+          className="explorer-row__check"
+          aria-label={t("explorer.useFile", { name: entry.name })}
+          checked={checked}
+          disabled={checkDisabled}
+          onChange={onToggle}
+        />
+      ) : null}
       <StateGlyph state={entry.state} label={stateLabel} />
       <span className="explorer-row__name">
+        {detailed && entry.folder !== "" ? (
+          <span className="explorer-row__dir">{`${entry.folder}/`}</span>
+        ) : null}
         <span className="explorer-row__stem">{entry.stem}</span>
         {entry.extension === "" ? null : (
           <span className="explorer-row__ext">{`.${entry.extension}`}</span>

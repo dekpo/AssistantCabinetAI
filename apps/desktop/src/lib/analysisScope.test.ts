@@ -7,7 +7,6 @@ import {
   scopedPaths,
   selectionOf,
   tickedPaths,
-  toggleAll,
   toggleScopeFile,
   wholeFolderScope,
   documentsSelected,
@@ -87,15 +86,6 @@ describe.each([
         { relativePath: nameC, pinnedId: "id-c", addedAt: 50 },
       ],
     });
-  });
-
-  it("selects every file from none or some, and none from all", () => {
-    const some = toggleScopeFile(noDocumentsScope(10), A, ANALYSED, 20);
-
-    expect(selectionOf(toggleAll(noDocumentsScope(10), 30))).toBe("all");
-    expect(selectionOf(toggleAll(some, 30))).toBe("all");
-    expect(selectionOf(toggleAll(wholeFolderScope(10), 30))).toBe("none");
-    expect(toggleAll(some, 30).createdAt).toBe(10);
   });
 
   it("does not call a single ticked file the whole folder when nothing else is analysed yet", () => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 /**
  * What is actually in one folder, read from the disk and the local index (`docs/WORK-FOLDER-INVENTORY.md`),
- * the way the two folder cards read it: once when the folder is chosen, again when the window gets the
+ * the way the explorer and the Settings panel read it: once when the folder is chosen, again when the window gets the
  * focus back (a file added in the file manager is the case this catches, without watching the disk),
  * after every finished pass, and when the software itself wrote a file (`refreshToken`).
  *

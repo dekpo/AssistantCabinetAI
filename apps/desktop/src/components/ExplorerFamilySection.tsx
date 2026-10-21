@@ -62,7 +62,7 @@ export function ExplorerFamilySection({
   indexing,
   now,
   onStop,
-  locked,
+  locked = false,
   isTicked,
   onToggleTick,
   onOpenFile,
@@ -71,6 +71,7 @@ export function ExplorerFamilySection({
   onOpenReport,
   filtering,
   reasonOf,
+  detailed = false,
 }: {
   family: Family;
   /** The folder this family is analysed from (a family with no folder is `ExplorerFamilySetup`). */
@@ -85,7 +86,8 @@ export function ExplorerFamilySection({
   /** Every entry of the box, to tell two files that share a name. */
   allEntries: readonly ExplorerEntry[];
   open: boolean;
-  onToggleOpen: () => void;
+  /** Absent where the list cannot be folded (the Settings panel): no fold button is drawn. */
+  onToggleOpen?: () => void;
   /** The most rows the list may show now (the shared height budget). */
   rows: number;
   rowHeight: number;
@@ -95,24 +97,31 @@ export function ExplorerFamilySection({
   /** Stops this family's pass and no other. */
   onStop: () => void;
   /** A question is being answered: the selection must not change under it. */
-  locked: boolean;
-  isTicked: (entry: ExplorerEntry) => boolean;
-  onToggleTick: (entry: ExplorerEntry) => void;
-  onOpenFile: (entry: ExplorerEntry) => void;
+  locked?: boolean;
+  /** The selection. Both absent is the non-selectable mode of the Settings panel: the rows have no
+   * checkbox and a click on a row does nothing. */
+  isTicked?: (entry: ExplorerEntry) => boolean;
+  onToggleTick?: (entry: ExplorerEntry) => void;
+  /** Absent where a file cannot be shown in the centre (the Settings panel): « Ouvrir » is not drawn. */
+  onOpenFile?: (entry: ExplorerEntry) => void;
   onRevealFile: (entry: ExplorerEntry) => void;
   /** The index predates the file profile: only Analyse fills it. */
   needsAnalyse: boolean;
-  /** « Voir le rapport »: opens the centre on its overview. */
-  onOpenReport: () => void;
+  /** « Voir le rapport »: opens the centre on its overview. Absent, the link is not drawn. */
+  onOpenReport?: () => void;
   /** The view is narrowed: an empty list then means "nothing matches", not "nothing here". */
   filtering: boolean;
   /** Why a text search found an entry, or undefined when none is active or it said nothing. */
   reasonOf?: (entry: ExplorerEntry) => { text: string; title: string } | undefined;
+  /** The Settings panel, which has the room: the folder's whole path in the header and, on each row,
+   * the file's whole path relative to the folder it sits in. */
+  detailed?: boolean;
 }) {
   const { t, locale } = useTranslation();
   const familyName = t(family === "documents" ? "explorer.familyDocuments" : "explorer.familyTables");
   const typesLine = t(family === "documents" ? "explorer.typesDocuments" : "explorer.typesTables");
   const duplicates = duplicateNames(allEntries);
+  const selectable = onToggleTick !== undefined;
   const running = indexing.running;
   const passFamily: PassFamily = family === "documents" ? "documents" : "tables";
   /* Pressed once, the Stop waits for the pass to end between two files; it cannot be pressed twice. */
@@ -137,7 +146,9 @@ export function ExplorerFamilySection({
         <div className="explorer-family__text">
           <span className="explorer-family__title">
             <span className="explorer-family__name">{familyName}</span>
-            <span className="explorer-family__location">{abbreviateFolderPath(folder)}</span>
+            <span className="explorer-family__location">
+              {detailed ? folder : abbreviateFolderPath(folder)}
+            </span>
           </span>
           {isEmpty ? (
             <span className="explorer-family__types">{typesLine}</span>
@@ -188,16 +199,18 @@ export function ExplorerFamilySection({
             ]}
           />
         )}
-        <button
-          type="button"
-          className="explorer-family__fold"
-          aria-expanded={open}
-          aria-label={t(open ? "explorer.foldClose" : "explorer.foldOpen", { family: familyName })}
-          title={t(open ? "explorer.foldCloseHint" : "explorer.foldOpenHint")}
-          onClick={onToggleOpen}
-        >
-          <FoldGlyph open={open} />
-        </button>
+        {onToggleOpen === undefined ? null : (
+          <button
+            type="button"
+            className="explorer-family__fold"
+            aria-expanded={open}
+            aria-label={t(open ? "explorer.foldClose" : "explorer.foldOpen", { family: familyName })}
+            title={t(open ? "explorer.foldCloseHint" : "explorer.foldOpenHint")}
+            onClick={onToggleOpen}
+          >
+            <FoldGlyph open={open} />
+          </button>
+        )}
       </div>
       {running && PROGRESS_HAIRLINE ? (
         <div className="explorer-family__line" aria-hidden="true">
@@ -212,7 +225,7 @@ export function ExplorerFamilySection({
           {line}
         </p>
       )}
-      {!running && indexing.summary !== null ? (
+      {!running && indexing.summary !== null && onOpenReport !== undefined ? (
         <p className="explorer-family__report">
           <button
             type="button"
@@ -268,12 +281,16 @@ export function ExplorerFamilySection({
                 <ExplorerFileRow
                   key={entry.key}
                   entry={entry}
-                  checked={isTicked(entry)}
+                  selectable={selectable}
+                  detailed={detailed}
+                  checked={isTicked?.(entry) ?? false}
                   checkDisabled={locked || !isTickable(entry)}
-                  onToggle={() => onToggleTick(entry)}
-                  hint={duplicates.has(entry.name.toLowerCase()) ? folderHint(entry) : ""}
+                  onToggle={() => onToggleTick?.(entry)}
+                  hint={!detailed && duplicates.has(entry.name.toLowerCase()) ? folderHint(entry) : ""}
                   reason={reasonOf?.(entry)}
-                  onOpen={isOpenable(entry) ? () => onOpenFile(entry) : undefined}
+                  onOpen={
+                    onOpenFile !== undefined && isOpenable(entry) ? () => onOpenFile(entry) : undefined
+                  }
                   onReveal={() => onRevealFile(entry)}
                 />
               )}

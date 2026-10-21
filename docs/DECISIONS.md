@@ -1789,3 +1789,26 @@ Expected figures of the human test (rules, from the files themselves): `2026-02-
 | 2 | The sheet viewer's scroll bars flickered on the 125 % screen | The library sizes its canvas to whole-number client dimensions while the box is fractional: a feedback loop (see `docs/CLIENT.md`) | One CSS rule clamping the canvas; measured on a replica before and after |
 
 **Not verified yet:** the mixed tier's reading of a document of the other folder end to end (retrieval by key is tested in `tests/explorer_in_place.rs`; the whole `sourced_answer` needs the application). The owner's re-test of her question settles it.
+
+## Owner's tests of step 9 and its two fixes (21 October 2026), results and what was not investigated
+
+The owner played the human test of step 9 twice: first the script of the lot report (backup, analyse the five files, open, tick, ask, restore), which found the two defects above, then a short re-test of the fixes on the rebuilt application.
+
+| Part | Result |
+| --- | --- |
+| Re-test 1 (`pnpm tauri dev`, rebuilt) | Compiled in 40.87 s and started |
+| Re-test 2 (letter and workbook ticked, « que dit la lettre modele_lettre.docx ? ») | **ok**: an answer written by `ministral-3:3b` in 5 s, from excerpt [1] of the letter (subject, salutation, the order lines `Article`, `Quantité`, `Prix_Unitaire`, `Total_Ligne`, the instruction on merging several articles, the signature), « Cette question ne portait sur aucune de vos tables. », source `Test/publipostage/modele_lettre.docx`, page 1. The « not selected » message is gone, and the document of the other folder is read by the mixed tier end to end: **the point left unverified above is settled** |
+| Re-test 3 (« Quelle est la somme des montants dans 2026-02-06_commandes ? ») | ok: 2 449,82 on 12 lines, no AI, source `administratif/commandes/2026-02-06_commandes.csv, feuille 2026-02-06_commandes, colonne Montant` (no key shown) |
+| Re-test 4 (« combien de lignes dans 2026-08-09_commandes.xlsx ? », not ticked) | ok: said « n'est pas sélectionné » |
+| Re-test 5 (sheet viewer, 156 % to 125 % to 100 %, 125 % display scale) | ok: no flicker, « affichage parfait » |
+| Closing | Index restored (91,398,144 bytes), the five files back to « to analyse » |
+
+**Not investigated (recorded to come back to).**
+
+| # | Observation | Where seen | Why it is not a blocker | To do |
+| --- | --- | --- | --- | --- |
+| N-6 | The « not selected » answer of re-test 4 is followed by the line « Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires. », which says nothing true about a refusal (nothing was established, and the documents were not consulted for that reason) | Re-test 4, mixed selection | The refusal itself is right and its instruction (tick the workbook) is clear; the extra line is a label on a table-side refusal that existed before step 9 | Hide the « documents not needed » line when the table answer is a refusal (`FileNotSelected`, `NoMatchingFile`, `WorkbookNotAnalysed`) rather than a computed value; small, TypeScript only |
+| N-7 | In a mixed selection a name that no workbook carries now leaves the question to the documents (`NoMatchingFile` is « no table part »): a mistyped workbook name is answered by the documents tier instead of the table tier's « no such file » | Design of the follow-up fix | Same rule as an unrecognised question; the documents answer or say they hold nothing | Decide with the owner whether a name with a table extension should keep the table tier's refusal |
+| N-8 | The knowledge-base sheets (`EntitySheetParts.tsx`, `ReviewTab.tsx`) still show a file key (`/data/...`) for a file of the other folder | Step 9 build | Outside the conversation; the knowledge work owns them | Use `displayPathOfKey` there when the knowledge sheets are next touched |
+
+Time of the step: not recorded.

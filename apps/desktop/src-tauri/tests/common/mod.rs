@@ -2,6 +2,7 @@
 //! crate of its own.
 
 pub mod corpus;
+pub mod counting_gateway;
 pub mod fake_gateway;
 pub mod knowledge;
 pub mod suggestions;

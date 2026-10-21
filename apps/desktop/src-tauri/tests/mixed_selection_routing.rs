@@ -15,8 +15,7 @@
 
 mod common;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use assistant_cabinet_ai_lib::analysis_scope::{ScopeEntry, ScopeMode};
@@ -26,32 +25,14 @@ use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::inventory::FileHashCache;
 use assistant_cabinet_ai_lib::tabular::engine::TabularValue;
 use assistant_cabinet_ai_lib::tabular_answer::{self, ModelAssist, TabularAnswer};
+use common::counting_gateway::start_counting_gateway;
 
 const IDLE_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// A fake gateway that counts every request it receives and never answers one usefully. Any call
-/// reaching it at all is already the failure this file's tests exist to catch: a mixed selection
-/// must never dial the gateway, whatever the question.
-struct CountingGateway {
-    url: String,
-    calls: Arc<AtomicUsize>,
-}
-
-fn start_counting_gateway() -> CountingGateway {
-    let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").expect("binds a free port"));
-    let url = format!("http://{}", server.server_addr());
-    let calls = Arc::new(AtomicUsize::new(0));
-    let counted = Arc::clone(&calls);
-    std::thread::spawn(move || {
-        for request in server.incoming_requests() {
-            counted.fetch_add(1, Ordering::SeqCst);
-            let _ = request.respond(tiny_http::Response::from_string(
-                r#"{"unsupported": true}"#,
-            ));
-        }
-    });
-    CountingGateway { url, calls }
-}
+// The counting gateway (a fake that counts every request and never answers one usefully) moved to
+// `tests/common/counting_gateway.rs` when `tests/mixed_routing_baseline.rs` needed it too. Any call
+// reaching it is already the failure this file's tests exist to catch: a mixed selection must never
+// dial the gateway, whatever the question.
 
 /// `date, fournisseur, montant`: ten rows (`SheetInventory::looks_tabular` needs at least eight),
 /// three of them in March 2026 (the 2nd, the 10th and the 20th), so "how many invoices in March

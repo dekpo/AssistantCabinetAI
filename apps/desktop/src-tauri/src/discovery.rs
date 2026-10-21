@@ -4,12 +4,13 @@
 //! links are refused rather than followed, because a link can point outside the allow-listed
 //! work folder and this module has no opinion on where it leads.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use serde::Serialize;
 use walkdir::WalkDir;
 
-use crate::file_key::{family_of_extension, home_root, index_key, Root};
+use crate::file_key::{family_of_extension, key_under, physical_identity};
 use crate::file_profile::build::Domain;
 
 /// Extensions this session's extractor understands: the four it reads itself, the pictures it sends to OCR, and
@@ -86,40 +87,39 @@ pub fn discover_all(work_folder: &Path) -> Vec<DiscoveredFile> {
     found
 }
 
-/// The files of `family` found under `foreign`, the folder that is **not** the family's own (a
-/// workbook under the Documents folder, a document under the Data folder), each given its key
-/// (`file_key::index_key`) as `relative_path`. Same walk and same refusals as `discover_all`; the
-/// absolute path stays the real one, so reading, hashing and extraction need no change. Nothing is
-/// copied or moved: the file is read where it sits.
-pub fn discover_foreign(foreign: &Path, root: Root, family: Domain) -> Vec<DiscoveredFile> {
-    let mut found: Vec<DiscoveredFile> = discover_all(foreign)
-        .into_iter()
-        .filter(|file| family_of_extension(&file.extension) == Some(family))
-        .map(|file| DiscoveredFile {
-            relative_path: index_key(root, family, &file.relative_path),
-            ..file
-        })
-        .collect();
-    found.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
-    found
-}
-
-/// Every file of `family` in both folders: the family's own folder (`native`) with plain paths, and the
-/// other one (`foreign`, when it is chosen) with keys. What a search or a pass over one family reads;
-/// a file no pipeline reads is in neither.
+/// Every file of `family` in both folders: the family's own folder (`native`) and the other one
+/// (`foreign`, when it is chosen). Each file is given its key (`file_key::key_under`, the one rule) as
+/// `relative_path`; the absolute path stays the real one, so reading, hashing and extraction need no
+/// change, and nothing is copied or moved. Same walk and same refusals as `discover_all`. A file reachable
+/// from both folders (equal or nested folders) is listed **once**, whichever walk met it first: the list
+/// is de-duplicated on the physical file before any key is written. What a search or a pass over one
+/// family reads; a file no pipeline reads is in neither.
 pub fn discover_family(
     native: &Path,
     foreign: Option<&Path>,
     family: Domain,
 ) -> Vec<DiscoveredFile> {
-    let mut found: Vec<DiscoveredFile> = discover_all(native)
-        .into_iter()
-        .filter(|file| family_of_extension(&file.extension) == Some(family))
-        .collect();
-    if let Some(foreign) = foreign {
-        found.extend(discover_foreign(foreign, home_root(family).other(), family));
-        found.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    let mut seen = HashSet::new();
+    let mut found = Vec::new();
+    for folder in std::iter::once(native).chain(foreign) {
+        for file in discover_all(folder) {
+            if family_of_extension(&file.extension) != Some(family) {
+                continue;
+            }
+            let absolute = Path::new(&file.absolute_path);
+            if !seen.insert(physical_identity(absolute)) {
+                continue;
+            }
+            let Some(key) = key_under(family, Some(native), foreign, absolute) else {
+                continue;
+            };
+            found.push(DiscoveredFile {
+                relative_path: key,
+                ..file
+            });
+        }
     }
+    found.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     found
 }
 
@@ -226,14 +226,16 @@ mod tests {
     }
 
     #[test]
-    fn foreign_files_are_found_where_they_sit_and_keyed_by_their_folder() {
-        let root = tempfile::tempdir().expect("temp dir");
-        std::fs::create_dir(root.path().join("Factures")).unwrap();
-        std::fs::write(root.path().join("Factures").join("2025.xlsx"), b"x").unwrap();
-        std::fs::write(root.path().join("letter.pdf"), b"pdf").unwrap();
-        std::fs::write(root.path().join("planning.csv"), b"csv").unwrap();
+    fn files_of_the_other_folder_are_found_where_they_sit_and_keyed_by_their_folder() {
+        let documents = tempfile::tempdir().expect("temp dir");
+        let data = tempfile::tempdir().expect("temp dir");
+        std::fs::create_dir(documents.path().join("Factures")).unwrap();
+        std::fs::write(documents.path().join("Factures").join("2025.xlsx"), b"x").unwrap();
+        std::fs::write(documents.path().join("letter.pdf"), b"pdf").unwrap();
+        std::fs::write(documents.path().join("planning.csv"), b"csv").unwrap();
+        std::fs::write(data.path().join("model.txt"), b"txt").unwrap();
 
-        let tables = discover_foreign(root.path(), Root::Documents, Domain::Data);
+        let tables = discover_family(data.path(), Some(documents.path()), Domain::Data);
         let keys: Vec<_> = tables.iter().map(|f| f.relative_path.clone()).collect();
         assert_eq!(
             keys,
@@ -242,15 +244,53 @@ mod tests {
         // The real file is still where it was found.
         assert!(Path::new(&tables[0].absolute_path).is_file());
 
-        let documents = discover_foreign(root.path(), Root::Data, Domain::Documents);
-        let keys: Vec<_> = documents.iter().map(|f| f.relative_path.clone()).collect();
-        assert_eq!(keys, vec!["/data/letter.pdf"]);
+        let letters = discover_family(documents.path(), Some(data.path()), Domain::Documents);
+        let keys: Vec<_> = letters.iter().map(|f| f.relative_path.clone()).collect();
+        assert_eq!(keys, vec!["/data/model.txt", "letter.pdf"]);
+    }
+
+    #[test]
+    fn a_file_reachable_from_both_folders_is_listed_once() {
+        let root = tempfile::tempdir().expect("temp dir");
+        std::fs::create_dir(root.path().join("Tables")).unwrap();
+        std::fs::write(root.path().join("Tables").join("a.csv"), b"csv").unwrap();
+        std::fs::write(root.path().join("Tables").join("a.pdf"), b"pdf").unwrap();
+        std::fs::write(root.path().join("b.csv"), b"csv").unwrap();
+
+        let tables = root.path().join("Tables");
+        let keys = |native: &Path, foreign: &Path, family| -> Vec<String> {
+            discover_family(native, Some(foreign), family)
+                .into_iter()
+                .map(|file| file.relative_path)
+                .collect()
+        };
+        // The same folder twice.
+        assert_eq!(
+            keys(root.path(), root.path(), Domain::Data),
+            vec!["Tables/a.csv", "b.csv"]
+        );
+        // Tables inside documents.
+        assert_eq!(
+            keys(&tables, root.path(), Domain::Data),
+            vec!["/documents/b.csv", "a.csv"]
+        );
+        assert_eq!(
+            keys(root.path(), &tables, Domain::Documents),
+            vec!["Tables/a.pdf"]
+        );
+        // Documents inside tables.
+        assert_eq!(
+            keys(root.path(), &tables, Domain::Data),
+            vec!["Tables/a.csv", "b.csv"]
+        );
+        assert_eq!(keys(&tables, root.path(), Domain::Documents), vec!["a.pdf"]);
     }
 
     #[cfg(unix)]
     #[test]
     fn a_symbolic_link_in_the_other_folder_is_refused_too() {
         let root = tempfile::tempdir().expect("temp dir");
+        let own = tempfile::tempdir().expect("temp dir");
         let outside = tempfile::tempdir().expect("temp dir");
         std::fs::write(outside.path().join("secret.xlsx"), b"x").unwrap();
         std::os::unix::fs::symlink(
@@ -260,7 +300,7 @@ mod tests {
         .unwrap();
         std::os::unix::fs::symlink(outside.path(), root.path().join("folder")).unwrap();
 
-        assert!(discover_foreign(root.path(), Root::Documents, Domain::Data).is_empty());
+        assert!(discover_family(own.path(), Some(root.path()), Domain::Data).is_empty());
     }
 
     #[test]

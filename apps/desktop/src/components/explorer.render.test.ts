@@ -139,6 +139,18 @@ describe("a file row, drawn", () => {
     expect(html).not.toContain("depuis");
   });
 
+  it("tags no file when both folders are the same folder: every file sits in its own family's folder", () => {
+    const listing = () => [record("lettre.pdf"), record("suivi.csv"), record("sub/stock.xlsx")];
+    const merged = mergeInventories(listing(), listing(), { documents: "/w/Both", data: "/w/Both" });
+
+    expect(merged.entries).toHaveLength(3);
+    for (const entry of merged.entries) {
+      const html = row(entry);
+      expect(html).not.toContain("explorer-row__tag");
+      expect(html).not.toContain("depuis");
+    }
+  });
+
   it("says each state in words for a screen reader, whatever the shape", () => {
     const [analysed] = entriesOf([record("a.pdf", "indexed")], []);
     const [waiting] = entriesOf([record("b.pdf", "pending")], []);

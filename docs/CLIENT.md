@@ -258,6 +258,14 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
   there, then analysed or unreadable), and is **counted** by its family's **Analyser (n)**, which reads it in place
   (explorer step 8). It can be ticked once analysed; opening and showing it wait for step 9. The search, the facts and
   the selection are by family and place each file by the folder its key names (`lib/indexKey.ts`).
+- **Any two folders (explorer step 8B, 21 October 2026).** The Documents folder and the Tables folder can be separate (the
+  suggested default), **the same folder**, a Tables folder **inside** the Documents folder, or the reverse: choosing one
+  is never refused (« ⋯ » then « Changer de dossier »). A file reachable from both is listed **once**, with the same
+  state in both listings, and the tag « depuis … » shows only on a file really outside its family's folder, so never
+  in the same-folder layout. Counters, the typed search, « Select. auto » and the saved views count and place each
+  physical file once. After a change of folder the new family's files are « À analyser » until its **Analyser** has run;
+  that pass forgets what the old folder left and reads the files natively. Rule: `docs/WORK-FOLDER-INVENTORY.md`, "The
+  key of a file".
 - **Per family:** a two-line header (the family's folder icon, its name, the three counters; **Analyser (n)**; a fold
   button), the analysis gauge while a pass runs (below), and
   a flat list with **its own scroll bar**. A click anywhere on a tickable row ticks it (`rowClickTicks`). **« Mes notes (N) »** (under the segmented control, only while the Notes folder holds a file) is a one-click origin-folder choice; while a text search is active the lists follow the finder's ranking, not the alphabet (`listSort`). The folder's short name (« …\Docs ») sits in grey after the family's name and gives way first; the whole path is the header's tooltip. The long text of a pass is **not** in the

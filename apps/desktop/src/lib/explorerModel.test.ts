@@ -3,7 +3,9 @@ import {
   countsByFamily,
   DOCUMENT_EXTENSIONS,
   duplicateNames,
+  entryIndexKey,
   explorerKey,
+  explorerKeyOfIndexKey,
   folderKey,
   listSort,
   familyOf,
@@ -154,6 +156,94 @@ describe("merging the two inventories", () => {
       "documents:lettre.pdf",
     ]);
     expect(merged.entries[0]?.state).toBe("analysed");
+  });
+
+  describe("any two folders, never a duplicate", () => {
+    // One document and one workbook at the top, one of each in a sub-folder, and a file no pipeline reads.
+    const keysOf = (merged: ReturnType<typeof mergeInventories>) =>
+      merged.entries.map((e) => `${e.key}|${entryIndexKey(e)}|${e.native ? "native" : "foreign"}`).sort();
+
+    it("the same folder: one entry per physical file, every file native, no foreign key", () => {
+      const listing = () => [
+        record("lettre.pdf"),
+        record("suivi.csv"),
+        record("sub/note.txt"),
+        record("sub/stock.xlsx"),
+        record("sub/readme.key"),
+      ];
+      const merged = mergeInventories(listing(), listing(), {
+        documents: "/w/Both",
+        data: "/w/Both",
+      });
+
+      expect(keysOf(merged)).toStrictEqual([
+        "data:sub/stock.xlsx|sub/stock.xlsx|native",
+        "data:suivi.csv|suivi.csv|native",
+        "documents:lettre.pdf|lettre.pdf|native",
+        "documents:sub/note.txt|sub/note.txt|native",
+      ]);
+      expect(merged.unsupported).toBe(1);
+      expect(merged.entries.some((e) => entryIndexKey(e).startsWith("/"))).toBe(false);
+    });
+
+    it("tables inside documents: the nested folder's own files native, the rest of the folder foreign", () => {
+      const merged = mergeInventories(
+        // The Documents folder lists everything under it.
+        [
+          record("lettre.pdf"),
+          record("b.csv"),
+          record("Tables/a.csv"),
+          record("Tables/c.pdf"),
+        ],
+        // The Tables folder lists what is inside it.
+        [record("a.csv"), record("c.pdf")],
+        { documents: "/w/Docs", data: "/w/Docs/Tables" },
+      );
+
+      expect(keysOf(merged)).toStrictEqual([
+        "data:a.csv|a.csv|native",
+        "documents:Tables/c.pdf|Tables/c.pdf|native",
+        "documents:b.csv|/documents/b.csv|foreign",
+        "documents:lettre.pdf|lettre.pdf|native",
+      ]);
+    });
+
+    it("documents inside tables: the same, the other way round", () => {
+      const merged = mergeInventories(
+        [record("lettre.pdf"), record("t.csv")],
+        [record("Docs/lettre.pdf"), record("Docs/t.csv"), record("d.pdf"), record("u.csv")],
+        { documents: "/w/Data/Docs", data: "/w/Data" },
+      );
+
+      expect(keysOf(merged)).toStrictEqual([
+        "data:Docs/t.csv|Docs/t.csv|native",
+        "data:d.pdf|/data/d.pdf|foreign",
+        "data:u.csv|u.csv|native",
+        "documents:lettre.pdf|lettre.pdf|native",
+      ]);
+    });
+
+    it("every key of those layouts leads back to the one entry that holds the file", () => {
+      const merged = mergeInventories(
+        [record("b.csv"), record("Tables/a.csv"), record("lettre.pdf")],
+        [record("a.csv")],
+        { documents: "/w/Docs", data: "/w/Docs/Tables" },
+      );
+      const byKey = new Map(merged.entries.map((e) => [e.key, e]));
+
+      expect(byKey.get(explorerKeyOfIndexKey("data", "a.csv"))?.path).toBe("a.csv");
+      expect(byKey.get(explorerKeyOfIndexKey("data", "/documents/b.csv"))?.path).toBe("b.csv");
+      expect(byKey.get(explorerKeyOfIndexKey("documents", "lettre.pdf"))?.path).toBe("lettre.pdf");
+    });
+
+    it("counts a file no pipeline reads once, however many folders list it", () => {
+      const merged = mergeInventories([record("sub/a.key")], [record("a.key")], {
+        documents: "/w/Docs",
+        data: "/w/Docs/sub",
+      });
+
+      expect(merged.unsupported).toBe(1);
+    });
   });
 
   it("does not merge anything without the folders' paths", () => {

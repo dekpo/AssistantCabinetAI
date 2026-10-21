@@ -342,9 +342,10 @@ new command: `work_folder_inventory` and `data_folder_inventory` already list **
   changed since) and `processing` are to analyse. **An analysed file can be ticked wherever it sits**
   (`isTickable`, `processingStatus === "indexed"`); the scopes are one per family, each entry under the file's key.
   Opening and showing a foreign file waits for step 9.
-- **Overlapping folders.** Two folders that are equal or nested are refused when chosen and set aside when found in
-  settings written before the rule (`folders_overlap`, explorer step 8). The merge still keeps one entry for a physical
-  file listed from both roots, as a guard for a state that no longer arises.
+- **Overlapping folders.** The two folders may be separate (the suggested default), the same folder, or one inside the
+  other (explorer step 8B). A file under both is listed by both folders' inventories with **the same key and the same
+  state**, and the merge keeps **one** entry for it, the copy that sits in its own family's folder (a file no pipeline
+  reads is counted once too). Nothing is refused any more; a duplicate is made impossible by the rule below.
 - **Counts** shown beside a family (analysed, to analyse, unreadable) are computed from the per-file states, not
   taken from either report's summary, because the two summaries are worked out differently for the two folders and
   neither counts a file of the other family.
@@ -366,6 +367,14 @@ nothing in the index changed shape: `file_key.rs` and `lib/indexKey.ts` are the 
 - **A key opens nothing by itself.** `reveal::resolve_plain_file` (the viewer, the file manager) rebuilds a path from plain
   names and refuses a root component, so a key handed to code that does not know about roots is refused, never read as
   another file. Step 9 makes the commands root-aware.
+- **One rule, one place (step 8B).** `file_key::key_under` decides the key of a file from its **absolute path** and the two
+  folders: under the folder of its own family, its path inside that folder; else under the other folder, `/<root>/<path>`;
+  under neither, not read. A file under both takes the first. Folders are compared by components with the platform's case
+  rule, never by string prefix. The two passes, the finder, the folder inventories, the family views and the clean-name
+  rename all call it, and every list of files is de-duplicated on the physical file before any key is written
+  (`discovery::discover_family`, `family_view::family_views`). So the same folder has no foreign key at all; a Tables
+  folder inside the Documents folder reads its own workbooks natively (relative to itself) and the other workbooks of the
+  Documents folder as foreign.
 - **What a name is made of.** `NameProfile::build` drops the folder of a key: the words of a foreign file's name are those of
   its own path.
 

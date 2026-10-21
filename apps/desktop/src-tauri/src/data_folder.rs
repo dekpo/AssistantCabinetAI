@@ -25,7 +25,7 @@ use crate::discovery;
 use crate::error::AppError;
 use crate::file_key::Root;
 use crate::file_profile::build::Domain;
-use crate::file_record::{FileKind, FileRecord, ProcessingStatus, Readability};
+use crate::file_record::{FileRecord, ProcessingStatus, Readability};
 use crate::index_store::IndexStore;
 use crate::indexing::{IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, WorkFolderInventory};
@@ -81,7 +81,19 @@ impl DataFolder {
         index: Option<&IndexStore>,
         cache: &FileHashCache,
     ) -> Result<Self, AppError> {
-        let (files, usable) = WorkFolderInventory::discover_in(Root::Data, root, index, cache)?;
+        Self::discover_alongside(root, None, index, cache)
+    }
+
+    /// [`discover`](Self::discover) with the Documents folder given when it is chosen: it decides the key
+    /// of a file the two folders share (equal or nested folders), so both listings agree on it.
+    pub fn discover_alongside(
+        root: &Path,
+        documents: Option<&Path>,
+        index: Option<&IndexStore>,
+        cache: &FileHashCache,
+    ) -> Result<Self, AppError> {
+        let (files, usable) =
+            WorkFolderInventory::discover_in(Root::Data, root, documents, index, cache)?;
         Ok(Self { files, usable })
     }
 
@@ -202,18 +214,7 @@ pub fn analyse_cancellable(
     let (cleared, clear_ms) = timed_ms(|| index.clear_tabular_workbooks());
     cleared?;
 
-    let mut workbooks: Vec<discovery::DiscoveredFile> = discovery::discover_all(root)
-        .into_iter()
-        .filter(|file| FileKind::from_extension(&file.extension) == FileKind::TabularCandidate)
-        .collect();
-    if let Some(foreign) = foreign_root {
-        workbooks.extend(discovery::discover_foreign(
-            foreign,
-            Root::Documents,
-            Domain::Data,
-        ));
-        workbooks.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
-    }
+    let workbooks = discovery::discover_family(root, foreign_root, Domain::Data);
     let total_files = workbooks.len();
     // `build_inventory_ms` is parsing every workbook; `write_ms` is storing the inventories (and
     // forgetting the typed cache up front). Per workbook, only its position is kept.

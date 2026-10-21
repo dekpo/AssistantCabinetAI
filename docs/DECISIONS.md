@@ -1717,8 +1717,50 @@ Decided in conversation after the human test of step 8 (previous section). What 
 4. **A half restriction was considered and rejected** (same folder allowed, nested refused): it saves about half an hour of tests and adds a validation rule, the duplicate check is needed for the same folder anyway and covers the nested cases at no extra cost, and « the same folder yes, a folder inside the other no » is hard to explain while the nested layout (a `Tableaux` sub-folder of a client folder) is probably the most natural one.
 5. **Decision (owner, 21 October 2026): allow every combination** (separate, identical, tables inside documents, documents inside tables) **and make a duplicate impossible by construction, with tests in the code and a human test**. Done on **a separate branch**, `feat/explorer-nested-folders` (handoff `docs/SESSION-EXPLORER/EXPLORER-08B-same-or-nested-folders.md`), **before** step 9. The separate `Docs` and `Data` folders stay the **suggested default** for a new user.
 
-**What this supersedes.** The rule « two folders that are equal or nested are refused when chosen and set aside on load » (`folders_overlap`, error code `folders_overlap`, its two catalogue sentences, the `folderError` banner of the box, the warning at load) taken while building step 8 at the request of the handoff of that step. Step 8 as committed still has it; step 8B removes it. Until then, the rule stands.
+**What this supersedes.** The rule « two folders that are equal or nested are refused when chosen and set aside on load » (`folders_overlap`, error code `folders_overlap`, its two catalogue sentences, the `folderError` banner of the box, the warning at load) taken while building step 8 at the request of the handoff of that step. Step 8 as committed had it; step 8B removed it (see "Taken while building the explorer's any-two-folders step", below).
 
 **The rule step 8B must build, in one sentence.** One file has **one key**, decided in one place from its absolute path and the two folders: under the folder of its own family (a document under the Documents folder, a workbook under the Data folder) its path inside that folder; otherwise, under the other folder, `/<root>/<path>`; under neither, it is not read. Where the two folders overlap, a file lying under both takes the key of its own family's folder. Every walk, every join and every search goes through that one decision, and a file is never listed twice under two keys.
 
 **Questions of the owner kept for the record.** « Does each indexing process take care of the files that concern it, wherever they are? » Yes, since step 8: the document pass reads the documents and the tabular pass the workbooks, in both folders. The only thing 8B adds is that a file reachable from both folders is read once.
+
+## Taken while building the explorer's any-two-folders step (21 October 2026), confirmed by the owner's test
+
+Handoff `EXPLORER-08B-same-or-nested-folders.md`, on the owner's decision above. Built, then confirmed by the owner's human test (next section). Rust and TypeScript; no schema change.
+
+| Subject | Taken |
+| --- | --- |
+| The rule | `file_key::key_under(family, own, other, absolute)` (and `key_for` with the folders given as Documents and Data, `FamilyRoots::key_of`): under the family's own folder, the path inside it; else under the other folder, `/<root>/<path>`; else `None`. A file under both takes the first. Components are compared with `work_folder::components_for_comparison` (case folded on Windows), never by prefix; `..` and any non-name component give `None`. |
+| Who calls it | `discovery::discover_family` (now the only walk of both folders: the document pass, the tabular pass and the finder call it; `discover_foreign` is gone), `WorkFolderInventory::discover_in` (new parameter: the other folder), `family_view::family_views`, `filename_sanitizer::sanitize_documents`. `discover_alongside` on `WorkFolderInventory` and `DataFolder` give the two explorer commands the other folder; `discover`, `discover_with_cache` keep their signatures for the tests that never had a second folder. |
+| Belt and braces | A list of files is de-duplicated on `file_key::physical_identity` (components, platform case rule) before any key is written, in `discover_family` and in `family_views`; the clean-name report no longer lists a file twice either. A mutation that removes the de-duplication makes three of the new tests fail (checked). |
+| The refusal is gone | `folders_overlap`, its check in `settings::save` and `load_app_snapshot`, `AppError::FoldersOverlap`, the two catalogue sentences, the `folderError` prop and its banner, and the test that pinned it. `work_folder::components_for_comparison` became crate-visible for the rule. |
+| What the document pass sends to the gateway | One text per passage **and one description per document** (`Title: ...`): the number of vectors asked is the passages plus the documents, so the test checks that every text is sent once and that the total is exactly that, in each layout. |
+| Changing the folders | Separate to same: the next document pass forgets the `/data/...` documents (they are not in its list) and the next tabular pass forgets the old Data workbooks and the `/documents/...` keys; the workbooks of the Documents folder are read natively. Tested: no key starting with a slash is left in `documents`, `tabular_inventories`, `file_profiles` or `kb_sources`. |
+| The explorer | The two inventories give a shared file the same key and state; `mergeInventories` keeps one entry, the native copy (or the Documents one), and counts a file no pipeline reads once. The tag « depuis ... » shows only on a really foreign file, so never in the same-folder layout. Saved views and the origin-folder filter are unchanged (`<root>:<folder>`). |
+
+## Owner's test of the any-two-folders step (21 October 2026), results and what was not investigated
+
+The owner played the human test of step 8B (script in the lot report: backup, part A « same folder », part B « tables inside documents », closing, one restore). She reported each part as **ok** and pasted the two commands that carry numbers; no screenshot and no per-step figure was sent, so the figures below are the measured ones, confirmed as « conform » by her.
+
+| Part | Result |
+| --- | --- |
+| 0 (backup) | 1,253 files in Docs and 17 in Data listed, backup made |
+| A (Tables folder = Docs) | ok: no refusal, no « depuis ... » tag, Documents not doubled, both Analyser pass as predicted, search and table question answered with a plain source |
+| B (Tables folder = `Docs\administratif\commandes`) | ok, same as A |
+| Closing | `identiques`: no file of either folder was added, renamed or modified; the index file was **91,398,144 bytes**, the size it had before (no second copy of the documents) |
+| Restore | Done (settings and index) |
+
+**Measured on a copy of her index before the test (rules, not guesses).** Her index held 1,249 documents and 15 workbooks (the state before step 8). Same folder or `commandes` folder: Documents 1,249 files (1,246 analysed, 3 unreadable, no « to analyse »); Tableaux 3 workbooks, 3 analysed after the pass, **15 forgotten**; no key starting with a slash left in `documents`, `tabular_inventories` or `file_profiles`; « commandes » finds each workbook once; « Quelle est la somme des montant ? » on `2026-02-06_commandes.csv` gives 2 449,82 over 12 rows, source `administratif/commandes/2026-02-06_commandes.csv` (same folder) or `2026-02-06_commandes.csv` (nested), never `/documents/...`.
+
+**What 8B adds for the user** (also in `docs/CLIENT.md`): the choice of any two folders without a refusal, so folders that already mix texts and spreadsheets need no reorganising; no doubled line, counter or hit for a file both folders reach; no « depuis ... » tag when the file is in fact in its own family's folder; the same state for a file in both listings; the plain source path in an answer.
+
+**Not investigated (recorded to come back to, none blocks a lot).**
+
+| # | Observation | Where seen | Why it is not a blocker | To do |
+| --- | --- | --- | --- | --- |
+| N-1 | The document pass over the **separate** folders with the AI server unreachable tried to embed again the two letters of the Data folder (`indexed=2 failed=2`, the other 1,249 unchanged), although their rows were absent from that index copy (the copy came from the restored, pre-step-8 index, so the pass read them for the first time and the server was off). It may be exactly that and no defect | Throwaway measure on a copy of her index, separate layout only | Expected if the two letters were new to that index; the same passes with the same folders worked in her test of step 8 | Re-measure on an index that already holds the two `/data/...` documents, to confirm the second pass says `unchanged=1251` |
+| N-2 | When the Tables folder becomes the Documents folder, the document pass has nothing to forget if the index holds no `/data/...` row, so `removed_files` stays empty; with such rows it forgets them (the automated test `changing_the_folders_forgets_the_old_keys...` covers it). The summary of the pass does not say how many keys changed | Throwaway measure | The interface shows the counts of the family, which are right | None unless the owner wants the summary to say so |
+| N-3 | `data_folder.rs` (a `match` clippy would write as `if let`) and `indexing.rs` (`run_cancellable`-family function with 9 arguments) keep the clippy warnings they had before step 8B | Final clippy pass | Pre-existing, in code 8B did not rewrite | Left for a cleanup the owner orders |
+| N-4 | Layout « documents inside tables » is covered by automated tests only (rows, vectors, lists), not by a human test: it would need a destructive pass on her real index | Handoff, part C | Same code path as « tables inside documents », mirrored | Play it once if she wants it, on a copy of her folders |
+| N-5 | `rustfmt` was not run on `discovery.rs`, `inventory.rs`, `work_folder.rs`, `settings.rs`, `filename_sanitizer.rs` as a whole: they keep their earlier `Diff in` blocks (2, 1, 3, 1, 4), 8B added none | Final formatting check | Rule of `AGENTS.md`: no crate-wide `cargo fmt` | Only when the owner orders the formatting commit |
+
+Time of the step: not recorded.

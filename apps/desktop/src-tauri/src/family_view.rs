@@ -8,11 +8,12 @@
 //! list and never two files of the same path. Nothing is copied or moved: the other folder's files
 //! are resolved against that folder, and only that one.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::data_folder::DataFolder;
 use crate::error::AppError;
-use crate::file_key::{index_key, Root};
+use crate::file_key::{key_for, physical_identity, Root};
 use crate::file_profile::build::Domain;
 use crate::file_record::{FileKind, FileRecord};
 use crate::index_store::IndexStore;
@@ -25,15 +26,25 @@ pub struct FamilyViews {
     pub data: Option<DataFolder>,
 }
 
-/// `record`, as the family `family` sees it when it sits in `root` (not the family's own folder).
-fn rekeyed(record: &FileRecord, root: Root, family: Domain) -> FileRecord {
+/// `record`, as the family sees it under `key`.
+fn rekeyed(record: &FileRecord, key: String) -> FileRecord {
     let mut record = record.clone();
-    record.relative_path = index_key(root, family, &record.relative_path);
+    record.relative_path = key;
     record
 }
 
+/// Where a record of `inventory` sits on the disk: its folder and its path inside it.
+fn absolute_of(inventory: &WorkFolderInventory, record: &FileRecord) -> PathBuf {
+    record
+        .relative_path
+        .split('/')
+        .fold(inventory.root().to_path_buf(), |path, part| path.join(part))
+}
+
 /// Both families, across the folders that are chosen. Two walks (one per folder), whatever the number
-/// of families asked for; the hash caches are one per folder.
+/// of families asked for; the hash caches are one per folder. A file the two folders share (equal or
+/// nested folders) is met in both walks and kept **once**, under the key the one rule gives it
+/// (`file_key::key_for`).
 pub fn family_views(
     documents_root: Option<&Path>,
     data_root: Option<&Path>,
@@ -42,22 +53,43 @@ pub fn family_views(
     data_cache: &FileHashCache,
 ) -> Result<FamilyViews, AppError> {
     let physical_documents = documents_root
-        .map(|root| WorkFolderInventory::discover_in(Root::Documents, root, index, documents_cache))
+        .map(|root| {
+            WorkFolderInventory::discover_in(
+                Root::Documents,
+                root,
+                data_root,
+                index,
+                documents_cache,
+            )
+        })
         .transpose()?;
     let physical_data = data_root
-        .map(|root| WorkFolderInventory::discover_in(Root::Data, root, index, data_cache))
+        .map(|root| {
+            WorkFolderInventory::discover_in(Root::Data, root, documents_root, index, data_cache)
+        })
         .transpose()?;
 
     let documents = physical_documents.as_ref().map(|(own, _)| {
         let mut files: Vec<FileRecord> = own.all_files().to_vec();
+        let mut seen: HashSet<String> = files
+            .iter()
+            .map(|record| physical_identity(&absolute_of(own, record)))
+            .collect();
         if let Some((other, _)) = &physical_data {
-            files.extend(
-                other
-                    .all_files()
-                    .iter()
-                    .filter(|record| record.kind.is_document())
-                    .map(|record| rekeyed(record, Root::Data, Domain::Documents)),
-            );
+            for record in other
+                .all_files()
+                .iter()
+                .filter(|record| record.kind.is_document())
+            {
+                let absolute = absolute_of(other, record);
+                if !seen.insert(physical_identity(&absolute)) {
+                    continue;
+                }
+                if let Some(key) = key_for(Domain::Documents, documents_root, data_root, &absolute)
+                {
+                    files.push(rekeyed(record, key));
+                }
+            }
         }
         WorkFolderInventory::from_records(own.root(), files).with_foreign_root(
             physical_data
@@ -69,17 +101,27 @@ pub fn family_views(
     let data = physical_data.as_ref().map(|(own, own_usable)| {
         let mut files: Vec<FileRecord> = own.all_files().to_vec();
         let mut usable = own_usable.clone();
+        let mut seen: HashSet<String> = files
+            .iter()
+            .map(|record| physical_identity(&absolute_of(own, record)))
+            .collect();
         if let Some((other, other_usable)) = &physical_documents {
             for record in other
                 .all_files()
                 .iter()
                 .filter(|record| record.kind == FileKind::TabularCandidate)
             {
-                let foreign = rekeyed(record, Root::Documents, Domain::Data);
-                if let Some(inventory) = other_usable.get(&record.relative_path) {
-                    usable.insert(foreign.relative_path.clone(), inventory.clone());
+                let absolute = absolute_of(other, record);
+                if !seen.insert(physical_identity(&absolute)) {
+                    continue;
                 }
-                files.push(foreign);
+                let Some(key) = key_for(Domain::Data, documents_root, data_root, &absolute) else {
+                    continue;
+                };
+                if let Some(inventory) = other_usable.get(&record.relative_path) {
+                    usable.insert(key.clone(), inventory.clone());
+                }
+                files.push(rekeyed(record, key));
             }
         }
         DataFolder::from_parts(
@@ -252,6 +294,7 @@ mod tests {
         let (physical, _) = WorkFolderInventory::discover_in(
             Root::Documents,
             documents.path(),
+            Some(data.path()),
             Some(&index),
             &FileHashCache::new(),
         )

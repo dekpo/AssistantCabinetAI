@@ -20,7 +20,7 @@ use sha2::{Digest, Sha256};
 
 use crate::discovery::{self, DiscoveredFile};
 use crate::error::AppError;
-use crate::file_key::{family_of_extension, index_key, FamilyRoots, Root};
+use crate::file_key::{family_of_extension, key_for, FamilyRoots, Root};
 use crate::file_profile::build::Domain;
 use crate::file_record::{
     mime_type_for, path_identity, split_name, ExtractionMethod, FileKind, FileRecord,
@@ -28,6 +28,19 @@ use crate::file_record::{
 };
 use crate::index_store::{DocumentIndexRow, IndexStore};
 use crate::tabular::inventory::TabularInventory;
+
+/// The key a discovered file has in the index (`file_key::key_for`): decided from its absolute path and
+/// the two folders. A file under neither folder cannot come from a walk of one of them; its path inside
+/// the folder it was found in stands in, so the listing never loses it.
+fn key_of(
+    family: Domain,
+    documents: Option<&Path>,
+    data: Option<&Path>,
+    file: &DiscoveredFile,
+) -> String {
+    key_for(family, documents, data, Path::new(&file.absolute_path))
+        .unwrap_or_else(|| file.relative_path.clone())
+}
 
 /// What one file's bytes hashed to, and the two cheap facts that say whether they still do.
 #[derive(Debug, Clone)]
@@ -161,24 +174,44 @@ impl WorkFolderInventory {
         index: Option<&IndexStore>,
         cache: &FileHashCache,
     ) -> Result<Self, AppError> {
-        Ok(Self::discover_in(Root::Documents, root, index, cache)?.0)
+        Self::discover_alongside(root, None, index, cache)
+    }
+
+    /// [`discover_with_cache`](Self::discover_with_cache) with the Data folder given when it is chosen:
+    /// it decides the key of a file the two folders share (equal or nested folders), so both listings
+    /// agree on it.
+    pub fn discover_alongside(
+        root: &Path,
+        data: Option<&Path>,
+        index: Option<&IndexStore>,
+        cache: &FileHashCache,
+    ) -> Result<Self, AppError> {
+        Ok(Self::discover_in(Root::Documents, root, data, index, cache)?.0)
     }
 
     /// The physical folder `root` is, whichever of the two it is: every file listed once, each joined to
     /// what **its own family** made of it. A document is joined to the document index, a workbook to the
     /// tabular inventories, by the key the file has there (`file_key`): a file of the family that sits
     /// in the folder of the other family is read in place and stored under a key that names this
-    /// folder, so it is found here and the same path in the other folder is not mistaken for it. The
-    /// second value holds the cached inventory of every workbook that reads as a table, by path.
+    /// folder, so it is found here and the same path in the other folder is not mistaken for it. `other`
+    /// is the other folder when it is chosen: the key of a file is decided from its absolute path and the
+    /// two folders (`file_key::key_for`), so a file the two share has the same key, and the same state,
+    /// in both listings. The second value holds the cached inventory of every workbook that reads as a
+    /// table, by its path inside this folder.
     ///
     /// A file no pipeline reads is `NotAssessed` in the Documents folder and unreadable in the Data
     /// folder, as it has always been.
     pub fn discover_in(
         role: Root,
         root: &Path,
+        other: Option<&Path>,
         index: Option<&IndexStore>,
         cache: &FileHashCache,
     ) -> Result<(Self, BTreeMap<String, TabularInventory>), AppError> {
+        let (documents, data) = match role {
+            Root::Documents => (Some(root), other),
+            Root::Data => (other, Some(root)),
+        };
         let rows = match index {
             Some(store) => store.all_documents()?,
             None => Vec::new(),
@@ -203,12 +236,12 @@ impl WorkFolderInventory {
             let family = family_of_extension(&split_name(name).1);
             let record = match family {
                 Some(Domain::Documents) => {
-                    let key = index_key(role, Domain::Documents, &file.relative_path);
+                    let key = key_of(Domain::Documents, documents, data, &file);
                     record_for(&file, by_key.get(key.as_str()).copied(), cache)
                 }
                 Some(Domain::Data) => {
                     let mut record = record_for(&file, None, cache);
-                    let key = index_key(role, Domain::Data, &file.relative_path);
+                    let key = key_of(Domain::Data, documents, data, &file);
                     let (readability, status, inventory) = tabular_state(
                         record.sha256.as_deref(),
                         workbooks.get(&key).map(String::as_str),

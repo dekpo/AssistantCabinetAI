@@ -650,7 +650,6 @@ function AppContent() {
                   suggestedDataFolder={snapshot.suggestedDataFolder}
                   onWorkFolderChosen={chooseWorkFolder}
                   onDataFolderChosen={(path) => void update({ dataFolder: path })}
-                  folderError={saveError?.code === "folders_overlap" ? saveError : null}
                   indexing={indexing}
                   dataIndexing={dataIndexing}
                   scope={scope}

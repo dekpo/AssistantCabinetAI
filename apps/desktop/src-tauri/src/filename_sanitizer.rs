@@ -24,7 +24,7 @@ use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::discovery;
-use crate::file_key::{index_key, Root};
+use crate::file_key::key_under;
 use crate::file_profile::build::Domain;
 
 /// The name a file should have. Idempotent: a clean name comes back unchanged.
@@ -143,14 +143,25 @@ pub fn sanitize_documents(work_folder: &Path, other_folder: Option<&Path>) -> Sa
     let mut report = sanitize_folder(work_folder);
     if let Some(other) = other_folder {
         let second = sanitize_folder(other);
-        let key = |path: String| index_key(Root::Data, Domain::Documents, &path);
+        // The key of a file the second walk met, by the one rule: a file lying under the work folder too
+        // (equal or nested folders) keeps its plain key and is never reported twice.
+        let key = |path: String| {
+            let absolute = path
+                .split('/')
+                .fold(other.to_path_buf(), |p, part| p.join(part));
+            key_under(Domain::Documents, Some(work_folder), Some(other), &absolute).unwrap_or(path)
+        };
         report
             .renamed
             .extend(second.renamed.into_iter().map(|entry| Renamed {
                 from: key(entry.from),
                 to: key(entry.to),
             }));
-        report.failed.extend(second.failed.into_iter().map(key));
+        for path in second.failed.into_iter().map(key) {
+            if !report.failed.contains(&path) {
+                report.failed.push(path);
+            }
+        }
     }
     report
 }

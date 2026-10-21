@@ -181,12 +181,16 @@ function canonical(path: string): string {
  * Data folder inside the Documents folder, or the same folder chosen twice) list the same physical
  * file from both; this is what tells them apart from two files that merely share a name.
  */
-function physicalIdentity(entry: ExplorerEntry, roots: RootPaths | undefined): string | null {
-  const base = roots?.[entry.root];
+function physicalIdentity(
+  root: ExplorerRoot,
+  path: string,
+  roots: RootPaths | undefined,
+): string | null {
+  const base = roots?.[root];
   if (base === null || base === undefined || base.trim() === "") {
     return null;
   }
-  return `${canonical(base)}/${canonical(entry.path)}`;
+  return `${canonical(base)}/${canonical(path)}`;
 }
 
 /**
@@ -202,14 +206,21 @@ export function mergeInventories(
   const entries: ExplorerEntry[] = [];
   let unsupported = 0;
   const seen = new Map<string, number>();
+  const seenUnsupported = new Set<string>();
   const add = (root: ExplorerRoot, records: readonly FileRecord[]) => {
     for (const record of records) {
+      const identity = physicalIdentity(root, record.relativePath, roots);
       const entry = entryOf(root, record);
       if (entry === null) {
-        unsupported += 1;
+        // A file no pipeline reads, listed from both folders, is still one file.
+        if (identity === null || !seenUnsupported.has(identity)) {
+          unsupported += 1;
+        }
+        if (identity !== null) {
+          seenUnsupported.add(identity);
+        }
         continue;
       }
-      const identity = physicalIdentity(entry, roots);
       const earlier = identity === null ? undefined : seen.get(identity);
       if (earlier === undefined) {
         if (identity !== null) {

@@ -334,22 +334,40 @@ new command: `work_folder_inventory` and `data_folder_inventory` already list **
 - **Family by extension.** Documents (`SUPPORTED_EXTENSIONS` of `discovery.rs`) or Tables (`csv xlsx xls xlsm ods`,
   `FileKind::TabularCandidate`). A file of neither family is counted and not listed.
 - **Native or foreign.** An entry is **native** when it sits in its family's own folder. A foreign entry is a workbook
-  of the Documents folder (kind `tabular_candidate`, "not assessed" there) or a document of the Data folder (forced to
-  `failed` by `data_folder.rs`, because that folder's pipeline reads workbooks only). What a foreign file's own inventory
-  says describes a pipeline that is not its own, so the screen shows it as **to analyse**, never as unreadable, and
-  leaves it out of its family's **Analyser** count, until it can be analysed in place.
+  of the Documents folder or a document of the Data folder. Since explorer step 8 each folder's inventory joins every
+  file to what **its own family** made of it (`WorkFolderInventory::discover_in`, see "The key of a file" below), so a
+  foreign file is shown in its real state: to analyse until its family's pass has read it in place, then analysed or
+  unreadable. It is counted by its family's **Analyser**.
 - **Three states for the screen:** `indexed` is analysed; `failed` is unreadable; `discovered`, `pending` (indexed once,
-  changed since) and `processing` are to analyse. The ticking rule is unchanged: **only an analysed file of its own
-  folder can be ticked** (`isSelectable`, `processingStatus === "indexed"`), so the scopes, which stay one per folder, are
-  worked out over the same set of files as before.
-- **Overlapping folders.** If one folder is chosen inside the other, or the same one twice, a physical file would be
-  listed from both. The merge, given the two folders' paths, keeps it once (the native copy wins, otherwise the
-  Documents one). Without the paths nothing is merged. A guard against choosing overlapping folders is a later step's.
+  changed since) and `processing` are to analyse. **An analysed file can be ticked wherever it sits**
+  (`isTickable`, `processingStatus === "indexed"`); the scopes are one per family, each entry under the file's key.
+  Opening and showing a foreign file waits for step 9.
+- **Overlapping folders.** Two folders that are equal or nested are refused when chosen and set aside when found in
+  settings written before the rule (`folders_overlap`, explorer step 8). The merge still keeps one entry for a physical
+  file listed from both roots, as a guard for a state that no longer arises.
 - **Counts** shown beside a family (analysed, to analyse, unreadable) are computed from the per-file states, not
   taken from either report's summary, because the two summaries are worked out differently for the two folders and
   neither counts a file of the other family.
 - **Cost.** The reports are read by the same cheap path as before: at launch, when the window gets the focus back,
   and after a pass. Measured figures for 1 500 files: `docs/DECISIONS.md`, "Taken while building the explorer's unified view".
+
+## The key of a file: root and family (explorer step 8)
+
+Two words (`docs/DECISIONS.md`, "root and family"). The **root** is the physical folder a file sits in, `documents` or
+`data`. The **family** is how it is read, by extension: the document pipeline or the tabular one. The index identifies a
+file by its **key**: its path inside its root when the root is its family's own, `/<root>/<path>` when it is not (a
+workbook found in the Documents folder is `/documents/Factures/2025.xlsx` in the tabular tables, a document found in the
+Data folder is `/data/Courriers/a.pdf` in the document tables). The same path in both roots is therefore two files, and
+nothing in the index changed shape: `file_key.rs` and `lib/indexKey.ts` are the only code that builds or reads a key.
+
+- **Two kinds of inventory.** The explorer lists a **folder** (`discover_in`): paths inside the root, each file joined to its
+  own family's rows by its key. The conversation reads a **family** (`family_view::family_views`): the family's own folder
+  as it is, plus the family's files found in the other folder under their keys, resolved against that folder only.
+- **A key opens nothing by itself.** `reveal::resolve_plain_file` (the viewer, the file manager) rebuilds a path from plain
+  names and refuses a root component, so a key handed to code that does not know about roots is refused, never read as
+  another file. Step 9 makes the commands root-aware.
+- **What a name is made of.** `NameProfile::build` drops the folder of a key: the words of a foreign file's name are those of
+  its own path.
 
 ## Future reuse — two Work Folders
 

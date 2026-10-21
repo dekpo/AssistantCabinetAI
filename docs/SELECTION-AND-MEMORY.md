@@ -142,6 +142,18 @@ that replaced the folder listing's "Detail":
   answers do not rest on her folder, and with every document the model has more to sift than it can use well.
 - Only analysed files can be ticked. The rest of the listing is there to be seen, with its state dot.
 
+### Entries, families and folders (explorer step 8)
+
+The two scopes are the two **families'**: `mode` holds the documents wherever they sit, `dataMode` the workbooks wherever
+they sit, and the chat contract is unchanged. An entry's `relativePath` is the file's **key** (`docs/DECISIONS.md`, "root
+and family"): its path when it sits in its family's own folder, `/<root>/<path>` when it sits in the other one, so the
+same path in the two folders is two entries. The client puts a ticked file into the scope of its family
+(`explorerSelection.ts`); Rust resolves each entry against the family's view across both folders
+(`family_view::family_views`). **A renamed file keeps its place:** `ScopeEntry::find_in` looks an entry up by its key and,
+when that path is gone, by the single file that still has the content it pinned (the clean-name rename of an Analyse, or
+the user's own). Two copies of the pinned content are not guessed between: the entry is then missing. Content that
+changed under the same key is `changed`, as before.
+
 ## Automatic selection (« Select. auto », explorer step 7, 21 October 2026)
 
 An **optional** switch in the explorer that makes the selection follow the filters. It is a convenience on top of the three states
@@ -192,6 +204,8 @@ The distinction that keeps this safe is **chosen nothing** versus **chose someth
 - A name that matches nothing anywhere in the folder is still "no file named X".
 
 ### "Tous" searches the current folder only
+
+(Since explorer step 8, « the folder » of a family is the family across both folders: the documents wherever they sit.)
 
 A whole-folder question now searches the chunks of files **present in the current folder** (and indexed),
 in the index's own order, instead of every chunk the index holds. When the index matches the folder the

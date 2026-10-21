@@ -126,11 +126,15 @@ trademark constraints, which also forbid rebadging Open WebUI as our product.
 An analysed file opens in the centre, inside the window, fully offline. It is display-only: opening a file never
 ticks or unticks a file, never starts an analysis, and touches no extraction, OCR, index, retrieval or provider.
 
-**How a file is opened.** Each row of the two lists in the sidebar (the Documents Folder and the Tables Folder)
-has an **Ouvrir** button, only on a file that can be selected (`isSelectable`: analysed, green dot), independent
-of its checkbox. A file that is not analysed, unreadable, or a workbook without a real table has no button: a
-`.csv` or `.xlsx` left in the Documents Folder is listed but not analysed, so it cannot be opened from there;
-the Tables Folder is where tables belong. Only analysed files open because an Analyse renames files to clean
+**How a file is opened.** Each row of the two lists in the sidebar (the Documents list and the Tables list)
+has an **Ouvrir** button, only on an analysed file (`isOpenable`, the green dot), independent of its checkbox,
+**wherever the file sits** (explorer step 9, 21 October 2026): a workbook found in the Documents folder or a document
+found in the Data folder opens like any other, once its family's pass has read it there. A file that is not analysed
+or is unreadable has no button (but keeps **Voir**). The tab is keyed by the **physical folder** (`entry.root`) and the
+plain path, never by the family, and the viewer reads the file through the command of that folder; the renderer is
+chosen by the extension. The viewer guard compares a tab with the inventory of its own folder, which joins a file to
+what its own family made of it, so a foreign file is judged by its own state. The old cards of the Settings still use
+their own gate (`isSelectable`) until step 10. Only analysed files open because an Analyse renames files to clean
 names, so a path known before it can change after it. `WorkspaceView` carries
 `{ kind: "files", tabs: OpenFile[], activeId }` (each `OpenFile` is `{ id, folder, record }`: the whole record, with
 the folder it is relative to). Every opening goes through one function in `App`, `openFile(folder, record)`, which
@@ -188,6 +192,15 @@ and `remark-gfm`, no `rehype-raw`): nothing a file contains can become markup, a
 its text (the alt text for an image), so the preview can neither navigate the window nor fetch anything. It is
 fed the same bounded text as the raw view (`prepareViewerText`: same decoding, same 500 000-character limit, same
 notice), from the bytes already read, and sits in its own scroll container. `Markdown.tsx` is unchanged.
+
+**The sheet viewer at a fractional display scale (21 October 2026).** `shrimp-doc-viewer` draws a sheet on a canvas
+sized to the scrolling element's `clientWidth` x `clientHeight`, which are whole numbers. At a Windows scale of 125 %
+the real box is fractional, so the canvas overflowed by a fraction of a pixel: a bar appeared, the box shrank, the
+library redrew the canvas smaller, the bar went, and the loop never stopped (the bars flickered, only on the 125 %
+screen, only at zooms where the sheet fits). `styles.css` now clamps that one canvas to its containing block
+(`.viewer__host > div:not(:first-child) > canvas[style*="will-change"]`, `max-width` and `max-height` 100 %). Only the
+sheet canvas carries `will-change`; a large sheet still scrolls. Measured on a replica of the library's own DOM and
+resize loop in Edge: 17 of 40 sizes flickered at 125 %, none at 100 %, none after the rule.
 
 **Text read by the assistant (`eml`, `srt`, `vtt`).** These three also give `["raw", "preview"]`
 (`previewKind(extension)`: `markdown` for `md`, `readable` for them), and the second button is named for what it
@@ -256,7 +269,9 @@ explorer" and "... the explorer's layout, first start, progress and centre". Pla
 - **A file of the other family** (a workbook in the Documents folder, a document in the Data folder) is shown under its
   family with a tag « depuis Docs » / « depuis Data », in its real state (to analyse until its family's pass has read it
   there, then analysed or unreadable), and is **counted** by its family's **Analyser (n)**, which reads it in place
-  (explorer step 8). It can be ticked once analysed; opening and showing it wait for step 9. The search, the facts and
+  (explorer step 8). Once analysed it can be ticked, **opened** (Ouvrir) and **shown** (Voir) exactly like any other file
+  (explorer step 9): the actions go to the folder the file really sits in (`entry.root`, `entry.path`), and Voir is offered
+  for every file, whatever its state or its folder. The search, the facts and
   the selection are by family and place each file by the folder its key names (`lib/indexKey.ts`).
 - **Any two folders (explorer step 8B, 21 October 2026).** The Documents folder and the Tables folder can be separate (the
   suggested default), **the same folder**, a Tables folder **inside** the Documents folder, or the reverse: choosing one
@@ -404,8 +419,8 @@ scroll bar), `lib/centreSection.ts` (the section and when the zone is open).
 - **À vérifier** lists the unreadable files of their own folder and the files the last pass could not read (a pass retries those,
   so the inventory still shows them as to analyse), with the reason from the error catalogue (or « Aucun texte lisible. », « Trop peu
   lisible pour être indexé. », « La reconnaissance de texte n'a trouvé aucun texte lisible. », « Aucun texte trouvé dans ce fichier. », « Aucun tableau exploitable. »; the index alone gives the last four, so no pass is needed), the first twenty and a count of the rest. **Voir** shows the file in
-  the file manager; **Ouvrir** appears only where the explorer's own rows open a file (analysed, in its own folder), so it is not
-  there for an unreadable one until step 9. « Afficher les N dans la liste de gauche » sets the explorer's state filter to
+  the file manager, wherever the file sits (explorer step 9); **Ouvrir** appears only where the explorer's own rows open a file
+  (analysed, wherever it sits), so it is not there for an unreadable one. « Afficher les N dans la liste de gauche » sets the explorer's state filter to
   unreadable for both families, empties the typed search and unfolds the folded lists that hold some of those files; N is what that filter shows. Each family's card shows its folder's **whole path**.
 - **The unread formats are text, not filters:** a file no pipeline reads is not an entry of the explorer, so a chip cannot filter the
   list (its tooltip says so).

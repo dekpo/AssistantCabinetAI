@@ -17,6 +17,8 @@ pub mod data_folder;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
+pub mod family_view;
+pub mod file_key;
 pub mod file_profile;
 pub mod file_record;
 pub mod file_reference;

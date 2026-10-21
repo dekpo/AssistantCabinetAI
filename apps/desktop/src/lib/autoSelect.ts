@@ -1,7 +1,7 @@
 import {
   addEntriesToScopes,
   clearedScopes,
-  type ScopesByRoot,
+  type ScopesByFamily,
 } from "./explorerSelection";
 import { isTickable, type ExplorerEntry } from "./explorerModel";
 
@@ -24,14 +24,14 @@ import { isTickable, type ExplorerEntry } from "./explorerModel";
 
 /** The selection as it was when the switch was turned on, and how many files it used. */
 export interface AutoSnapshot {
-  scopes: ScopesByRoot;
+  scopes: ScopesByFamily;
   /** The files used on both sides, for the label of the restore link. */
   count: number;
 }
 
 /** A result to follow: the selection it gives and a key that is the same for the same result. */
 export interface AutoTarget {
-  scopes: ScopesByRoot;
+  scopes: ScopesByFamily;
   key: string;
 }
 
@@ -56,7 +56,7 @@ export const AUTO_OFF: AutoState = {
 
 export type AutoEvent =
   /** The user turned the switch on: the selection as it stands, and the result to follow now. */
-  | { type: "switchOn"; scopes: ScopesByRoot; count: number; target: AutoTarget }
+  | { type: "switchOn"; scopes: ScopesByFamily; count: number; target: AutoTarget }
   | { type: "switchOff" }
   /** A settled result: the selection it gives. Never sent per keystroke. */
   | { type: "resultArrived"; target: AutoTarget }
@@ -69,7 +69,7 @@ export type AutoEvent =
 export interface AutoStep {
   state: AutoState;
   /** The selection to put in place now, or null when the selection stays as it is. */
-  apply: ScopesByRoot | null;
+  apply: ScopesByFamily | null;
 }
 
 const unchanged = (state: AutoState): AutoStep => ({ state, apply: null });
@@ -151,8 +151,8 @@ export function targetOf(
   return { scopes, key };
 }
 
-/** How many results cannot be ticked: the files of the result that are not analysed, or sit in the
- * other family's folder. The bar says it while the switch is on. */
+/** How many results cannot be ticked: the files of the result that are not analysed yet. The bar says
+ * it while the switch is on. */
 export function unreachableCount(shown: readonly ExplorerEntry[]): number {
   return shown.filter((entry) => !isTickable(entry)).length;
 }

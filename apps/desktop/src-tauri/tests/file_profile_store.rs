@@ -554,6 +554,7 @@ async fn the_pass_is_resumable_and_cancellable() {
         vocabulary: &vocabulary,
         packs: &packs,
         gazetteer: None,
+        foreign_folder: None,
     };
 
     // Cancelled after three files: three profiles exist, the folder is not marked as profiled.

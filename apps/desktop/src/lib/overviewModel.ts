@@ -1,8 +1,9 @@
 import type { AppError } from "./errors";
 import {
   countsByFamily,
-  explorerKey,
-  isTickable,
+  entryIndexKey,
+  explorerKeyOfIndexKey,
+  isOpenable,
   sortEntries,
   type ExplorerEntry,
   type Family,
@@ -233,10 +234,10 @@ function outcomeOf(summary: IndexSummary): PassOutcome {
     : "done";
 }
 
-/** Who can do what to a file of the list: the explorer's own gates (`isTickable` for Ouvrir, the
+/** Who can do what to a file of the list: the explorer's own gates (`isOpenable` for Ouvrir, the
  * folder of its own family for Voir), so a later step that widens them widens this page too. */
 export function checkActions(entry: ExplorerEntry): CheckActions {
-  return { open: isTickable(entry), reveal: entry.native };
+  return { open: isOpenable(entry), reveal: entry.native };
 }
 
 /** The view the link « Afficher les N dans la liste de gauche » sets: the files in the unreadable
@@ -253,7 +254,7 @@ export function checkView(): ExplorerView {
  * reason.
  */
 function reasonOf(entry: ExplorerEntry, summary: IndexSummary | null): CheckReason {
-  const path = normal(entry.path);
+  const path = normal(entryIndexKey(entry));
   const failed = summary?.failedFiles.find((file) => normal(file.path) === path);
   if (failed !== undefined) {
     return { kind: "error", code: failed.code, data: failed.data };
@@ -268,24 +269,23 @@ function reasonOf(entry: ExplorerEntry, summary: IndexSummary | null): CheckReas
 }
 
 /**
- * The files that ask for a look: every unreadable file of its own folder, and every file the last
- * pass of its family failed to read (the pass retries those, so the inventory still shows them as to
- * analyse). Sorted by name. A file of the other family is not here: its own pipeline did not run on
- * it.
+ * The files that ask for a look: every unreadable file, wherever it sits (each folder's inventory
+ * joins a file to what its own family made of it), and every file the last pass of its family failed
+ * to read (the pass retries those, so the inventory still shows them as to analyse). Sorted by name.
  */
 function filesToCheck(input: OverviewInput): CheckItem[] {
   const picked = new Map<string, ExplorerEntry>();
   for (const entry of input.entries) {
-    if (entry.native && entry.state === "unreadable") {
+    if (entry.state === "unreadable") {
       picked.set(entry.key, entry);
     }
   }
   const byKey = new Map(input.entries.map((entry) => [entry.key, entry]));
   for (const family of FAMILIES) {
-    const root = family === "documents" ? "documents" : "data";
+    const passFamily = family === "documents" ? "documents" : "data";
     for (const file of inputOf(input, family).summary?.failedFiles ?? []) {
-      const entry = byKey.get(explorerKey(root, normal(file.path)));
-      if (entry !== undefined && entry.native) {
+      const entry = byKey.get(explorerKeyOfIndexKey(passFamily, normal(file.path)));
+      if (entry !== undefined) {
         picked.set(entry.key, entry);
       }
     }

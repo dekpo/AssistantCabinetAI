@@ -10,9 +10,10 @@ import {
 } from "react";
 import { useTranslation } from "../i18n/I18nProvider";
 import { unfinishedPercent } from "../lib/analysis";
-import { selectionOf, tickedPaths, toggleScopeFile } from "../lib/analysisScope";
+import { selectionOf, toggleScopeFile } from "../lib/analysisScope";
 import { restoreCount, showsTickLink, targetOf, unreachableCount } from "../lib/autoSelect";
 import { normaliseError, type AppError } from "../lib/errors";
+import { inventoryRefresh } from "../lib/inventoryRefresh";
 import { attachFacts, type EntityKind } from "../lib/explorerFacts";
 import {
   activeFilterCount,
@@ -38,7 +39,7 @@ import {
 import {
   countsByFamily,
   filterEntries,
-  explorerKey,
+  explorerKeyOfIndexKey,
   foundKeys,
   isTickable,
   mergeInventories,
@@ -54,10 +55,13 @@ import {
   clearedScopes,
   entriesToTick,
   isFiltering,
+  scopeFamilyOf,
+  scopeRecord,
   selectionNotes,
   tickableRecords,
+  tickedKeysOf,
   usedCount,
-  type ScopesByRoot,
+  type ScopesByFamily,
 } from "../lib/explorerSelection";
 import { boxState, folderState, nothingToSearch } from "../lib/explorerStates";
 import {
@@ -121,6 +125,7 @@ export function FileExplorer({
   suggestedDataFolder,
   onWorkFolderChosen,
   onDataFolderChosen,
+  folderError,
   indexing,
   dataIndexing,
   scope,
@@ -152,6 +157,9 @@ export function FileExplorer({
    * ask first); the Data one just saves the setting. */
   onWorkFolderChosen: (path: string) => void;
   onDataFolderChosen: (path: string) => void;
+  /** A folder just chosen was refused when the settings were saved (the two folders overlap): the box
+   * is where it was chosen, so it says so here too. */
+  folderError?: AppError | null;
   /** The documents' pass and the workbooks' pass: two folders, two passes. */
   indexing: IndexingState;
   dataIndexing: IndexingState;
@@ -218,17 +226,26 @@ export function FileExplorer({
   const filtersButton = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
+  /* A pass of one family changes what both inventories say (a workbook of the Documents folder is read
+     by the tabular pass), so both are read again after any pass or clear (`lib/inventoryRefresh.ts`). */
+  const refresh = inventoryRefresh({
+    documentsPasses: indexing.finishedPasses,
+    dataPasses: dataIndexing.finishedPasses,
+    notesToken: refreshToken,
+    documentsClears: folders.clears.documents,
+    tablesClears: folders.clears.tables,
+  });
   const documentsInventory = useFolderInventory(
     workFolderInventory,
     workFolder,
-    indexing.finishedPasses,
-    refreshToken + folders.clears.documents,
+    refresh.passes,
+    refresh.token,
   );
   const dataInventory = useFolderInventory(
     dataFolderInventory,
     dataFolder,
-    dataIndexing.finishedPasses,
-    folders.clears.tables,
+    refresh.passes,
+    refresh.token,
   );
   const merged = useMemo(
     () =>
@@ -255,21 +272,29 @@ export function FileExplorer({
     [merged.entries, knowledge.facts],
   );
 
-  /* One field, two searches: the finder works per folder, so the same text is asked of each and the
-     two answers are joined by (folder, path). A search that could not run shows everything and says
-     so, rather than hiding one folder's files behind the other's answer. */
+  /* One field, two searches: the finder works per family across both folders (a workbook found in the
+     Documents folder is searched with the tables), so the same text is asked of each and the two
+     answers, whose hits are index keys, are joined by the folder each file sits in. A search that could
+     not run shows everything and says so, rather than hiding one family's files behind the other's
+     answer. */
+  const bothFolders = `${workFolder ?? ""}|${dataFolder ?? ""}`;
+  const bothPasses = indexing.finishedPasses + dataIndexing.finishedPasses;
+  const bothInventories = useMemo(
+    () => [documentsInventory, dataInventory],
+    [documentsInventory, dataInventory],
+  );
   const documentsFinder = useFinderSearch({
     domain: "documents",
-    folder: workFolder,
-    finishedPasses: indexing.finishedPasses,
-    inventory: documentsInventory,
+    folder: bothFolders,
+    finishedPasses: bothPasses,
+    inventory: bothInventories,
     enabled: !scopeLocked && workFolder !== null,
   });
   const dataFinder = useFinderSearch({
     domain: "data",
-    folder: dataFolder,
-    finishedPasses: dataIndexing.finishedPasses,
-    inventory: dataInventory,
+    folder: bothFolders,
+    finishedPasses: bothPasses,
+    inventory: bothInventories,
     enabled: !scopeLocked && dataFolder !== null,
   });
   const text = documentsFinder.text;
@@ -304,12 +329,10 @@ export function FileExplorer({
       return null;
     }
     const keys = new Set<string>();
-    for (const [root, side] of [
-      ["documents", scope],
-      ["data", dataScope],
-    ] as const) {
-      for (const path of tickedPaths(side, tickableRecords(entries, root))) {
-        keys.add(explorerKey(root, path));
+    const ticked = tickedKeysOf({ documents: scope, data: dataScope }, entries);
+    for (const family of ["documents", "data"] as const) {
+      for (const key of ticked[family]) {
+        keys.add(explorerKeyOfIndexKey(family, key));
       }
     }
     return keys;
@@ -343,11 +366,13 @@ export function FileExplorer({
      not the last of the list; the position is the one each finder gave its own folder's files. */
   const rankByKey = useMemo(() => {
     const rank = new Map<string, number>();
-    for (const [root, finder] of [
+    for (const [family, finder] of [
       ["documents", documentsFinder],
       ["data", dataFinder],
     ] as const) {
-      (finder.found ?? []).forEach((path, position) => rank.set(explorerKey(root, path), position));
+      (finder.found ?? []).forEach((key, position) =>
+        rank.set(explorerKeyOfIndexKey(family, key), position),
+      );
     }
     return rank;
   }, [documentsFinder.found, dataFinder.found]);
@@ -441,12 +466,12 @@ export function FileExplorer({
     if (found === null) {
       return map;
     }
-    for (const [root, finder] of [
+    for (const [family, finder] of [
       ["documents", documentsFinder],
       ["data", dataFinder],
     ] as const) {
-      for (const [path, reasons] of Object.entries(finder.reasons)) {
-        map.set(explorerKey(root, path), reasonKeys(reasons));
+      for (const [key, reasons] of Object.entries(finder.reasons)) {
+        map.set(explorerKeyOfIndexKey(family, key), reasonKeys(reasons));
       }
     }
     return map;
@@ -479,7 +504,7 @@ export function FileExplorer({
      it asks for. Off at every launch, locked while a question is being answered. */
   const auto = useAutoSelect({
     locked: scopeLocked,
-    apply: (next: ScopesByRoot) => {
+    apply: (next: ScopesByFamily) => {
       onScopeChange(next.documents);
       onDataScopeChange(next.data);
     },
@@ -490,18 +515,18 @@ export function FileExplorer({
     }
   }, [auto.state.on, shown, entries]);
 
-  /* The selection: the same two scopes the chat is sent with. A row's tick, the two links of the
-     bottom bar and the counts all read them through the analysed files of each folder. */
+  /* The selection: the same two scopes the chat is sent with, one per family (the documents wherever
+     they sit, the tables wherever they sit), each entry under the key the index knows the file by. A
+     row's tick, the two links of the bottom bar and the counts all read them through the analysed
+     files of each family. */
   const tickable = {
     documents: tickableRecords(entries, "documents"),
     data: tickableRecords(entries, "data"),
   };
-  const tickedPathsByRoot = {
-    documents: new Set(tickedPaths(scope, tickable.documents)),
-    data: new Set(tickedPaths(dataScope, tickable.data)),
-  };
+  const scopes: ScopesByFamily = { documents: scope, data: dataScope };
+  const tickedByFamily = tickedKeysOf(scopes, entries);
   const isTicked = (entry: ExplorerEntry) =>
-    isTickable(entry) && tickedPathsByRoot[entry.root].has(entry.path);
+    isTickable(entry) && tickedByFamily[scopeFamilyOf(entry)].has(scopeRecord(entry).relativePath);
   const toggleTick = (entry: ExplorerEntry) => {
     if (!isTickable(entry)) {
       return;
@@ -509,13 +534,13 @@ export function FileExplorer({
     /* A tick by hand turns the automatic selection off and drops nothing else. */
     auto.send({ type: "manualChange" });
     const now = Date.now();
-    if (entry.root === "documents") {
-      onScopeChange(toggleScopeFile(scope, entry.record, tickable.documents, now));
+    const record = scopeRecord(entry);
+    if (scopeFamilyOf(entry) === "documents") {
+      onScopeChange(toggleScopeFile(scope, record, tickable.documents, now));
     } else {
-      onDataScopeChange(toggleScopeFile(dataScope, entry.record, tickable.data, now));
+      onDataScopeChange(toggleScopeFile(dataScope, record, tickable.data, now));
     }
   };
-  const scopes = { documents: scope, data: dataScope };
   const toTick = isFiltering(filter) ? entriesToTick(shown, entries, scopes) : [];
   const documentsUsed = usedCount(scope, tickable.documents);
   const tablesUsed = usedCount(dataScope, tickable.data);
@@ -886,6 +911,7 @@ export function FileExplorer({
       )}
 
       {error === null ? null : <ErrorBanner error={error} />}
+      {folderError == null ? null : <ErrorBanner error={folderError} />}
       {indexing.error === null ? null : <ErrorBanner error={indexing.error} />}
       {dataIndexing.error === null ? null : <ErrorBanner error={dataIndexing.error} />}
 

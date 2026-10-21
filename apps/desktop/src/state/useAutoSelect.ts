@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AUTO_OFF, autoStep, type AutoEvent, type AutoState } from "../lib/autoSelect";
-import type { ScopesByRoot } from "../lib/explorerSelection";
+import type { ScopesByFamily } from "../lib/explorerSelection";
 
 /**
  * « Select. auto » in the box: the state machine of `lib/autoSelect.ts` held for the life of the box, and
@@ -13,7 +13,7 @@ export function useAutoSelect({
 }: {
   locked: boolean;
   /** Puts a selection in place: the two scopes the chat is sent with. */
-  apply: (scopes: ScopesByRoot) => void;
+  apply: (scopes: ScopesByFamily) => void;
 }): { state: AutoState; send: (event: AutoEvent) => void } {
   const [state, setState] = useState<AutoState>(AUTO_OFF);
   const current = useRef(state);

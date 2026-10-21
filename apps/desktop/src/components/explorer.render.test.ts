@@ -126,7 +126,7 @@ describe("a file row, drawn", () => {
 
     const sheetHtml = row(sheet as ExplorerEntry, { checkDisabled: true });
     expect(sheetHtml).toContain("depuis Docs");
-    expect(sheetHtml).toContain("ne peut pas encore être analysé ici");
+    expect(sheetHtml).toContain("il est analysé là où il se trouve");
     expect(sheetHtml).toContain("explorer-row--foreign");
     expect(row(letter as ExplorerEntry, { checkDisabled: true })).toContain("depuis Data");
   });
@@ -227,21 +227,29 @@ describe("a family section, drawn", () => {
     expect(tables).toContain("family-glyph--tables");
   });
 
-  it("counts in Analyser only the files of its own folder that wait, never a foreign one", () => {
-    // Two documents wait in the Documents folder; one more waits in the Data folder (foreign).
+  it("counts in Analyser every file of the family that waits, wherever it sits", () => {
+    // Two documents wait in the Documents folder; one more waits in the Data folder (read there).
     const html = section(
       [record("a.pdf", "discovered"), record("b.pdf", "pending"), record("c.pdf")],
-      [record("lettre.docx", "failed")],
+      [record("lettre.docx", "discovered")],
     );
 
-    expect(html).toContain("Analyser (2)");
-    // The tooltip of the button says the foreign file is not counted.
-    expect(html).toContain("1 fichier rangé dans l&#x27;autre dossier n&#x27;est pas compté");
-    // ... while the header's "to analyse" counter does include it: three files wait.
+    expect(html).toContain("Analyser (3)");
+    // No tooltip about a file left out: nothing is left out any more.
+    expect(html).not.toContain("autre dossier n&#x27;est pas compté");
     expect(html).toContain('aria-label="3 à analyser"');
   });
 
-  it("says plain Analyser, without a number, when nothing of its own folder waits", () => {
+  it("does not count a foreign file already analysed or unreadable as waiting", () => {
+    const html = section(
+      [record("a.pdf", "discovered")],
+      [record("lettre.docx", "indexed"), record("note.txt", "failed")],
+    );
+
+    expect(html).toContain("Analyser (1)");
+  });
+
+  it("says plain Analyser, without a number, when nothing of the family waits", () => {
     const html = section([record("a.pdf")], [record("lettre.docx")]);
 
     expect(html).toContain(">Analyser<");

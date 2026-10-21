@@ -1,11 +1,12 @@
-import type { EntryFacts, ExplorerEntry, ExplorerRoot } from "./explorerModel";
-import { explorerKey } from "./explorerModel";
-import type { FactEntity, FolderKnowledgeFacts } from "./ipc";
+import type { EntryFacts, ExplorerEntry } from "./explorerModel";
+import { explorerKeyOfIndexKey } from "./explorerModel";
+import type { FactEntity, FinderDomain, FolderKnowledgeFacts } from "./ipc";
 
 /*
- * The knowledge-base facts of the explorer, with no React and no call: the facts of the two folders
+ * The knowledge-base facts of the explorer, with no React and no call: the facts of the two families
  * joined by `explorerKey`, attached to the entries, and the names of the people and organisations they
- * link to. The facts are read once per folder (`file_knowledge_facts`); every count and every filter of
+ * link to. The facts are read once per family (`file_knowledge_facts`), each file under the key the index
+ * knows it by, so a workbook found in the Documents folder is placed there (`indexKey.ts`); every count and every filter of
  * the knowledge base is then worked out here, so a filter change costs no call (`docs/KNOWLEDGE-BASE.md`,
  * "Filters of the explorer"). A person stays a person and an organisation an organisation: the type
  * comes from the base, never from the active packs.
@@ -20,19 +21,19 @@ export interface KnowledgeFacts {
 
 export const NO_FACTS: KnowledgeFacts = { byKey: new Map(), entities: new Map() };
 
-/** The facts of the two folders as one value; a folder not read (null) adds nothing. */
+/** The facts of the two families as one value; a family not read (null) adds nothing. */
 export function joinFacts(
-  folders: Readonly<Record<ExplorerRoot, FolderKnowledgeFacts | null>>,
+  families: Readonly<Record<FinderDomain, FolderKnowledgeFacts | null>>,
 ): KnowledgeFacts {
   const byKey = new Map<string, EntryFacts>();
   const entities = new Map<number, FactEntity>();
-  for (const root of ["documents", "data"] as const) {
-    const facts = folders[root];
+  for (const family of ["documents", "data"] as const) {
+    const facts = families[family];
     if (facts === null) {
       continue;
     }
     for (const file of facts.files) {
-      byKey.set(explorerKey(root, file.relativePath), {
+      byKey.set(explorerKeyOfIndexKey(family, file.relativePath), {
         type: file.businessType,
         years: file.years,
         links: file.entities,

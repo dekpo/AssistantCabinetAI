@@ -24,7 +24,8 @@ use crate::knowledge::packs::PackSet;
 /// The number of characters of the first page read for the body markers.
 pub const BODY_CHARS: usize = 1500;
 
-/// Which of the two folders a file belongs to; the same relative path can exist in both.
+/// The family of a file: how it is read (the document pipeline or the tabular one), and so which tables
+/// hold it. Not the folder it sits in (`file_key::Root`): a workbook can sit in the Documents folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Domain {

@@ -56,6 +56,11 @@ pub enum AppError {
     #[error("data_folder_no_longer_allowed")]
     DataFolderNoLongerAllowed,
 
+    /// The Documents folder and the Data folder are the same folder, or one is inside the other. Refused
+    /// when chosen, and dropped with this warning when found in settings written before the rule.
+    #[error("folders_overlap")]
+    FoldersOverlap,
+
     #[error("work_folder_is_symlink")]
     WorkFolderIsSymlink { path: String },
 
@@ -344,6 +349,7 @@ impl AppError {
             Self::WorkFolderIsCloudSynced { .. } => "work_folder_is_cloud_synced",
             Self::WorkFolderNoLongerAllowed => "work_folder_no_longer_allowed",
             Self::DataFolderNoLongerAllowed => "data_folder_no_longer_allowed",
+            Self::FoldersOverlap => "folders_overlap",
             Self::WorkFolderIsSymlink { .. } => "work_folder_is_symlink",
             Self::WorkFolderUncNotSupported { .. } => "work_folder_unc_not_supported",
             Self::WorkFolderNotWritable { .. } => "work_folder_not_writable",
@@ -419,6 +425,7 @@ impl AppError {
             | Self::WorkFolderSelectionCancelled
             | Self::WorkFolderNoLongerAllowed
             | Self::DataFolderNoLongerAllowed
+            | Self::FoldersOverlap
             | Self::ServerResponseInvalid
             | Self::EmbeddingTimeout
             | Self::NoWorkFolderSet

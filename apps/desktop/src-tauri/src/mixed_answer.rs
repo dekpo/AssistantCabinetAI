@@ -773,6 +773,60 @@ mod tests {
         }
     }
 
+    // The turn the model receives, frozen in full for TABULAR step 01 (20 October 2026). Step 03
+    // extends it (workbook cards, a family of one instruction); these three tests are the ones that
+    // change on purpose, and show the shape they start from. The excerpt block ends with a blank
+    // line of its own, hence the four newlines before the table block.
+    const FIGURE: &str = "Sheet Planning, column amount: sum = 1840 (computed over 8 rows)";
+
+    #[test]
+    fn the_turn_with_documents_and_no_table_result() {
+        let turn = build_two_block_turn(&[evidence("The contract covers all suppliers.")], None);
+        assert_eq!(
+            turn,
+            format!(
+                "{MIXED_INSTRUCTION}\n\n\
+                 Document excerpts:\n\
+                 [1] contrat.pdf (page 1):\n\
+                 The contract covers all suppliers.\n\n\n\n\
+                 Table results: none."
+            )
+        );
+    }
+
+    #[test]
+    fn the_turn_with_documents_and_one_figure() {
+        let turn = build_two_block_turn(
+            &[evidence("The contract covers all suppliers.")],
+            Some(FIGURE),
+        );
+        assert_eq!(
+            turn,
+            format!(
+                "{MIXED_INSTRUCTION}\n\n\
+                 Document excerpts:\n\
+                 [1] contrat.pdf (page 1):\n\
+                 The contract covers all suppliers.\n\n\n\n\
+                 Table results:\n\
+                 {FIGURE}"
+            )
+        );
+    }
+
+    #[test]
+    fn the_turn_with_no_documents_and_one_figure() {
+        let turn = build_two_block_turn(&[], Some(FIGURE));
+        assert_eq!(
+            turn,
+            format!(
+                "{MIXED_INSTRUCTION}\n\n\
+                 Document excerpts: none.\n\n\
+                 Table results:\n\
+                 {FIGURE}"
+            )
+        );
+    }
+
     #[test]
     fn an_altered_number_is_flagged_against_the_table() {
         let corrections = verify_numbers("The total billed was 1480 euros.", Some(1840.0), &[]);

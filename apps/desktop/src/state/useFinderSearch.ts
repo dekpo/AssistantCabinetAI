@@ -4,11 +4,10 @@ import { initialSearchState, searchReducer } from "../lib/finderSearchState";
 import { findFiles, type FinderDomain, type FinderReason } from "../lib/ipc";
 
 /**
- * The search field of a folder card: what she typed, the files the finder found, and whether the
- * listing shows all the files or only the ones found.
+ * The search field of the explorer: what she typed and the files the finder found.
  *
  * A search only filters the view and never touches the selection: ticking the results is a separate
- * click (`FinderControls`). The rules (pause in typing, stale answers, a new search after a pass)
+ * click (the bottom bar of the box). The rules (pause in typing, stale answers, a new search after a pass)
  * live in `lib/finderSearchState.ts`, which is tested; this hook only starts the request that state
  * asks for and gives the answer back. The search runs after a pause in typing, never at launch, and
  * costs no model call (`docs/LEXICAL-RETRIEVAL-DESIGN.md` 6.1).
@@ -24,10 +23,6 @@ export interface FinderSearch {
   typedFormats: string[];
   /** The search could not run (the index is unavailable); the field says so. */
   failed: boolean;
-  showAll: boolean;
-  setShowAll: (showAll: boolean) => void;
-  /** Ends the filter and shows the whole listing again. The selection is not touched. */
-  reset: () => void;
 }
 
 export function useFinderSearch({
@@ -38,7 +33,7 @@ export function useFinderSearch({
   enabled,
 }: {
   domain: FinderDomain;
-  /** The folder of the card: the text and the results are dropped when it changes. */
+  /** The folders: the text and the results are dropped when it changes. */
   folder: string | null;
   /** Counted up by every finished pass: the files and their names may have changed. */
   finishedPasses: number;
@@ -50,11 +45,6 @@ export function useFinderSearch({
   const [state, dispatch] = useReducer(searchReducer, enabled, initialSearchState);
 
   const setText = useCallback((text: string) => dispatch({ type: "textChanged", text }), []);
-  const setShowAll = useCallback(
-    (showAll: boolean) => dispatch({ type: "showAllChanged", showAll }),
-    [],
-  );
-  const reset = useCallback(() => dispatch({ type: "textChanged", text: "" }), []);
 
   useEffect(() => dispatch({ type: "folderChanged" }), [folder]);
   useEffect(() => dispatch({ type: "enabledChanged", enabled }), [enabled]);
@@ -88,8 +78,5 @@ export function useFinderSearch({
     reasons: state.reasons,
     typedFormats: state.typedFormats,
     failed: state.failed,
-    showAll: state.showAll,
-    setShowAll,
-    reset,
   };
 }

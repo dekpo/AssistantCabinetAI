@@ -29,8 +29,8 @@ function languageName(tag: string, locale: string): string {
 }
 
 /**
- * The "Voice" block of the settings dialog: the switches, the state of the speech model, the
- * language, the caps, the read-aloud choices and the notes folder. It starts nothing by itself: the
+ * The "Voice" section of the settings dialog, laid out in the dialog's two columns: the switches, the
+ * state of the speech model, the language, the caps, the read-aloud choices and the notes folder. It starts nothing by itself: the
  * model is downloaded by the Install button, or checked by Verify (the way to use a model copied by
  * hand), and with no model the block says so and nothing else on screen changes. Every change goes
  * through `onSave`, which applies it to the speech settings as they stand when its turn comes.
@@ -84,9 +84,11 @@ export function SpeechSettingsBlock({
   };
 
   return (
-    <details className="field settings-voice">
-      <summary className="disclosure">{t("speech.groupLabel")}</summary>
+    <>
+      <h3 className="dialog__subtitle settings-wide">{t("speech.groupLabel")}</h3>
 
+      {/* Two columns, left then right, one pair per line: the switches and the notes first, then the
+          dictation, then the reading. Nothing is hidden behind a disclosure but the credits. */}
       <div className="field">
         <label className="field__row">
           <input
@@ -103,33 +105,48 @@ export function SpeechSettingsBlock({
         <label className="field__row">
           <input
             type="checkbox"
-            checked={speech.dictationEnabled}
-            disabled={!speech.enabled}
-            onChange={(event) => set({ dictationEnabled: event.target.checked })}
-          />
-          <span>{t("speech.dictationLabel")}</span>
-        </label>
-        <label className="field__row">
-          <input
-            type="checkbox"
-            checked={speech.readAloudEnabled}
-            disabled={!speech.enabled}
-            onChange={(event) => set({ readAloudEnabled: event.target.checked })}
-          />
-          <span>{t("speech.readAloudLabel")}</span>
-        </label>
-      </div>
-
-      <div className="field">
-        <label className="field__row">
-          <input
-            type="checkbox"
             checked={speech.notesEnabled}
             onChange={(event) => set({ notesEnabled: event.target.checked })}
           />
           <span className="field__label">{t("speech.notesLabel")}</span>
         </label>
         <span className="field__description">{t("speech.notesDescription")}</span>
+      </div>
+
+      <label className="field">
+        <span className="field__label">{t("speech.notesFolderLabel")}</span>
+        <span className="field__description">{t("speech.notesFolderDescription")}</span>
+        <input
+          type="text"
+          className="field__control"
+          value={notesFolderDraft}
+          onChange={(event) => setNotesFolderDraft(event.target.value)}
+          onBlur={() => set({ notesFolderName: notesFolderDraft })}
+        />
+      </label>
+
+      <div className="field">
+        <label className="field__row">
+          <input
+            type="checkbox"
+            checked={speech.notesVoiceCommands}
+            onChange={(event) => set({ notesVoiceCommands: event.target.checked })}
+          />
+          <span className="field__label">{t("speech.notesCommandsLabel")}</span>
+        </label>
+        <span className="field__description">{t("speech.notesCommandsDescription")}</span>
+      </div>
+
+      <div className="field">
+        <label className="field__row">
+          <input
+            type="checkbox"
+            checked={speech.dictationEnabled}
+            disabled={!speech.enabled}
+            onChange={(event) => set({ dictationEnabled: event.target.checked })}
+          />
+          <span className="field__label">{t("speech.dictationLabel")}</span>
+        </label>
       </div>
 
       {/* The model is reported whatever the switches say, so a missing or damaged one is never
@@ -183,36 +200,6 @@ export function SpeechSettingsBlock({
         )}
       </div>
 
-      {problems.length === 0 ? null : (
-        <div className="field">
-          {problems.map(({ feature, reasonKey }) => (
-            <span className="field__description" key={feature}>
-              {t("speech.featureProblem", {
-                feature: featureLabels[feature],
-                reason: t(reasonKey),
-              })}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <label className="field">
-        <span className="field__label">{t("speech.languageLabel")}</span>
-        <span className="field__description">{t("speech.languageDescription")}</span>
-        <select
-          className="field__control"
-          value={speech.languageOverride ?? ""}
-          onChange={(event) => set({ languageOverride: event.target.value || null })}
-        >
-          <option value="">{t("speech.languageFollow")}</option>
-          {languages.map((language) => (
-            <option key={language.id} value={language.id}>
-              {languageName(language.id, locale)}
-            </option>
-          ))}
-        </select>
-      </label>
-
       <NumberSetting
         label={t("speech.dictationCapLabel")}
         description={t("speech.dictationCapDescription")}
@@ -250,6 +237,35 @@ export function SpeechSettingsBlock({
         }}
       />
 
+      <div className="field">
+        <label className="field__row">
+          <input
+            type="checkbox"
+            checked={speech.readAloudEnabled}
+            disabled={!speech.enabled}
+            onChange={(event) => set({ readAloudEnabled: event.target.checked })}
+          />
+          <span className="field__label">{t("speech.readAloudLabel")}</span>
+        </label>
+      </div>
+
+      <label className="field">
+        <span className="field__label">{t("speech.languageLabel")}</span>
+        <span className="field__description">{t("speech.languageDescription")}</span>
+        <select
+          className="field__control"
+          value={speech.languageOverride ?? ""}
+          onChange={(event) => set({ languageOverride: event.target.value || null })}
+        >
+          <option value="">{t("speech.languageFollow")}</option>
+          {languages.map((language) => (
+            <option key={language.id} value={language.id}>
+              {languageName(language.id, locale)}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="field">
         <span className="field__label">{t("speech.engineLabel")}</span>
         <select
@@ -266,26 +282,27 @@ export function SpeechSettingsBlock({
             </option>
           ))}
         </select>
-      </label>
-      {systemVoices === null ? null : (
-        <div className="field">
-          <span className="field__description">
-            {systemVoices.names.length > 0
-              ? t("speech.systemVoices.found", { names: systemVoices.names.join(", ") })
-              : t("speech.systemVoices.none")}
-          </span>
-          {systemVoices.ignored === 0 ? null : (
+        {systemVoices === null ? null : (
+          <>
             <span className="field__description">
-              {t(
-                systemVoices.ignored === 1
-                  ? "speech.systemVoices.ignoredOne"
-                  : "speech.systemVoices.ignoredMany",
-                { count: systemVoices.ignored },
-              )}
+              {systemVoices.names.length > 0
+                ? t("speech.systemVoices.found", { names: systemVoices.names.join(", ") })
+                : t("speech.systemVoices.none")}
             </span>
-          )}
-        </div>
-      )}
+            {systemVoices.ignored === 0 ? null : (
+              <span className="field__description">
+                {t(
+                  systemVoices.ignored === 1
+                    ? "speech.systemVoices.ignoredOne"
+                    : "speech.systemVoices.ignoredMany",
+                  { count: systemVoices.ignored },
+                )}
+              </span>
+            )}
+          </>
+        )}
+      </label>
+
       {speech.ttsEngine === "system" ? (
         <label className="field">
           <span className="field__label">{t("speech.systemVoiceLabel")}</span>
@@ -334,6 +351,7 @@ export function SpeechSettingsBlock({
           </select>
         </label>
       )}
+
       {/* The voices of the language, each with its state and its licence: nothing is downloaded until
           the user presses Install on one of them. */}
       <div className="field">
@@ -405,6 +423,7 @@ export function SpeechSettingsBlock({
           );
         })}
       </div>
+
       <NumberSetting
         label={t("speech.rateLabel")}
         description={t("speech.rateDescription")}
@@ -421,31 +440,22 @@ export function SpeechSettingsBlock({
         }}
       />
 
-      <label className="field">
-        <span className="field__label">{t("speech.notesFolderLabel")}</span>
-        <span className="field__description">{t("speech.notesFolderDescription")}</span>
-        <input
-          type="text"
-          className="field__control"
-          value={notesFolderDraft}
-          onChange={(event) => setNotesFolderDraft(event.target.value)}
-          onBlur={() => set({ notesFolderName: notesFolderDraft })}
-        />
-      </label>
+      {problems.length === 0 ? null : (
+        <div className="field settings-wide">
+          {problems.map(({ feature, reasonKey }) => (
+            <span className="field__description" key={feature}>
+              {t("speech.featureProblem", {
+                feature: featureLabels[feature],
+                reason: t(reasonKey),
+              })}
+            </span>
+          ))}
+        </div>
+      )}
 
-      <div className="field">
-        <label className="field__row">
-          <input
-            type="checkbox"
-            checked={speech.notesVoiceCommands}
-            onChange={(event) => set({ notesVoiceCommands: event.target.checked })}
-          />
-          <span className="field__label">{t("speech.notesCommandsLabel")}</span>
-        </label>
-        <span className="field__description">{t("speech.notesCommandsDescription")}</span>
+      <div className="settings-wide">
+        <SpeechCredits status={status} />
       </div>
-
-      <SpeechCredits status={status} />
-    </details>
+    </>
   );
 }

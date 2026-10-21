@@ -357,6 +357,15 @@ describe("filtering", () => {
 });
 
 describe("sorting", () => {
+  it("sorts by path, folder by folder, so the files of one folder stay together", () => {
+    const sorted = sortEntries(
+      entries([record("b/z.pdf"), record("a/y.pdf"), record("c.pdf"), record("a/x.pdf")], []),
+      "path",
+    );
+
+    expect(sorted.map((e) => e.path)).toStrictEqual(["a/x.pdf", "a/y.pdf", "b/z.pdf", "c.pdf"]);
+  });
+
   it("sorts by name with numbers read as numbers and accents ignored", () => {
     const sorted = sortEntries(
       entries([record("note10.pdf"), record("note2.pdf"), record("Zoe.pdf"), record("\u00e9t\u00e9.pdf")], []),

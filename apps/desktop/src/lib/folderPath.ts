@@ -3,7 +3,7 @@
  * under is the part that tells her the least. The separator comes from the path itself rather
  * than from the platform the UI is running on, since Rust already returns it in the native form
  * (`dunce::simplified`) and the same interface can show a path reported by either OS. Generic
- * over any folder path, so both the Documents Folder and the Data Folder cards share it.
+ * over any folder path, so both families of the explorer share it.
  */
 export function abbreviateFolderPath(path: string): string {
   const separator = path.includes("\\") ? "\\" : "/";

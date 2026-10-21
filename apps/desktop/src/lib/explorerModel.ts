@@ -362,7 +362,7 @@ export function foundKeys(
   return keys;
 }
 
-export type ExplorerSort = "name" | "date" | "state" | "relevance";
+export type ExplorerSort = "name" | "date" | "state" | "relevance" | "path";
 
 /** Analysed last: what asks for something comes first. */
 const STATE_ORDER: Readonly<Record<ExplorerState, number>> = {
@@ -377,7 +377,12 @@ function byName(a: ExplorerEntry, b: ExplorerEntry): number {
   return collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
 }
 
-/** A sorted copy. By name: numbers read as numbers, accents and case ignored. By date: newest
+function byPath(a: ExplorerEntry, b: ExplorerEntry): number {
+  return collator.compare(a.path, b.path) || a.key.localeCompare(b.key);
+}
+
+/** A sorted copy. By path (the Settings panel, which shows the whole relative path): folder by
+ * folder. By name: numbers read as numbers, accents and case ignored. By date: newest
  * first, files without a date last. By state: to analyse, unreadable, analysed; each by name. */
 export function sortEntries(
   entries: readonly ExplorerEntry[],
@@ -396,6 +401,8 @@ export function sortEntries(
       );
     case "name":
       return copy.sort(byName);
+    case "path":
+      return copy.sort(byPath);
     case "date":
       return copy.sort((a, b) => {
         if (a.modified === b.modified) {

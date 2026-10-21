@@ -36,7 +36,6 @@ describe("typing", () => {
 
     expect(cleared.found).toBeNull();
     expect(cleared.wanted).toBeNull();
-    expect(cleared.showAll).toBe(false);
     expect(cleared.failed).toBe(false);
   });
 
@@ -109,13 +108,11 @@ describe("the folder", () => {
       ON,
       type("rapport"),
       { type: "answered", id: 1, paths: ["a.pdf"] },
-      { type: "showAllChanged", showAll: true },
       { type: "folderChanged" },
     );
 
     expect(state.text).toBe("");
     expect(state.found).toBeNull();
-    expect(state.showAll).toBe(false);
     expect(state.wanted).toBeNull();
   });
 
@@ -158,17 +155,8 @@ describe("a search asked again", () => {
   });
 });
 
-describe("the view controls", () => {
-  it("show all and show the results only without a new search", () => {
-    const answered = run(ON, type("rapport"), { type: "answered", id: 1, paths: ["a.pdf"] });
-    const all = run(answered, { type: "showAllChanged", showAll: true });
-
-    expect(all.showAll).toBe(true);
-    expect(all.found).toStrictEqual(["a.pdf"]);
-    expect(all.request).toBe(answered.request);
-  });
-
-  it("have nothing to say about a selection: the state holds none", () => {
+describe("the state", () => {
+  it("holds nothing about a selection", () => {
     const state = run(ON, type("rapport"), { type: "answered", id: 1, paths: ["a.pdf"] }, type(""));
 
     expect(Object.keys(state).sort()).toStrictEqual(
@@ -178,7 +166,6 @@ describe("the view controls", () => {
         "found",
         "reasons",
         "request",
-        "showAll",
         "text",
         "typedFormats",
         "wanted",

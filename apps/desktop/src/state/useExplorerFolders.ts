@@ -21,8 +21,9 @@ const CANCELLED = "work_folder_selection_cancelled";
 /**
  * What the explorer does to a family's folder: choose it (the system dialog, or the suggested folder
  * made on the spot), show it in the file manager, and clear its analysis. The same commands the two
- * old folder cards call, with the same guard: a folder change goes through the callbacks `App` gives
- * (the Documents one asks before it drops unsaved notes). A failure is handed to `onError`.
+ * folder cards used to call, with the same guard: a folder change goes through the callbacks `App` gives
+ * (the Documents one asks before it drops unsaved notes). A failure is handed to `onError`. Used by the
+ * sidebar's box and by the Settings panel's folder sections alike.
  */
 export function useExplorerFolders({
   indexing,
@@ -30,12 +31,16 @@ export function useExplorerFolders({
   onWorkFolderChosen,
   onDataFolderChosen,
   onError,
+  onCleared,
 }: {
   indexing: IndexingState;
   dataIndexing: IndexingState;
   onWorkFolderChosen: (path: string) => void;
   onDataFolderChosen: (path: string) => void;
   onError: (error: AppError | null) => void;
+  /** An analysis was cleared. The Settings panel tells `App` here, so the sidebar's box, which holds
+   * its own inventories, reads its folders again at once. */
+  onCleared?: (family: Family) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -119,6 +124,7 @@ export function useExplorerFolders({
       await (family === "documents" ? resetIndex() : resetDataIndex());
       passOf(family).reset();
       setClears((now) => ({ ...now, [family]: now[family] + 1 }));
+      onCleared?.(family);
       return true;
     } catch (raw: unknown) {
       onError(normaliseError(raw));

@@ -2,7 +2,7 @@ import { SEARCH_DELAY_MS } from "./finderField";
 import type { FinderReason } from "./ipc";
 
 /**
- * What the search field of a folder card knows and decides, with no timer, no call and no React, so
+ * What the search field of the explorer knows and decides, with no timer, no call and no React, so
  * that every rule below is tested without a browser (`finderSearchState.test.ts`). The hook
  * `useFinderSearch` is the thin shell that starts the request this state asks for and feeds the
  * answer back.
@@ -33,7 +33,6 @@ export interface SearchState {
   typedFormats: string[];
   /** The search could not run; the field says so. */
   failed: boolean;
-  showAll: boolean;
   /** False while the field is not shown (no folder, or a question is being answered). */
   enabled: boolean;
   /** The number of the latest request; an answer with another number is dropped. */
@@ -56,8 +55,7 @@ export type SearchAction =
       reasons?: Record<string, FinderReason[]>;
       typedFormats?: string[];
     }
-  | { type: "failed"; id: number }
-  | { type: "showAllChanged"; showAll: boolean };
+  | { type: "failed"; id: number };
 
 export function initialSearchState(enabled: boolean): SearchState {
   return {
@@ -66,7 +64,6 @@ export function initialSearchState(enabled: boolean): SearchState {
     reasons: {},
     typedFormats: [],
     failed: false,
-    showAll: false,
     enabled,
     request: 0,
     wanted: null,
@@ -82,7 +79,6 @@ function cleared(state: SearchState, text: string): SearchState {
     reasons: {},
     typedFormats: [],
     failed: false,
-    showAll: false,
     request: state.request + 1,
     wanted: null,
   };
@@ -148,9 +144,6 @@ export function searchReducer(state: SearchState, action: SearchAction): SearchS
         return state;
       }
       return { ...state, found: null, reasons: {}, typedFormats: [], failed: true, wanted: null };
-    }
-    case "showAllChanged": {
-      return { ...state, showAll: action.showAll };
     }
   }
 }

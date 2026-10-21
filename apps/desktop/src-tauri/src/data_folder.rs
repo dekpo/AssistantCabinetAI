@@ -37,8 +37,8 @@ use crate::knowledge::ingest::KnowledgeContext;
 use crate::tabular;
 use crate::tabular::inventory::{TabularFormat, TabularInventory};
 
-/// The three counts the card prints, in the same order and with the same meaning as the
-/// Documents Folder card's: files, analysed (green), unreadable (red).
+/// The three counts the Data folder shows, in the same order and with the same meaning as the
+/// Documents folder's: files, analysed (green), unreadable (red).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataFolderSummary {

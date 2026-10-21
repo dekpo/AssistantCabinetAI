@@ -1812,3 +1812,64 @@ The owner played the human test of step 9 twice: first the script of the lot rep
 | N-8 | The knowledge-base sheets (`EntitySheetParts.tsx`, `ReviewTab.tsx`) still show a file key (`/data/...`) for a file of the other folder | Step 9 build | Outside the conversation; the knowledge work owns them | Use `displayPathOfKey` there when the knowledge sheets are next touched |
 
 Time of the step: not recorded.
+
+
+## Taken while building the retirement of the old folder cards (explorer step 10, 21 October 2026), to confirm
+
+The Settings panel now draws the sidebar's family sections (`FolderSettings`, `docs/CLIENT.md`, "The Settings panel's folder
+sections"), and the two old cards are deleted. Decided while building, for the owner to confirm:
+
+- **One implementation.** `FolderSettings` uses `ExplorerFamilySection` and `ExplorerFamilySetup` in their non-selectable mode, the
+  same two inventories (`useFamilyInventories`, now also used by `FileExplorer`), the same folder commands
+  (`useExplorerFolders`), the same two passes. Nothing was copied from the cards.
+- **« Voir » on every row, no « Ouvrir ».** The panel is a place for settings: a file is opened from the sidebar. Opening from the
+  panel would have to close it first and open a tab behind it; adding it later is one prop (`onOpenFile`).
+- **Twelve rows with the list's own scroll bar, not "in full"** (`SETTINGS_LIST_ROWS`, `components/FolderSettings.tsx`). The handoff allowed the whole list; a folder of 1,249 documents
+  drawn in full would make the panel endless, and the windowed list already costs a few dozen rows whatever the folder holds.
+  `SETTINGS_LIST_ROWS` is the one number to change.
+- **No fold button in the panel.** The fold state is a setting shared with the sidebar (`documentsFolded`, `tablesFolded`); the
+  panel's lists are always open and never touch it.
+- **« Voir le rapport » closes the panel.** The report lives in the centre, so the link closes the panel and opens the Overview.
+- **The sidebar follows a clear made in the panel** through a counter held by `App` (`onFolderCleared`), added to the box's refresh
+  token. A pass needs nothing: both places share the `IndexingState`.
+- **What went with the cards.** `WorkFolderCard`, `DataFolderCard`, `FinderControls`, `AnalysisProgress`, `FileList`, `SelectAll`,
+  `StatusDot`, `isSelectable`, `WarningGlyph`, `documentPassLines`, `dataPassLines`, `lib/unreadFormats.ts`, and what only they
+  used: `analysisFraction`, `vectorPercent`, `analysisPending`, `analysisPendingDocuments`, `toggleAll`, `shownFiles`,
+  `resultsToTick`, `foundAnalysed`, `foundNotAnalysed`, the finder's `showAll` / `setShowAll` / `reset`, 67 catalogue keys per
+  language (`workFolder.*`, `dataFolder.*`, `finder.*`, `chat.scope*` of the cards), and their CSS (`.card*`, `.path`,
+  `.work-folder__*`, `.progress*`, `.inventory*`, `.finder*`, `.status-dot*`, `.scope-picker*`, `.warning-glyph*`). `card__glyph`
+  became `file-glyph` (the viewer tabs still draw it). Kept: `AnalyseButton` and `KnowledgeLink` (`FolderCardParts.tsx`),
+  `CAPABILITY_KEYS`, `countPending` and `countPendingDocuments` (the notes check uses them).
+- **Two user-visible sentences changed.** The knowledge dialog's reset intro said « les deux boutons Reset des cartes de dossier »;
+  it now names « Effacer l'analyse » in each folder's menu (both languages). The comments of the code that spoke of "the folder
+  card" were reworded (TypeScript and four Rust files, comments only).
+
+**Not changed, as ordered.** The box, the Overview and the pipelines are untouched in behaviour. The knowledge-base sheets still
+show a file key as it is (N-8) and the « documents not needed » line under a table-side refusal (N-6) is still there: neither is
+part of this step.
+
+
+### Owner's test of step 10 and its corrections (21 October 2026)
+
+The owner played the script: backup, launch, the folders box, « Voir », menu, change of folder, clear, analyse, stop, the sidebar,
+restore. The behaviour was right everywhere; the screen was not, and the script was wrong on one point. Corrected the same day:
+
+- **The Settings window is as large as the knowledge dialog** (`dialog--wide`) and its layout uses the width (columns of at least
+  26 em for the fields; the folders, the group title, the messages and the note span the row).
+- **The folder's whole path** is in the header of each family (the sidebar keeps the short form).
+- **Each row shows its whole relative path** from the root of the folder where the file sits, never the bare, cut name; sorted by path.
+- **The « depuis Docs » / « depuis Data » tag is always read**: after choosing an empty Data folder, the Tableaux section is not empty,
+  it lists the workbooks of the Documents folder, tagged. The script said « vide »: that was wrong (the explorer's model, step 8).
+- **« Voir » sits on the right.** Cause: the row's grid has a column for the checkbox; without one, the columns shifted
+  (`explorer-row--plain` has three).
+
+
+### The Settings panel rearranged by the owner (21 October 2026, after her second look at step 10)
+
+The owner asked, and it was built the same day: the two folders are **main settings in plain view**, not an advanced block; the panel is
+organised in titled sections with two columns (left | right) and whole rows where the content needs them (the order is in
+`docs/CLIENT.md`); the voice settings are no longer hidden in a disclosure; only the advanced settings and the voice credits are. The
+overlap seen in her screenshot (the layout and reset blocks drawn over the folders' list) was a grid row squeezed under its content: rows
+are now `max-content`. `SETTINGS_LIST_ROWS` (25, her value) and the two sidebar budgets moved to `src/config/layout.ts`. Added:
+`Module juridique` (announced, no pack yet), the section title « Base de connaissances » (was « Connaissances »), « Gestion de la voix »
+(was « Voix »), « Disposition et réinitialisation » (a title for the two maintenance blocks that had none).

@@ -1970,8 +1970,8 @@ impl IndexStore {
         Ok(gone)
     }
 
-    /// Forget every cached workbook inventory, and nothing else. The Data Folder card's Reset: the
-    /// two folders are reset from two cards, independently, so this must never touch `documents`
+    /// Forget every cached workbook inventory, and nothing else. The Data folder's clear: the
+    /// two folders are cleared independently, so this must never touch `documents`
     /// or `chunks` - exactly as `clear` never touches this table. The workbooks' knowledge goes
     /// with the inventories, in the same transaction; the documents' knowledge stays.
     pub fn clear_tabular_inventories(&mut self) -> Result<(), AppError> {
@@ -2054,7 +2054,7 @@ impl IndexStore {
     /// every document table are untouched. Called at the start of every `data_folder::analyse`
     /// pass (a workbook that left the folder, or whose content changed, must not go on serving
     /// stale cells under its old hash a moment longer than the pass that would have caught it)
-    /// and from the Data Folder card's Reset, exactly where `clear_tabular_inventories` is.
+    /// and from the Data folder's clear, exactly where `clear_tabular_inventories` is.
     pub fn clear_tabular_workbooks(&mut self) -> Result<(), AppError> {
         self.connection
             .execute("DELETE FROM tabular_workbooks", [])

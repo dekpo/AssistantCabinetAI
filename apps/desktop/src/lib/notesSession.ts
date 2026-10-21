@@ -42,7 +42,7 @@ export interface NotesSnapshot {
   /** The last finished save, until the user dismisses it or edits a note. */
   report: NotesReport | null;
   error: AppError | null;
-  /** Counted up after every write, so the Documents card re-reads its folder at once. */
+  /** Counted up after every write, so the explorer re-reads the Documents folder at once. */
   writes: number;
 }
 

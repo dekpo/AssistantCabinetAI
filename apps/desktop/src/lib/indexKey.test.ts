@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { homeRoot, indexKey, isForeignKey, parseIndexKey } from "./indexKey";
+import { displayPathOfKey, homeRoot, indexKey, isForeignKey, parseIndexKey } from "./indexKey";
 
 describe("the key of a file in the index", () => {
   it("keeps the plain path for a file in the folder of its own family", () => {
@@ -35,6 +35,15 @@ describe("the key of a file in the index", () => {
     expect(parseIndexKey("documents", "/data/")).toBeNull();
     expect(parseIndexKey("documents", "/documents/a.pdf")).toBeNull();
     expect(parseIndexKey("data", "/data/a.csv")).toBeNull();
+  });
+
+  it("shows the path of a key without the folder prefix, and a key that parses to nothing as it is", () => {
+    expect(displayPathOfKey("documents", "Courriers/a.pdf")).toBe("Courriers/a.pdf");
+    expect(displayPathOfKey("documents", "/data/Test/modele_lettre.docx")).toBe("Test/modele_lettre.docx");
+    expect(displayPathOfKey("data", "/documents/administratif/commandes.xlsx")).toBe(
+      "administratif/commandes.xlsx",
+    );
+    expect(displayPathOfKey("data", "/etc")).toBe("/etc");
   });
 
   it("never takes a name with a colon for a foreign file", () => {

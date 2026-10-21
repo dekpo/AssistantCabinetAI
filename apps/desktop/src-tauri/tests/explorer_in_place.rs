@@ -594,3 +594,179 @@ fn a_symbolic_link_in_the_other_folder_is_not_followed() {
         assert_eq!(summary.scanned_files, 0);
     }
 }
+
+// --- A file named in a question, wherever it sits (explorer step 9 follow-up) ------------------------------
+
+/// What the two gates of a mixed selection (a document and a workbook both ticked) make of a question.
+/// `gate`: the data-only shortcut (`None` hands the question to the mixed tier). `table_part`: what the
+/// mixed tier's own table half is (`prepare_for_mixed`), where an answer that is not a computed value ends
+/// the whole answer with no generation.
+struct MixedRouting {
+    gate: Option<TabularAnswer>,
+    table_part: TabularAnswer,
+}
+
+fn mixed_routing(
+    lab: &Lab,
+    ticked_workbook: &str,
+    ticked_document: &str,
+    question: &str,
+    locale: &str,
+) -> MixedRouting {
+    let data = views(lab).data.expect("the tabular family exists");
+    let scope = ScopeMode::Explicit(vec![ScopeEntry {
+        relative_path: ticked_workbook.to_string(),
+        pinned_id: data
+            .files()
+            .find_by_relative_path(ticked_workbook)
+            .unwrap()
+            .id
+            .clone(),
+        added_at: 1,
+        sheet_names: Vec::new(),
+    }]);
+    let gate =
+        match tabular_answer::prepare_if_data_only(question, &data, &scope, locale, &lab.index)
+            .unwrap()
+        {
+            None => None,
+            Some(tabular_answer::PendingAnswer::Done(answer)) => Some(answer),
+            Some(tabular_answer::PendingAnswer::TryModel { .. }) => {
+                panic!("the gate never hands the model to this tier")
+            }
+        };
+    let table_part = match tabular_answer::prepare_for_mixed(
+        question,
+        &data,
+        &scope,
+        locale,
+        &lab.index,
+        &[ticked_document.to_string()],
+    )
+    .unwrap()
+    {
+        tabular_answer::PendingAnswer::Done(answer) => answer,
+        tabular_answer::PendingAnswer::TryModel { fallback, .. } => fallback,
+    };
+    MixedRouting { gate, table_part }
+}
+
+/// The table half of a question that has none: the same sign `prepare_for_mixed` leaves for a question the
+/// classifier cannot read, so the documents answer it alone.
+fn has_no_table_part(answer: &TabularAnswer) -> bool {
+    matches!(answer, TabularAnswer::Nudge { reason: None, .. })
+}
+
+#[test]
+fn a_document_of_the_data_folder_named_in_a_mixed_question_is_answered_from_the_documents() {
+    let mut lab = Lab::new();
+    write(
+        lab.data.path(),
+        "Test/factures.csv",
+        factures_csv().as_bytes(),
+    );
+    write(
+        lab.data.path(),
+        "Test/publipostage/modele_lettre.docx",
+        b"a document of the Data folder",
+    );
+    tabular_pass(&mut lab, true);
+
+    // The owner's own question, word for word (21 October 2026), with the letter ticked under its key.
+    let routing = mixed_routing(
+        &lab,
+        "Test/factures.csv",
+        "/data/Test/publipostage/modele_lettre.docx",
+        "que dit la lettre modele_lettre.docx ?",
+        "fr-FR",
+    );
+
+    assert!(routing.gate.is_none(), "got {:?}", routing.gate);
+    assert!(
+        has_no_table_part(&routing.table_part),
+        "the table engine must not answer for a document, got {:?}",
+        routing.table_part
+    );
+}
+
+#[test]
+fn a_document_of_the_documents_folder_named_in_a_mixed_question_is_answered_from_the_documents() {
+    let mut lab = Lab::new();
+    write(lab.data.path(), "factures.csv", factures_csv().as_bytes());
+    write(
+        lab.work.path(),
+        "lettre-cabinet.txt",
+        b"The cabinet closes in August.",
+    );
+    tabular_pass(&mut lab, true);
+
+    let routing = mixed_routing(
+        &lab,
+        "factures.csv",
+        "lettre-cabinet.txt",
+        "que dit la lettre lettre-cabinet.txt ?",
+        "fr-FR",
+    );
+
+    assert!(routing.gate.is_none(), "got {:?}", routing.gate);
+    assert!(
+        has_no_table_part(&routing.table_part),
+        "the table engine must not answer for a document, got {:?}",
+        routing.table_part
+    );
+}
+
+#[test]
+fn a_document_named_without_any_trigger_word_is_answered_from_the_documents_too() {
+    // No "the letter": nothing but the file name says it is a document.
+    let mut lab = Lab::new();
+    write(lab.data.path(), "factures.csv", factures_csv().as_bytes());
+    write(
+        lab.data.path(),
+        "Test/modele_lettre.docx",
+        b"a document of the Data folder",
+    );
+    tabular_pass(&mut lab, true);
+
+    let routing = mixed_routing(
+        &lab,
+        "factures.csv",
+        "/data/Test/modele_lettre.docx",
+        "Resume modele_lettre.docx",
+        "fr-FR",
+    );
+
+    assert!(routing.gate.is_none(), "got {:?}", routing.gate);
+    assert!(
+        has_no_table_part(&routing.table_part),
+        "got {:?}",
+        routing.table_part
+    );
+}
+
+#[test]
+fn a_workbook_named_in_a_mixed_question_but_not_ticked_is_still_said_not_selected() {
+    let mut lab = Lab::new();
+    write(lab.data.path(), "factures.csv", factures_csv().as_bytes());
+    write(lab.data.path(), "achats.csv", factures_csv().as_bytes());
+    write(
+        lab.work.path(),
+        "lettre-cabinet.txt",
+        b"The cabinet closes in August.",
+    );
+    tabular_pass(&mut lab, true);
+
+    let routing = mixed_routing(
+        &lab,
+        "factures.csv",
+        "lettre-cabinet.txt",
+        "How many invoices in achats.csv?",
+        "en-US",
+    );
+
+    let not_selected = TabularAnswer::FileNotSelected {
+        query: "achats.csv".to_string(),
+    };
+    assert_eq!(routing.gate, Some(not_selected.clone()));
+    assert_eq!(routing.table_part, not_selected);
+}

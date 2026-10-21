@@ -412,8 +412,8 @@ describe("the files to check", () => {
     const [check] = blocksOf(page, "check");
     expect(check?.items.map((item) => item.entry.name)).toStrictEqual(["sheet.xlsx"]);
     expect(check?.items[0]?.reason).toStrictEqual({ kind: "noTable" });
-    // Reading is where it sits; opening and showing it from here is the next step.
-    expect(check?.items[0]?.actions).toStrictEqual({ open: false, reveal: false });
+    // Not analysed, so no Ouvrir; it is shown in the file manager like any file.
+    expect(check?.items[0]?.actions).toStrictEqual({ open: false, reveal: true });
   });
 });
 
@@ -436,11 +436,17 @@ describe("what the link and the buttons do", () => {
     expect(view).not.toBe(NO_VIEW);
   });
 
-  it("opens only an analysed file of its own folder, and reveals any file of its own folder", () => {
+  it("opens only an analysed file, and reveals any file, wherever it sits", () => {
     expect(checkActions(entryOf("a.pdf", "failed"))).toStrictEqual({ open: false, reveal: true });
     expect(checkActions(entryOf("a.pdf", "indexed"))).toStrictEqual({ open: true, reveal: true });
-    expect(checkActions(entryOf("sheet.xlsx", "failed"))).toStrictEqual({ open: false, reveal: false });
     expect(checkActions(entryOf("t.csv", "failed", "data"))).toStrictEqual({ open: false, reveal: true });
+    // A workbook in the Documents folder and a letter in the Data folder: same gates as any other.
+    expect(checkActions(entryOf("sheet.xlsx", "failed"))).toStrictEqual({ open: false, reveal: true });
+    expect(checkActions(entryOf("sheet.xlsx", "indexed"))).toStrictEqual({ open: true, reveal: true });
+    expect(checkActions(entryOf("letter.docx", "indexed", "data"))).toStrictEqual({
+      open: true,
+      reveal: true,
+    });
   });
 });
 

@@ -154,6 +154,12 @@ when that path is gone, by the single file that still has the content it pinned 
 the user's own). Two copies of the pinned content are not guessed between: the entry is then missing. Content that
 changed under the same key is `changed`, as before.
 
+**What a person reads (explorer step 9).** A key such as `/data/Test/modele_lettre.docx` is never shown as it is: the
+source lines under an answer (documents and sheets) show the path inside the file's folder, through
+`displayPathOfKey(family, key)` (`lib/indexKey.ts`, built on `parseIndexKey`), so the copied sources read the same. The
+explorer opens and shows a file by its folder and plain path (`entry.root`, `entry.path`), never by handing a key to a
+viewer command, which still refuses a key.
+
 ## Automatic selection (« Select. auto », explorer step 7, 21 October 2026)
 
 An **optional** switch in the explorer that makes the selection follow the filters. It is a convenience on top of the three states
@@ -307,6 +313,15 @@ hidden interpreter), never to compute. Both selected is the case this section co
 the data - the tabular classifier recognises it and nothing is left over but filler and the filter words it
 applied - is routed straight to tier 2's own engine, before any document is read for retrieval and with no
 gateway call, exactly as if tables alone were selected. Unchanged by session 16.
+
+**A file named in a question (explorer step 9 follow-up, 21 October 2026).** The table engine says "this workbook
+is not selected" or "no such file" only of a **workbook**. A name that is a document (a letter in the Data folder,
+or an ordinary document of the Documents folder) is not a table question: with both sides selected, the data-only
+shortcut and the mixed tier's own table half (`prepare_for_mixed`) leave it to the documents, which answer it
+alone. Before the fix the table half answered `FileNotSelected` or `NoMatchingFile` and that ended the whole
+answer, with no document read and the ticked letter's sources still streamed under it. A real workbook that is
+named but not ticked is still said "not selected". With tables only selected, a named document gets "no file of
+that name among the tables".
 
 **Session 16** (`docs/SESSION-DATA-16-Mixed-Tier.md`) built everything session 15 left refused: the mixed
 tier, `mixed_answer::answer`, reached from `commands::mixed_tier` for every question session 15's own

@@ -33,6 +33,12 @@ export function isForeignKey(key: string): boolean {
   return key.startsWith("/");
 }
 
+/** The path a key of `family` stands for inside its root, as a person reads it: the key of a file of the
+ * other folder (`/data/Test/a.docx`) loses its prefix. A key that parses to nothing is shown as it is. */
+export function displayPathOfKey(family: IndexFamily, key: string): string {
+  return parseIndexKey(family, key)?.path ?? key;
+}
+
 /** The root and the path inside it that a key of `family` stands for; null for a key that starts with a
  * slash and names no root or no path, which is never produced and is ignored. */
 export function parseIndexKey(

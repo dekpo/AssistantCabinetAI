@@ -234,10 +234,10 @@ function outcomeOf(summary: IndexSummary): PassOutcome {
     : "done";
 }
 
-/** Who can do what to a file of the list: the explorer's own gates (`isOpenable` for Ouvrir, the
- * folder of its own family for Voir), so a later step that widens them widens this page too. */
+/** Who can do what to a file of the list: the explorer's own gate (`isOpenable` for Ouvrir); Voir is
+ * offered for every file, wherever it sits and whatever its state. */
 export function checkActions(entry: ExplorerEntry): CheckActions {
-  return { open: isOpenable(entry), reveal: entry.native };
+  return { open: isOpenable(entry), reveal: true };
 }
 
 /** The view the link « Afficher les N dans la liste de gauche » sets: the files in the unreadable

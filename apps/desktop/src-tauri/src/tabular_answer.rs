@@ -31,7 +31,7 @@ use serde::Serialize;
 use crate::analysis_scope::ScopeMode;
 use crate::data_folder::DataFolder;
 use crate::error::AppError;
-use crate::file_record::{FileRecord, ProcessingStatus};
+use crate::file_record::{FileKind, FileRecord, ProcessingStatus};
 use crate::file_reference::{fold_text, FileReferenceResolver, ReferenceStatus};
 use crate::gateway::{ChatTurn, GatewayClient};
 use crate::index_store::IndexStore;
@@ -269,20 +269,33 @@ pub fn prepare_for_mixed(
     if matches!(pending, PendingAnswer::Done(TabularAnswer::WhichWorkbook { .. }))
         && !asks_about_a_table(question, data, selection, locale)
     {
-        return Ok(PendingAnswer::Done(TabularAnswer::Nudge {
-            file: String::new(),
-            reason: None,
-            available_sheets: Vec::new(),
-            available_columns: Vec::new(),
-            example_column: None,
-            example_group: None,
-            filter_column: None,
-            filter_value: None,
-            close_values: Vec::new(),
-            model_attempt: None,
-        }));
+        return Ok(PendingAnswer::Done(no_table_part()));
+    }
+    // A name that no workbook carries has no table part either: the documents answer it. It is never the
+    // whole mixed answer, which would drop the document the user ticked (a letter named in the question).
+    if matches!(
+        pending,
+        PendingAnswer::Done(TabularAnswer::NoMatchingFile { .. })
+    ) {
+        return Ok(PendingAnswer::Done(no_table_part()));
     }
     Ok(pending)
+}
+
+/// The result `prepare_for_mixed` leaves for a question with no table part: an unrecognised nudge.
+fn no_table_part() -> TabularAnswer {
+    TabularAnswer::Nudge {
+        file: String::new(),
+        reason: None,
+        available_sheets: Vec::new(),
+        available_columns: Vec::new(),
+        example_column: None,
+        example_group: None,
+        filter_column: None,
+        filter_value: None,
+        close_values: Vec::new(),
+        model_attempt: None,
+    }
 }
 
 /// Whether a question is about a table: it does not name the documents (unless it names a workbook), and
@@ -349,6 +362,9 @@ pub fn prepare_if_data_only(
         {
             Ok(None)
         }
+        // A file named in the question that no workbook of the selection or of the folder carries may be a
+        // document: the table engine cannot tell, the tier that reads both can.
+        PendingAnswer::Done(TabularAnswer::NoMatchingFile { .. }) => Ok(None),
         done @ PendingAnswer::Done(_) => Ok(Some(done)),
         PendingAnswer::TryModel { .. } => Ok(None),
     }
@@ -1152,7 +1168,19 @@ fn pick_target<'c, 'a>(
                     .collect(),
             }),
             ReferenceStatus::NoMatch => {
-                let elsewhere = FileReferenceResolver::new(data.files()).resolve(&resolution.query);
+                // Only a workbook can be "in the folder but not selected": the Data folder also holds
+                // documents (a letter kept beside its table), and a document of the other family is not a
+                // workbook that was left unticked.
+                let tables = WorkFolderInventory::from_records(
+                    data.files().root(),
+                    data.files()
+                        .all_files()
+                        .iter()
+                        .filter(|record| record.kind == FileKind::TabularCandidate)
+                        .cloned()
+                        .collect(),
+                );
+                let elsewhere = FileReferenceResolver::new(&tables).resolve(&resolution.query);
                 Err(match elsewhere.exact_match {
                     Some(record) if record.processing_status == ProcessingStatus::Failed => {
                         TabularAnswer::WorkbookUnreadable {

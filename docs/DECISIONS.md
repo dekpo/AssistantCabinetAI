@@ -1764,3 +1764,51 @@ The owner played the human test of step 8B (script in the lot report: backup, pa
 | N-5 | `rustfmt` was not run on `discovery.rs`, `inventory.rs`, `work_folder.rs`, `settings.rs`, `filename_sanitizer.rs` as a whole: they keep their earlier `Diff in` blocks (2, 1, 3, 1, 4), 8B added none | Final formatting check | Rule of `AGENTS.md`: no crate-wide `cargo fmt` | Only when the owner orders the formatting commit |
 
 Time of the step: not recorded.
+
+## Taken while building the actions on any file (explorer step 9, 21 October 2026)
+
+Step 9 (`docs/SESSION-EXPLORER/EXPLORER-09-actions.md`) was far smaller than estimated: step 8 had already routed the open and reveal calls by the entry's physical root and made the ticking and the scope work by family. What was left was two gates and the way a key is shown.
+
+| Subject | Decision |
+| --- | --- |
+| Ouvrir | `isOpenable(entry)` is `entry.state === "analysed"`, wherever the file sits. The explorer opens it by its root and plain path (`entry.root`, `entry.path`), which `read_work_file_for_viewer` and `read_data_file_for_viewer` already accept for any extension. **No Rust signature changed**, so no Rust test was added |
+| Voir | Offered for **every** file of the explorer and of the « A verifier » page (`checkActions().reveal` is `true`), whatever its state and its folder; the reveal commands take a path inside their root and are extension-agnostic. The old `entry.native` gates are gone |
+| Tab identity | Unchanged: `tabId(folder, path)` with the **root** as folder. In every layout of step 8B a physical file has exactly one entry (`mergeInventories`), so it has one root and can never be two tabs; the same path in the two roots stays two tabs. Tested in `viewerTabs.test.ts` and `explorerModel.test.ts` (tables inside documents and documents inside tables, the N-4 item) |
+| Viewer guard | Unchanged in code. It compares a tab with the inventory of **its own folder**, and that inventory joins a file to what its own family made of it (step 8), so a foreign file is closed only when it is really missing, no longer analysed or modified. Tested with a workbook in the Documents root and a letter in the Data root |
+| Keys the user reads | The source lines under an answer used to show the key (`/documents/administratif/commandes/2026-02-06_commandes.csv`, the known limit recorded in step 8). They now show the path inside the folder (`displayPathOfKey`, `lib/indexKey.ts`). Nothing in the conversation opens a file from a source (they are text lines), so no « open a source » path was added; if one is added, it goes through `parseIndexKey` first. The knowledge-base sheets (`EntitySheetParts.tsx`, `ReviewTab.tsx`) still show a key as it is: out of the scope of this step, noted for the knowledge work |
+| Her state at the time of the step | Her settings point at `C:/Users/elise/AssistantCabinetAI-test/Docs` and `C:/Users/elise/AssistantCabinetAI/Data` (**not** `AssistantCabinetAI-test/Data`). Her index (copy read, 91,398,144 bytes) holds 1,249 documents and 15 workbooks and **none of the five foreign files** (no `/data/...` or `/documents/...` key): the restore after step 8B put it back. The five files are to analyse until she presses Analyser |
+| N-1 | Settled by that measure: the two letters of the Data folder have no row in her index, so the first document pass reads them (and embeds them: with the AI server unreachable it reports them failed, as measured in 8B). The human test of step 9 needs the AI server up for the letters |
+
+Expected figures of the human test (rules, from the files themselves): `2026-02-06_commandes.csv` has 12 data rows; the sum of `Montant` is 2,449.82 and of `Quantite` 154; eight rows are from « Pharma-Depot Romandie SA » and four from « Imprimerie du Chablais SAS ».
+
+### Found by the owner's test of step 9 (21 October 2026), and fixed
+
+| # | Observation | Cause | Fix |
+| --- | --- | --- | --- |
+| 1 | Asked « que dit la lettre modele_lettre.docx ? » with the letter (Data folder) and a workbook both ticked, the answer was « se trouve dans votre dossier des tableaux mais n'est pas sélectionné ». The same question on an ordinary document of the Documents folder got « aucun fichier nommé ... » | The mixed tier's table half (`prepare_for_mixed`, and the data-only shortcut) resolved the name among the ticked workbooks, then **among every file of the Data folder** (`data.files()`, which also holds documents). A document is not a workbook, so the engine reported `FileNotSelected` / `NoMatchingFile`, and `resolve_table` keeps any answer that is not a computed value as the **whole** answer: no document read, no generation. The sources of the letter were streamed before, which explains a « page 1 » under a table message. Not new in step 8, but unreachable before it for the Data folder | `pick_target` looks "elsewhere" only among the files of the table kind; `prepare_if_data_only` and `prepare_for_mixed` treat `NoMatchingFile` as « no table part » (the same sign as a question the classifier cannot read) so the documents answer alone; `FileNotSelected` stays for a real workbook. Tests in `tests/explorer_in_place.rs` (the owner's question word for word, a document of the Documents folder, a name with no trigger word, a workbook named but not ticked), each failing before the fix |
+| 2 | The sheet viewer's scroll bars flickered on the 125 % screen | The library sizes its canvas to whole-number client dimensions while the box is fractional: a feedback loop (see `docs/CLIENT.md`) | One CSS rule clamping the canvas; measured on a replica before and after |
+
+**Not verified yet:** the mixed tier's reading of a document of the other folder end to end (retrieval by key is tested in `tests/explorer_in_place.rs`; the whole `sourced_answer` needs the application). The owner's re-test of her question settles it.
+
+## Owner's tests of step 9 and its two fixes (21 October 2026), results and what was not investigated
+
+The owner played the human test of step 9 twice: first the script of the lot report (backup, analyse the five files, open, tick, ask, restore), which found the two defects above, then a short re-test of the fixes on the rebuilt application.
+
+| Part | Result |
+| --- | --- |
+| Re-test 1 (`pnpm tauri dev`, rebuilt) | Compiled in 40.87 s and started |
+| Re-test 2 (letter and workbook ticked, « que dit la lettre modele_lettre.docx ? ») | **ok**: an answer written by `ministral-3:3b` in 5 s, from excerpt [1] of the letter (subject, salutation, the order lines `Article`, `Quantité`, `Prix_Unitaire`, `Total_Ligne`, the instruction on merging several articles, the signature), « Cette question ne portait sur aucune de vos tables. », source `Test/publipostage/modele_lettre.docx`, page 1. The « not selected » message is gone, and the document of the other folder is read by the mixed tier end to end: **the point left unverified above is settled** |
+| Re-test 3 (« Quelle est la somme des montants dans 2026-02-06_commandes ? ») | ok: 2 449,82 on 12 lines, no AI, source `administratif/commandes/2026-02-06_commandes.csv, feuille 2026-02-06_commandes, colonne Montant` (no key shown) |
+| Re-test 4 (« combien de lignes dans 2026-08-09_commandes.xlsx ? », not ticked) | ok: said « n'est pas sélectionné » |
+| Re-test 5 (sheet viewer, 156 % to 125 % to 100 %, 125 % display scale) | ok: no flicker, « affichage parfait » |
+| Closing | Index restored (91,398,144 bytes), the five files back to « to analyse » |
+
+**Not investigated (recorded to come back to).**
+
+| # | Observation | Where seen | Why it is not a blocker | To do |
+| --- | --- | --- | --- | --- |
+| N-6 | The « not selected » answer of re-test 4 is followed by the line « Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires. », which says nothing true about a refusal (nothing was established, and the documents were not consulted for that reason) | Re-test 4, mixed selection | The refusal itself is right and its instruction (tick the workbook) is clear; the extra line is a label on a table-side refusal that existed before step 9 | Hide the « documents not needed » line when the table answer is a refusal (`FileNotSelected`, `NoMatchingFile`, `WorkbookNotAnalysed`) rather than a computed value; small, TypeScript only |
+| N-7 | In a mixed selection a name that no workbook carries now leaves the question to the documents (`NoMatchingFile` is « no table part »): a mistyped workbook name is answered by the documents tier instead of the table tier's « no such file » | Design of the follow-up fix | Same rule as an unrecognised question; the documents answer or say they hold nothing | Decide with the owner whether a name with a table extension should keep the table tier's refusal |
+| N-8 | The knowledge-base sheets (`EntitySheetParts.tsx`, `ReviewTab.tsx`) still show a file key (`/data/...`) for a file of the other folder | Step 9 build | Outside the conversation; the knowledge work owns them | Use `displayPathOfKey` there when the knowledge sheets are next touched |
+
+Time of the step: not recorded.

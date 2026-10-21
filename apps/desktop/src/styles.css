@@ -379,6 +379,18 @@ body {
   overflow: auto;
 }
 
+/* The sheet viewer sizes its canvas to the scrolling element's `clientWidth` x `clientHeight`, which are
+   whole numbers, while the real box is fractional at a display scale such as 125 %. The canvas then
+   overflows by a fraction of a pixel, a scroll bar appears, the client box shrinks, the library redraws
+   the canvas smaller, the bar goes, and the loop never ends (measured 21 October 2026: 17 of 40 sizes
+   flickered at 125 %, none at 100 %). Clamping the canvas to its containing block breaks the loop and
+   changes nothing visible (a fraction of a pixel); a large sheet still scrolls. Only this canvas carries
+   `will-change` (the PDF's page canvases do not). */
+.viewer__host > div:not(:first-child) > canvas[style*="will-change"] {
+  max-width: 100%;
+  max-height: 100%;
+}
+
 /* The library draws a toolbar of its own, with labels in one fixed language. It is the first child
    of the host (the PDF has none: its first child is the stage); the application's own controls
    replace it. The library sets `display` on the element itself, hence `!important`. */

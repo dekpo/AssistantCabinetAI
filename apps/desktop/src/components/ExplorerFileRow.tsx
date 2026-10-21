@@ -30,9 +30,9 @@ export function ExplorerFileRow({
   /** Why a text search found this file: the short label beside the name, every reason in its tooltip.
    * Absent without a search. The row keeps its height: the label gives way like the grey hint. */
   reason?: { text: string; title: string };
-  /** Present only where opening is allowed: an analysed file of the folder of its own family. */
+  /** Present only where opening is allowed: an analysed file, wherever it sits. */
   onOpen?: () => void;
-  /** Present only where showing the file in the file manager is allowed. */
+  /** Present where showing the file in the file manager is allowed: every file, wherever it sits. */
   onReveal?: () => void;
 }) {
   const { t } = useTranslation();

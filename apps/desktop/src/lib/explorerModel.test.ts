@@ -223,6 +223,37 @@ describe("merging the two inventories", () => {
       ]);
     });
 
+    it("an analysed file of any layout is opened from the root and the path of its one entry, and a key leads to the same", () => {
+      const layouts = [
+        // Tables inside documents.
+        mergeInventories(
+          [record("b.csv"), record("Tables/a.csv"), record("Tables/c.pdf")],
+          [record("a.csv"), record("c.pdf")],
+          { documents: "/w/Docs", data: "/w/Docs/Tables" },
+        ),
+        // Documents inside tables (covered by automated tests only).
+        mergeInventories(
+          [record("lettre.pdf"), record("t.csv")],
+          [record("Docs/lettre.pdf"), record("Docs/t.csv"), record("d.pdf"), record("u.csv")],
+          { documents: "/w/Data/Docs", data: "/w/Data" },
+        ),
+      ];
+
+      for (const merged of layouts) {
+        const tabs = new Set<string>();
+        for (const entry of merged.entries) {
+          expect(isOpenable(entry)).toBe(true);
+          // What Ouvrir hands to the viewer: the root and the plain path of the entry itself.
+          tabs.add(`${entry.root}\u0000${entry.path}`);
+          // And the key the index knows it by points back at that very entry.
+          const family = entry.family === "documents" ? "documents" : "data";
+          expect(explorerKeyOfIndexKey(family, entryIndexKey(entry))).toBe(entry.key);
+        }
+        // One tab per physical file: no entry is listed twice.
+        expect(tabs.size).toBe(merged.entries.length);
+      }
+    });
+
     it("every key of those layouts leads back to the one entry that holds the file", () => {
       const merged = mergeInventories(
         [record("b.csv"), record("Tables/a.csv"), record("lettre.pdf")],
@@ -399,7 +430,7 @@ describe("counts", () => {
     expect(counts.tables.foreign).toBe(1);
   });
 
-  it("lets an analysed file be ticked wherever it sits, and opened only from the folder of its family", () => {
+  it("lets an analysed file be ticked and opened wherever it sits", () => {
     const withForeign = entries(
       [record("a.pdf", "indexed"), record("b.pdf", "discovered"), record("grid.xlsx", "indexed")],
       [record("note.docx", "indexed")],
@@ -410,10 +441,10 @@ describe("counts", () => {
     expect(isTickable(byName["b.pdf"] as ExplorerEntry)).toBe(false);
     expect(isTickable(byName["grid.xlsx"] as ExplorerEntry)).toBe(true);
     expect(isTickable(byName["note.docx"] as ExplorerEntry)).toBe(true);
-    // Opening and showing a foreign file is the next step.
     expect(isOpenable(byName["a.pdf"] as ExplorerEntry)).toBe(true);
-    expect(isOpenable(byName["grid.xlsx"] as ExplorerEntry)).toBe(false);
-    expect(isOpenable(byName["note.docx"] as ExplorerEntry)).toBe(false);
+    expect(isOpenable(byName["b.pdf"] as ExplorerEntry)).toBe(false);
+    expect(isOpenable(byName["grid.xlsx"] as ExplorerEntry)).toBe(true);
+    expect(isOpenable(byName["note.docx"] as ExplorerEntry)).toBe(true);
   });
 });
 

@@ -91,6 +91,28 @@ describe("tabsGone", () => {
     ]);
   });
 
+  it("keeps a file of the other family, judged by its own record in the folder it sits in", () => {
+    // A workbook in the Documents folder and a letter in the Data folder: tabs keyed by their root.
+    const workbook = tab("documents", {
+      relativePath: "administratif/commandes/2026-04-21_commandes.xlsx",
+      extension: "xlsx",
+    });
+    const letter = tab("data", { relativePath: "Test/modele_lettre.docx", extension: "docx" });
+
+    expect(tabsGone([workbook, letter], { documents: [workbook.record], data: [letter.record] })).toEqual(
+      [],
+    );
+    expect(
+      tabsGone([workbook, letter], {
+        documents: [{ ...workbook.record, processingStatus: "pending" }],
+        data: [{ ...letter.record, sha256: "other" }],
+      }),
+    ).toEqual([
+      { id: workbook.id, reason: "not_analysed" },
+      { id: letter.id, reason: "modified" },
+    ]);
+  });
+
   it("leaves the tabs of a folder alone when its inventory could not be read", () => {
     expect(tabsGone([a, c], { documents: [] })).toEqual([{ id: a.id, reason: "missing" }]);
     expect(tabsGone([a, c], {})).toEqual([]);

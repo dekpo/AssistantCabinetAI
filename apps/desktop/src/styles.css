@@ -18,6 +18,13 @@
   --degraded: #b7791f;
   --offline: #9b2c2c;
   --radius: 8px;
+  --accent-soft: #dcebe6;
+  /* The two families of the file explorer: documents are blue, tables are brown. Each has a soft
+     background for its folder icon and its extension badges. */
+  --family-documents: #2c5d9e;
+  --family-documents-soft: #e2ebf7;
+  --family-tables: #8a5a12;
+  --family-tables-soft: #f6ead2;
 
   color-scheme: light;
 }
@@ -36,6 +43,11 @@
   --online: #68d391;
   --degraded: #ecc94b;
   --offline: #fc8181;
+  --accent-soft: #24443a;
+  --family-documents: #86b2ee;
+  --family-documents-soft: #1f2e45;
+  --family-tables: #e3b25f;
+  --family-tables-soft: #43361b;
 
   color-scheme: dark;
 }
@@ -367,6 +379,18 @@ body {
   overflow: auto;
 }
 
+/* The sheet viewer sizes its canvas to the scrolling element's `clientWidth` x `clientHeight`, which are
+   whole numbers, while the real box is fractional at a display scale such as 125 %. The canvas then
+   overflows by a fraction of a pixel, a scroll bar appears, the client box shrinks, the library redraws
+   the canvas smaller, the bar goes, and the loop never ends (measured 21 October 2026: 17 of 40 sizes
+   flickered at 125 %, none at 100 %). Clamping the canvas to its containing block breaks the loop and
+   changes nothing visible (a fraction of a pixel); a large sheet still scrolls. Only this canvas carries
+   `will-change` (the PDF's page canvases do not). */
+.viewer__host > div:not(:first-child) > canvas[style*="will-change"] {
+  max-width: 100%;
+  max-height: 100%;
+}
+
 /* The library draws a toolbar of its own, with labels in one fixed language. It is the first child
    of the host (the PDF has none: its first child is the stage); the application's own controls
    replace it. The library sets `display` on the element itself, hence `!important`. */
@@ -568,7 +592,6 @@ body {
   background: var(--surface);
 }
 
-.card,
 .chat,
 .dialog {
   background: var(--panel);
@@ -576,271 +599,1117 @@ body {
   border-radius: var(--radius);
 }
 
-.card {
-  padding: 14px;
-}
-
-/* Every gap inside this card is half the app's elsewhere: it shares the sidebar with the
-   conversation, and each line it does not spend is one the answers get. The card's padding is
-   untouched - it still breathes at its edges, it is only tighter within. */
-.card__title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 5px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-quiet);
-}
-
-/* Beside the heading, at its own size so a copy change cannot leave it stranded. It says which
-   of the two folders this card is: documents here, tables in the card that will sit beside it. */
-.card__glyph {
+/* Beside a viewer tab's title, at its own size so a copy change cannot leave it stranded. It says
+   which of the two families the tab's file belongs to: a document or a table. */
+.file-glyph {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
   color: var(--text-quiet);
 }
 
-.card__description {
-  margin: 0 0 5px;
-  color: var(--text-quiet);
-  font-size: 12px;
-}
-
-.path {
-  margin: 0 0 6px;
-  padding: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: ui-monospace, "Cascadia Mono", monospace;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.path--empty {
-  color: var(--text-quiet);
-  font-family: inherit;
-}
-
-.work-folder__actions {
+/* The file explorer: one compact box with two family sections, in the sidebar and, without the selection,
+   in the Settings panel. Every height inside it is fixed (rows, lists), so the box never grows with a
+   folder. */
+.explorer {
+  --explorer-row: 24px;
+  flex: none;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 5px;
-}
-
-/* Four controls in one line, in a sidebar column narrow enough that two were already tight.
-   Every child grows from its own text width by an equal share of what is left over, so the row
-   fills the card edge to edge and the gaps between the buttons are identical - `space-between`
-   distributed the *gaps* instead, which left four buttons of four different widths adrift.
-   Nothing is ever crushed: the basis is the label, growing only adds to it.
-   `flex-wrap` stays as the last resort. At a width where even one-word labels do not fit, a
-   second line is better than four ellipses, and it is what keeps a longer translation safe. */
-.work-folder__row {
-  display: flex;
-  align-items: stretch;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.work-folder__row > .button {
-  flex: 1 1 auto;
-  /* One word each, so a button is never the thing that wraps. */
-  white-space: nowrap;
-}
-
-/* The one that matters, so it is the one that gets the room. It takes three shares of the spare
-   width to the others' one, which reads as "largest" at both widths the card lives at rather than
-   only at the wide one: in the sidebar there is little spare and the four stay close to their
-   labels, in the settings panel there is a lot and this one visibly takes it.
-   Written against the analyse button itself rather than against `.button--primary`, which it only
-   wears while a pass is still owed. */
-.work-folder__row > .work-folder__analyse {
-  flex-grow: 3;
-}
-
-/* A hairline under both buttons, for the length of one analysis pass. A spinner only says "still
-   working"; a folder of scans takes minutes, and what she needs then is how much is left. It is
-   removed from the DOM when the pass ends rather than emptied, so nothing lingers at 100%. */
-.progress {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
-.progress__fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: inherit;
-  transition: width 120ms linear;
+.explorer button:focus-visible,
+.explorer input:focus-visible,
+.explorer summary:focus-visible,
+.explorer-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.explorer__head {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer__titleline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.explorer__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-quiet);
+}
+
+.explorer__views {
+  display: flex;
+  gap: 2px;
+}
+
+.explorer__view {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-quiet);
+  cursor: pointer;
+}
+
+.explorer__view[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.explorer__view:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explorer__searchline {
+  display: flex;
+  gap: 6px;
+}
+
+.explorer__search {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-glyph {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translateY(-50%);
+  color: var(--text-quiet);
+  pointer-events: none;
+}
+
+.explorer__search-input {
+  width: 100%;
+  padding: 5px 8px 5px 26px;
+  background: var(--surface);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.explorer__search-input:disabled {
+  opacity: 0.55;
+}
+
+.explorer__segments {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.explorer__segment {
+  flex: 1;
+  padding: 4px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer__segment:last-child {
+  border-right: 0;
+}
+
+.explorer__segment[aria-pressed="true"] {
+  background: var(--accent-soft);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* « Mes notes »: the shortcut to the Notes folder, under the segmented control. */
+.explorer__notes {
+  display: flex;
+}
+
+.explorer__notes-chip {
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer__notes-chip[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.explorer__segment-count {
+  margin-left: 4px;
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.explorer__status {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 11.5px;
+}
+
+.explorer .banner {
+  margin: 6px 10px;
+}
+
+/* A family: the family's own colours reach the icon, the name and the extension badges through two
+   custom properties set once on the section. */
+.explorer-family {
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer-family--documents {
+  --family: var(--family-documents);
+  --family-soft: var(--family-documents-soft);
+}
+
+.explorer-family--tables {
+  --family: var(--family-tables);
+  --family-soft: var(--family-tables-soft);
+}
+
+/* Always one line: the folder icon, the name with its counters, the Analyser button and the fold
+   button never wrap. The left zone has a minimum width that holds them (`AppLayout.tsx`); when the
+   name and the counters still lack room, they are the part that gives way. */
+.explorer-family__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+}
+
+.family-glyph {
+  flex: none;
+}
+
+.family-glyph {
+  width: 24px;
+  height: 21px;
+}
+
+.family-glyph__body {
+  fill: var(--family-soft);
+  stroke: var(--family);
+}
+
+.family-glyph__mark {
+  stroke: var(--family);
+}
+
+.explorer-family__text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The family's name, then its folder's short name in grey (the mock-up's « …\Docs »): the folder is
+   what gives way, the name stays whole. The whole path is the header's tooltip. */
+.explorer-family__title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.explorer-family__location {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-family__name {
+  flex: none;
+  overflow: hidden;
+  color: var(--family);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-family__counters {
+  display: flex;
+  overflow: hidden;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.explorer-family__counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.explorer-family__counter .state-glyph {
+  width: 10px;
+  height: 10px;
+}
+
+.explorer-family__head .button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.explorer-family__fold,
+.explorer-family__menu {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-quiet);
+  cursor: pointer;
+}
+
+.explorer-family__fold:hover,
+.explorer-family__menu:hover,
+.explorer-family__menu[aria-expanded="true"] {
+  background: var(--surface);
+}
+
+.menu-glyph {
+  width: 16px;
+  height: 16px;
+}
+
+/* The formats a family reads, on the second line of its header while its folder is empty. */
+.explorer-family__types {
+  overflow: hidden;
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The « ⋯ » menu: in fixed coordinates (`lib/explorerMenu.ts`), because the box clips its overflow. */
+.explorer-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+}
+
+.explorer-menu__item {
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer-menu__item:hover,
+.explorer-menu__item:focus-visible {
+  background: var(--accent-soft);
+}
+
+.fold-glyph {
+  width: 16px;
+  height: 16px;
+  transition: transform 120ms;
+}
+
+.fold-glyph--folded {
+  transform: rotate(-90deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .progress__fill {
+  .fold-glyph {
     transition: none;
   }
 }
 
-/* Beside the conversation the listing is behind a disclosure, and smaller: the space belongs to
-   the answers. The settings panel shows the same list open, where there is room for it. */
-.inventory-detail {
-  margin-bottom: 5px;
-  font-size: 12px;
+/* The shape of the glyph carries the state; the colour only repeats it. */
+.state-glyph {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
 }
 
-/* What the last pass did, directly under the disclosure and above the listing it describes. Its
-   parts are lines of one paragraph, not paragraphs, so they stack without a blank line between
-   them - it is one account of one pass. */
-.inventory-detail__summary {
-  margin: 3px 0 0;
-  color: var(--text-quiet);
-  font-size: 11px;
-  line-height: 1.45;
+.state-glyph--analysed {
+  color: var(--accent);
 }
 
-/* The work folder as it actually is: one line per file, state dot first, name second. Deliberately
-   plain - this is a way to check what the software sees, not a file manager. */
-.inventory {
-  max-height: 220px;
-  margin: 4px 0 5px;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
+.state-glyph--toAnalyse {
+  color: var(--degraded);
 }
 
-.inventory__file {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 11px;
+.state-glyph--unreadable {
+  color: var(--offline);
 }
 
-/* One line each, clipped rather than wrapped: a column of names that each fold onto a second line
-   cannot be scanned, and the full path is on the element's `title` for the ones that do not fit. */
-.inventory__path {
-  min-width: 0;
-  font-family: ui-monospace, "Cascadia Mono", monospace;
-  font-size: 10px;
-  font-weight: 400;
-  white-space: nowrap;
+/* The line of a running pass, and then the line of the pass that just ended: one line at the
+   narrowest width, the times last so an ellipsis cuts them first, the whole text on hover. */
+.explorer-family__run {
   overflow: hidden;
+  margin: 0;
+  padding: 3px 10px 5px;
+  background: var(--surface);
+  color: var(--text-quiet);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* The checkbox, the state dot and the name share one line; the name keeps its ellipsis. */
-.inventory__choice {
+.explorer-family__run--end {
+  background: none;
+  padding-top: 0;
+}
+
+/* « Voir le rapport »: alone on its line under the end of a pass. */
+.explorer-family__report {
+  margin: 0;
+  padding: 0 10px 4px;
+}
+
+/* The thin line under the header, filled to the stage's percentage (`PROGRESS_HAIRLINE`). */
+.explorer-family__line {
+  height: 2px;
+  background: var(--border);
+}
+
+.explorer-family__line-fill {
+  display: block;
+  height: 100%;
+  background: var(--family);
+  transition: width 120ms linear;
+}
+
+/* The Analyser button while its pass runs: the gauge and its Stop, never wider than the button and
+   the « ⋯ » menu they replace, so the header holds one line at 320 px. */
+.gauge {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+}
+
+.gauge__body {
+  position: relative;
+  display: inline-flex;
+  overflow: hidden;
+  align-items: center;
+  gap: 5px;
   min-width: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--family);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gauge__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--family) 26%, transparent);
+  transition: width 120ms linear;
+}
+
+.gauge__spinner,
+.gauge__label {
+  position: relative;
+}
+
+.gauge__spinner {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-width: 2px;
+}
+
+.gauge__stop {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
   cursor: pointer;
 }
 
-.inventory__choice input {
-  flex: 0 0 auto;
-  margin: 0;
+.gauge__stop:hover:not(:disabled) {
+  background: var(--surface);
 }
 
-/* The "See" button ends the row, pushed to the right edge; the name gives it the room it needs. */
-.inventory__see {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding-top: 1px;
-  padding-bottom: 1px;
-  font-size: 10px;
-}
-
-/* A file's state as a colour, in the palette the rest of the window already uses: the accent green
-   for read, the warning amber for waiting, the offline red for unreadable. The words are on the
-   dot's hover and its aria-label. */
-.status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-}
-
-.status-dot--ok {
-  background: var(--accent);
-}
-
-.status-dot--wait {
-  background: var(--degraded);
-}
-
-.status-dot--fail {
-  background: var(--offline);
-}
-
-/* Shown beside "the whole folder" only: the default is the case worth a second look, because it
-   is the one that quietly widens what an answer may rest on. The triangle's drawing sits high in
-   its box, so it is nudged down to the text's baseline. */
-.warning-glyph__wrap {
-  display: inline-flex;
-}
-
-.warning-glyph {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  color: var(--degraded);
-  transform: translateY(0);
-}
-
-/* "Tous les documents": the listing's header row, so it reads as the box that governs the boxes
-   below it. Same size and rhythm as a file row, a firmer rule under it. */
-.scope-picker__all {
-  margin-top: 4px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--text-quiet);
-  font-size: 11px;
-}
-
-.scope-picker__all input:disabled,
-.scope-picker__all:has(input:disabled) {
+.gauge__stop:disabled {
+  color: var(--text-quiet);
   cursor: default;
 }
 
-.card .banner {
-  margin-top: 6px;
+.gauge__stop .glyph {
+  width: 14px;
+  height: 14px;
 }
 
-/* The search field of a folder card, above the line that says how many files are used. It takes the
-   place the title line had; that line stays under it, with its warnings. */
-.finder {
-  margin-top: 4px;
+@media (prefers-reduced-motion: reduce) {
+  .gauge__fill,
+  .explorer-family__line-fill {
+    transition: none;
+  }
 }
 
-.finder__input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 6px 8px;
-  background: var(--surface);
-  color: inherit;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font: inherit;
-  font-size: 12px;
-}
-
-.finder__status,
-.finder__notice {
-  margin: 4px 0 0;
+.explorer-note,
+.explorer-empty {
+  margin: 0;
+  padding: 4px 10px;
   color: var(--text-quiet);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
-.finder__actions {
+.explorer-empty {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+/* A folder that holds nothing: the sentence and the two buttons. At the narrowest width the buttons
+   go under the sentence; nothing is cut. */
+.explorer-empty--folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.explorer-empty__actions {
   display: flex;
   gap: 6px;
-  margin-top: 2px;
+}
+
+.explorer-empty__actions .button {
+  white-space: nowrap;
+}
+
+/* « Pour commencer »: the first-start block, then one setup block per family without a folder. */
+.explorer-start {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin: 8px 10px;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.explorer-start__title {
+  margin: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.explorer-start__steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.explorer-start .button {
+  white-space: nowrap;
+}
+
+.explorer-setup__types {
+  overflow: hidden;
+  color: var(--family);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-setup__path {
+  overflow: hidden;
+  margin: 0 10px;
+  padding: 3px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-setup__actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 8px;
+}
+
+.explorer-setup__actions .button {
+  white-space: nowrap;
+}
+
+/* One list per family, with its own scroll bar. The height is set inline from the row budget, and
+   the rows are a fixed height, so the list can draw only the ones in view. */
+.explorer-list {
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.explorer-list__rows {
+  margin: 0;
+  padding-right: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.explorer-row {
+  display: grid;
+  grid-template-columns: 16px 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  height: var(--explorer-row);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+/* The Settings panel's rows have no checkbox: one column fewer, so the buttons stay on the right. */
+.explorer-row--plain {
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+}
+
+.explorer-row:hover {
+  background: var(--surface);
+}
+
+/* A row that can be ticked is ticked by a click anywhere on it. */
+.explorer-row--tickable {
+  cursor: pointer;
+}
+
+.explorer-row__check {
+  margin: 0;
+}
+
+.explorer-row__check:disabled {
+  opacity: 0.35;
+}
+
+.explorer-row__name {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.explorer-row__stem {
+  flex: 0 1 auto;
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The folders of the path, in grey before the name (the Settings panel): they give way before the
+   name does. */
+.explorer-row__dir {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-quiet);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The extension is never the part that is cut: only the stem gives way. */
+.explorer-row__ext {
+  flex: none;
+  margin-left: 1px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--family-soft);
+  color: var(--family);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.explorer-row__hint,
+.explorer-row__reason,
+.explorer-row__tag {
+  flex: 0 1 auto;
+  max-width: 40%;
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+
+.explorer-row__hint,
+.explorer-row__reason {
+  color: var(--text-quiet);
+}
+
+.explorer-row__tag {
+  color: var(--accent);
+}
+
+.explorer-row--foreign .explorer-row__stem {
+  color: var(--text-quiet);
+}
+
+/* With the room of the Settings panel, the tag that says where a file really sits is never cut. */
+.explorer-row--plain .explorer-row__tag {
+  flex: none;
+  max-width: none;
+}
+
+/* Shown on hover and on keyboard focus; the room is kept, so the name does not move. */
+.explorer-row__actions {
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+}
+
+.explorer-row:hover .explorer-row__actions,
+.explorer-row:focus-within .explorer-row__actions {
+  opacity: 1;
+}
+
+.explorer-row__button {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.explorer-bottom {
+  padding: 5px 10px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.explorer-bottom__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
+.explorer-bottom__label {
+  font-weight: 600;
+}
+
+.explorer-bottom__hint {
+  color: var(--text-quiet);
+  font-size: 11px;
+}
+
+.explorer-bottom__note {
+  margin: 2px 0 0;
+  color: var(--text-quiet);
+  font-size: 11px;
+}
+
+/* The filter panel opens in the flow of the head: the box clips what overflows it. It has no scroll
+   area (the format pills wrap), and every block fits the 320 px minimum of the left zone. */
+.explorer-filters {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.explorer-filters__block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.explorer-filters__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-quiet);
+}
+
+.explorer-filters__none {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-quiet);
+}
+
+.explorer-filters__field {
+  width: 100%;
+  padding: 4px 8px;
+  background: var(--panel);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.explorer-filters__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.explorer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.explorer-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explorer-chip--mono {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11.5px;
+}
+
+.explorer-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.explorer-chip[data-empty="true"] {
+  opacity: 0.55;
+}
+
+.explorer-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.explorer-chip__count {
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.explorer-suggest {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.explorer-suggest__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explorer-suggest__item:hover {
+  background: var(--accent-soft);
+}
+
+.explorer-suggest__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-suggest__count {
+  flex: none;
+  color: var(--text-quiet);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 10.5px;
+}
+
+.explorer-suggest__more {
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: var(--text-quiet);
+}
+
+.explorer-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.explorer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 0 3px 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 11.5px;
+}
+
+.explorer-pill__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-pill__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.explorer-pill__remove:hover {
+  background: var(--border);
+}
+
+.explorer__filters-badge {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.explorer-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.explorer-link--quiet {
+  color: var(--text-quiet);
+}
+
+.explorer-link:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* « Select. auto »: a switch with its hint line, in the upper part of the box. */
+.explorer-auto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.explorer-auto__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.explorer-auto__switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explorer-auto__track {
+  position: relative;
+  display: inline-block;
+  width: 26px;
+  height: 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.explorer-auto__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-quiet);
+}
+
+.explorer-auto__switch[aria-checked="true"] .explorer-auto__track {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.explorer-auto__switch[aria-checked="true"] .explorer-auto__thumb {
+  left: 13px;
+  background: var(--accent);
+}
+
+.explorer-auto__label {
+  font-weight: 600;
+}
+
+.explorer-auto__hint {
+  color: var(--text-quiet);
+  font-size: 11px;
+}
+
+/* A chosen name and the roles it can be narrowed to, on their own line. */
+.explorer-chips--entity {
+  align-items: center;
+}
+
+.explorer-chip--role {
+  font-size: 11.5px;
+}
+
+/* The views: the application's, the user's own, and the form that saves the current filters. */
+.explorer-views {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.explorer-views__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explorer-views__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.explorer-views__open {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.explorer-views__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-views__missing {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text-quiet);
 }
 
 .chat {
@@ -1588,12 +2457,61 @@ body {
   max-width: 44em;
 }
 
-/* The folder card is a card everywhere else, and in here it is one more setting among the fields
-   above it. Same ceiling as `.field`, written once against the dialog body rather than as a
-   modifier the card has to be told to wear: anything dropped into this panel later should line up
-   with the rest without being asked to. */
-.dialog__body > .card {
-  max-width: 44em;
+/* The Settings panel is as wide as the knowledge dialog (`dialog--wide`) and uses all of it: two
+   columns that share the width, left then right, and a whole row (`settings-wide`) for what needs the
+   room - a section title, the two folders, a message, the voice credits. Rows are as tall as their
+   content and never squeezed (`max-content`): a box with a long list in it would otherwise be overlapped
+   by what follows. On a narrow window the two columns become one. */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: start;
+  gap: 18px 32px;
+}
+
+@media (max-width: 1000px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.settings-grid > .field {
+  max-width: none;
+}
+
+.settings-grid > .settings-wide,
+.settings-grid > .banner {
+  grid-column: 1 / -1;
+}
+
+/* A title of the panel: it opens a section, with a rule under it. */
+.settings-grid > .dialog__subtitle {
+  margin: 12px 0 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05em;
+}
+
+.settings-grid > .dialog__subtitle:first-child {
+  margin-top: 0;
+}
+
+/* A folder of the files: its title, then the box that lists them, the whole row wide. */
+.settings-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The disclosure of the advanced settings holds a grid of its own, the same two columns. */
+.settings-grid--inside {
+  margin-top: 12px;
+}
+
+.settings-grid--inside > .field {
+  max-width: none;
 }
 
 .field__label {
@@ -1866,14 +2784,6 @@ body {
   font-size: 1em;
 }
 
-.settings-advanced > .field,
-.settings-advanced > .field__row,
-.settings-advanced > .field__description,
-.settings-voice > .field,
-.settings-voice > .field__row,
-.settings-voice > .field__description {
-  margin-top: 8px;
-}
 
 /* ---------------------------------------------------------------------------------------------
    Knowledge base, lot 8: the management dialog. Same tokens as the rest, so light and dark need
@@ -2443,6 +3353,268 @@ body {
   position: relative;
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* The Aperçu section of the centre: one page that scrolls on its own, with no scroll area inside it.
+   It reads down to the centre's minimum width (320 px): long names break, nothing is cut. */
+.overview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+
+.overview__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.overview__block--alert {
+  padding: 8px 10px;
+  color: var(--alert-text);
+  background: var(--alert-surface);
+  border: 1px solid var(--alert-border);
+  border-radius: var(--radius);
+}
+
+.overview__heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.overview__text {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.overview__text--strong {
+  color: var(--text);
+}
+
+.overview__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview__card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--family);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.overview__card--documents,
+.overview__family--documents {
+  --family: var(--family-documents);
+  --family-soft: var(--family-documents-soft);
+}
+
+.overview__card--tables,
+.overview__family--tables {
+  --family: var(--family-tables);
+  --family-soft: var(--family-tables-soft);
+}
+
+.overview__family {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--family);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* The folder's whole path: it matters as much as the counts, and this page has the room. */
+.overview__path {
+  margin: 0;
+  color: var(--text-quiet);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.overview__counters,
+.overview__list,
+.overview__files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview__counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview__counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.overview__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-quiet);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* The three steps: a number (a tick once done) and the words beside it. */
+.overview__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.overview__mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-quiet);
+  font-size: 12px;
+}
+
+.overview__step[aria-current="step"] .overview__mark {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.overview__step--done .overview__mark {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.overview__check {
+  width: 13px;
+  height: 13px;
+}
+
+.overview__step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.overview__step-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.overview__step-detail {
+  color: var(--text-quiet);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* A file to check: its name, where it sits and why, then its buttons. The buttons go under the text
+   at the narrowest width. */
+.overview__files {
+  display: flex;
+  flex-direction: column;
+}
+
+.overview__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.overview__file:first-child {
+  border-top: 0;
+}
+
+.overview__file-text {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.overview__file-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.overview__file-folder,
+.overview__file-reason {
+  color: var(--text-quiet);
+  font-size: 11.5px;
+}
+
+.overview__file-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.overview__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.overview__chip {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-quiet);
+  background: var(--surface);
+  font-size: 11.5px;
+}
+
+/* Said to a screen reader only. */
+.overview__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* A recording is running while the other section is on screen. */

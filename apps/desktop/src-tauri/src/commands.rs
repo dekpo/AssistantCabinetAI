@@ -13,11 +13,13 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::analysis_scope::{AnalysisScope, GroundingTier, ScopeMode};
+use crate::analysis_stop::AnalysisStops;
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::data_folder::{self, DataFolder, DataFolderReport};
 use crate::discovery;
 use crate::error::AppError;
+use crate::family_view::{self, FamilyViews};
 use crate::file_profile;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::FileReferenceResolver;
@@ -67,9 +69,10 @@ pub struct AppState {
     pub gateway: GatewayClient,
     /// Lets `cancel_chat` reach the question being worked on. One at a time.
     pub cancellation: Cancellation,
-    /// Raised by `cancel_analysis`, read between two files and two batches by the pass that is running
-    /// (`indexing::run_cancellable`); lowered when a pass starts.
-    pub analysis_stop: std::sync::atomic::AtomicBool,
+    /// One Stop flag per folder, raised by `cancel_analysis`, read between two files and two batches by
+    /// the pass of that folder (`indexing::run_cancellable`, `data_folder::analyse_cancellable`) and
+    /// lowered when a pass of that folder starts. The two passes can run together.
+    pub analysis_stop: AnalysisStops,
     /// What each file in the work folder last hashed to. Lives as long as the application so the
     /// folder panel can be rebuilt whenever she comes back to the window without re-reading every
     /// scan in the folder (`inventory::FileHashCache`).
@@ -100,7 +103,7 @@ impl AppState {
             settings: Mutex::new(Settings::default()),
             gateway: GatewayClient::new()?,
             cancellation: Cancellation::default(),
-            analysis_stop: std::sync::atomic::AtomicBool::new(false),
+            analysis_stop: AnalysisStops::default(),
             file_hashes: FileHashCache::new(),
             data_file_hashes: FileHashCache::new(),
             model_budgets: Mutex::new(ModelBudgets::default()),
@@ -304,7 +307,7 @@ pub fn save_settings(
 ///
 /// The local index is **not** touched. Documents stay analysed, and choosing the same folder
 /// again finds them exactly as they were - the index is keyed by path relative to the folder, not
-/// by the setting. Emptying it is the other button, in the folder card, on purpose.
+/// by the setting. Emptying it is the other action, in the folder menu of the explorer, on purpose.
 #[tauri::command]
 pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Result<Settings, AppError> {
     let stored = settings::save(&app, &work_folder_policy(&app), Settings::default())?;
@@ -401,10 +404,11 @@ pub async fn index_work_folder(
     state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let (work_folder, server_url, embedding_alias, locale, mode, packs, own_names) =
+    let (work_folder, data_folder, server_url, embedding_alias, locale, mode, packs, own_names) =
         state.read(|settings| {
             (
                 settings.work_folder.clone(),
+                settings.data_folder.clone(),
                 settings.server_url.clone(),
                 settings.embedding_alias.clone(),
                 settings.locale.clone(),
@@ -429,7 +433,12 @@ pub async fn index_work_folder(
     // Names are made plain before anything is read, so the pass, the index and every later question
     // agree on one spelling of each file. Logged as it happens: a pass that fails afterwards must
     // not leave a renamed file with no record of what it used to be.
-    let sanitised = filename_sanitizer::sanitize_folder(Path::new(&work_folder));
+    // The rule is by family: this pass renames a document wherever it sits, in the Data folder too, and
+    // no pass renames a workbook (`docs/DECISIONS.md`, "clean file names").
+    let sanitised = filename_sanitizer::sanitize_documents(
+        Path::new(&work_folder),
+        data_folder.as_deref().map(Path::new),
+    );
     log_renames(&app, &sanitised.renamed);
 
     let mut index = open_index(&app)?;
@@ -448,13 +457,15 @@ pub async fn index_work_folder(
         .map(|context| context.with_own_names(&own_names));
     state
         .analysis_stop
-        .store(false, std::sync::atomic::Ordering::SeqCst);
+        .lower(file_profile::build::Domain::Documents);
     let mut summary = indexing::run_cancellable(
         &mut index,
         &state.gateway,
         &server_url,
         &embedding_alias,
         Path::new(&work_folder),
+        // The documents found in the Data folder are read where they sit.
+        data_folder.as_deref().map(Path::new),
         ocr,
         raster,
         locale,
@@ -466,7 +477,7 @@ pub async fn index_work_folder(
         &|| {
             state
                 .analysis_stop
-                .load(std::sync::atomic::Ordering::SeqCst)
+                .is_raised(file_profile::build::Domain::Documents)
         },
     )
     .await?;
@@ -482,13 +493,12 @@ pub async fn index_work_folder(
     Ok(summary)
 }
 
-/// Stop the analysis that is running. It stops between two files or two batches of vectors; what it
-/// wrote stays, and the next one goes on from there. Nothing happens when none is running.
+/// Stop the analysis of one folder that is running. It stops between two files, two batches of
+/// vectors or two workbooks; what it wrote stays, and the next one goes on from there. The other
+/// folder's analysis is not touched. Nothing happens when none is running.
 #[tauri::command]
-pub fn cancel_analysis(state: State<'_, AppState>) {
-    state
-        .analysis_stop
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+pub fn cancel_analysis(state: State<'_, AppState>, domain: file_profile::build::Domain) {
+    state.analysis_stop.raise(domain);
 }
 
 /// How many passages have their meaning vector, out of all of them: one cheap count, so the card can
@@ -532,12 +542,18 @@ pub async fn find_files(
     mut query: FinderQuery,
     scope: FinderScope,
 ) -> Result<FinderResult, AppError> {
-    let (folder, locale, pack_ids) = state.read(|settings| {
+    let (folder, other_folder, locale, pack_ids) = state.read(|settings| {
+        let (own, other) = match domain {
+            file_profile::build::Domain::Documents => {
+                (settings.work_folder.clone(), settings.data_folder.clone())
+            }
+            file_profile::build::Domain::Data => {
+                (settings.data_folder.clone(), settings.work_folder.clone())
+            }
+        };
         (
-            match domain {
-                file_profile::build::Domain::Documents => settings.work_folder.clone(),
-                file_profile::build::Domain::Data => settings.data_folder.clone(),
-            },
+            own,
+            other,
             settings
                 .locale
                 .clone()
@@ -551,10 +567,20 @@ pub async fn find_files(
             file_profile::build::Domain::Data => AppError::NoDataFolderSet,
         });
     };
-    let inventory: Vec<InventoryFile> = discovery::discover_all(Path::new(&folder))
-        .iter()
-        .map(InventoryFile::from)
-        .collect();
+    // The search is by family, across both folders: the files of the family in its own folder keep their
+    // path, those found in the other folder come back under their key (`file_key`), and the client places
+    // each by the folder it names. A file of the other family is searched by that family's own request.
+    let inventory: Vec<InventoryFile> = discovery::discover_family(
+        Path::new(&folder),
+        other_folder.as_deref().map(Path::new),
+        domain,
+    )
+    .iter()
+    .map(InventoryFile::from)
+    .collect();
+    // An extension typed in the field is a format filter and a date typed alone also asks for the files
+    // dated so (`finder::typed`); the words that are left are what the finder searches.
+    let typed_formats = finder::typed::apply_typed_text(&mut query, &inventory);
     // A number typed in any spelling meets the number stored in the profile: the identifiers of the active
     // packs are read from what was typed, here, where the packs are known.
     if query.identifiers.is_empty() {
@@ -569,7 +595,22 @@ pub async fn find_files(
         }
     }
     let index = open_index(&app)?;
-    finder::find(index.connection(), domain, &inventory, &query, &scope)
+    let mut result = finder::find(index.connection(), domain, &inventory, &query, &scope)?;
+    result.typed_formats = typed_formats;
+    Ok(result)
+}
+
+/// What the knowledge base and the file profile know of each analysed file of one folder (business type,
+/// years, people and organisations with their roles), for the explorer's filters. Two reads of the profile
+/// tables and two of the knowledge base: no model, no file read, nothing written. The explorer asks for it when
+/// a filter of the knowledge base is shown or in force, never at launch.
+#[tauri::command(async)]
+pub fn file_knowledge_facts(
+    app: AppHandle,
+    domain: file_profile::build::Domain,
+) -> Result<finder::facts::FolderFacts, AppError> {
+    let index = open_index(&app)?;
+    finder::facts::folder_facts(index.connection(), domain)
 }
 
 /// Whether the local index has anything to search yet. The chat panel checks this before
@@ -585,20 +626,27 @@ pub async fn has_indexed_documents(app: AppHandle) -> Result<bool, AppError> {
 ///
 /// Answered from `std::fs` and the local index, never from the model, so the counts the panel
 /// shows are the same ones a question about the folder gets (`docs/WORK-FOLDER-INVENTORY.md`).
-#[tauri::command]
+///
+/// `async` so a first read, which hashes every file of a large folder, never runs on the thread
+/// that draws the window: the explorer reads this and `data_folder_inventory` at launch and each
+/// time the window gets the focus back (measured, `docs/DECISIONS.md`, "the explorer's unified view").
+#[tauri::command(async)]
 pub fn work_folder_inventory(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<InventoryReport, AppError> {
-    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let (work_folder, data_folder) =
+        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
     let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
     };
     // A folder that has never been analysed still has an inventory; it simply has no index to
-    // join onto, which is exactly what "nothing has been read yet" should look like.
+    // join onto, which is exactly what "nothing has been read yet" should look like. The Data folder
+    // is given too: it decides the key of a file the two folders share.
     let index = open_index(&app).ok();
-    let inventory = WorkFolderInventory::discover_with_cache(
+    let inventory = WorkFolderInventory::discover_alongside(
         Path::new(&work_folder),
+        data_folder.as_deref().map(Path::new),
         index.as_ref(),
         &state.file_hashes,
     )?;
@@ -689,15 +737,28 @@ pub fn reset_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), App
 /// CSV/XLS/XLSX/XLSM file parsed and its inventory cached (`data_folder::analyse`). No embedding
 /// and no gateway call - local parsing only, so it is over in moments where the Documents pass
 /// takes minutes. Counts only on the progress channel: no file name, no cell.
+///
+/// Parsed on a blocking thread, so the window keeps drawing and the Stop of this folder
+/// (`cancel_analysis`) can be heard between two workbooks, while the Documents pass runs on its own.
 #[tauri::command]
-pub fn index_data_folder(
+pub async fn index_data_folder(
     app: AppHandle,
-    state: State<'_, AppState>,
     on_progress: Channel<IndexProgress>,
 ) -> Result<IndexSummary, AppError> {
-    let (data_folder, locale, mode, packs, own_names) = state.read(|settings| {
+    tauri::async_runtime::spawn_blocking(move || run_data_pass(&app, &on_progress))
+        .await
+        .map_err(|_| AppError::Internal)?
+}
+
+fn run_data_pass(
+    app: &AppHandle,
+    on_progress: &Channel<IndexProgress>,
+) -> Result<IndexSummary, AppError> {
+    let state = app.state::<AppState>();
+    let (data_folder, work_folder, locale, mode, packs, own_names) = state.read(|settings| {
         (
             settings.data_folder.clone(),
+            settings.work_folder.clone(),
             settings.locale.clone(),
             settings.knowledge_mode,
             settings.knowledge_pack_ids(),
@@ -709,31 +770,30 @@ pub fn index_data_folder(
     };
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
 
-    // The same rename, the same log and the same guarantees as the Documents Folder's pass
-    // (`docs/DECISIONS.md`, "clean file names"): the name only, never the content, never over
-    // another file, never out of its folder.
-    let sanitised = filename_sanitizer::sanitize_folder(Path::new(&data_folder));
-    log_renames(&app, &sanitised.renamed);
-
-    let mut index = open_index(&app)?;
-    let _ = file_profile::store::record_original_names(
-        index.connection(),
-        file_profile::build::Domain::Data,
-        &sanitised.renamed,
-    );
+    // This pass renames nothing: a workbook is never renamed, whichever folder it sits in, and the
+    // documents are renamed by the document pass (`docs/DECISIONS.md`, "clean file names").
+    let mut index = open_index(app)?;
     // The knowledge base never blocks a pass: if it cannot start, the workbooks are analysed exactly
     // as before and the summary says that part of the analysis did not complete.
-    let mut knowledge = knowledge_context(&app, &index, mode, locale, &packs)
+    let mut knowledge = knowledge_context(app, &index, mode, locale, &packs)
         .ok()
         .map(|context| context.with_own_names(&own_names));
-    let mut summary = data_folder::analyse_with_knowledge(
+    state.analysis_stop.lower(file_profile::build::Domain::Data);
+    let mut summary = data_folder::analyse_cancellable(
         Path::new(&data_folder),
+        // The workbooks found in the Documents folder are read where they sit.
+        work_folder.as_deref().map(Path::new),
         &mut index,
         locale,
         &|progress| {
             let _ = on_progress.send(progress);
         },
         knowledge.as_mut(),
+        &|| {
+            state
+                .analysis_stop
+                .is_raised(file_profile::build::Domain::Data)
+        },
     )?;
     if knowledge.is_none() && mode.reads_files() {
         summary.knowledge = Some(KnowledgeSummary {
@@ -741,27 +801,28 @@ pub fn index_data_folder(
             ..KnowledgeSummary::default()
         });
     }
-    summary.renamed_files = sanitised.renamed;
-    summary.rename_failed_files = sanitised.failed;
-    log_analysis_timing(&app, &state, &summary);
+    log_analysis_timing(app, &state, &summary);
     Ok(summary)
 }
 
 /// What is in the Data Folder right now, and which workbooks hold a usable table: the
 /// filesystem, joined with the cached tabular inventories. The one place both are read together
-/// (`docs/DECISIONS.md`, "the two inventories stay separate").
-#[tauri::command]
+/// (`docs/DECISIONS.md`, "the two inventories stay separate"). `async` for the same reason as
+/// `work_folder_inventory`.
+#[tauri::command(async)]
 pub fn data_folder_inventory(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DataFolderReport, AppError> {
-    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let (work_folder, data_folder) =
+        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
     let Some(data_folder) = data_folder else {
         return Err(AppError::NoDataFolderSet);
     };
     let index = open_index(&app).ok();
-    let folder = DataFolder::discover(
+    let folder = DataFolder::discover_alongside(
         Path::new(&data_folder),
+        work_folder.as_deref().map(Path::new),
         index.as_ref(),
         &state.data_file_hashes,
     )?;
@@ -823,9 +884,9 @@ pub fn read_data_file_readable_text(
         .map(tauri::ipc::Response::new)
 }
 
-/// Forget every workbook analysis, and nothing else: the Data Folder card's Reset. The documents
-/// index is left exactly as it is, as `reset_index` leaves the workbooks - two cards, two
-/// independent resets. No file in either folder is touched.
+/// Forget every workbook analysis, and nothing else: the Data folder's "clear the analysis". The
+/// documents index is left exactly as it is, as `reset_index` leaves the workbooks - two folders,
+/// two independent clears. No file in either folder is touched.
 #[tauri::command]
 pub fn reset_data_index(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
     let mut index = open_index(&app)?;
@@ -1000,6 +1061,22 @@ pub fn knowledge_diagnostics(
     )
 }
 
+/// Both families across the two folders the settings name (`family_view`): the documents wherever they
+/// sit, the workbooks wherever they sit, each file under the key it has in the index. What a selection,
+/// a retrieval or a table question reads; the explorer's own listing stays per folder. A family is
+/// absent when its own folder is not chosen.
+fn family_views_of(state: &AppState, index: &IndexStore) -> Result<FamilyViews, AppError> {
+    let (work_folder, data_folder) =
+        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
+    family_view::family_views(
+        work_folder.as_deref().map(Path::new),
+        data_folder.as_deref().map(Path::new),
+        Some(index),
+        &state.file_hashes,
+        &state.data_file_hashes,
+    )
+}
+
 /// The names of the current selection that begin with `prefix`, for the composer's `@` picker
 /// (`knowledge::picker`), and the names that exist only in analysed files she did not select.
 ///
@@ -1015,26 +1092,16 @@ pub fn knowledge_search_entities(
     scope: AnalysisScope,
     limit: Option<usize>,
 ) -> Result<EntitySearch, AppError> {
-    let (work_folder, data_folder, mode) = state.read(|settings| {
-        (
-            settings.work_folder.clone(),
-            settings.data_folder.clone(),
-            settings.knowledge_mode,
-        )
-    })?;
+    let mode = state.read(|settings| settings.knowledge_mode)?;
     if !mode.reads_files() || prefix.trim().is_empty() {
         return Ok(EntitySearch::default());
     }
     let index = open_index(&app)?;
 
+    let views = family_views_of(&state, &index)?;
     let mut selected_documents_list = Vec::new();
     let mut analysed_documents = Vec::new();
-    if let Some(work_folder) = work_folder {
-        let full = WorkFolderInventory::discover_with_cache(
-            Path::new(&work_folder),
-            Some(&index),
-            &state.file_hashes,
-        )?;
+    if let Some(full) = views.documents {
         let as_files = |inventory: &WorkFolderInventory| -> Vec<SelectedFile> {
             inventory
                 .indexed_files()
@@ -1047,12 +1114,7 @@ pub fn knowledge_search_entities(
     }
     let mut selected_workbooks_list = Vec::new();
     let mut analysed_workbooks = Vec::new();
-    if let Some(data_folder) = data_folder {
-        let folder = DataFolder::discover(
-            Path::new(&data_folder),
-            Some(&index),
-            &state.data_file_hashes,
-        )?;
+    if let Some(folder) = views.data {
         analysed_workbooks = selected_workbook_files(&folder, &ScopeMode::WholeFolder);
         selected_workbooks_list = selected_workbook_files(&folder, &scope.data_mode);
     }
@@ -1113,20 +1175,14 @@ fn resolve_selection(
     index: &IndexStore,
     scope: &AnalysisScope,
 ) -> Result<ResolvedSelection, AppError> {
-    let (work_folder, data_folder) =
-        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
+    let views = family_views_of(state, index)?;
     let mut resolved = ResolvedSelection {
         documents: Vec::new(),
         scoped_documents: None,
         data: None,
         workbooks: Vec::new(),
     };
-    if let Some(work_folder) = work_folder {
-        let full = WorkFolderInventory::discover_with_cache(
-            Path::new(&work_folder),
-            Some(index),
-            &state.file_hashes,
-        )?;
+    if let Some(full) = views.documents {
         let scoped = scope.resolve(&full).inventory;
         resolved.documents = scoped
             .indexed_files()
@@ -1135,12 +1191,7 @@ fn resolve_selection(
             .collect();
         resolved.scoped_documents = Some(scoped);
     }
-    if let Some(data_folder) = data_folder {
-        let folder = DataFolder::discover(
-            Path::new(&data_folder),
-            Some(index),
-            &state.data_file_hashes,
-        )?;
+    if let Some(folder) = views.data {
         resolved.workbooks = tabular_answer::selected_workbook_choices(&folder, &scope.data_mode);
         resolved.data = Some(folder);
     }
@@ -1848,9 +1899,9 @@ async fn sourced_answer(
                 settings.answer_idle_timeout(),
             )
         })?;
-    let Some(work_folder) = work_folder else {
+    if work_folder.is_none() {
         return Err(AppError::NoWorkFolderSet);
-    };
+    }
     // The budget of the model chosen for this question, from the last health check. Switching
     // models mid-conversation changes this and nothing else.
     let budget = state
@@ -1868,7 +1919,9 @@ async fn sourced_answer(
     };
 
     let index = open_index(app)?;
-    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let full_inventory = family_views_of(state, &index)?
+        .documents
+        .ok_or(AppError::NoWorkFolderSet)?;
     measured.inventory_ms = stage.lap_ms();
     // From here on the conversation sees the scope's inventory and nothing wider: the router, the
     // per-document list, the counts and the context all read it, and retrieval is held to its
@@ -2275,16 +2328,14 @@ async fn tabular_tier(
             settings.answer_idle_timeout(),
         )
     })?;
-    let Some(data_folder) = data_folder else {
+    if data_folder.is_none() {
         return Err(AppError::NoDataFolderSet);
-    };
+    }
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
-    let folder = DataFolder::discover(
-        Path::new(&data_folder),
-        Some(&index),
-        &state.data_file_hashes,
-    )?;
+    let folder = family_views_of(state, &index)?
+        .data
+        .ok_or(AppError::NoDataFolderSet)?;
     measured.inventory_ms += stage.lap_ms();
     measured.selected_workbooks = selected_workbooks(&folder, &scope.data_mode);
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
@@ -2390,16 +2441,14 @@ async fn mixed_data_only_tier(
             settings.answer_idle_timeout(),
         )
     })?;
-    let Some(data_folder) = data_folder else {
+    if data_folder.is_none() {
         return Err(AppError::NoDataFolderSet);
-    };
+    }
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
-    let folder = DataFolder::discover(
-        Path::new(&data_folder),
-        Some(&index),
-        &state.data_file_hashes,
-    )?;
+    let folder = family_views_of(state, &index)?
+        .data
+        .ok_or(AppError::NoDataFolderSet)?;
     measured.inventory_ms += stage.lap_ms();
     measured.selected_workbooks = selected_workbooks(&folder, &scope.data_mode);
     let locale = locale.as_deref().unwrap_or(settings::DEFAULT_LOCALE);
@@ -2509,16 +2558,18 @@ fn mixed_folder_tier(
 ) -> Result<Option<AskAnswer>, AppError> {
     let (work_folder, locale) =
         state.read(|settings| (settings.work_folder.clone(), settings.locale.clone()))?;
-    let Some(work_folder) = work_folder else {
+    if work_folder.is_none() {
         return Ok(None);
-    };
+    }
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
     if !folder_questions::names_the_documents(question, &locale) {
         return Ok(None);
     }
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
-    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let full_inventory = family_views_of(state, &index)?
+        .documents
+        .ok_or(AppError::NoWorkFolderSet)?;
     measured.inventory_ms += stage.lap_ms();
     let resolution = scope.resolve(&full_inventory);
     let selection = folder_questions::Selection {
@@ -2536,15 +2587,9 @@ fn mixed_folder_tier(
         };
     let answer = if let Some(set) = set_sentence {
         measured.path = RetrievalPath::DocumentSearch;
-        let data_folder = state.read(|settings| settings.data_folder.clone())?;
-        let Some(data_folder) = data_folder else {
+        let Some(data) = family_views_of(state, &index)?.data else {
             return Ok(None);
         };
-        let data = DataFolder::discover(
-            Path::new(&data_folder),
-            Some(&index),
-            &state.data_file_hashes,
-        )?;
         let workbooks: Vec<InventoryFile> =
             tabular_answer::selected_workbook_paths(&data, &scope.data_mode)
                 .iter()
@@ -2633,20 +2678,18 @@ fn fill_tier(
             settings.locale.clone(),
         )
     })?;
-    let (Some(work_folder), Some(data_folder)) = (work_folder, data_folder) else {
+    if work_folder.is_none() || data_folder.is_none() {
         return Ok(None);
-    };
+    }
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
     if !crate::tabular::question::has_writing_intent(question, &locale) {
         return Ok(None);
     }
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
-    let data = DataFolder::discover(
-        Path::new(&data_folder),
-        Some(&index),
-        &state.data_file_hashes,
-    )?;
+    let data = family_views_of(state, &index)?
+        .data
+        .ok_or(AppError::NoDataFolderSet)?;
     measured.inventory_ms += stage.lap_ms();
     let every_row = crate::tabular::question::has_distributive_word(question, &locale);
     let located = tabular_answer::locate_fill_source(
@@ -2662,7 +2705,9 @@ fn fill_tier(
     let Some(source) = located else {
         return Ok(None);
     };
-    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let full_inventory = family_views_of(state, &index)?
+        .documents
+        .ok_or(AppError::NoWorkFolderSet)?;
     let resolution = scope.resolve(&full_inventory);
     let templates = fill_plan::candidate_templates(&resolution.inventory, &source.table.columns);
     if templates.is_empty() {
@@ -2715,17 +2760,19 @@ fn fill_inputs(
         )
     })?;
     let work_folder = work_folder.ok_or(AppError::NoWorkFolderSet)?;
-    let data_folder = data_folder.ok_or(AppError::NoDataFolderSet)?;
+    if data_folder.is_none() {
+        return Err(AppError::NoDataFolderSet);
+    }
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
     let index = open_index(app)?;
-    let inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let inventory = family_views_of(state, &index)?
+        .documents
+        .ok_or(AppError::NoWorkFolderSet)?;
     let template = fill_plan::read_template(&inventory, &request.template)
         .ok_or(AppError::FillSourceUnavailable)?;
-    let data = DataFolder::discover(
-        Path::new(&data_folder),
-        Some(&index),
-        &state.data_file_hashes,
-    )?;
+    let data = family_views_of(state, &index)?
+        .data
+        .ok_or(AppError::NoDataFolderSet)?;
     let (_, table) = tabular_answer::load_fill_table(&data, &request.data_file, &locale, &index)
         .ok_or(AppError::FillSourceUnavailable)?;
     Ok((std::path::PathBuf::from(work_folder), template, table))
@@ -2801,12 +2848,12 @@ async fn mixed_tier(
                 settings.answer_idle_timeout(),
             )
         })?;
-    let Some(work_folder) = work_folder else {
+    if work_folder.is_none() {
         return Err(AppError::NoWorkFolderSet);
-    };
-    let Some(data_folder) = data_folder else {
+    }
+    if data_folder.is_none() {
         return Err(AppError::NoDataFolderSet);
-    };
+    }
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
 
     // `index` stays owned, never borrowed into a struct held across an `.await`, for the same
@@ -2815,16 +2862,16 @@ async fn mixed_tier(
     // only in the synchronous stretches between awaits).
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
-    let folder = DataFolder::discover(
-        Path::new(&data_folder),
-        Some(&index),
-        &state.data_file_hashes,
-    )?;
+    let folder = family_views_of(state, &index)?
+        .data
+        .ok_or(AppError::NoDataFolderSet)?;
 
     // The document selection, resolved exactly as tier 1 does: a selection whose files are all
     // gone or changed is refused rather than quietly answered from nothing, the same guarantee
     // `sourced_answer`'s own documents-tier arm already gives.
-    let full_inventory = WorkFolderInventory::discover(Path::new(&work_folder), Some(&index))?;
+    let full_inventory = family_views_of(state, &index)?
+        .documents
+        .ok_or(AppError::NoWorkFolderSet)?;
     measured.inventory_ms += stage.lap_ms();
     let resolution = scope.resolve(&full_inventory);
     let scope_outdated: Vec<String> = resolution

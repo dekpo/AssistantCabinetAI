@@ -73,8 +73,9 @@ export function toggleScopeFile(
 /**
  * The selection after `files` are added to it, among the `analysed` files the listing offers: the
  * same ticking as `toggleScopeFile`, several at once. This is what "Add to my selection" does under
- * the name picker, for the files of a name that is only in files she did not tick. A selection that
- * is already "tous" is left as it is, and a file already ticked is not added twice.
+ * the name picker, for the files of a name that is only in files she did not tick, and what
+ * the "tick the results" button does under the search field. A selection that is already "tous" is
+ * left as it is, and a file already ticked is not added twice.
  */
 export function addScopeFiles(
   scope: AnalysisScope,
@@ -114,32 +115,6 @@ function scopeOfEntries(
     return { ...wholeFolderScope(scope.createdAt), updatedAt: now };
   }
   return { mode: { kind: "explicit", entries: next }, createdAt: scope.createdAt, updatedAt: now };
-}
-
-/**
- * The selection a search makes: the analysed files it found, and only those. The result replaces the
- * selection, as typing a search is her own action; a file that is not analysed cannot be selected, so
- * it is left out (the field says how many were found and not analysed). Nothing found is "aucun".
- * Every analysed file found is "tous", as everywhere else in this file.
- */
-export function scopeFromSearch(
-  scope: AnalysisScope,
-  foundPaths: string[],
-  analysed: FileRecord[],
-  now: number,
-): AnalysisScope {
-  const wanted = new Set(foundPaths);
-  const entries = analysed
-    .filter((file) => wanted.has(file.relativePath))
-    .map((file) => ({ relativePath: file.relativePath, pinnedId: file.id, addedAt: now }));
-  return scopeOfEntries(scope, entries, analysed, now);
-}
-
-/** The header checkbox: from "tous" to "aucun", and from anything else to "tous". */
-export function toggleAll(scope: AnalysisScope, now: number): AnalysisScope {
-  return selectionOf(scope) === "all"
-    ? { ...noDocumentsScope(scope.createdAt), updatedAt: now }
-    : { ...wholeFolderScope(scope.createdAt), updatedAt: now };
 }
 
 /**

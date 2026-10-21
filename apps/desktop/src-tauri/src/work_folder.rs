@@ -336,7 +336,7 @@ fn is_filesystem_root(path: &Path) -> bool {
 }
 
 /// Windows compares paths without regard to case, so the allow-list must too.
-fn components_for_comparison(path: &Path) -> Vec<String> {
+pub(crate) fn components_for_comparison(path: &Path) -> Vec<String> {
     path.components()
         .map(|component| {
             let text = component.as_os_str().to_string_lossy().to_string();

@@ -23,6 +23,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::file_record::FileRecord;
 use crate::inventory::WorkFolderInventory;
 
 /// How wide a conversation may look.
@@ -54,9 +55,27 @@ pub struct ScopeEntry {
     pub sheet_names: Vec<String>,
 }
 
+impl ScopeEntry {
+    /// The file this entry stands for in `inventory`: the one at its path (a key, for a file of the other
+    /// folder: the folder is part of the path) or, when the path is gone, the single file that still has
+    /// the content the entry pinned, which is a file renamed since (the rename on Analyse, or the user's
+    /// own). Two copies of the same content are not told apart, so then no file is chosen.
+    pub fn find_in<'a>(&self, inventory: &'a WorkFolderInventory) -> Option<&'a FileRecord> {
+        inventory
+            .find_by_relative_path(&self.relative_path)
+            .or_else(|| {
+                let mut same = inventory.find_by_id(&self.pinned_id).into_iter();
+                match (same.next(), same.next()) {
+                    (Some(only), None) => Some(only),
+                    _ => None,
+                }
+            })
+    }
+}
+
 /// One conversation's scope, built from both selection lists before every question: the
-/// documents she ticked in the Documents Folder card (`mode`) and the workbooks she ticked in the
-/// Data Folder card (`data_mode`). Two modes rather than one mixed list, because each is relative
+/// documents she ticked in the explorer (`mode`) and the workbooks she ticked there
+/// (`data_mode`). Two modes rather than one mixed list, because each is relative
 /// to its own folder - the same relative path can exist in both - and because "tous" means the
 /// whole of one folder, never of the other.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,7 +155,8 @@ impl AnalysisScope {
                 inventory: WorkFolderInventory::from_records(
                     full.root(),
                     full.all_files().to_vec(),
-                ),
+                )
+                .with_foreign_root(full.foreign_root().map(std::path::Path::to_path_buf)),
                 narrowed: false,
                 no_documents_chosen: false,
                 missing: Vec::new(),
@@ -150,7 +170,7 @@ impl AnalysisScope {
         let mut changed = Vec::new();
         let mut sheet_restrictions = std::collections::BTreeMap::new();
         for entry in entries {
-            match full.find_by_relative_path(&entry.relative_path) {
+            match entry.find_in(full) {
                 None => missing.push(entry.relative_path.clone()),
                 Some(record) if record.id != entry.pinned_id => {
                     changed.push(entry.relative_path.clone())
@@ -158,14 +178,20 @@ impl AnalysisScope {
                 Some(record) => {
                     if !entry.sheet_names.is_empty() {
                         sheet_restrictions
-                            .insert(entry.relative_path.clone(), entry.sheet_names.clone());
+                            .insert(record.relative_path.clone(), entry.sheet_names.clone());
                     }
-                    members.push(record.clone());
+                    if !members
+                        .iter()
+                        .any(|member: &FileRecord| member.relative_path == record.relative_path)
+                    {
+                        members.push(record.clone());
+                    }
                 }
             }
         }
         ScopeResolution {
-            inventory: WorkFolderInventory::from_records(full.root(), members),
+            inventory: WorkFolderInventory::from_records(full.root(), members)
+                .with_foreign_root(full.foreign_root().map(std::path::Path::to_path_buf)),
             narrowed: true,
             // Documents only: a table-only choice never reaches this function's caller on the
             // document path, because `tier` routes it to the tabular engine first.
@@ -513,6 +539,74 @@ mod tests {
         assert!(resolution.no_documents_chosen);
         assert!(resolution.inventory.is_empty());
         assert!(resolution.missing.is_empty());
+    }
+
+    #[test]
+    fn a_renamed_document_keeps_its_place_by_the_content_it_pinned() {
+        // The Analyse renamed `a.txt`: the entry still names the old path, the content is the same.
+        let renamed = WorkFolderInventory::from_records(
+            std::path::Path::new("root"),
+            vec![record("a-clean.txt", "id-a"), record("b.txt", "id-b")],
+        );
+        let resolution = explicit(&[("a.txt", "id-a")]).resolve(&renamed);
+
+        assert!(resolution.missing.is_empty() && resolution.changed.is_empty());
+        let paths: Vec<_> = resolution
+            .inventory
+            .all_files()
+            .iter()
+            .map(|file| file.relative_path.as_str())
+            .collect();
+        assert_eq!(paths, vec!["a-clean.txt"]);
+    }
+
+    #[test]
+    fn two_copies_of_the_pinned_content_are_never_guessed_between() {
+        let copies = WorkFolderInventory::from_records(
+            std::path::Path::new("root"),
+            vec![record("one.txt", "id-a"), record("two.txt", "id-a")],
+        );
+        let resolution = explicit(&[("a.txt", "id-a")]).resolve(&copies);
+
+        assert_eq!(resolution.missing, vec!["a.txt"]);
+        assert!(resolution.inventory.is_empty());
+    }
+
+    #[test]
+    fn an_entry_and_its_renamed_twin_count_once() {
+        let renamed = WorkFolderInventory::from_records(
+            std::path::Path::new("root"),
+            vec![record("a-clean.txt", "id-a")],
+        );
+        let resolution = explicit(&[("a.txt", "id-a"), ("a-clean.txt", "id-a")]).resolve(&renamed);
+
+        assert_eq!(resolution.inventory.file_count(), 1);
+    }
+
+    #[test]
+    fn an_entry_of_the_other_folder_is_found_by_its_key_and_not_by_the_same_plain_path() {
+        let view = WorkFolderInventory::from_records(
+            std::path::Path::new("root"),
+            vec![
+                record("rapport.txt", "id-own"),
+                record("/data/rapport.txt", "id-foreign"),
+            ],
+        )
+        .with_foreign_root(Some(std::path::PathBuf::from("other")));
+
+        let own = explicit(&[("rapport.txt", "id-own")]).resolve(&view);
+        let foreign = explicit(&[("/data/rapport.txt", "id-foreign")]).resolve(&view);
+
+        assert_eq!(own.inventory.all_files()[0].id, "id-own");
+        assert_eq!(foreign.inventory.all_files()[0].id, "id-foreign");
+        assert_eq!(
+            foreign.inventory.foreign_root(),
+            Some(std::path::Path::new("other")),
+            "the resolved inventory still knows where the other folder is"
+        );
+        // The wrong content under a key is a changed file, not a missing one.
+        let stale = explicit(&[("/data/rapport.txt", "id-own")]).resolve(&view);
+        assert_eq!(stale.changed, vec!["/data/rapport.txt"]);
     }
 
     #[test]

@@ -31,7 +31,7 @@
 //! started fills them.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
@@ -44,6 +44,7 @@ use super::metadata::{read_metadata, MetadataReading};
 use super::name::{link_name_words, words_of, NameProfile, NAME_LINK_CONFIDENCE};
 use super::vocabulary::ProfileVocabulary;
 use crate::error::AppError;
+use crate::file_key::{parse_key, FamilyRoots};
 use crate::index_store::IndexStore;
 use crate::knowledge::extract::text::names_the_whole_entity;
 use crate::knowledge::gazetteer::{is_listed_type, Gazetteer};
@@ -259,6 +260,23 @@ pub struct ProfileSettings<'a> {
     /// The people and organisations the base holds. `None` with the knowledge mode `off`: layer 2 then
     /// keeps surfaces only.
     pub gazetteer: Option<&'a Gazetteer>,
+    /// The other folder when it is chosen: a file of this family found there is read in place, under
+    /// its key (`file_key`). `None` reads the family's own folder alone.
+    pub foreign_folder: Option<&'a Path>,
+}
+
+/// Where the file of a key sits on the disk: the family's own folder, or the other one for a foreign
+/// key. A key that names no chosen folder gives an empty path, which reads as an unreadable file.
+fn file_of(domain: Domain, folder: &Path, settings: &ProfileSettings<'_>, key: &str) -> PathBuf {
+    FamilyRoots::new(domain, folder, settings.foreign_folder)
+        .resolve(key)
+        .unwrap_or_default()
+}
+
+/// The path of a key inside its own folder: what the name of the file is made of (its words, its
+/// date, the folders it sits in), never the root it was found in.
+fn path_in_folder(domain: Domain, key: &str) -> &str {
+    parse_key(domain, key).map_or(key, |(_, path)| path)
 }
 
 /// Counts, never a name.
@@ -551,7 +569,7 @@ fn load_cells(
         return None;
     }
     let (inventory, workbook, _) = crate::tabular::build_inventory_with_source_rows(
-        &folder.join(&item.relative_path),
+        &file_of(domain, folder, settings, &item.relative_path),
         &item.relative_path,
         settings.packs.locale(),
     )
@@ -735,7 +753,7 @@ fn build_one(
         .map(|(_, extension)| extension.to_ascii_lowercase())
         .unwrap_or_default();
     let metadata = read_metadata(
-        &folder.join(&item.relative_path),
+        &file_of(domain, folder, settings, &item.relative_path),
         &extension,
         settings.vocabulary,
     );
@@ -745,7 +763,7 @@ fn build_one(
     };
     let profile = build_profile(
         &ProfileInput {
-            relative_path: &item.relative_path,
+            relative_path: path_in_folder(domain, &item.relative_path),
             original_name,
             domain,
             first_page_text: text.as_deref(),
@@ -1604,7 +1622,18 @@ pub fn run_documents(
     knowledge: Option<&crate::knowledge::ingest::KnowledgeContext>,
     locale: &str,
 ) -> Option<ProfileSummary> {
-    run(index, folder, knowledge, locale, Domain::Documents)
+    run_documents_across(index, folder, None, knowledge, locale)
+}
+
+/// [`run_documents`], reading the documents found in the other folder too.
+pub fn run_documents_across(
+    index: &mut IndexStore,
+    folder: &Path,
+    foreign: Option<&Path>,
+    knowledge: Option<&crate::knowledge::ingest::KnowledgeContext>,
+    locale: &str,
+) -> Option<ProfileSummary> {
+    run(index, folder, foreign, knowledge, locale, Domain::Documents)
 }
 
 /// The profile pass of the Data Folder's Analyse.
@@ -1614,12 +1643,24 @@ pub fn run_workbooks(
     knowledge: Option<&crate::knowledge::ingest::KnowledgeContext>,
     locale: &str,
 ) -> Option<ProfileSummary> {
-    run(index, folder, knowledge, locale, Domain::Data)
+    run_workbooks_across(index, folder, None, knowledge, locale)
+}
+
+/// [`run_workbooks`], reading the workbooks found in the other folder too.
+pub fn run_workbooks_across(
+    index: &mut IndexStore,
+    folder: &Path,
+    foreign: Option<&Path>,
+    knowledge: Option<&crate::knowledge::ingest::KnowledgeContext>,
+    locale: &str,
+) -> Option<ProfileSummary> {
+    run(index, folder, foreign, knowledge, locale, Domain::Data)
 }
 
 fn run(
     index: &mut IndexStore,
     folder: &Path,
+    foreign: Option<&Path>,
     knowledge: Option<&crate::knowledge::ingest::KnowledgeContext>,
     locale: &str,
     domain: Domain,
@@ -1641,6 +1682,7 @@ fn run(
         vocabulary: &vocabulary,
         packs: &packs,
         gazetteer,
+        foreign_folder: foreign,
     };
     let never = || false;
     let started = std::time::Instant::now();

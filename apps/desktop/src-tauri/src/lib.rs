@@ -5,6 +5,7 @@
 //! commands registered below.
 
 pub mod analysis_scope;
+pub mod analysis_stop;
 pub mod cancellation;
 pub mod cards;
 pub mod chunking;
@@ -16,6 +17,8 @@ pub mod data_folder;
 pub mod discovery;
 pub mod error;
 pub mod extraction;
+pub mod family_view;
+pub mod file_key;
 pub mod file_profile;
 pub mod file_record;
 pub mod file_reference;
@@ -108,6 +111,7 @@ pub fn run() {
             commands::cancel_analysis,
             commands::vector_share,
             commands::find_files,
+            commands::file_knowledge_facts,
             commands::work_folder_inventory,
             commands::reveal_work_folder,
             commands::reveal_work_file,

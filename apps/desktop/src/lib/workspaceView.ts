@@ -21,6 +21,3 @@ export interface OpenFile {
 export type WorkspaceView =
   | { kind: "welcome" }
   | { kind: "files"; tabs: OpenFile[]; activeId: string | null };
-
-/** Opens the centre zone on a view, or replaces what it shows. */
-export type OpenWorkspace = (view: WorkspaceView) => void;

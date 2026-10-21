@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppLayout } from "./components/AppLayout";
 import { ChatPanel } from "./components/ChatPanel";
-import { DataFolderCard } from "./components/DataFolderCard";
 import { ErrorBanner } from "./components/ErrorBanner";
-import { isSelectable } from "./components/FolderCardParts";
+import { FileExplorer } from "./components/FileExplorer";
 import { KnowledgeDialog } from "./components/KnowledgeDialog";
 import type { NotesActions, NotesBundle } from "./components/notes/NotesPanel";
 import type { NotesDictation } from "./components/notes/LiveDictation";
@@ -15,19 +14,31 @@ import {
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TitleBar } from "./components/TitleBar";
 import { OutsideChangeNotice } from "./components/viewer/OutsideChangeNotice";
-import { WorkFolderCard } from "./components/WorkFolderCard";
-import type { TabActions } from "./components/WorkspacePanel";
+import type { OverviewActions } from "./components/OverviewPage";
+import type { Centre, TabActions } from "./components/WorkspacePanel";
 import { I18nProvider, useTranslation } from "./i18n/I18nProvider";
 import { effectiveSection, shownCentre, type CentreSection } from "./lib/centreSection";
+import { normaliseError, type AppError } from "./lib/errors";
 import {
   addScopeFiles,
   combineScopes,
   noDocumentsScope,
 } from "./lib/analysisScope";
+import type { ExplorerEntry } from "./lib/explorerModel";
+import { analysedByFamily } from "./lib/explorerSelection";
+import { checkView, overviewInput, overviewModel, type ExplorerFacts } from "./lib/overviewModel";
+import {
+  familiesToUnfold,
+  foldsToRestore,
+  NO_VIEW,
+  type ExplorerView,
+} from "./lib/explorerView";
+import type { Family } from "./lib/explorerModel";
 import {
   dataFolderInventory,
   type FileRecord,
   indexDataFolder,
+  revealDataFile,
   revealWorkFile,
   workFolderInventory,
   type AnalysisScope,
@@ -55,7 +66,7 @@ import {
   viewOf,
   type TabsState,
 } from "./lib/viewerTabs";
-import type { OpenWorkspace, ViewerFolder, WorkspaceView } from "./lib/workspaceView";
+import type { ViewerFolder, WorkspaceView } from "./lib/workspaceView";
 import { useAppSettings } from "./state/useAppSettings";
 import { useOutsideChangeGuard } from "./state/useOutsideChangeGuard";
 import { useIndexing } from "./state/useIndexing";
@@ -81,25 +92,38 @@ function StartupScreen({ onRetry, failed }: { onRetry: () => void; failed: boole
 }
 
 function AppContent() {
-  const { snapshot, locale, loadError, saveError, reload, update, saveLayout, saveSpeech, reset } =
-    useAppSettings();
+  const {
+    snapshot,
+    locale,
+    loadError,
+    saveError,
+    reload,
+    update,
+    saveLayout,
+    saveExplorer,
+    saveSpeech,
+    reset,
+  } = useAppSettings();
   const { connection, health, error: healthError, refresh } = useServerHealth(
     snapshot?.settings.serverUrl,
   );
-  /* Owned here rather than inside the folder card, because two places start the same pass: the
-     card's own button, and the answer that had to say the documents have not been read yet. */
+  /* Owned here rather than inside the explorer, because two places start the same pass: the
+     explorer's own button, and the answer that had to say the documents have not been read yet. */
   const indexing = useIndexing();
   /* The Data Folder's own pass: two folders, two passes that never wait on each other. */
   const dataIndexing = useIndexing(indexDataFolder);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* Counted up when an analysis is cleared from the Settings panel: the sidebar's box, which holds its
+     own inventories, reads its folders again through its refresh token. */
+  const [settingsClears, setSettingsClears] = useState(0);
   /* The knowledge management dialog: opened from the settings or from an analysis summary, drawn
      over whichever is on screen. Never reachable from the conversation. */
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
-  /* The documents the conversation is about. Held here because it is chosen in the folder card and
+  /* The documents the conversation is about. Held here because it is chosen in the explorer and
      used by the chat: nothing persists a session yet, so nothing persists this. It starts with no
      document: the selection is built only from what she ticks (`docs/SELECTION-AND-MEMORY.md`). */
   const [scope, setScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
-  /* The workbooks, chosen the same way in the Data Folder card and starting from none too. */
+  /* The workbooks, chosen the same way in the explorer and starting from none too. */
   const [dataScope, setDataScope] = useState<AnalysisScope>(() => noDocumentsScope(Date.now()));
   const [chatBusy, setChatBusy] = useState(false);
   /* What the centre zone of the window holds: the open tabs, or the welcome view. Nothing is open at
@@ -108,10 +132,6 @@ function AppContent() {
      as it was), and anything that opens a file shows it again (`docs/CLIENT.md`, "Layout"). */
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
   const [workspaceHidden, setWorkspaceHidden] = useState(false);
-  const openWorkspace = useCallback<OpenWorkspace>((view) => {
-    setWorkspace(view);
-    setWorkspaceHidden(false);
-  }, []);
   const hideWorkspace = useCallback(() => setWorkspaceHidden(true), []);
   /* The Notes section of the centre. The notes live in a session held here, in memory only, so a
      switch of section or a hidden centre never loses them; `section` is which of the two sections
@@ -127,6 +147,8 @@ function AppContent() {
     }),
   );
   const notes = useSyncExternalStore(notesSession.subscribe, notesSession.getSnapshot);
+  /* Files at launch, where the zone is closed; the title-bar button, « Voir le rapport » and the
+     switch bring the overview, opening a file brings Files. */
   const [section, setSection] = useState<CentreSection>("files");
   const notesEnabled = snapshot?.settings.speech.notesEnabled ?? false;
   const shownSection = effectiveSection(section, notesEnabled);
@@ -181,6 +203,13 @@ function AppContent() {
   );
   const showNotes = useCallback(() => {
     setSection("notes");
+    setWorkspaceHidden(false);
+  }, []);
+  /* Opens the zone on its overview: the way « Voir le rapport » and the title-bar button, with no
+     file open, lead there. Nothing opens the zone by itself: a finished analysis only changes what
+     the overview says. */
+  const showOverview = useCallback(() => {
+    setSection("overview");
     setWorkspaceHidden(false);
   }, []);
   /* The cross of the window: a note that is not saved keeps it open until the user has answered. */
@@ -267,6 +296,7 @@ function AppContent() {
     nonce: number;
   } | null>(null);
   const workFolder = snapshot?.settings.workFolder ?? null;
+  const dataFolder = snapshot?.settings.dataFolder ?? null;
   const notesActions = useMemo<NotesActions>(
     () => ({
       select: notesSession.select,
@@ -281,6 +311,19 @@ function AppContent() {
       reveal: revealWorkFile,
     }),
     [notesSession, guardLeaving],
+  );
+  /* Another Documents folder starts from no note: the notes written for this one would otherwise
+     land in the next. The first choice of a folder loses nothing. The one door to a change of folder
+     is the settings panel until the explorer's own menu (`docs/CLIENT.md`, "The left panel"). */
+  const chooseWorkFolder = useCallback(
+    (path: string) =>
+      workFolder === null || path === workFolder
+        ? void update({ workFolder: path })
+        : guardLeaving({ kind: "change-folder" }, () => {
+            notesSession.discardAll();
+            void update({ workFolder: path });
+          }),
+    [workFolder, update, guardLeaving, notesSession],
   );
   /* Files | Notes. A centre with no tab open would close when Files is chosen, so Files shows its
      welcome view then. Switching is never a way to lose a note. */
@@ -297,7 +340,6 @@ function AppContent() {
      every question would be refused. A different folder starts from no document again. Analyse
      leaves the selection alone: each ticked file is pinned to its content and survives a pass. */
   useEffect(() => setScope(noDocumentsScope(Date.now())), [workFolder]);
-  const dataFolder = snapshot?.settings.dataFolder ?? null;
   /* The same rule for the Data Folder: another folder, no workbook chosen. */
   useEffect(() => setDataScope(noDocumentsScope(Date.now())), [dataFolder]);
   /* The tabs of a folder that was replaced would show another folder's file under the same path:
@@ -359,6 +401,111 @@ function AppContent() {
     }),
     [notes, notesActions, workFolder, notesDictation],
   );
+  /* The explorer's filter, held here so that the overview's link can set what the panel sets, and
+     the counter that asks the typed search to be emptied with it. Neither is the selection. */
+  const [explorerView, setExplorerView] = useState<ExplorerView>(NO_VIEW);
+  const [searchClears, setSearchClears] = useState(0);
+  /* What the explorer read of the two folders, for the overview. */
+  const [explorerFacts, setExplorerFacts] = useState<ExplorerFacts | null>(null);
+  /* Read by the overview's link at the moment it is pressed, so its action stays one stable value. */
+  /* The lists the overview's link opened: they close again when the filter it set is removed. */
+  const [linkOpened, setLinkOpened] = useState<Family[]>([]);
+  const explorerFactsRef = useRef(explorerFacts);
+  explorerFactsRef.current = explorerFacts;
+  const settingsRef = useRef(snapshot?.settings);
+  settingsRef.current = snapshot?.settings;
+  const overviewOnScreen = shownWorkspace !== null && shownSection === "overview";
+  const overviewPage = useMemo(
+    () =>
+      overviewOnScreen
+        ? overviewModel(
+            overviewInput(
+              explorerFacts,
+              { documents: workFolder, tables: dataFolder },
+              {
+                summary: indexing.summary,
+                durationMs: indexing.durationMs,
+                finishedAt: indexing.finishedAt,
+                running: indexing.running,
+                error: indexing.error,
+              },
+              {
+                summary: dataIndexing.summary,
+                durationMs: dataIndexing.durationMs,
+                finishedAt: dataIndexing.finishedAt,
+                running: dataIndexing.running,
+                error: dataIndexing.error,
+              },
+            ),
+          )
+        : null,
+    [
+      overviewOnScreen,
+      explorerFacts,
+      workFolder,
+      dataFolder,
+      indexing.summary,
+      indexing.durationMs,
+      indexing.finishedAt,
+      indexing.running,
+      indexing.error,
+      dataIndexing.summary,
+      dataIndexing.durationMs,
+      dataIndexing.finishedAt,
+      dataIndexing.running,
+      dataIndexing.error,
+    ],
+  );
+  /* Removing the filter the link set closes what the link opened, and only that. */
+  useEffect(() => {
+    const close = foldsToRestore(linkOpened, explorerView);
+    if (close.length === 0) {
+      return;
+    }
+    setLinkOpened([]);
+    void saveExplorer((current) => ({
+      ...current,
+      documentsFolded: close.includes("documents") ? true : current.documentsFolded,
+      tablesFolded: close.includes("tables") ? true : current.tablesFolded,
+    }));
+  }, [linkOpened, explorerView, saveExplorer]);
+  const overviewActions = useMemo<OverviewActions>(
+    () => ({
+      onShowUnreadable: () => {
+        setExplorerView(checkView());
+        setSearchClears((count) => count + 1);
+        /* A folded list that holds some of these files is opened: that is what the link was
+           pressed for. Nothing else ever opens or closes a list by itself. */
+        const open = familiesToUnfold(explorerFactsRef.current?.entries ?? [], "unreadable", {
+          documents: settingsRef.current?.explorer.documentsFolded ?? false,
+          tables: settingsRef.current?.explorer.tablesFolded ?? false,
+        });
+        if (open.length > 0) {
+          setLinkOpened((current) => [...new Set([...current, ...open])]);
+          void saveExplorer((current) => ({
+            ...current,
+            documentsFolded: open.includes("documents") ? false : current.documentsFolded,
+            tablesFolded: open.includes("tables") ? false : current.tablesFolded,
+          }));
+        }
+      },
+      onOpenKnowledge: () => setKnowledgeOpen(true),
+      onOpenFile: (entry: ExplorerEntry) =>
+        entry.root === "documents" ? openDocument(entry.record) : openTable(entry.record),
+      onRevealFile: (entry: ExplorerEntry, onFailure: (error: AppError) => void) =>
+        void (entry.root === "documents" ? revealWorkFile(entry.path) : revealDataFile(entry.path)).catch(
+          (raw: unknown) => onFailure(normaliseError(raw)),
+        ),
+    }),
+    [saveExplorer, openDocument, openTable],
+  );
+  const centreProps: Centre = {
+    section: shownSection,
+    onSection: chooseSection,
+    recording: longDictation?.recording ?? false,
+    notes: notesEnabled ? notesBundle : undefined,
+    overview: { page: overviewPage, actions: overviewActions },
+  };
   /* "Add to my selection", under the name picker: the files of a name that is only in analysed
      files she did not tick. Her own click, and the same ticking as the listing's checkboxes
      (`addScopeFiles` shares its rule with `toggleScopeFile`). The ids come from a fresh read of each
@@ -372,15 +519,25 @@ function AppContent() {
       }
       const now = Date.now();
       try {
+        /* The names the base holds are in files by the key the index knows them by, which names the
+           folder of a file that sits in the other one: the analysed files of each family come from
+           both folders (`analysedByFamily`). */
+        const [documentsRead, dataRead] = await Promise.all([
+          workFolderInventory().catch(() => null),
+          dataFolderInventory().catch(() => null),
+        ]);
+        const analysed = analysedByFamily(documentsRead?.files ?? [], dataRead?.files ?? []);
         if (outside.documents.length > 0) {
-          const analysed = (await workFolderInventory()).files.filter(isSelectable);
-          const wanted = analysed.filter((file) => outside.documents.includes(file.relativePath));
-          setScope((current) => addScopeFiles(current, wanted, analysed, now));
+          const wanted = analysed.documents.filter((file) =>
+            outside.documents.includes(file.relativePath),
+          );
+          setScope((current) => addScopeFiles(current, wanted, analysed.documents, now));
         }
         if (outside.workbooks.length > 0) {
-          const analysed = (await dataFolderInventory()).files.filter(isSelectable);
-          const wanted = analysed.filter((file) => outside.workbooks.includes(file.relativePath));
-          setDataScope((current) => addScopeFiles(current, wanted, analysed, now));
+          const wanted = analysed.data.filter((file) =>
+            outside.workbooks.includes(file.relativePath),
+          );
+          setDataScope((current) => addScopeFiles(current, wanted, analysed.data, now));
         }
       } catch {
         // Nothing was changed; see above.
@@ -454,7 +611,7 @@ function AppContent() {
             if (shownWorkspace !== null) {
               guardLeaving({ kind: "hide-zone" }, hideWorkspace);
             } else if (workspace === null) {
-              openWorkspace({ kind: "welcome" });
+              showOverview();
             } else {
               setWorkspaceHidden(false);
             }
@@ -485,52 +642,49 @@ function AppContent() {
             }}
             viewStates={viewStates}
             tabActions={tabActions}
-            notes={
-              notesEnabled
-                ? {
-                    section: shownSection,
-                    onSection: chooseSection,
-                    recording: longDictation?.recording ?? false,
-                    bundle: notesBundle,
-                  }
-                : undefined
-            }
+            centre={centreProps}
             restoreNonce={layoutRestores}
             resources={
               <aside className="app__side">
-                <WorkFolderCard
+                <FileExplorer
                   workFolder={snapshot.settings.workFolder}
-                  suggestedWorkFolder={snapshot.suggestedWorkFolder}
-                  onChosen={(path) =>
-                    /* Another folder starts from no note: the notes written for this one would
-                       otherwise land in the next. The first choice of a folder loses nothing. */
-                    workFolder === null || path === workFolder
-                      ? void update({ workFolder: path })
-                      : guardLeaving({ kind: "change-folder" }, () => {
-                          notesSession.discardAll();
-                          void update({ workFolder: path });
-                        })
-                  }
-                  indexing={indexing}
-                  detail="collapsible"
-                  scope={scope}
-                  onScopeChange={setScope}
-                  scopeLocked={chatBusy}
-                  onOpenKnowledge={() => setKnowledgeOpen(true)}
-                  onOpenFile={openDocument}
-                  refreshToken={notes.writes}
-                />
-                <DataFolderCard
                   dataFolder={snapshot.settings.dataFolder}
+                  suggestedWorkFolder={snapshot.suggestedWorkFolder}
                   suggestedDataFolder={snapshot.suggestedDataFolder}
-                  onChosen={(path) => void update({ dataFolder: path })}
-                  indexing={dataIndexing}
-                  detail="collapsible"
-                  scope={dataScope}
-                  onScopeChange={setDataScope}
+                  onWorkFolderChosen={chooseWorkFolder}
+                  onDataFolderChosen={(path) => void update({ dataFolder: path })}
+                  indexing={indexing}
+                  dataIndexing={dataIndexing}
+                  scope={scope}
+                  dataScope={dataScope}
+                  onScopeChange={setScope}
+                  onDataScopeChange={setDataScope}
                   scopeLocked={chatBusy}
-                  onOpenKnowledge={() => setKnowledgeOpen(true)}
-                  onOpenFile={openTable}
+                  density={snapshot.settings.explorer.density}
+                  folded={{
+                    documents: snapshot.settings.explorer.documentsFolded,
+                    tables: snapshot.settings.explorer.tablesFolded,
+                  }}
+                  view={explorerView}
+                  onViewChange={setExplorerView}
+                  searchClears={searchClears}
+                  onFacts={setExplorerFacts}
+                  onOpenReport={showOverview}
+                  savedViews={snapshot.settings.explorerViews}
+                  onSavedViewsChange={(views) => void update({ explorerViews: views })}
+                  notesFolder={snapshot.settings.speech.notesFolderName}
+                  onFoldedChange={(family, isFolded) => {
+                    /* A fold she makes herself is hers: the link's memory is dropped. */
+                    setLinkOpened([]);
+                    void saveExplorer((current) =>
+                      family === "documents"
+                        ? { ...current, documentsFolded: isFolded }
+                        : { ...current, tablesFolded: isFolded },
+                    );
+                  }}
+                  onOpenDocument={openDocument}
+                  onOpenTable={openTable}
+                  refreshToken={notes.writes + settingsClears}
                 />
                 {snapshot.warnings.map((code) => (
                   <ErrorBanner key={code} error={{ code, data: {} }} />
@@ -577,6 +731,8 @@ function AppContent() {
             indexing={indexing}
             dataIndexing={dataIndexing}
             onUpdate={(patch) => void update(patch)}
+            onWorkFolderChosen={chooseWorkFolder}
+            onSaveExplorer={(change) => void saveExplorer(change)}
             onSaveSpeech={(change) =>
               snapshot.settings.speech.notesEnabled && !change(snapshot.settings.speech).notesEnabled
                 ? guardLeaving({ kind: "disable-notes" }, () => {
@@ -605,6 +761,11 @@ function AppContent() {
             }}
             onClose={() => setSettingsOpen(false)}
             onOpenKnowledge={() => setKnowledgeOpen(true)}
+            onOpenReport={() => {
+              setSettingsOpen(false);
+              showOverview();
+            }}
+            onFolderCleared={() => setSettingsClears((count) => count + 1)}
           />
         ) : null}
         {outsideNotice ? (

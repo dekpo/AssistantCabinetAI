@@ -20,11 +20,27 @@ use sha2::{Digest, Sha256};
 
 use crate::discovery::{self, DiscoveredFile};
 use crate::error::AppError;
+use crate::file_key::{family_of_extension, key_for, FamilyRoots, Root};
+use crate::file_profile::build::Domain;
 use crate::file_record::{
     mime_type_for, path_identity, split_name, ExtractionMethod, FileKind, FileRecord,
     IndexMetadata, ProcessingStatus, Readability,
 };
 use crate::index_store::{DocumentIndexRow, IndexStore};
+use crate::tabular::inventory::TabularInventory;
+
+/// The key a discovered file has in the index (`file_key::key_for`): decided from its absolute path and
+/// the two folders. A file under neither folder cannot come from a walk of one of them; its path inside
+/// the folder it was found in stands in, so the listing never loses it.
+fn key_of(
+    family: Domain,
+    documents: Option<&Path>,
+    data: Option<&Path>,
+    file: &DiscoveredFile,
+) -> String {
+    key_for(family, documents, data, Path::new(&file.absolute_path))
+        .unwrap_or_else(|| file.relative_path.clone())
+}
 
 /// What one file's bytes hashed to, and the two cheap facts that say whether they still do.
 #[derive(Debug, Clone)]
@@ -135,6 +151,10 @@ pub struct WorkFolderInventory {
     /// The absolute root. Kept so a caller can open a file it resolved; deliberately **not**
     /// serialised and never put in front of the model.
     root: PathBuf,
+    /// The other folder, when this inventory is a family's view across both (`family_view`): the files
+    /// of the family found there carry a key (`file_key`) instead of a path, and are resolved against
+    /// this folder. `None` for an inventory of one folder.
+    foreign_root: Option<PathBuf>,
     files: Vec<FileRecord>,
 }
 
@@ -154,27 +174,109 @@ impl WorkFolderInventory {
         index: Option<&IndexStore>,
         cache: &FileHashCache,
     ) -> Result<Self, AppError> {
+        Self::discover_alongside(root, None, index, cache)
+    }
+
+    /// [`discover_with_cache`](Self::discover_with_cache) with the Data folder given when it is chosen:
+    /// it decides the key of a file the two folders share (equal or nested folders), so both listings
+    /// agree on it.
+    pub fn discover_alongside(
+        root: &Path,
+        data: Option<&Path>,
+        index: Option<&IndexStore>,
+        cache: &FileHashCache,
+    ) -> Result<Self, AppError> {
+        Ok(Self::discover_in(Root::Documents, root, data, index, cache)?.0)
+    }
+
+    /// The physical folder `root` is, whichever of the two it is: every file listed once, each joined to
+    /// what **its own family** made of it. A document is joined to the document index, a workbook to the
+    /// tabular inventories, by the key the file has there (`file_key`): a file of the family that sits
+    /// in the folder of the other family is read in place and stored under a key that names this
+    /// folder, so it is found here and the same path in the other folder is not mistaken for it. `other`
+    /// is the other folder when it is chosen: the key of a file is decided from its absolute path and the
+    /// two folders (`file_key::key_for`), so a file the two share has the same key, and the same state,
+    /// in both listings. The second value holds the cached inventory of every workbook that reads as a
+    /// table, by its path inside this folder.
+    ///
+    /// A file no pipeline reads is `NotAssessed` in the Documents folder and unreadable in the Data
+    /// folder, as it has always been.
+    pub fn discover_in(
+        role: Root,
+        root: &Path,
+        other: Option<&Path>,
+        index: Option<&IndexStore>,
+        cache: &FileHashCache,
+    ) -> Result<(Self, BTreeMap<String, TabularInventory>), AppError> {
+        let (documents, data) = match role {
+            Root::Documents => (Some(root), other),
+            Root::Data => (other, Some(root)),
+        };
         let rows = match index {
             Some(store) => store.all_documents()?,
             None => Vec::new(),
         };
-        let by_path: BTreeMap<&str, &DocumentIndexRow> = rows
+        let by_key: BTreeMap<&str, &DocumentIndexRow> = rows
             .iter()
             .map(|row| (row.relative_path.as_str(), row))
             .collect();
+        let workbooks: BTreeMap<String, String> = match index {
+            Some(store) => store
+                .all_tabular_inventories()?
+                .into_iter()
+                .map(|row| (row.relative_path, row.workbook_id))
+                .collect(),
+            None => BTreeMap::new(),
+        };
 
-        let files = discovery::discover_all(root)
-            .into_iter()
-            .map(|file| {
-                let indexed = by_path.get(file.relative_path.as_str()).copied();
-                record_for(&file, indexed, cache)
-            })
-            .collect();
+        let mut usable = BTreeMap::new();
+        let mut files = Vec::new();
+        for file in discovery::discover_all(root) {
+            let name = file.relative_path.rsplit('/').next().unwrap_or("");
+            let family = family_of_extension(&split_name(name).1);
+            let record = match family {
+                Some(Domain::Documents) => {
+                    let key = key_of(Domain::Documents, documents, data, &file);
+                    record_for(&file, by_key.get(key.as_str()).copied(), cache)
+                }
+                Some(Domain::Data) => {
+                    let mut record = record_for(&file, None, cache);
+                    let key = key_of(Domain::Data, documents, data, &file);
+                    let (readability, status, inventory) = tabular_state(
+                        record.sha256.as_deref(),
+                        workbooks.get(&key).map(String::as_str),
+                        index,
+                    )?;
+                    record.readability = readability;
+                    record.processing_status = status;
+                    // The document index holds nothing about a workbook, and nothing may claim it does.
+                    record.indexed = false;
+                    record.index_metadata = None;
+                    if let Some(inventory) = inventory {
+                        usable.insert(file.relative_path.clone(), inventory);
+                    }
+                    record
+                }
+                None => {
+                    let mut record = record_for(&file, None, cache);
+                    if role == Root::Data {
+                        record.readability = Readability::Unreadable;
+                        record.processing_status = ProcessingStatus::Failed;
+                    }
+                    record
+                }
+            };
+            files.push(record);
+        }
 
-        Ok(Self {
-            root: root.to_path_buf(),
-            files,
-        })
+        Ok((
+            Self {
+                root: root.to_path_buf(),
+                foreign_root: None,
+                files,
+            },
+            usable,
+        ))
     }
 
     /// Build one from records directly. For tests, and for a caller that already holds them.
@@ -182,12 +284,24 @@ impl WorkFolderInventory {
         files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
         Self {
             root: root.to_path_buf(),
+            foreign_root: None,
             files,
         }
     }
 
+    /// The same inventory, resolving the keys of the other folder's files against `foreign`.
+    pub fn with_foreign_root(mut self, foreign: Option<PathBuf>) -> Self {
+        self.foreign_root = foreign;
+        self
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The other folder of a family's view across both, when it has one.
+    pub fn foreign_root(&self) -> Option<&Path> {
+        self.foreign_root.as_deref()
     }
 
     /// What to call the folder in front of the user, and in front of the model: its own name,
@@ -205,6 +319,12 @@ impl WorkFolderInventory {
     pub fn absolute_path(&self, record: &FileRecord) -> Option<PathBuf> {
         if !self.contains(&record.relative_path) {
             return None;
+        }
+        if crate::file_key::is_foreign_key(&record.relative_path) {
+            // A file of the other folder: rebuilt from plain names under that folder, or nothing.
+            let family = family_of_extension(&record.extension)?;
+            return FamilyRoots::new(family, &self.root, self.foreign_root.as_deref())
+                .resolve(&record.relative_path);
         }
         Some(
             record
@@ -331,7 +451,13 @@ impl WorkFolderInventory {
         }
         InventorySummary {
             total_files: self.files.len(),
-            indexed_files: self.indexed_files().len(),
+            // Analysed means read **and current**, the same word the Data folder's report uses: a document
+            // whose bytes changed since it was read is out of date, not analysed.
+            indexed_files: self
+                .files
+                .iter()
+                .filter(|file| file.processing_status == ProcessingStatus::Indexed)
+                .count(),
             unreadable_files: self.unreadable_files().len(),
             not_assessed_files: self
                 .files
@@ -415,6 +541,38 @@ fn sort_node(node: &mut FolderNode) {
     for child in &mut node.folders {
         sort_node(child);
     }
+}
+
+/// What the tabular analysis made of one workbook: not analysed yet, changed since, readable as a
+/// table, or analysed with nothing usable in it. `analysed_id` is the content id the last pass stored
+/// for it (`None` when it was never read); the third value is the cached inventory of a workbook that
+/// reads as a table. The one place this is decided, for a workbook of either folder.
+pub(crate) fn tabular_state(
+    sha256: Option<&str>,
+    analysed_id: Option<&str>,
+    index: Option<&IndexStore>,
+) -> Result<(Readability, ProcessingStatus, Option<TabularInventory>), AppError> {
+    Ok(match analysed_id {
+        None => (Readability::NotAssessed, ProcessingStatus::Discovered, None),
+        Some(workbook_id) if sha256 != Some(workbook_id) => {
+            (Readability::NotAssessed, ProcessingStatus::Pending, None)
+        }
+        Some(workbook_id) => {
+            let cached = match index {
+                Some(store) => store.tabular_inventory_by_hash(workbook_id)?,
+                None => None,
+            };
+            match cached {
+                Some(inventory) if inventory.has_a_usable_sheet() => (
+                    Readability::Readable,
+                    ProcessingStatus::Indexed,
+                    Some(inventory),
+                ),
+                Some(_) => (Readability::Unreadable, ProcessingStatus::Failed, None),
+                None => (Readability::NotAssessed, ProcessingStatus::Discovered, None),
+            }
+        }
+    })
 }
 
 /// Filesystem truth plus index truth, for one file.
@@ -753,5 +911,53 @@ mod tests {
         let serialised = serde_json::to_string(inventory.all_files()).unwrap();
 
         assert!(!serialised.contains("confidential"));
+    }
+
+    #[test]
+    fn the_summary_counts_a_document_as_analysed_only_while_it_is_current() {
+        let root = folder_with(&[("a.txt", "one"), ("b.txt", "two")]);
+        let app = tempfile::tempdir().unwrap();
+        let mut index = IndexStore::open_at(&app.path().join("index.sqlite3")).unwrap();
+        let cache = FileHashCache::new();
+        let chunk = |path: &str| crate::chunking::Chunk {
+            chunk_id: format!("{path}#p1#s1"),
+            relative_path: path.to_string(),
+            page_number: 1,
+            section: 1,
+            text: "text".into(),
+            index_text: None,
+            origin: crate::extraction::PageOrigin::TextLayer,
+            confidence: None,
+        };
+        for (name, content) in [("a.txt", "one"), ("b.txt", "two")] {
+            let sha256 = hash_file(&root.path().join(name)).unwrap();
+            assert!(!sha256.is_empty() && !content.is_empty());
+            index
+                .replace_document(
+                    name,
+                    &sha256,
+                    false,
+                    &[chunk(name)],
+                    &[vec![0.5]],
+                    None,
+                    None,
+                )
+                .unwrap();
+        }
+        let current =
+            WorkFolderInventory::discover_with_cache(root.path(), Some(&index), &cache).unwrap();
+        assert_eq!(current.summary().indexed_files, 2);
+
+        // b.txt changes after it was read: still indexed, no longer current.
+        std::fs::write(root.path().join("b.txt"), "two, changed").unwrap();
+        let after = WorkFolderInventory::discover_with_cache(
+            root.path(),
+            Some(&index),
+            &FileHashCache::new(),
+        )
+        .unwrap();
+        assert_eq!(after.indexed_files().len(), 2, "both still have passages");
+        assert_eq!(after.summary().indexed_files, 1, "only a.txt is current");
+        assert_eq!(after.unanalysed_documents(), 1);
     }
 }

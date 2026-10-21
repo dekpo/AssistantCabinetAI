@@ -52,6 +52,7 @@ async fn pass(
         &url,
         "cabinet-embed",
         lab.work.path(),
+        None,
         Some(ocr as &dyn OcrProvider),
         Some(raster as &dyn PageRasterizer),
         lab.locale,

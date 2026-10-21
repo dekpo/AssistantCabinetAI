@@ -40,13 +40,13 @@ export function ChatPanel({
 }: {
   onFailure: () => void;
   hasWorkFolder: boolean;
-  /** The files this conversation is about, chosen in the two folder cards beside it. */
+  /** The files this conversation is about, chosen in the file explorer beside it. */
   scope: CombinedScope;
-  /** Whether a question is being answered, so the folder card can lock the choice meanwhile. */
+  /** Whether a question is being answered, so the explorer can lock the choice meanwhile. */
   onBusyChange: (busy: boolean) => void;
   modelAlias: string;
   aliases: string[];
-  /** The same analysis pass the folder card starts, so the answer that asks for one starts that
+  /** The same analysis pass the explorer starts, so the answer that asks for one starts that
    * pass rather than a second one of its own. */
   indexing: IndexingState;
   onModelAliasChange: (alias: string) => void;
@@ -148,7 +148,7 @@ export function ChatPanel({
 
   /* What she asked for by clicking "analyse" under an unanswered question: the pass, and then the
      answer she wanted in the first place. A pass that failed stops here - its error is already on
-     screen in the folder card, and asking again would only produce the same refusal. */
+     screen in the explorer, and asking again would only produce the same refusal. */
   const analyseThenAsk = async (answerEntryId: string) => {
     if (await indexing.run()) {
       await regenerate(answerEntryId);

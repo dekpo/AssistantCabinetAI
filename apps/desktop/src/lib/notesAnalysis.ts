@@ -5,7 +5,7 @@ import type { FileRecord } from "./ipc";
  * Saving a note runs the existing Analyse pass over the whole folder (the per-file path is not
  * separable from it), so before it starts the user must know whether it would also read other
  * documents. This counts those: the documents the pass would still change (same rule as the
- * Documents card's button), minus the notes just saved, which she asked to analyse by saving.
+ * Documents Analyser button), minus the notes just saved, which she asked to analyse by saving.
  *
  * The inventory held by the interface may not yet list a note written a moment ago, or may list it
  * as `discovered`; both are handled by leaving the saved paths out. Paths are compared without

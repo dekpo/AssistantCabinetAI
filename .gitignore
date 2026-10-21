@@ -4,6 +4,7 @@
 /docs/SESSION-*.md
 /docs/SESSION-WORKSPACE/
 /docs/SESSION-SPEECH/
+/docs/SESSION-EXPLORER/
 /docs/SESSIONS-DONE/
 
 .env

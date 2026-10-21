@@ -77,6 +77,45 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   speechModelsUrl: "",
 };
 
+/** How tall a row of the file explorer is: about 24 px, or about 32 px. */
+export type ExplorerDensity = "compact" | "comfortable";
+
+/** What the file explorer remembers: the density of its rows and which family lists are folded.
+ * Mirrors `ExplorerSettings` in `settings.rs`, which reads every field leniently. */
+export interface ExplorerSettings {
+  density: ExplorerDensity;
+  documentsFolded: boolean;
+  tablesFolded: boolean;
+}
+
+/** What Rust uses when `settings.json` has no `explorer` block: compact rows, both lists open. */
+export const DEFAULT_EXPLORER_SETTINGS: ExplorerSettings = {
+  density: "compact",
+  documentsFolded: false,
+  tablesFolded: false,
+};
+
+/** One view the user saved in the explorer: a name and the filters of the left panel, never a file or
+ * a selection. Mirrors `SavedView` in `settings.rs`, which keeps only what it can use. A person or an
+ * organisation is its knowledge-base id (`12`, or `12:author` for one role), never its name. */
+export interface SavedViewSetting {
+  id: string;
+  name: string;
+  family: "all" | "documents" | "tables";
+  formats: string[];
+  states: ("analysed" | "toAnalyse" | "unreadable")[];
+  /** Origin-folder keys, `<root>:<folder>`. */
+  folders: string[];
+  people: string[];
+  organisations: string[];
+  /** Business type codes. */
+  types: string[];
+  /** `YYYY`. */
+  years: string[];
+  recent: boolean;
+  inConversation: boolean;
+}
+
 export interface AppSettings {
   /** Chosen locale, or null on a machine where nothing has been chosen yet. */
   locale: string | null;
@@ -130,6 +169,10 @@ export interface AppSettings {
   ownNames: string[];
   /** The remembered widths of the three zones of the window. Rust keeps only usable triples. */
   layout: PanelLayouts;
+  /** Row density and folded lists of the file explorer. Rust keeps every value usable. */
+  explorer: ExplorerSettings;
+  /** The views the user saved in the explorer. Rust drops what it cannot use, entry by entry. */
+  explorerViews: SavedViewSetting[];
   /** Local voice and notes. Rust keeps every value in range. */
   speech: SpeechSettings;
 }
@@ -1140,7 +1183,7 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
  * from the environment, so it is read, never assumed.
  *
  * The local index is untouched - documents stay analysed, and choosing the same folder again
- * finds them. Emptying the index is `resetIndex`, in the folder card.
+ * finds them. Emptying the index is `resetIndex`, in the folder menu of the explorer.
  */
 export function resetSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("reset_settings");
@@ -1249,9 +1292,13 @@ export interface ProfileIndexStatus {
   data: FolderProfileStatus;
 }
 
-/** Stop the analysis that is running. What it wrote stays; the next one goes on from there. */
-export function cancelAnalysis(): Promise<void> {
-  return invoke<void>("cancel_analysis");
+/** The two folders an Analyse runs over, as Rust names them (`file_profile::build::Domain`). */
+export type AnalysisDomain = "documents" | "data";
+
+/** Stop the analysis of one folder that is running; the other folder's is not touched. What it wrote
+ * stays; the next one goes on from there. */
+export function cancelAnalysis(domain: AnalysisDomain): Promise<void> {
+  return invoke<void>("cancel_analysis", { domain });
 }
 
 /** How many passages have their meaning vector, out of all of them (one cheap lookup). */
@@ -1316,12 +1363,14 @@ export type FinderScope = { kind: "wholeFolder" } | { kind: "selection"; paths: 
 
 /**
  * Why a file was found. `word` means a typed word met a text of the file and `detail` says which:
- * `name`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile`
- * (the words are spread over several texts) or `passage`. `entity` means a filter linked it, and
- * `detail` is the role or `mention`.
+ * `name`, `folder`, `title`, `author`, `subject`, `entities`, `headers`, `cells`, `identifiers`, `profile`
+ * (the words are spread over several texts) or `passage`. `identifier` means a number typed in any
+ * spelling met the same number stored in the file. `date` means a date typed met the file's date
+ * (`detail` is `profile` or `name`). `entity` means a filter linked it, and `detail` is the role or
+ * `mention`.
  */
 export interface FinderReason {
-  kind: "word" | "entity";
+  kind: "word" | "identifier" | "date" | "entity";
   detail: string | null;
 }
 
@@ -1398,6 +1447,9 @@ export interface FinderResult {
   coverage: FinderCoverage;
   /** Present when words were typed: the interface says it is a word search. */
   textSearch: { terms: string[]; lastIsPrefix: boolean } | null;
+  /** The file extensions the typed text carried (`.docx`, `xlsx`), taken out of the words and applied
+   * as a format filter; lower case, no dot. Empty when none was typed. */
+  typedFormats: string[];
 }
 
 /**
@@ -1410,6 +1462,44 @@ export function findFiles(
   scope: FinderScope = { kind: "wholeFolder" },
 ): Promise<FinderResult> {
   return invoke<FinderResult>("find_files", { domain, query, scope });
+}
+
+/** One person or organisation linked to a file, with every role that links them: the roles of the
+ * file's profile (`author`, `subject`, `recipient`, `sender`, `issuer`, `mentioned`...), the knowledge
+ * base's own (`client`, `provider`, `supplier`), or `mention` for a name met in the text with no role. */
+export interface FileEntityLink {
+  entityId: number;
+  roles: string[];
+}
+
+/** What is known of one analysed file. A file that carries nothing is not listed. */
+export interface FileKnowledgeFacts {
+  relativePath: string;
+  businessType: string | null;
+  /** `YYYY`, ascending. */
+  years: string[];
+  entities: FileEntityLink[];
+}
+
+/** A person or an organisation the files link to, under the name the base gives it. `typeId` is
+ * `person` or `organization`, whatever packs are active. */
+export interface FactEntity {
+  entityId: number;
+  name: string;
+  typeId: string;
+}
+
+export interface FolderKnowledgeFacts {
+  files: FileKnowledgeFacts[];
+  entities: FactEntity[];
+}
+
+/**
+ * What the knowledge base and the file profile know of each analysed file of one folder, for the
+ * explorer's filters (`file_knowledge_facts`). A read: no model, no file, nothing written.
+ */
+export function fileKnowledgeFacts(domain: FinderDomain): Promise<FolderKnowledgeFacts> {
+  return invoke<FolderKnowledgeFacts>("file_knowledge_facts", { domain });
 }
 
 /** The preview of a mail merge for the choices made on the plan card. */

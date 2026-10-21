@@ -36,6 +36,29 @@ describe("the layout shapes", () => {
   });
 });
 
+describe("the default layouts", () => {
+  it("give the left zone 28 % with the centre open and 30 % without it", () => {
+    expect(DEFAULT_OPEN_TRIPLE).toEqual([28, 34, 38]);
+    expect(DEFAULT_COLLAPSED_TRIPLE).toEqual([30, 0, 70]);
+  });
+
+  it("add up to the whole window, the closed centre taking nothing", () => {
+    expect(DEFAULT_OPEN_TRIPLE.reduce((sum, share) => sum + share, 0)).toBe(100);
+    expect(DEFAULT_COLLAPSED_TRIPLE.reduce((sum, share) => sum + share, 0)).toBe(100);
+    expect(isCentreOpen(tripleToLayout(DEFAULT_OPEN_TRIPLE))).toBe(true);
+    expect(isCentreOpen(tripleToLayout(DEFAULT_COLLAPSED_TRIPLE))).toBe(false);
+  });
+
+  it("keep a saved layout narrower than the new minimum as it is: the library clamps it on screen", () => {
+    // A layout saved before the minimum went to 320 px is read back untouched; only the user's own
+    // drag is ever written (`AppLayout`), so the clamp never rewrites it.
+    const layouts: PanelLayouts = { open: [22, 38, 40], collapsed: [26, 0, 74] };
+
+    expect(layoutToApply(layouts, true)).toEqual({ resources: 22, workspace: 38, chat: 40 });
+    expect(layoutToApply(layouts, false)).toEqual({ resources: 26, workspace: 0, chat: 74 });
+  });
+});
+
 describe("which saved triple applies", () => {
   const layouts: PanelLayouts = { open: [18, 42, 40], collapsed: [30, 0, 70] };
 

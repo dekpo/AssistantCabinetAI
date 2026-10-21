@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from "react";
+import { initialTrace, stepTrace, type ProgressTrace } from "../lib/analysisProgress";
 import { normaliseError, type AppError } from "../lib/errors";
 import { indexWorkFolder, type IndexProgress, type IndexSummary } from "../lib/ipc";
 
 /**
- * One analysis pass over the work folder, owned above both places that start it: the folder card
+ * One analysis pass over the work folder, owned above both places that start it: the explorer
  * in the sidebar, and the answer that had to say "analyse your documents first". Two buttons, one
  * pass - a second pass started while the first is running would re-embed the same files.
  *
@@ -14,10 +15,17 @@ export interface IndexingState {
   running: boolean;
   /** How far the running pass has got, or null when nothing is running. */
   progress: IndexProgress | null;
+  /** What the running pass has reported, with the moment it started, for the gauge's stage, rate and
+   * clock (`lib/analysisProgress.ts`). Null when nothing is running. */
+  trace: ProgressTrace | null;
+  /** How long the last finished pass took, from the press to its end. Cleared when a new pass starts. */
+  durationMs: number | null;
+  /** When the last finished pass ended (epoch milliseconds). Cleared with `durationMs`. */
+  finishedAt: number | null;
   /** What the last finished pass did. Cleared when a new pass starts. */
   summary: IndexSummary | null;
   error: AppError | null;
-  /** How many passes have finished, successfully or not. The folder card re-reads its inventory
+  /** How many passes have finished, successfully or not. The explorer re-reads its inventories
    * from this rather than from `summary`, so a failed pass still refreshes what is on screen. */
   finishedPasses: number;
   /** Resolves true when the pass finished without failing, so a caller can go on to do the thing
@@ -33,6 +41,9 @@ export function useIndexing(
 ): IndexingState {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<IndexProgress | null>(null);
+  const [trace, setTrace] = useState<ProgressTrace | null>(null);
+  const [durationMs, setDurationMs] = useState<number | null>(null);
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [summary, setSummary] = useState<IndexSummary | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [finishedPasses, setFinishedPasses] = useState(0);
@@ -47,17 +58,33 @@ export function useIndexing(
     setError(null);
     setSummary(null);
     setProgress(null);
+    setDurationMs(null);
+    setFinishedAt(null);
+    const startedAt = Date.now();
+    setTrace(initialTrace(startedAt));
     setRunning(true);
     try {
-      setSummary(await pass(setProgress));
+      setSummary(
+        await pass((next) => {
+          const at = Date.now();
+          setProgress(next);
+          setTrace((current) =>
+            current === null ? current : stepTrace(current, { at, progress: next }),
+          );
+        }),
+      );
       return true;
     } catch (raw: unknown) {
       setError(normaliseError(raw));
       return false;
     } finally {
       inFlight.current = false;
+      const endedAt = Date.now();
+      setDurationMs(endedAt - startedAt);
+      setFinishedAt(endedAt);
       setRunning(false);
       setProgress(null);
+      setTrace(null);
       setFinishedPasses((count) => count + 1);
     }
   }, [pass]);
@@ -65,7 +92,20 @@ export function useIndexing(
   const reset = useCallback(() => {
     setSummary(null);
     setError(null);
+    setDurationMs(null);
+    setFinishedAt(null);
   }, []);
 
-  return { running, progress, summary, error, finishedPasses, run, reset };
+  return {
+    running,
+    progress,
+    trace,
+    durationMs,
+    finishedAt,
+    summary,
+    error,
+    finishedPasses,
+    run,
+    reset,
+  };
 }

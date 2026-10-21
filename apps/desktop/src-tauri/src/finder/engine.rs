@@ -27,7 +27,7 @@ use super::contracts::{
 use crate::discovery::is_supported;
 use crate::error::AppError;
 use crate::file_profile::build::Domain;
-use crate::file_profile::name::{words_of, NameProfile, MIN_PREFIX_LETTERS};
+use crate::file_profile::name::{split_date_prefix, words_of, NameProfile, MIN_PREFIX_LETTERS};
 use crate::file_record::FileKind;
 
 /// The people and organisations shown on a file's card.
@@ -57,6 +57,10 @@ const PROFILE_COLUMNS: [&str; 9] = [
 
 /// An identifier met in its stored forms is as sure as a word of the name.
 const IDENTIFIER_WEIGHT: u32 = 95;
+
+/// A date typed that a file carries (in its profile or at the start of its name) is as sure as an
+/// identifier.
+const DATE_WEIGHT: u32 = 95;
 
 /// What a word found in the name counts for against the same word found elsewhere: the name is chosen by
 /// a person to describe the file.
@@ -116,6 +120,7 @@ impl Found {
             .filter_map(|reason| match reason.kind.as_str() {
                 "word" => Some(weight(reason.detail.as_deref().unwrap_or(""))),
                 "identifier" => Some(IDENTIFIER_WEIGHT),
+                "date" => Some(DATE_WEIGHT),
                 _ => None,
             })
             .max()
@@ -175,7 +180,7 @@ pub fn find(
         .filter(|form| !form.is_empty() && form.chars().all(char::is_alphanumeric))
         .collect();
     let mut found: Option<HashMap<String, Found>> = None;
-    if typed.is_some() || !identifiers.is_empty() {
+    if typed.is_some() || !identifiers.is_empty() || query.typed_date.is_some() {
         let mut matches: HashMap<String, Found> = HashMap::new();
         if let (Some(typed), false) = (typed, terms.is_empty()) {
             by_name(
@@ -188,7 +193,9 @@ pub fn find(
                 &mut matches,
             )?;
             by_profile(connection, domain, &terms, last_is_prefix, &mut matches)?;
-            if domain == Domain::Documents {
+            // A date typed is looked for in the names and the profile: the passages of every document
+            // that mentions the year would bury the files dated so.
+            if domain == Domain::Documents && query.typed_date.is_none() {
                 by_passage(
                     connection,
                     &terms,
@@ -199,6 +206,9 @@ pub fn find(
             }
         }
         by_identifier(connection, domain, &identifiers, &mut matches)?;
+        if let Some(range) = &query.typed_date {
+            by_date(&in_scope, &profiles, range, &mut matches);
+        }
         found = Some(matches);
     }
 
@@ -272,6 +282,7 @@ pub fn find(
         facets,
         coverage,
         text_search,
+        typed_formats: Vec::new(),
     })
 }
 
@@ -540,6 +551,46 @@ fn by_identifier(
     Ok(())
 }
 
+/// The files dated as a date typed in the field: by their profile's date, or by the clean date their
+/// name starts with, which a file never analysed has too.
+fn by_date(
+    in_scope: &[&InventoryFile],
+    profiles: &HashMap<String, ProfileRow>,
+    range: &DateRange,
+    matches: &mut HashMap<String, Found>,
+) {
+    for file in in_scope {
+        let path = file.relative_path.as_str();
+        let profile_date = profiles
+            .get(path)
+            .and_then(|row| row.document_date.as_deref())
+            .is_some_and(|date| date_within(date, range));
+        let name_dated = name_date(path).is_some_and(|date| date_within(&date, range));
+        if profile_date {
+            matches
+                .entry(path.to_string())
+                .or_default()
+                .add("date", "profile");
+        }
+        if name_dated {
+            matches
+                .entry(path.to_string())
+                .or_default()
+                .add("date", "name");
+        }
+    }
+}
+
+/// The date at the start of a file's name (`2026-02-06_commandes.csv`), as `YYYY-MM-DD`.
+pub(super) fn name_date(relative_path: &str) -> Option<String> {
+    let name = relative_path.rsplit('/').next().unwrap_or(relative_path);
+    let stem = match name.rsplit_once('.') {
+        Some((stem, _)) if !stem.is_empty() => stem,
+        _ => name,
+    };
+    split_date_prefix(stem).0
+}
+
 fn by_passage(
     connection: &Connection,
     terms: &[String],
@@ -705,9 +756,11 @@ fn passes_filters(
         return false;
     }
     if let Some(range) = &query.date {
+        // A file never analysed has no profile date: the date its name starts with stands for it.
         let dated = profile
             .and_then(|row| row.document_date.as_deref())
-            .is_some_and(|date| date_within(date, range));
+            .is_some_and(|date| date_within(date, range))
+            || name_date(&file.relative_path).is_some_and(|date| date_within(&date, range));
         let spanned = ranges.is_some_and(|spans| {
             spans
                 .iter()

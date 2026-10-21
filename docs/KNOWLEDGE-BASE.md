@@ -168,6 +168,21 @@ the small **i** that opens the sheet of a name, the block « Suggestions », the
 KB lot 7, 8, 9". Nothing in the conversation opens the dialog; a name is never shown for a file outside the
 selection except in the one labelled « add these files to my selection » offer (I7).
 
+### The filters of the explorer (explorer step 7)
+
+The explorer filter panel narrows the file lists by what the base knows: **person**, **organisation** (with a role as a second
+step: author, subject, recipient, sender, issuer, mentioned), **business type** and **year**. The data is one read per folder
+(`file_knowledge_facts`, `finder/facts.rs`): for each analysed file its profile business type, the years of its document date, of
+the date its name starts with and (workbooks) of its date columns, and its people and organisations from **both** the profile
+(roles with evidence) and the base mentions (`mention`, or the role the base gave: `client`, `provider`, `supplier`). A merged entity
+answers as the one it was merged into; a deleted one links nothing; candidates count as names. Only the types `person` and
+`organization` are listed: **a person stays a person and an organisation an organisation** whatever packs are active, and no pack
+excludes or transforms a type. Nothing here changes how entities are extracted. Counts are worked out client-side (cost measured
+20 October 2026 on a copy of the owner analysed index: about 55 ms in a debug build for 1,246 documents, 325 KB of JSON). On that
+index the most frequent person is the practice own doctor (700 of 1,246 files, all as « mention »): the list is by frequency, as
+specified, so such a name tops it; a name in almost every file narrows nothing (the same reason `knowledge_max_selectivity` ignores it
+for the targeting of a question).
+
 ## 8. Privacy and boundaries
 
 - Local only, per workstation, in the index file; nothing is synchronised and nothing is sent to the AI, the server,

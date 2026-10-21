@@ -8,6 +8,7 @@ import type {
   TabularRow,
   TabularValue,
 } from "./ipc";
+import { displayPathOfKey } from "./indexKey";
 import { counted } from "./plural";
 
 /**
@@ -97,9 +98,9 @@ export function tabularSourceOf(answer: TabularAnswer): TabularSource | null {
 /** "factures.csv, feuille Facturation, colonne montant": where a document source says "page 3". */
 export function tabularSourceLine(t: Translator, source: TabularSource): string {
   return source.column === null
-    ? t("chat.sourceItemSheet", { path: source.file, sheet: source.sheet })
+    ? t("chat.sourceItemSheet", { path: displayPathOfKey("data", source.file), sheet: source.sheet })
     : t("chat.sourceItemSheetColumn", {
-        path: source.file,
+        path: displayPathOfKey("data", source.file),
         sheet: source.sheet,
         column: source.column,
       });

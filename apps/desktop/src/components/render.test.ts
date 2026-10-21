@@ -401,7 +401,7 @@ describe("the sheet of a name, drawn", () => {
     expect(html).toContain('role="dialog"');
   });
 
-  it("uses its own class names, never the folder cards' (a shared `card` squashed the settings)", () => {
+  it("uses its own class names, never a generic `card` (a shared one squashed the settings)", () => {
     const html = sheet(card);
 
     expect(html).toContain('class="entity-card"');

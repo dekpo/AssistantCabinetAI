@@ -40,7 +40,13 @@ pub fn words_of(text: &str) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = String::new();
     let mut current_is_digit = false;
-    for c in fold(text).chars() {
+    // The ligatures oe and ae and the sharp s have no decomposition: a name typed with them meets the
+    // plain spelling a cleaned file name has.
+    let folded = fold(text)
+        .replace('\u{153}', "oe")
+        .replace('\u{e6}', "ae")
+        .replace('\u{df}', "ss");
+    for c in folded.chars() {
         if !c.is_alphanumeric() {
             if !current.is_empty() {
                 words.push(std::mem::take(&mut current));
@@ -141,6 +147,9 @@ impl NameProfile {
     /// Build the profile of `relative_path` (forward slashes, as the inventory writes it).
     /// `original_name` is the name the file had before the Analyse cleaned it, from the rename log.
     pub fn build(relative_path: &str, original_name: Option<&str>) -> Self {
+        // A file of the other folder comes with a key (`file_key`): its name is made of its own path, never
+        // of the folder it was found in.
+        let relative_path = crate::file_key::plain_path(relative_path);
         let (folders, name) = match relative_path.rsplit_once('/') {
             Some((folders, name)) => (folders, name),
             None => ("", relative_path),
@@ -228,10 +237,43 @@ impl NameProfile {
         if self.exact_keys.contains(&wanted) {
             return true;
         }
-        let (wanted_date, rest) = split_date_prefix(wanted.trim());
-        // A date typed in front of the name is that file's date: a file dated otherwise is not it.
+        // A whole date typed anywhere in the query (`notes/2026-10-20`, `2026-10-20 courrier`) is a date,
+        // not four words: the first segment that starts with one gives it, the others stay words.
+        let mut wanted_date = None;
+        let mut wanted_month: Option<&str> = None;
+        let mut kept: Vec<&str> = Vec::new();
+        for segment in wanted
+            .split(|c: char| c == '/' || c.is_whitespace())
+            .filter(|segment| !segment.is_empty())
+        {
+            if wanted_date.is_none() {
+                let (date, remainder) = split_date_prefix(segment);
+                if date.is_some() {
+                    wanted_date = date;
+                    if !remainder.is_empty() {
+                        kept.push(remainder);
+                    }
+                    continue;
+                }
+            }
+            if wanted_month.is_none() && is_year_month(segment) {
+                wanted_month = Some(segment);
+                continue;
+            }
+            kept.push(segment);
+        }
+        let rest = kept.join(" ");
+        let rest = rest.as_str();
+        // A date typed in the query is that file's date: a file dated otherwise is not it.
         if let (Some(typed), Some(own)) = (&wanted_date, &self.date) {
             if *typed != own.value {
+                return false;
+            }
+        }
+        // `2026-10` typed whole is a month: the file's date (or its folder's) must be in it.
+        if let Some(month) = wanted_month {
+            let own = self.date.iter().chain(&self.folder_period).next();
+            if own.is_some_and(|own| !own.value.starts_with(month)) {
                 return false;
             }
         }
@@ -243,7 +285,16 @@ impl NameProfile {
         let Some((last, others)) = tokens.split_last() else {
             return false;
         };
-        let words: Vec<&str> = self.all_words().collect();
+        // The date the name starts with, and the year or month a folder is, are not words of the name
+        // (`name_words` leaves them out), but a person who types `notes 2026` means the file dated
+        // 2026 in the folder `notes`: each piece of those dates (`2026`, `10`, `20`) is a word here.
+        let date_pieces: Vec<&str> = self
+            .date
+            .iter()
+            .chain(&self.folder_period)
+            .flat_map(|date| date.value.split('-'))
+            .collect();
+        let words: Vec<&str> = self.all_words().chain(date_pieces).collect();
         let exact_word = |token: &str| words.contains(&token);
         others.iter().all(|token| exact_word(token))
             && (exact_word(last)
@@ -251,6 +302,19 @@ impl NameProfile {
                     && last.chars().count() >= MIN_PREFIX_LETTERS
                     && words.iter().any(|word| word.starts_with(last.as_str()))))
     }
+}
+
+/// `2026-03` as typed: a year and a month that exists, nothing else.
+fn is_year_month(segment: &str) -> bool {
+    let bytes = segment.as_bytes();
+    bytes.len() == 7
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && matches!(
+            &segment[5..],
+            "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12"
+        )
+        && (1990..=2100).contains(&segment[..4].parse::<i32>().unwrap_or(0))
 }
 
 /// `2026` or `2026-03` (or `2026_03`) as a folder: a period, not words.
@@ -477,6 +541,61 @@ mod tests {
     }
 
     #[test]
+    fn the_pieces_of_the_date_a_name_starts_with_are_words_beside_other_words() {
+        // The note a saved voice note makes: a folder, then a name that is only a date and a time.
+        let note = profile("Notes/2026-10-20_18-51-28.md");
+        for query in [
+            "Notes/2026",
+            "notes 2026",
+            "Notes/2026-10",
+            "notes 2026 10 20",
+            "notes/2026-10-20_18-51-28",
+            "Notes/2026-10-20_18-51-28.md",
+            "2026",
+            "18-51",
+        ] {
+            assert!(note.matches(query), "{query:?} must find the note");
+        }
+        for query in [
+            "notes 2025",
+            "Notes/2026-11",
+            "notes 2026 10 21",
+            "documents 2026",
+        ] {
+            assert!(!note.matches(query), "{query:?} must not find the note");
+        }
+        // The year or the month a folder is counts the same way.
+        let sorted = profile("courriers/2026-02/rapport-orl.pdf");
+        assert!(sorted.matches("rapport 2026"));
+        assert!(sorted.matches("courriers 2026-02"));
+        assert!(!sorted.matches("rapport 2025"));
+    }
+
+    #[test]
+    fn a_whole_date_typed_beside_other_words_is_the_files_own_date() {
+        let note = profile("Notes/2026-10-20_18-51-28.md");
+        // Another note of the same folder name, dated otherwise, and a file whose folder is called `notes`.
+        let other = profile("administratif/notes/2026-02-10_note-interne-fermeture.docx");
+        let october = profile("administratif/notes/2026-10-05_note-interne-informatique.pdf");
+        for query in ["Notes/2026-10-20", "notes 2026-10-20", "2026-10-20 notes"] {
+            assert!(note.matches(query), "{query:?} must find the note");
+            assert!(
+                !other.matches(query),
+                "{query:?} must not find {}",
+                other.relative_path
+            );
+            assert!(
+                !october.matches(query),
+                "{query:?} must not find {}",
+                october.relative_path
+            );
+        }
+        // Typed in part, the date is only words, as before: the start `20` still reads as a year's start.
+        assert!(other.matches("notes 2026-02"));
+        assert!(!other.matches("notes 2026-10"));
+    }
+
+    #[test]
     fn a_date_typed_before_the_name_must_be_the_files_own_date() {
         let march = profile("2026-03-01_courrier-orl.pdf");
         let april = profile("2026-04-01_courrier-orl.pdf");
@@ -488,6 +607,39 @@ mod tests {
             "without a date, both files answer"
         );
         assert!(march.matches("courrier orl"));
+    }
+
+    #[test]
+    fn a_name_typed_with_decomposed_accents_or_ligatures_finds_the_plain_spelling() {
+        let resume = profile("2026-01-02_resume-cardiologie.pdf");
+        // `e` + combining acute, twice: the decomposed spelling some keyboards and file systems produce.
+        assert!(resume.matches("re\u{301}sume\u{301} cardiologie"));
+        assert!(resume.matches("r\u{e9}sum\u{e9}"));
+
+        let heart = profile("2026-01-02_coeur.pdf");
+        assert!(heart.matches("c\u{153}ur"));
+        assert!(heart.matches("C\u{152}UR"));
+        // The other way round: a name that still carries the ligature meets the plain word.
+        assert!(profile("c\u{153}ur-gauche.pdf").matches("coeur"));
+        assert!(profile("caecum.pdf").matches("c\u{e6}cum"));
+        assert!(profile("rue-strasse.pdf").matches("stra\u{df}e"));
+        assert!(profile("rue-stra\u{df}e.pdf").matches("strasse"));
+    }
+
+    #[test]
+    fn a_single_letter_is_a_whole_word_and_never_the_start_of_one() {
+        let profile = profile("2026-01-02_note-a-classer.txt");
+        assert!(profile.matches("a"), "a one-letter word of the name is found");
+        assert!(!profile.matches("c"), "one letter is not the start of `classer`");
+        assert!(profile.matches("cl"), "two letters are");
+    }
+
+    #[test]
+    fn punctuation_alone_finds_nothing() {
+        let profile = profile("2026-01-02_note-a-classer.txt");
+        for query in ["!!", "...", "-", "_ -", "/", "?"] {
+            assert!(!profile.matches(query), "{query:?} must not find the file");
+        }
     }
 
     #[test]
@@ -642,5 +794,17 @@ mod tests {
             "nothing known is not created"
         );
         assert!(link_name_words(&[], &gazetteer()).is_empty());
+    }
+
+    #[test]
+    fn a_file_of_the_other_folder_is_named_by_its_own_path_not_by_the_folder_it_was_found_in() {
+        let foreign = NameProfile::build("/data/Courriers/2026-02-06_lettre.pdf", None);
+        let native = NameProfile::build("Courriers/2026-02-06_lettre.pdf", None);
+
+        assert_eq!(foreign.name_words, native.name_words);
+        assert_eq!(foreign.folder_words, native.folder_words);
+        assert_eq!(foreign.exact_keys, native.exact_keys);
+        assert_eq!(foreign.date, native.date);
+        assert!(!foreign.folder_words.contains(&"data".to_string()));
     }
 }

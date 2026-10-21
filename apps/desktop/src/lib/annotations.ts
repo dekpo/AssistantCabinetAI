@@ -3,6 +3,7 @@ import type { ChatEntry } from "../state/useChat";
 import { coverageLine } from "./coverage";
 import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
+import { displayPathOfKey } from "./indexKey";
 import { counted } from "./plural";
 import { groupSources, type SourceGroup } from "./sourceGroups";
 import { formatTabularAnswer, tabularSourceLine } from "./tabularAnswer";
@@ -149,7 +150,7 @@ export function computedBlock(t: Translator, locale: string, entry: ChatEntry): 
 export function sourceGroupLine(t: Translator, group: SourceGroup): string {
   return (
     t(group.pages.length > 1 ? "chat.sourceItemPages" : "chat.sourceItemPage", {
-      path: group.relativePath,
+      path: displayPathOfKey("documents", group.relativePath),
       pages: group.pages.join(", "),
     }) +
     (group.sections.length > 0 ? t("chat.sourceSections", { sections: group.sections.join(" ; ") }) : "") +

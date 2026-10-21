@@ -84,15 +84,39 @@ const WITH_VOICES: SpeechStatus = {
 };
 
 describe("the voice block of the settings", () => {
-  it("is one details block that starts closed", () => {
+  it("is a titled section laid out in the dialog's columns, with only the credits behind a disclosure", () => {
     answered = { status: null, failed: false };
     const markup = draw(settings());
 
-    expect(markup.startsWith('<details class="field settings-voice">')).toBe(true);
+    expect(markup.startsWith('<h3 class="dialog__subtitle settings-wide">Gestion de la voix</h3>')).toBe(true);
     expect(markup).not.toContain("<details open");
-    /* The voice block, and inside it the credits block (phase 13), both closed. */
-    expect(markup.match(/<details/g)).toHaveLength(2);
+    /* No disclosure of its own: the credits block is the only one, closed. */
+    expect(markup.match(/<details/g)).toHaveLength(1);
     expect(markup).toContain('<details class="field settings-credits">');
+  });
+
+  it("keeps the order of the columns: pairs, left then right", () => {
+    answered = { status: null, failed: false };
+    const markup = draw(settings());
+    const order = [
+      "Utiliser la voix",
+      "Notes vocales",
+      "Nom du dossier des notes",
+      "Commandes vocales dans les notes",
+      "Dictée dans la conversation",
+      "Modèle de reconnaissance vocale",
+      "Dictée la plus longue dans la conversation",
+      "Dictée la plus longue d&#x27;une note",
+      "Lire les réponses à voix haute",
+      "Langue de la voix",
+      "Moteur de lecture",
+      "Voix de lecture",
+      "Voix installées sur cet ordinateur",
+      "Vitesse de lecture",
+    ].map((label) => markup.indexOf(`field__label">${label}<`));
+
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect([...order].sort((x, y) => x - y)).toStrictEqual(order);
   });
 
   it("says the model is missing, offers Install and keeps Verify off", () => {
@@ -261,7 +285,7 @@ describe("the voice block of the settings", () => {
     const markup = draw(settings({ enabled: true }));
 
     expect(markup).toMatch(
-      /<div class="field"><span class="field__description">Dictée dans la conversation : Le composant vocal[^<]*<\/span><span class="field__description">Lire les réponses à voix haute : Aucune voix[^<]*<\/span><\/div>/,
+      /<div class="field settings-wide"><span class="field__description">Dictée dans la conversation : Le composant vocal[^<]*<\/span><span class="field__description">Lire les réponses à voix haute : Aucune voix[^<]*<\/span><\/div>/,
     );
   });
 
@@ -270,12 +294,13 @@ describe("the voice block of the settings", () => {
     const markup = draw(settings());
     const boxes = [...markup.matchAll(/<input type="checkbox"[^>]*>/g)].map(([box]) => box);
 
-    // Master, dictation, read aloud, notes, voice commands.
+    // Master, notes, voice commands, dictation, read aloud (the order of the columns).
     expect(boxes).toHaveLength(5);
     expect(boxes[0]).not.toContain("disabled");
-    expect(boxes[1]).toContain("disabled");
-    expect(boxes[2]).toContain("disabled");
-    expect(boxes[3]).not.toContain("disabled");
+    expect(boxes[1]).not.toContain("disabled");
+    expect(boxes[2]).not.toContain("disabled");
+    expect(boxes[3]).toContain("disabled");
+    expect(boxes[4]).toContain("disabled");
   });
 
   it("offers the enabled languages only, after the interface language", () => {

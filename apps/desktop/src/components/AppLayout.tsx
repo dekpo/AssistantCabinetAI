@@ -13,17 +13,19 @@ import {
 } from "../lib/panelLayout";
 import type { ViewStateStore } from "../lib/viewState";
 import type { WorkspaceView } from "../lib/workspaceView";
-import { WorkspacePanel, type CentreNotes, type TabActions } from "./WorkspacePanel";
+import { WorkspacePanel, type Centre, type TabActions } from "./WorkspacePanel";
 
 /* Pixels, not percentages: below these the content of the zone stops being usable (the two folder
    cards, a readable page, the model selector beside the composer). A number is pixels and a string
    is a percentage in this library's v4 API. */
-const RESOURCES_MIN_PX = 240;
+/* 320: the explorer's family header (icon, name and counters, Analyser, fold) is one line and never
+   wraps, and it needs this much. */
+const RESOURCES_MIN_PX = 320;
 const WORKSPACE_MIN_PX = 320;
 const CHAT_MIN_PX = 340;
 
 /**
- * The three zones of the window, left to right: the resources (both folder cards), the workspace
+ * The three zones of the window, left to right: the resources (the file explorer), the workspace
  * and the chat. The workspace panel is **always rendered**: closed, it is collapsed to nothing, so
  * the group always holds three panels and the chat keeps its place in the tree (the conversation
  * lives in it and must never be remounted). The workspace is visible exactly while `workspace` is
@@ -38,7 +40,7 @@ export function AppLayout({
   onWorkspaceCollapsed,
   viewStates,
   tabActions,
-  notes,
+  centre,
   restoreNonce,
 }: {
   resources: ReactNode;
@@ -54,8 +56,8 @@ export function AppLayout({
   viewStates: ViewStateStore;
   /** What the tabs of the workspace can ask for: show, close, or report a file that is gone. */
   tabActions: TabActions;
-  /** The Notes section of the centre; absent while its switch is off. */
-  notes?: CentreNotes;
+  /** The sections of the centre zone (overview, files, notes). */
+  centre: Centre;
   /** Changes whenever the default layout must be put back on screen at once. */
   restoreNonce: number;
 }) {
@@ -127,9 +129,11 @@ export function AppLayout({
       <Panel
         id={RESOURCES_ID}
         className="pane"
-        defaultSize="22%"
+        defaultSize="28%"
         minSize={RESOURCES_MIN_PX}
-        maxSize="35%"
+        /* Two columns (no centre): up to half the window, so the explorer's long lines have room;
+           with the centre open the three zones share the window and 35 % stays the ceiling. */
+        maxSize={centreOpen ? "35%" : "50%"}
       >
         <div className="pane__content">{resources}</div>
       </Panel>
@@ -154,7 +158,7 @@ export function AppLayout({
               view={workspace}
               viewStates={viewStates}
               actions={tabActions}
-              notes={notes}
+              centre={centre}
             />
           )}
         </div>

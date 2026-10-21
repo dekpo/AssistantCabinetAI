@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { SUPPORTED_LOCALES } from "../i18n/catalogues";
 import { useTranslation } from "../i18n/I18nProvider";
 import type { AppError } from "../lib/errors";
-import type { AppSettings, KnowledgeMode, SpeechSettings, ThemeChoice } from "../lib/ipc";
+import type { Family } from "../lib/explorerModel";
+import type {
+  AppSettings,
+  ExplorerDensity,
+  KnowledgeMode,
+  SpeechSettings,
+  ThemeChoice,
+} from "../lib/ipc";
 import {
   boundedNumber,
   fractionFromPercentDraft,
@@ -16,14 +23,14 @@ import {
 import { HEALTH_MODULES, isModuleOn, withModule } from "../lib/knowledgePacks";
 import type { IndexingState } from "../state/useIndexing";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { DataFolderCard } from "./DataFolderCard";
 import { ErrorBanner } from "./ErrorBanner";
+import { FolderSettings } from "./FolderSettings";
 import { NumberSetting } from "./NumberSetting";
 import { SpeechSettingsBlock } from "./SpeechSettings";
-import { WorkFolderCard } from "./WorkFolderCard";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
 const KNOWLEDGE_MODES: KnowledgeMode[] = ["off", "suggest", "auto"];
+const DENSITY_CHOICES: ExplorerDensity[] = ["compact", "comfortable"];
 
 /* The same bounds Rust clamps to, so the control offers only what will actually be stored. They
    are duplicated rather than fetched because a number input needs them before anything is saved;
@@ -47,11 +54,15 @@ export function SettingsDialog({
   indexing,
   dataIndexing,
   onUpdate,
+  onWorkFolderChosen,
+  onSaveExplorer,
   onSaveSpeech,
   onReset,
   onRestoreLayout,
   onClose,
   onOpenKnowledge,
+  onOpenReport,
+  onFolderCleared,
 }: {
   settings: AppSettings;
   settingsPath: string;
@@ -59,11 +70,15 @@ export function SettingsDialog({
   suggestedDataFolder: string | null;
   aliases: string[];
   saveError: AppError | null;
-  /** The same analysis pass the sidebar card starts: one pass, wherever it is started from. */
+  /** The same analysis pass the sidebar starts: one pass, wherever it is started from. */
   indexing: IndexingState;
-  /** The Data Folder's pass, the same one its sidebar card starts. */
+  /** The Data Folder's pass, the same one the sidebar starts. */
   dataIndexing: IndexingState;
   onUpdate: (patch: Partial<AppSettings>) => void;
+  /** A Documents folder was chosen: the notes of the folder that is left are looked after first. */
+  onWorkFolderChosen: (path: string) => void;
+  /** One change to the nested explorer settings, applied to them as they stand when its turn comes. */
+  onSaveExplorer: (change: (current: AppSettings["explorer"]) => AppSettings["explorer"]) => void;
   /** One change to the nested voice settings, applied to them as they stand when its turn comes. */
   onSaveSpeech: (change: (current: SpeechSettings) => SpeechSettings) => void;
   /** Every setting back to a first launch, the documents folder included. Rejects on failure.
@@ -75,6 +90,10 @@ export function SettingsDialog({
   onClose: () => void;
   /** Opens the knowledge management dialog, over this one. */
   onOpenKnowledge: () => void;
+  /** « Voir le rapport » of a folder: closes this panel and opens the centre on its overview. */
+  onOpenReport: () => void;
+  /** The analysis of a family was cleared here: the sidebar reads its folders again. */
+  onFolderCleared: (family: Family) => void;
 }) {
   const { t, locale } = useTranslation();
   const [serverUrlDraft, setServerUrlDraft] = useState(settings.serverUrl);
@@ -121,8 +140,13 @@ export function SettingsDialog({
     system: t("settings.themeSystem"),
   };
 
+  const densityLabels: Record<ExplorerDensity, string> = {
+    compact: t("settings.explorerDensityCompact"),
+    comfortable: t("settings.explorerDensityComfortable"),
+  };
+
   return (
-    <div className="dialog" role="dialog" aria-label={t("settings.title")}>
+    <div className="dialog dialog--wide" role="dialog" aria-label={t("settings.title")}>
       <header className="dialog__header">
         <h2 className="dialog__title">{t("settings.title")}</h2>
         <button type="button" className="button button--quiet" onClick={onClose}>
@@ -130,7 +154,12 @@ export function SettingsDialog({
         </button>
       </header>
 
-      <div className="dialog__body">
+      <div className="dialog__body settings-grid">
+        {/* The panel is two columns, left then right, and a whole row where a block needs the room
+            (the folders, the voice credits). Four sections, each with its title: the main settings,
+            the knowledge base, the voice, then the advanced ones in a disclosure. */}
+        <h3 className="dialog__subtitle settings-wide">{t("settings.mainGroupLabel")}</h3>
+
         <label className="field">
           <span className="field__label">{t("settings.themeLabel")}</span>
           <select
@@ -141,6 +170,27 @@ export function SettingsDialog({
             {THEME_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
                 {themeLabels[choice]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span className="field__label">{t("settings.explorerDensityLabel")}</span>
+          <span className="field__description">{t("settings.explorerDensityDescription")}</span>
+          <select
+            className="field__control"
+            value={settings.explorer.density}
+            onChange={(event) => {
+              /* Read now: the change is applied later, in the settings queue, when a controlled
+                 select has already gone back to the value it still holds. */
+              const density = event.target.value as ExplorerDensity;
+              onSaveExplorer((current) => ({ ...current, density }));
+            }}
+          >
+            {DENSITY_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {densityLabels[choice]}
               </option>
             ))}
           </select>
@@ -233,6 +283,22 @@ export function SettingsDialog({
           </div>
         </label>
 
+        {/* The two folders, one whole row each: they are the files the product works on, so they sit
+            among the main settings, in plain view (`FolderSettings`). */}
+        <FolderSettings
+          workFolder={settings.workFolder}
+          dataFolder={settings.dataFolder}
+          suggestedWorkFolder={suggestedWorkFolder}
+          suggestedDataFolder={suggestedDataFolder}
+          onWorkFolderChosen={onWorkFolderChosen}
+          onDataFolderChosen={(path) => onUpdate({ dataFolder: path })}
+          indexing={indexing}
+          dataIndexing={dataIndexing}
+          density={settings.explorer.density}
+          onCleared={onFolderCleared}
+          onOpenReport={onOpenReport}
+        />
+
         <label className="field">
           <span className="field__label">{t("settings.generatedFolderLabel")}</span>
           <span className="field__description">{t("settings.generatedFolderDescription")}</span>
@@ -247,10 +313,36 @@ export function SettingsDialog({
           />
         </label>
 
+        <div className="field">
+          <label className="field__row">
+            <input
+              type="checkbox"
+              checked={settings.copySources}
+              onChange={(event) => onUpdate({ copySources: event.target.checked })}
+            />
+            <span className="field__label">{t("settings.copySourcesLabel")}</span>
+          </label>
+          <span className="field__description">{t("settings.copySourcesDescription")}</span>
+        </div>
+
+        <div className="field">
+          <label className="field__row">
+            <input
+              type="checkbox"
+              checked={settings.knowledgeHideNamesInSuggestions}
+              onChange={(event) =>
+                onUpdate({ knowledgeHideNamesInSuggestions: event.target.checked })
+              }
+            />
+            <span className="field__label">{t("settings.hideNamesLabel")}</span>
+          </label>
+          <span className="field__description">{t("settings.hideNamesDescription")}</span>
+        </div>
+
         {/* The knowledge base: what the analysis learns from the documents, and how a question
             uses it. The mode and the modules are read at the next Analyse: nothing runs in the
             background when one is changed. */}
-        <h3 className="dialog__subtitle">{t("settings.knowledgeGroupLabel")}</h3>
+        <h3 className="dialog__subtitle settings-wide">{t("settings.knowledgeGroupLabel")}</h3>
 
         <label className="field">
           <span className="field__label">{t("settings.knowledgeModeLabel")}</span>
@@ -269,6 +361,17 @@ export function SettingsDialog({
             ))}
           </select>
         </label>
+
+        {/* Where the knowledge base can be seen, corrected and extended (`KnowledgeDialog`). */}
+        <div className="field">
+          <span className="field__label">{t("settings.manageKnowledgeLabel")}</span>
+          <span className="field__description">{t("settings.manageKnowledgeDescription")}</span>
+          <div className="field__row">
+            <button type="button" className="button button--compact" onClick={onOpenKnowledge}>
+              {t("settings.manageKnowledge")}
+            </button>
+          </div>
+        </div>
 
         {/* One tick per country: a cross-border worker has both a French and a Swiss number, so the
             modules add up and never exclude one another. Nothing ticked is no health module. */}
@@ -295,181 +398,145 @@ export function SettingsDialog({
           ))}
         </div>
 
-        {/* Where the knowledge base can be seen, corrected and extended (`KnowledgeDialog`). */}
+        {/* The legal module has no pack yet: its place is kept, and it says so. */}
         <div className="field">
-          <span className="field__label">{t("settings.manageKnowledgeLabel")}</span>
-          <span className="field__description">{t("settings.manageKnowledgeDescription")}</span>
-          <div className="field__row">
-            <button type="button" className="button button--compact" onClick={onOpenKnowledge}>
-              {t("settings.manageKnowledge")}
-            </button>
-          </div>
+          <span className="field__label">{t("settings.legalModuleLabel")}</span>
+          <span className="field__description">{t("settings.legalModuleDescription")}</span>
         </div>
 
-        <div className="field">
-          <label className="field__row">
-            <input
-              type="checkbox"
-              checked={settings.knowledgeHideNamesInSuggestions}
-              onChange={(event) =>
-                onUpdate({ knowledgeHideNamesInSuggestions: event.target.checked })
-              }
-            />
-            <span className="field__label">{t("settings.hideNamesLabel")}</span>
-          </label>
-          <span className="field__description">{t("settings.hideNamesDescription")}</span>
-        </div>
-
-        <div className="field">
-          <label className="field__row">
-            <input
-              type="checkbox"
-              checked={settings.copySources}
-              onChange={(event) => onUpdate({ copySources: event.target.checked })}
-            />
-            <span className="field__label">{t("settings.copySourcesLabel")}</span>
-          </label>
-          <span className="field__description">{t("settings.copySourcesDescription")}</span>
-        </div>
-
-        {/* The voice: switches, speech model, language, caps, reading and notes. Its own block, beside
-            the advanced one below. */}
+        {/* The voice: its own section, with its own title (`SpeechSettingsBlock`). */}
         <SpeechSettingsBlock settings={settings} onSave={onSaveSpeech} />
 
         {/* The thresholds of the narrowing, the measurement switches and the developer panel, kept
-            apart under one heading. None changes what an answer says; the thresholds change which
+            apart in a disclosure. None changes what an answer says; the thresholds change which
             files are searched when the mode is automatic or a name was picked. */}
-        <details className="field settings-advanced">
+        <details className="field settings-wide settings-advanced">
           <summary className="disclosure">{t("settings.advancedLabel")}</summary>
 
-          <NumberSetting
-            label={t("settings.minScopeFilesLabel")}
-            description={t("settings.minScopeFilesDescription")}
-            value={String(settings.knowledgeMinScopeFiles)}
-            min={MIN_SCOPE_FILES.min}
-            max={MIN_SCOPE_FILES.max}
-            step={1}
-            commit={(typed) => {
-              const next = boundedNumber(typed, MIN_SCOPE_FILES, settings.knowledgeMinScopeFiles);
-              if (next !== settings.knowledgeMinScopeFiles) {
-                onUpdate({ knowledgeMinScopeFiles: next });
-              }
-              return String(next);
-            }}
-          />
-          <NumberSetting
-            label={t("settings.maxSelectivityLabel")}
-            description={t("settings.maxSelectivityDescription")}
-            value={percentDraft(settings.knowledgeMaxSelectivity)}
-            min={MAX_SELECTIVITY.min * 100}
-            max={MAX_SELECTIVITY.max * 100}
-            step={5}
-            unit="%"
-            commit={(typed) => {
-              const next = fractionFromPercentDraft(
-                typed,
-                MAX_SELECTIVITY,
-                settings.knowledgeMaxSelectivity,
-              );
-              if (next !== settings.knowledgeMaxSelectivity) {
-                onUpdate({ knowledgeMaxSelectivity: next });
-              }
-              return percentDraft(next);
-            }}
-          />
-          <NumberSetting
-            label={t("settings.minReductionLabel")}
-            description={t("settings.minReductionDescription")}
-            value={percentDraft(settings.knowledgeMinReduction)}
-            min={MIN_REDUCTION.min * 100}
-            max={MIN_REDUCTION.max * 100}
-            step={5}
-            unit="%"
-            commit={(typed) => {
-              const next = fractionFromPercentDraft(
-                typed,
-                MIN_REDUCTION,
-                settings.knowledgeMinReduction,
-              );
-              if (next !== settings.knowledgeMinReduction) {
-                onUpdate({ knowledgeMinReduction: next });
-              }
-              return percentDraft(next);
-            }}
-          />
-          <NumberSetting
-            label={t("settings.maxCandidatesLabel")}
-            description={t("settings.maxCandidatesDescription")}
-            value={String(settings.knowledgeMaxCandidates)}
-            min={MAX_CANDIDATES.min}
-            max={MAX_CANDIDATES.max}
-            step={1}
-            commit={(typed) => {
-              const next = boundedNumber(typed, MAX_CANDIDATES, settings.knowledgeMaxCandidates);
-              if (next !== settings.knowledgeMaxCandidates) {
-                onUpdate({ knowledgeMaxCandidates: next });
-              }
-              return String(next);
-            }}
-          />
-          <NumberSetting
-            label={t("settings.widenBelowScoreLabel")}
-            description={t("settings.widenBelowScoreDescription")}
-            value={String(settings.knowledgeWidenBelowScore)}
-            min={WIDEN_BELOW_SCORE.min}
-            max={WIDEN_BELOW_SCORE.max}
-            step={0.05}
-            commit={(typed) => {
-              const next = boundedNumber(
-                typed,
-                WIDEN_BELOW_SCORE,
-                settings.knowledgeWidenBelowScore,
-                2,
-              );
-              if (next !== settings.knowledgeWidenBelowScore) {
-                onUpdate({ knowledgeWidenBelowScore: next });
-              }
-              return String(next);
-            }}
-          />
+          <div className="settings-grid settings-grid--inside">
+            <NumberSetting
+              label={t("settings.minScopeFilesLabel")}
+              description={t("settings.minScopeFilesDescription")}
+              value={String(settings.knowledgeMinScopeFiles)}
+              min={MIN_SCOPE_FILES.min}
+              max={MIN_SCOPE_FILES.max}
+              step={1}
+              commit={(typed) => {
+                const next = boundedNumber(typed, MIN_SCOPE_FILES, settings.knowledgeMinScopeFiles);
+                if (next !== settings.knowledgeMinScopeFiles) {
+                  onUpdate({ knowledgeMinScopeFiles: next });
+                }
+                return String(next);
+              }}
+            />
+            <NumberSetting
+              label={t("settings.maxSelectivityLabel")}
+              description={t("settings.maxSelectivityDescription")}
+              value={percentDraft(settings.knowledgeMaxSelectivity)}
+              min={MAX_SELECTIVITY.min * 100}
+              max={MAX_SELECTIVITY.max * 100}
+              step={5}
+              unit="%"
+              commit={(typed) => {
+                const next = fractionFromPercentDraft(
+                  typed,
+                  MAX_SELECTIVITY,
+                  settings.knowledgeMaxSelectivity,
+                );
+                if (next !== settings.knowledgeMaxSelectivity) {
+                  onUpdate({ knowledgeMaxSelectivity: next });
+                }
+                return percentDraft(next);
+              }}
+            />
+            <NumberSetting
+              label={t("settings.minReductionLabel")}
+              description={t("settings.minReductionDescription")}
+              value={percentDraft(settings.knowledgeMinReduction)}
+              min={MIN_REDUCTION.min * 100}
+              max={MIN_REDUCTION.max * 100}
+              step={5}
+              unit="%"
+              commit={(typed) => {
+                const next = fractionFromPercentDraft(
+                  typed,
+                  MIN_REDUCTION,
+                  settings.knowledgeMinReduction,
+                );
+                if (next !== settings.knowledgeMinReduction) {
+                  onUpdate({ knowledgeMinReduction: next });
+                }
+                return percentDraft(next);
+              }}
+            />
+            <NumberSetting
+              label={t("settings.maxCandidatesLabel")}
+              description={t("settings.maxCandidatesDescription")}
+              value={String(settings.knowledgeMaxCandidates)}
+              min={MAX_CANDIDATES.min}
+              max={MAX_CANDIDATES.max}
+              step={1}
+              commit={(typed) => {
+                const next = boundedNumber(typed, MAX_CANDIDATES, settings.knowledgeMaxCandidates);
+                if (next !== settings.knowledgeMaxCandidates) {
+                  onUpdate({ knowledgeMaxCandidates: next });
+                }
+                return String(next);
+              }}
+            />
+            <NumberSetting
+              label={t("settings.widenBelowScoreLabel")}
+              description={t("settings.widenBelowScoreDescription")}
+              value={String(settings.knowledgeWidenBelowScore)}
+              min={WIDEN_BELOW_SCORE.min}
+              max={WIDEN_BELOW_SCORE.max}
+              step={0.05}
+              commit={(typed) => {
+                const next = boundedNumber(
+                  typed,
+                  WIDEN_BELOW_SCORE,
+                  settings.knowledgeWidenBelowScore,
+                  2,
+                );
+                if (next !== settings.knowledgeWidenBelowScore) {
+                  onUpdate({ knowledgeWidenBelowScore: next });
+                }
+                return String(next);
+              }}
+            />
 
-          <label className="field__row">
-            <input
-              type="checkbox"
-              checked={settings.writeTimingLog}
-              onChange={(event) => onUpdate({ writeTimingLog: event.target.checked })}
-            />
-            <span>{t("settings.timingLogLabel")}</span>
-          </label>
-          <span className="field__description">{t("settings.timingLogDescription")}</span>
-          <label className="field__row">
-            <input
-              type="checkbox"
-              checked={settings.showDiagnostics}
-              onChange={(event) => onUpdate({ showDiagnostics: event.target.checked })}
-            />
-            <span>{t("settings.showDiagnosticsLabel")}</span>
-          </label>
-          <span className="field__description">{t("settings.showDiagnosticsDescription")}</span>
+            <div className="field">
+              <label className="field__row">
+                <input
+                  type="checkbox"
+                  checked={settings.writeTimingLog}
+                  onChange={(event) => onUpdate({ writeTimingLog: event.target.checked })}
+                />
+                <span>{t("settings.timingLogLabel")}</span>
+              </label>
+              <span className="field__description">{t("settings.timingLogDescription")}</span>
+            </div>
+            <div className="field">
+              <label className="field__row">
+                <input
+                  type="checkbox"
+                  checked={settings.showDiagnostics}
+                  onChange={(event) => onUpdate({ showDiagnostics: event.target.checked })}
+                />
+                <span>{t("settings.showDiagnosticsLabel")}</span>
+              </label>
+              <span className="field__description">
+                {t("settings.showDiagnosticsDescription")}
+              </span>
+            </div>
+          </div>
         </details>
 
-        <WorkFolderCard
-          workFolder={settings.workFolder}
-          suggestedWorkFolder={suggestedWorkFolder}
-          onChosen={(path) => onUpdate({ workFolder: path })}
-          indexing={indexing}
-          onOpenKnowledge={onOpenKnowledge}
-        />
-
-        <DataFolderCard
-          dataFolder={settings.dataFolder}
-          suggestedDataFolder={suggestedDataFolder}
-          onChosen={(path) => onUpdate({ dataFolder: path })}
-          indexing={dataIndexing}
-          onOpenKnowledge={onOpenKnowledge}
-        />
-
         {saveError === null ? null : <ErrorBanner error={saveError} />}
+
+        {/* Last, under everything they undo, with a line saying what a reset costs before she
+            reaches the button rather than only once she has pressed it. */}
+        <h3 className="dialog__subtitle settings-wide">{t("settings.maintenanceGroupLabel")}</h3>
 
         <div className="field">
           <span className="field__label">{t("settings.layoutLabel")}</span>
@@ -481,8 +548,6 @@ export function SettingsDialog({
           </div>
         </div>
 
-        {/* Last in the panel, under everything it undoes, with a line saying what it costs
-            before she reaches the button rather than only once she has pressed it. */}
         <div className="field">
           <span className="field__label">{t("settings.resetLabel")}</span>
           <span className="field__description">{t("settings.resetDescription")}</span>
@@ -498,7 +563,7 @@ export function SettingsDialog({
           </div>
         </div>
 
-        <p className="dialog__note">{t("settings.storedAt", { path: settingsPath })}</p>
+        <p className="dialog__note settings-wide">{t("settings.storedAt", { path: settingsPath })}</p>
       </div>
 
       {confirmingReset ? (

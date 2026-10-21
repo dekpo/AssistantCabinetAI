@@ -16,6 +16,7 @@ use crate::cleaning;
 use crate::discovery::{self, DiscoveredFile};
 use crate::error::AppError;
 use crate::extraction::{self, ExtractionError, PageOrigin};
+use crate::file_profile::build::Domain;
 use crate::gateway::GatewayClient;
 use crate::index_store::{self, IndexStore};
 use crate::knowledge::backfill;
@@ -349,6 +350,7 @@ pub async fn run_with_knowledge(
         server_url,
         embedding_alias,
         work_folder,
+        None,
         ocr,
         rasterizer,
         locale,
@@ -368,6 +370,9 @@ pub async fn run_cancellable(
     server_url: &str,
     embedding_alias: &str,
     work_folder: &std::path::Path,
+    // The other folder (the Data folder) when it is chosen: the documents found there are read too,
+    // in place, under their own key (`file_key`). `None` reads the work folder alone.
+    foreign_root: Option<&std::path::Path>,
     ocr: Option<&dyn OcrProvider>,
     rasterizer: Option<&dyn PageRasterizer>,
     locale: &str,
@@ -401,10 +406,9 @@ pub async fn run_cancellable(
     let ocr: Option<&dyn OcrProvider> = timed_ocr.as_ref().map(|engine| engine as &dyn OcrProvider);
     let everything = discovery::discover_all(work_folder);
     let unread_formats = unread_formats(&everything);
-    let files: Vec<DiscoveredFile> = everything
-        .into_iter()
-        .filter(|file| discovery::is_supported(&file.extension))
-        .collect();
+    // The documents of both folders, each under its key by the one rule (`file_key`) and a file reachable
+    // from both listed once: the family decides who reads a file, not the folder it is in.
+    let files = discovery::discover_family(work_folder, foreign_root, Domain::Documents);
     // Before reading anything: a document she deleted must stop being citable, and that is true
     // whether or not the rest of the pass succeeds. Keyed on the same walk the pass itself uses,
     // so the index and the folder panel cannot disagree about what is there.
@@ -739,9 +743,10 @@ pub async fn run_cancellable(
             }
             _ => None,
         };
-        profile = crate::file_profile::store::run_documents(
+        profile = crate::file_profile::store::run_documents_across(
             index,
             work_folder,
+            foreign_root,
             knowledge.as_deref(),
             locale,
         );

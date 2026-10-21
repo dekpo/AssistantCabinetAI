@@ -22,7 +22,7 @@ Reference: [Tauri 2](https://v2.tauri.app/start/), [webview versions](https://v2
 
 One window, one product:
 
-- **left (Resources):** the documents folder, then the data folder (files);
+- **left (Resources):** one file explorer: the two families of files, Documents then Tables (see "The left panel" below);
 - **centre (Workspace):** an extensible zone, closed unless something is shown in it (see "Layout" below);
 - **right:** chat, the proposed plan, and Approve / Cancel;
 - **top:** Assistant Cabinet AI;
@@ -31,18 +31,24 @@ One window, one product:
 ### Layout
 
 The three zones sit in one `react-resizable-panels` v4 group (`Group`, `Panel`, `Separator`; a number is pixels,
-a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 240 (the cards need it),
-Workspace 320, Chat 340; Resources never exceeds 35 %. The window `minWidth` is 1000 (240 + 320 + 340, two
-separators and the padding come to about 960). Each zone scrolls inside itself.
+a string is a percentage), in `src/components/AppLayout.tsx`. Pixel minimums: Resources 320 (the explorer's family header is one line and never wraps),
+Workspace 320, Chat 340; Resources never exceeds 35 % with the centre open, and 50 % in two columns (centre closed; owner request, 20 October 2026, so the explorer's line of times has room). The window `minWidth` is 1080 (320 + 320 + 340, two
+separators and the padding come to about 1040). Each zone scrolls inside itself. **Default widths** (`lib/panelLayout.ts`,
+explorer step 4): `[28, 34, 38]` with the centre open and `[30, 0, 70]` with it closed, so the left zone starts at about
+330 px in the default window. A layout saved before the minimum went to 320 px (for example `[22, 38, 40]`) is read back
+untouched and shown clamped to 320 px by the panel library; it is never rewritten by that clamp, because only a gesture of the
+user is saved (`isUserInteraction`).
 
 **The centre is a slot, not a viewer.** `App` holds `workspace: WorkspaceView | null` (`src/lib/workspaceView.ts`,
-a discriminated union with two kinds today, `welcome` and `files` (a list of tabs, see "The document viewer")) and passes
-`openWorkspace(view)` and `closeWorkspace()` around. **The centre is visible exactly while `workspace !== null`.** Nothing
-is open at launch, so the user sees two columns. A new use of the zone (a calendar, say) adds a kind to the union and a case
-to `WorkspacePanel`, and touches nothing else. **Voice notes are not a kind of view:** they are a *section* of the zone, reached
-by a Files / Notes switch (see "Voice in the window" at the end of this file). A button in the title bar (`aria-pressed`) opens the welcome view or
-closes the zone; the user can also close it by dragging it below its minimum or by pressing Enter on a
-separator beside it.
+a discriminated union with two kinds today, `welcome` (the empty state of the Files section: no file open) and `files` (a list
+of tabs, see "The document viewer")). **The centre is visible exactly while `shownCentre(...)` is not `null`**
+(`lib/centreSection.ts`, pure, tested over every combination): the open tabs, or the Overview section, or the Notes section while
+it holds a note. Nothing is open at launch (the section is Files), so the user sees two columns. A new use of the zone (a
+calendar, say) adds a kind to the union and a case to `WorkspacePanel`, and touches nothing else. **Overview and voice notes are
+not kinds of view:** they are *sections* of the zone, reached by a switch **Aperçu · Fichiers · Notes** that is drawn whenever
+the zone is open (`Notes` only while enabled; see "The overview of the centre" below and "Voice in the window" at the end of this
+file). A button in the title bar (`aria-pressed`) opens the zone, on the Overview when no file is open, or closes it; the user
+can also close it by dragging it below its minimum or by pressing Enter on a separator beside it.
 
 **The workspace panel is always rendered**, collapsed to size 0 when closed, so the group always holds three
 panels and `ChatPanel` keeps its place in the tree: the conversation is never remounted by a resize, an open or a
@@ -97,9 +103,11 @@ text is untouched. If the name exists only in files she did not tick, one clearl
 health modules, hiding names in suggestions) and, under **Avancé**, the thresholds and a **diagnostics panel** for
 developers that appears under the last answer. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 7".
 
-**Knowledge management dialog (KB lot 8).** Settings → « Connaissances » → **Gérer…**, or the link **Voir les connaissances** under the analysis summary of either folder card, opens a full-window administrative dialog; nothing in the conversation opens it. Tabs: **Entités** (a searchable, filterable list of 50 per page and the sheet of the chosen entity: its names, where each mention was found with the passage, the method and the confidence, the links, the details, the pairs, how the spreadsheet columns were read; actions Modifier, Ajouter un nom, Fusionner avec…, Séparer…, Supprimer, Restaurer, Défaire la fusion), **À vérifier** (possible matches to merge or dismiss, and library-health counts), **Types et rôles** (read-only) and **Réinitialiser**. A strip under the title counts what the base holds, says how many documents the next Analyse will read again (from the stored text, without the AI) and holds **Annuler : <operation>**. Delete, merge, split, removing a name and both resets ask first through the confirmation dialog. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 8".
+**Knowledge management dialog (KB lot 8).** Settings → « Connaissances » → **Gérer…**, or the link **Voir les connaissances** in the knowledge lines of the Overview report, opens a full-window administrative dialog; nothing in the conversation opens it. Tabs: **Entités** (a searchable, filterable list of 50 per page and the sheet of the chosen entity: its names, where each mention was found with the passage, the method and the confidence, the links, the details, the pairs, how the spreadsheet columns were read; actions Modifier, Ajouter un nom, Fusionner avec…, Séparer…, Supprimer, Restaurer, Défaire la fusion), **À vérifier** (possible matches to merge or dismiss, and library-health counts), **Types et rôles** (read-only) and **Réinitialiser**. A strip under the title counts what the base holds, says how many documents the next Analyse will read again (from the stored text, without the AI) and holds **Annuler : <operation>**. Delete, merge, split, removing a name and both resets ask first through the confirmation dialog. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 8".
 
-**Suggestions, and the sheet of a name (KB lot 9).** Two more things, and nothing changes while the mode is `off`. (1) In the empty conversation (and nowhere else: the folder cards no longer draw them, 17 October 2026), a short block titled **« Suggestions »** (« Questions suggérées à partir de vos fichiers ») is drawn as buttons: each was checked on the selected files before it was shown (a few operations run on the cached workbooks, nothing on the AI) and a click sends it as it stands. Nothing says it will have an answer. Names are **hidden by default** (the setting « Masquer les noms dans les suggestions »): only questions that name nobody are shown, with **Afficher les suggestions avec des noms**, which the user clicks and which lasts the session, and **Masquer à nouveau les noms**. Nothing is looked up at launch or while an Analyse runs. (2) A small **i** beside a name, on its chip above the box and in the `@` list, opens the **sheet of the name** inside the selection: its other spellings, its roles, the documents with their pages and the tables with the sheet and the column, a count (never a list) for what lies outside the selection, and the links the files state. It only reads. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 9".
+**The search field of the explorer (explorer step 1, 19 October 2026).** A field at the top of the box searches the files' names, their file profile and, for documents, the text, with no model, across both folders. It **only filters the list**: the selection never changes because of it. The bottom bar's tick link adds the analysed results that are not yet selected, and the result line says how many results are not analysed and cannot be ticked. A typed word that is a file extension (`.docx`, `xlsx`) filters by format, and a text that is only a date (`2026`, `2026-02`, `2026-02-06`, `06/02/2026`) finds the files dated so. The search runs again by itself when an Analyse finishes or the list is read again on window focus, and the text is cleared when a folder changes. Rules: `docs/DECISIONS.md`, « the explorer's search step »; code: `lib/finderSearchState.ts` (tested), `state/useFinderSearch.ts`, `finder/typed.rs`. The per-folder search field of the old folder cards (`FinderControls`, with its « Tous les fichiers » and « Réinitialiser » buttons) was removed with the cards in step 10.
+
+**Suggestions, and the sheet of a name (KB lot 9).** Two more things, and nothing changes while the mode is `off`. (1) In the empty conversation (and nowhere else: the folders no longer draw them, 17 October 2026), a short block titled **« Suggestions »** (« Questions suggérées à partir de vos fichiers ») is drawn as buttons: each was checked on the selected files before it was shown (a few operations run on the cached workbooks, nothing on the AI) and a click sends it as it stands. Nothing says it will have an answer. Names are **hidden by default** (the setting « Masquer les noms dans les suggestions »): only questions that name nobody are shown, with **Afficher les suggestions avec des noms**, which the user clicks and which lasts the session, and **Masquer à nouveau les noms**. Nothing is looked up at launch or while an Analyse runs. (2) A small **i** beside a name, on its chip above the box and in the `@` list, opens the **sheet of the name** inside the selection: its other spellings, its roles, the documents with their pages and the tables with the sheet and the column, a count (never a list) for what lies outside the selection, and the links the files state. It only reads. Design and rules: `docs/DECISIONS.md`, "Settled by KB lot 9".
 
 
 The conversation remembers its recent exchanges, as many as the chosen model's context window allows; past
@@ -118,11 +126,14 @@ trademark constraints, which also forbid rebadging Open WebUI as our product.
 An analysed file opens in the centre, inside the window, fully offline. It is display-only: opening a file never
 ticks or unticks a file, never starts an analysis, and touches no extraction, OCR, index, retrieval or provider.
 
-**How a file is opened.** Each row of the two lists in the sidebar (the Documents Folder and the Tables Folder)
-has an **Ouvrir** button, only on a file that can be selected (`isSelectable`: analysed, green dot), independent
-of its checkbox. A file that is not analysed, unreadable, or a workbook without a real table has no button: a
-`.csv` or `.xlsx` left in the Documents Folder is listed but not analysed, so it cannot be opened from there;
-the Tables Folder is where tables belong. Only analysed files open because an Analyse renames files to clean
+**How a file is opened.** Each row of the two lists in the sidebar (the Documents list and the Tables list)
+has an **Ouvrir** button, only on an analysed file (`isOpenable`, the green dot), independent of its checkbox,
+**wherever the file sits** (explorer step 9, 21 October 2026): a workbook found in the Documents folder or a document
+found in the Data folder opens like any other, once its family's pass has read it there. A file that is not analysed
+or is unreadable has no button (but keeps **Voir**). The tab is keyed by the **physical folder** (`entry.root`) and the
+plain path, never by the family, and the viewer reads the file through the command of that folder; the renderer is
+chosen by the extension. The viewer guard compares a tab with the inventory of its own folder, which joins a file to
+what its own family made of it, so a foreign file is judged by its own state. Only analysed files open because an Analyse renames files to clean
 names, so a path known before it can change after it. `WorkspaceView` carries
 `{ kind: "files", tabs: OpenFile[], activeId }` (each `OpenFile` is `{ id, folder, record }`: the whole record, with
 the folder it is relative to). Every opening goes through one function in `App`, `openFile(folder, record)`, which
@@ -130,7 +141,7 @@ adds a tab or activates the one that exists (see "Tabs" below). The centre shows
 file's relative path) and the content; closing the last tab collapses the zone. The title-bar button and dragging
 the centre closed only **hide** it: the tabs stay open, nothing is closed, and the button (or opening any file)
 shows them again, each tab coming back as it was left (the viewers are unmounted while hidden and restored from the
-tab's remembered view). With nothing open, the button shows the welcome view.
+tab's remembered view). With nothing open, the button shows the Overview.
 
 **Tabs.** Several files can be open at once, one tab each (`src/components/viewer/TabStrip.tsx`, pure logic in
 `src/lib/viewerTabs.ts`). A tab's identity is the folder plus the relative path (`tabId`, joined by a NUL
@@ -181,6 +192,15 @@ its text (the alt text for an image), so the preview can neither navigate the wi
 fed the same bounded text as the raw view (`prepareViewerText`: same decoding, same 500 000-character limit, same
 notice), from the bytes already read, and sits in its own scroll container. `Markdown.tsx` is unchanged.
 
+**The sheet viewer at a fractional display scale (21 October 2026).** `shrimp-doc-viewer` draws a sheet on a canvas
+sized to the scrolling element's `clientWidth` x `clientHeight`, which are whole numbers. At a Windows scale of 125 %
+the real box is fractional, so the canvas overflowed by a fraction of a pixel: a bar appeared, the box shrank, the
+library redrew the canvas smaller, the bar went, and the loop never stopped (the bars flickered, only on the 125 %
+screen, only at zooms where the sheet fits). `styles.css` now clamps that one canvas to its containing block
+(`.viewer__host > div:not(:first-child) > canvas[style*="will-change"]`, `max-width` and `max-height` 100 %). Only the
+sheet canvas carries `will-change`; a large sheet still scrolls. Measured on a replica of the library's own DOM and
+resize loop in Edge: 17 of 40 sizes flickered at 125 %, none at 100 %, none after the rule.
+
 **Text read by the assistant (`eml`, `srt`, `vtt`).** These three also give `["raw", "preview"]`
 (`previewKind(extension)`: `markdown` for `md`, `readable` for them), and the second button is named for what it
 shows: **Texte lu par l'assistant** instead of **Aperçu**, so it cannot be taken for the original. Raw stays the default and
@@ -229,6 +249,222 @@ back to one sans font; Chinese, Cyrillic, Arabic and every script outside the La
 binary formats (`doc xls ppt`) are not shown and not converted. An EML shows its raw source, bodies still
 encoded. The PPTX renderer puts one letter per line on the tested files, and the XLSX one truncates long values
 in narrow columns (`10/1/202`): both are the library's, not the application's.
+
+### The left panel: one file explorer (explorer programme, step 2, 19 October 2026)
+
+The two folder cards of the sidebar are replaced by one compact box, `FileExplorer`
+(`src/components/FileExplorer.tsx`). The two physical folders and the two analysis pipelines are unchanged; only
+the way they are shown is. Decisions: `docs/DECISIONS.md`, "Settled by the owner: the left panel becomes one file
+explorer" and "... the explorer's layout, first start, progress and centre". Plan: `docs/SESSION-EXPLORER/` (git-ignored).
+
+- **Two families, sorted by extension** (`lib/explorerModel.ts`, `familyOf`): **Documents** (`pdf docx txt md jpg jpeg
+  png vtt srt rtf eml odt odp pptx`, the document pipeline's list) and **Tables** (`csv xlsx xls xlsm ods`). A file no
+  pipeline reads is set apart and **not listed**: the bottom bar says how many there are. No new inventory command: the box
+  merges the two existing reports (`work_folder_inventory`, `data_folder_inventory`), which already list every file
+  of their folder (`docs/WORK-FOLDER-INVENTORY.md`, "The merged view").
+- **One definition of the states for the screen:** analysed (filled disc), to analyse (hollow ring: not analysed yet,
+  **or changed since**, or being analysed), unreadable (triangle). The shape carries the state, the colour repeats it, and
+  every glyph has a text for screen readers (`StateGlyph`, a small SVG component; no emoji, no text character).
+- **A file of the other family** (a workbook in the Documents folder, a document in the Data folder) is shown under its
+  family with a tag « depuis Docs » / « depuis Data », in its real state (to analyse until its family's pass has read it
+  there, then analysed or unreadable), and is **counted** by its family's **Analyser (n)**, which reads it in place
+  (explorer step 8). Once analysed it can be ticked, **opened** (Ouvrir) and **shown** (Voir) exactly like any other file
+  (explorer step 9): the actions go to the folder the file really sits in (`entry.root`, `entry.path`), and Voir is offered
+  for every file, whatever its state or its folder. The search, the facts and
+  the selection are by family and place each file by the folder its key names (`lib/indexKey.ts`).
+- **Any two folders (explorer step 8B, 21 October 2026).** The Documents folder and the Tables folder can be separate (the
+  suggested default), **the same folder**, a Tables folder **inside** the Documents folder, or the reverse: choosing one
+  is never refused (« ⋯ » then « Changer de dossier »). A file reachable from both is listed **once**, with the same
+  state in both listings, and the tag « depuis … » shows only on a file really outside its family's folder, so never
+  in the same-folder layout. Counters, the typed search, « Select. auto » and the saved views count and place each
+  physical file once. After a change of folder the new family's files are « À analyser » until its **Analyser** has run;
+  that pass forgets what the old folder left and reads the files natively. Rule: `docs/WORK-FOLDER-INVENTORY.md`, "The
+  key of a file".
+- **Per family:** a two-line header (the family's folder icon, its name, the three counters; **Analyser (n)**; a fold
+  button), the analysis gauge while a pass runs (below), and
+  a flat list with **its own scroll bar**. A click anywhere on a tickable row ticks it (`rowClickTicks`). **« Mes notes (N) »** (under the segmented control, only while the Notes folder holds a file) is a one-click origin-folder choice; while a text search is active the lists follow the finder's ranking, not the alphabet (`listSort`). The folder's short name (« …\Docs ») sits in grey after the family's name and gives way first; the whole path is the header's tooltip. The long text of a pass is **not** in the
+  box any more (step 6): after a pass the box keeps its one end-of-pass line and, on its own line under it, **« Voir le
+  rapport »**, which opens the centre on the Overview; the lines themselves are built by `lib/overviewModel.ts` (`lib/passSummary.ts` keeps only the sentences of the
+  capability codes). Choosing, changing and clearing a folder are in the
+  box itself since step 4 (below); the Settings panel draws the same family sections since step 10 (below).
+- **The gauge (step 5).** While a family's pass runs, **Analyser** is replaced by `AnalysisGauge`: a spinner, « Lecture 45 % »
+  then « Sens 63 % » (« Noms n % » while the stored documents are read again for new names), a fill that follows the
+  percentage and a square **Stop** of its own. It is not a disabled button (the text stays at full contrast) and is a
+  `role="status"`. The « ⋯ » menu is absent, the fold button stays. **Each family stops on its own**: the Documents pass and the
+  Tables pass can run together, and `cancel_analysis(domain)` raises only that family's flag. Under the header, one line
+  (`lib/analysisLines.ts`): « Étape 1 sur 2 · Lecture des documents · 761 / 1 245 · 3 min 48 s écoulées · environ 2 min
+  restantes », the stage and the counts first and the times last, so that an ellipsis cuts the times first (the whole line is
+  the tooltip); the Tables pass has one stage and names no step; stage 2 adds « La recherche par mots fonctionne déjà. ». A thin
+  2 px line under the header (`PROGRESS_HAIRLINE` in `ExplorerFamilySection.tsx`) fills with the stage's percentage. When the pass
+  ends the same place says « Terminé · 1 245 analysés, 3 illisibles · 6 min 49 s », or « Analyse arrêtée · 3 min 48 s · ce qui
+  est lu est conservé »; « Voir le rapport » comes with step 6. The numbers come from `lib/analysisProgress.ts` (pure: the clock
+  is an input): the remaining time is shown only after 10 % of the stage and 8 s in it, from the **recent rate** (the last 15 s of
+  messages, at least two), smoothed (30 % of each new estimate of the finishing moment), and it is the time left **in the stage
+  being run**. `useIndexing` keeps the trace and the pass's duration; `useNow` ticks once a second only while a pass runs. A pass
+  started from the Notes section shows the same gauge. The Settings panel's folder sections show the same gauge and Stop (step 10).
+- **Height budget** (`lib/explorerWindow.ts`): both lists open, six rows each; one open, twelve; both folded, the headers
+  alone. A short list is not padded. Rows have a **fixed height** (24 px `compact`, 32 px `comfortable`), so a **hand-written
+  window** draws only the rows in view plus four above and below, the rest being padding: a thousand files are about
+  a dozen rows. Keyboard: the scroll area takes the focus when it scrolls, and the arrow keys scroll it; Tab walks the rows drawn.
+- **Remembered across launches** (settings file, `settings.json`, key `explorer`): `density` (`compact` default, `comfortable`),
+  `documentsFolded`, `tablesFolded` (open by default). Rust reads each field **leniently** (`ExplorerSettings`, a corrupted
+  value is the default, the file never becomes unreadable); the density is chosen in the **Settings panel**, never in the box.
+  The folds are written through `saveExplorer`, in the settings queue.
+- **Search and selection.** One field. The finder works per folder, so the same text is asked of each and the two answers
+  are joined by `(folder, path)`; a search that fails shows everything and says so. The search only filters the view and
+  never changes the selection. The segmented control **Tout / Documents / Tableaux** filters the lists and shows counts
+  (computed on the search results). The **bottom bar** says « Utilisés : n doc. · n tab. », offers **Cocher les N** (adds the
+  analysed files the view shows, both folders, with `addScopeFiles` through the existing rules) and **Décocher**, and a
+  second line only when there is something to say (nothing used, a whole family used, files of unread formats). The scope
+  state (`scope`, `dataScope`, `combineScopes`) and the chat contract are unchanged.
+- **The filter panel (explorer step 3, 20 October 2026).** The « Filtres » button opens a panel **in the flow of the box**, under the
+  search line (the box clips what overflows it, and nothing may be drawn below the box). It closes on Escape (the focus returns to the
+  button), on « Terminé » (same) and on a click outside it (the focus stays where the click put it). It has **no scroll area**: the
+  format pills wrap. **Format** and **state** are pills with the number of files each leaves; the **origin folder** is a typed field
+  that offers **at most five** suggestions (the folders, each ancestor included, with the files in it or under it) **only while it
+  has the focus**, then « N autres : tapez pour affiner ». The segmented control stays outside. The choices in force appear as
+  **removable pills** under the segmented control (a « Tout effacer » link from two), and as a badge on the button. A filter only
+  narrows the view; it never changes the selection, and « Cocher les N » ticks what all the filters show. The numbers beside every
+  choice, and the segmented control's, are counted over what **all the other filters** leave (the choice's own kind left out); a
+  choice that would empty the list says 0. Rules and code: `lib/explorerFilters.ts` (pure, tested), `ExplorerFilter` in
+  `lib/explorerModel.ts` (the filter type, with the origin folder), `components/ExplorerFilterPanel.tsx`,
+  `components/ExplorerActivePills.tsx`. The two roots can hold a folder of the same name: a choice is identified by root and folder,
+  and says its root (« 2025 (Docs) ») only when both hold that name.
+- **A typed extension and the reasons of the hits.** The finder's answer now echoes the extensions it took out of the text
+  (`FinderResult.typedFormats`, set by `find_files` from `finder::typed`): the matching format pill is lit and pressing it takes the
+  extension out of the text. A typed extension **narrows** like any other filter (see `docs/DECISIONS.md`, « the explorer's filter
+  panel »). With a text search, each row shows beside its name **why it was found** (« dans le nom », « dans le contenu », « dans une
+  cellule »...), the first reason in the row and all of them in its tooltip, from `FinderHit.reasons`, which the paths-only request
+  already carries.
+- **The three situations of the box (explorer step 4, 20 October 2026).** `lib/explorerStates.ts` (pure, tested) decides from
+  the two inventories and the settings: a family's folder is `none` (not chosen), `empty` (chosen, its inventory read, no file
+  in the folder and none listed under the family) or `filled` (anything else, **including a folder not read yet or whose read
+  failed**, so the box never flashes « empty »); the box is `firstStart` (both `none`), `empty` (no family `filled`) or `use`.
+  While the box is not in use the search field and « Filtres » are disabled, and the segmented control and the bottom bar are
+  not drawn: there is nothing to search or to select.
+  - **First start**: a « Pour commencer » block (three steps, and « Créer les deux dossiers suggérés », which makes the two
+    suggested folders one after the other and keeps the first if the second fails; the failure is said). Each family without a
+    folder is a setup block (`ExplorerFamilySetup`): the type line (« Documents : PDF, DOCX, ODT… »), the suggested folder in its
+    short form (the whole path and the reason it sits outside the user's own Documents are the **tooltip only**), and « Créer et
+    utiliser » beside « Choisir un dossier ». A family alone without a folder (the other one is chosen) shows its setup block
+    only, without the steps.
+  - **Folder created, still empty**: the family's header says the formats it reads in place of the counters, **Analyser** is
+    greyed with a tooltip, and the body is « Vide. Déposez-y vos fichiers. » with « Voir le dossier » (the existing reveal
+    command) and « Changer ». The box re-reads the folder when the window gets the focus back (existing behaviour).
+  - **The « ⋯ » menu** (`ExplorerFamilyMenu`): « Voir le dossier », « Changer de dossier », « Effacer l'analyse » (the confirmation
+    dialog `ExplorerClearDialog`, shared with the Settings panel, its button says « Effacer l'analyse »). It opens in **fixed coordinates**
+    (`lib/explorerMenu.ts`: under the button, above it when there is no room), because the box clips its overflow; it closes on a
+    click elsewhere, on Escape (focus back to the button), on Tab, and on a resize or a scroll; the arrows, Home and End move
+    between the entries. It is **not drawn while that family is being analysed**. The folder actions live in
+    `state/useExplorerFolders.ts` (the folder commands, the same guard for the Documents folder, shared with the Settings panel).
+- **The filter is held by `App`** (step 6): `ExplorerView { family, choices }` (`lib/explorerView.ts`) is the segmented
+  control's family and the filter panel's three sets, passed to the box as `view` / `onViewChange`, so the Overview's link sets
+  exactly what the panel sets. The typed search stays in the box (`searchClears` asks it to empty). The box reports what the
+  Overview needs from its inventories (`ExplorerFacts`: the merged entries, the situation of each folder, the share of the meaning
+  search, the profile note) through `onFacts`.
+- **Knowledge-base filters, views and « Select. auto »** (step 7, 21 October 2026): see the next section.
+
+### The knowledge-base filters, the views and « Select. auto » (explorer step 7, 21 October 2026)
+
+- **Filters.** The « Filtres » panel gains four blocks, drawn between the states and the origin folder: **Type de document** (chips,
+  labelled from the catalogue key `businessType.<code>`; a type the build has no word for keeps its code), **Année** (chips,
+  newest first), **Personnes** and **Organisations** (typed fields: at most five suggestions, the most frequent first, only while
+  the field has the focus, « N autres : tapez pour affiner », no scroll bar). A chosen name is a chip; when it is linked to the
+  files in two or more labelled roles it gets the **role step**: « Tous les rôles » then one chip per role with its count (author,
+  subject, recipient, sender, issuer, « Cité »; a name met in the text with no role is not a role). Counts follow the step 3 rule:
+  over what **all the other filters** leave, the kind's own choices left out; a chosen name or type the files no longer carry stays
+  listed with 0 (a name the base no longer knows says « Nom introuvable »). The choices of one kind combine as « this or that », the
+  kinds as « this and that », and everything combines with the family, the typed text and the other filters.
+- **One read, no call per filter change.** `file_knowledge_facts(domain)` (Rust, `finder/facts.rs`) returns once per folder, for
+  every analysed file, its business type, its years and its people and organisations with their roles, plus the names of those
+  entities. `lib/explorerFacts.ts` attaches them to the entries (`ExplorerEntry.facts`), and **every count and every filter is worked
+  out in TypeScript** (`filterEntries`, `typeChoices`, `yearChoices`, `entityOptions`, `suggestEntities`). It is read only when
+  something needs it (the panel open, the « Vues » side, or a choice of the knowledge base in force), again after each pass and each
+  time the panel opens, and never at launch (`state/useKnowledgeFacts.ts`). A person is a person and an organisation an
+  organisation whatever packs are active: the type comes from the base. The engine facets were **not** used: they are counted
+  over one result (the kind's own choices cannot be left out) and list ten entities at most.
+- **Pills.** Each choice is a pill (`ActivePill` kinds `person`, `organisation`, `type`, `year`, plus `conversation` and `recent`);
+  a person pill reads « Name · Role »; a folder that no longer exists says « (introuvable) ».
+- **Vues.** The switch « Fichiers | Vues » of the header is enabled. « Vues » shows the three views of the application (**Récents**:
+  newest first; **À analyser**: the state filter; **Dans la conversation**: only the files the conversation uses now), the user's
+  own (open, rename, delete with a confirmation) and the form « Enregistrer les filtres actuels » (name unique ignoring case and
+  accents, at most 60 characters, at most 50 views, nothing to save without a filter). A view stores **filters only** (the family and
+  the panel's choices; never a file, a selection or the typed text), in `settings.json` under `explorerViews` (`SavedView` in
+  `settings.rs`, read leniently entry by entry); a person or an organisation is kept **by id, never by name**. Opening a view
+  replaces the filters through `onViewChange` and goes back to « Fichiers »; it **never touches the selection, the lists' folds or
+  the typed text** (the text keeps narrowing; it stays visible in the field). A view or a filter that names someone the files no
+  longer link to says so (« Un nom de ce filtre ne figure plus dans vos fichiers. ») instead of showing nothing.
+- **« Select. auto ».** A `role="switch"` under the search line with its hint; off by default and at every launch (nothing is
+  stored). Pure rules in `lib/autoSelect.ts`, held by `state/useAutoSelect.ts`; see `docs/SELECTION-AND-MEMORY.md`, « Automatic
+  selection ». The bottom bar always says « Mode : automatique (suit les filtres) » or « Mode : manuel », shows
+  « Rétablir la sélection précédente (n) » while a snapshot exists, says how many results cannot be ticked, and « Cocher les N
+  résultats » is hidden while the switch is on.
+- **Not built:** a per-person automatic view, a « Tout analyser » button, any change to how entities are extracted.
+
+### The overview of the centre (explorer step 6, 20 October 2026)
+
+The **Aperçu** section is a page that each analysis updates; it is never opened by force (a finished pass changes what it says,
+nothing more). Rules and code: `lib/overviewModel.ts` (pure, tested: the inventories and the two passes' summaries in, an ordered
+list of blocks out), `components/OverviewPage.tsx` (draws the blocks through the catalogues; its own page scroll is the only
+scroll bar), `lib/centreSection.ts` (the section and when the zone is open).
+
+- **Four phases.** No folder at all: the first-start guidance, pointing at the left. Folders chosen, nothing analysed in either:
+  the three steps (folders chosen, files found, « Appuyez sur Analyser » with one sentence on what the analysis does) and a card per
+  family (what it reads, how many files wait). Otherwise the report: per family the three counters, the date and length of the last
+  pass of this session (« Analysé avant cette session. » when none ran), the meaning-search share and the profile note; then
+  **À vérifier**, the files dropped from the index because they left the folder (a count), the cleaned names **in full**, the files read by text recognition, the unread formats, the knowledge-base lines with
+  « Gérer », the capabilities that did not start, and where the time went.
+- **À vérifier** lists the unreadable files of their own folder and the files the last pass could not read (a pass retries those,
+  so the inventory still shows them as to analyse), with the reason from the error catalogue (or « Aucun texte lisible. », « Trop peu
+  lisible pour être indexé. », « La reconnaissance de texte n'a trouvé aucun texte lisible. », « Aucun texte trouvé dans ce fichier. », « Aucun tableau exploitable. »; the index alone gives the last four, so no pass is needed), the first twenty and a count of the rest. **Voir** shows the file in
+  the file manager, wherever the file sits (explorer step 9); **Ouvrir** appears only where the explorer's own rows open a file
+  (analysed, wherever it sits), so it is not there for an unreadable one. « Afficher les N dans la liste de gauche » sets the explorer's state filter to
+  unreadable for both families, empties the typed search and unfolds the folded lists that hold some of those files; N is what that filter shows. Each family's block shows its folder's **whole path**.
+- **The unread formats are text, not filters:** a file no pipeline reads is not an entry of the explorer, so a chip cannot filter the
+  list (its tooltip says so).
+- The report is held for the session, like the summaries it comes from; a new pass clears its family's report while it runs.
+
+### The Settings panel's folder sections (explorer step 10, 21 October 2026)
+
+The Settings panel no longer draws the two old folder cards (`WorkFolderCard`, `DataFolderCard`) or anything only they used
+(`FinderControls`, the `AnalysisProgress` bar, `FileList`, `SelectAll`, `StatusDot`, `WarningGlyph`, `documentPassLines`,
+`dataPassLines`, `unreadFormatsLines`, the `workFolder.*` / `dataFolder.*` catalogue keys of the cards, their CSS). It draws
+`FolderSettings` (`components/FolderSettings.tsx`): the sidebar's `ExplorerFamilySection` / `ExplorerFamilySetup` for each
+family, in their **non-selectable mode**, so the two places share one implementation.
+
+- **Same sources.** `state/useFamilyInventories.ts` (the two inventories, merged under their families, read again after any
+  pass or clear: `lib/inventoryRefresh.ts`), `state/useExplorerFolders.ts` (choose, make the suggested folder, show, clear),
+  the two `IndexingState` of `App`, `state/useNow.ts` and `state/useProfileStatus.ts`. Choosing a folder goes through the same
+  guarded callbacks of `App` as the sidebar's.
+- **What the sections have.** The folder choice (or the suggested folder), the header with its three counters and **the folder's
+  whole path**, **Analyser** and its gauge with Stop, the « ⋯ » menu (Voir le dossier, Changer de dossier, Effacer l'analyse), the
+  end-of-pass line with **Voir le rapport** (it closes the panel and opens the centre on the Overview), and the list of the family's
+  files (`detailed` mode of `ExplorerFamilySection`): each row shows the file's **whole path relative to the folder it sits in** (the
+  folders in grey, then the name and the extension badge), the tag « depuis Docs » / « depuis Data » of a file that sits in the other
+  family's folder (never cut), and **Voir** on the right. Sorted by path (folder by folder), twelve rows at a time inside the list's own
+  scroll bar (`SETTINGS_LIST_ROWS`, `components/FolderSettings.tsx`).
+- **The panel is as wide as the knowledge dialog** (`dialog dialog--wide`, 78 em at most) and uses all of it: a grid of two columns
+  (`.settings-grid`, one column under 1000 px of window), left then right, with a whole row (`settings-wide`) for a section title, a
+  folder, a message or the voice credits. Rows are `max-content`, never squeezed (a box with a long list in it was overlapped by what
+  followed). A row without a checkbox has its own column layout (`explorer-row--plain`).
+- **Four sections, each with its title, in this order** (`components/SettingsDialog.tsx`, `SpeechSettings.tsx`; the pairs are
+  left | right): **Section principale** (Apparence | Densité de la liste de fichiers; Langue | Adresse de l'IA; Profil de modèle | Temps
+  d'attente; **Dossier des Documents** and **Dossier des Tableaux**, a whole row each; Dossier des courriers générés | Copier aussi les
+  sources des réponses; Masquer les noms dans les suggestions), **Base de connaissances** (Ciblage intelligent | Gérer les
+  connaissances; Module santé | Module juridique, announced), **Gestion de la voix** (Utiliser la voix | Notes vocales; Nom du dossier
+  des notes | Commandes vocales dans les notes; Dictée dans la conversation | Modèle de reconnaissance vocale; the two longest
+  dictations; Lire les réponses à voix haute | Langue de la voix; Moteur de lecture | Voix de lecture; Voix installées sur cet
+  ordinateur | Vitesse de lecture; the credits, a whole row, the only disclosure of the section), then **Avancé** (a disclosure: the
+  thresholds of the narrowing, the timing log, the diagnostics) and **Disposition et réinitialisation** (restore the layout | reset the
+  settings, then the place of `settings.json`). Not in the panel: `embeddingAlias` (follows the server), `ownNames` (edited in
+  `settings.json`), `explorerViews` (kept by the explorer's views).
+- **The list sizes are in `src/config/layout.ts`**: `SETTINGS_LIST_ROWS` (the Settings lists), `ROWS_BOTH_OPEN` and `ROWS_ONE_OPEN` (the
+  sidebar's box).
+- **What they do not have.** No checkbox and no tick by clicking a row, no search field, no filter, no segmented control, no
+  bottom bar, no fold button, no **Ouvrir** (a file is opened from the sidebar; the panel stays a place for settings). The section
+  is non-selectable when `onToggleTick` is not given; `onToggleOpen`, `onOpenFile` and `onOpenReport` are optional in the same way.
+- **The sidebar follows.** Clearing an analysis from the panel tells `App` (`onFolderCleared`), which counts up the box's refresh
+  token, so the box reads its folders again at once; a pass started from either place is the same pass (`useIndexing`).
 
 ## The work folder
 
@@ -290,17 +526,15 @@ exists so CSV/XLSX files never share a directory with PDF/DOCX/scans, and it fee
 tabular engine (`tabular::engine`, `docs/ARCHITECTURE.md`'s "Tabular analysis" row) instead.
 **Unlike the documents folder, it is never required**: the conversation works without one.
 
-Its card is the documents folder card, cloned (tabular UI session, 28 September 2026): one
-component, `DataFolderCard`, in the sidebar and again in the settings panel, built from the same
-parts as `WorkFolderCard` (`components/FolderCardParts.tsx`) — the same buttons (Voir, Changer,
-Reset, **Analyser**), the same summary line ("X fichiers, Y analysés, Z illisibles"), the same dots,
-and, in the sidebar, the same selection list ("Données utilisées : aucune ⚠ / N fichiers /
-toutes ⚠").
+Its section is the Documents one, cloned (tabular UI session, 28 September 2026; since explorer step 10 the two
+folders are drawn by one component, `ExplorerFamilySection`, in the sidebar and again in the Settings panel): the same
+buttons (Voir le dossier, Changer de dossier, Effacer l'analyse in the « ⋯ » menu, **Analyser**), the same counters
+(analysed, to analyse, unreadable) and the same state glyphs.
 
 - **Analyser** (`index_data_folder`) cleans file names exactly as the documents pass does (same
   rule, same `renamed-files.jsonl`), then parses every CSV/XLS/XLSX/XLSM file on this computer and
   caches its `TabularInventory`. No embedding and no gateway call, so it is over in a moment; the
-  line under the card says so, because an Analyse that finishes before the spinner is seen would
+  line under the header says so, because an Analyse that finishes before the spinner is seen would
   otherwise read as a button that did nothing.
 - **Three states per file**, computed by `data_folder::DataFolder` from the filesystem
   (`WorkFolderInventory`, unchanged, built with no index) joined with the cached inventories
@@ -312,7 +546,7 @@ toutes ⚠").
   returns to "aucune", never to "toutes". Changing the data folder resets the data selection; the
   next Analyse drops the inventories of files no longer present.
 - **Reset** (`reset_data_index`) forgets the workbook analyses only. The documents index is never
-  touched by it, nor the workbooks by the documents card's Reset.
+  touched by it, nor the workbooks by the Documents folder's Effacer l'analyse.
 
 A conversation with workbooks selected and no document is answered by the tabular engine alone —
 tier 2 of the grounding priority chain (`docs/SELECTION-AND-MEMORY.md`): a computed value or a
@@ -384,14 +618,15 @@ Not built yet; this is what the phases will build, so that the layout rules abov
 
 - **Notes: a section of the centre, not a kind of view.** A title-bar button beside Settings (its own switch `notesEnabled`, on by
   default, independent of the voice master switch) opens the centre on the **Notes** section, or hides the zone when it is already
-  there. A two-position switch **Files | Notes** (role `tablist`) sits at the top of the centre zone and is shown only while
-  `notesEnabled` is on; with it off the centre renders exactly as today. The file tabs are kept and `WorkspaceView` is not
-  changed: `App` holds the section (`"files" | "notes"`) and the drafts, and passes `AppLayout` a value derived from both, in one
+  there. A switch **Aperçu · Fichiers · Notes** (role `tablist`) sits at the top of the centre zone and is drawn whenever the
+  zone is open since the overview (step 6); `Notes` is in it only while `notesEnabled` is on. The file tabs are kept and
+  `WorkspaceView` is not changed: `App` holds the section (`"overview" | "files" | "notes"`) and the drafts, and passes `AppLayout` a value derived from both, in one
   pure function, so that the rule "the centre is visible exactly while there is something to show" keeps working while a note holds
   a draft or a recording. Both sections stay mounted while the zone is open (the inactive one is hidden), so open file tabs keep
   their scroll, zoom and sheet while she writes, and an unsaved note and a recording in progress survive a switch. Opening a file
   from a list shows the Files section. A red dot marks the Notes segment while recording. The welcome view is the empty state of the
-  Files section.
+  Files section (« Aucun fichier n'est ouvert. »). A note saved from here starts the application's own Analyse; its report is read
+  in the Overview like any other, and the zone is not opened for it.
 - **The Notes pane.** The text fills the pane and is editable, with the viewer's Raw / Preview switch (Markdown rendered by the
   application's own component); a dark pill button centred at the bottom (microphone at rest, an animated waveform driven by the input
   level while recording, "click again to finish"); under the text, a save block (a name field whose placeholder shows the timestamp,

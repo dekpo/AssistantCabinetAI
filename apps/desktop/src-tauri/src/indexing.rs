@@ -16,7 +16,6 @@ use crate::cleaning;
 use crate::discovery::{self, DiscoveredFile};
 use crate::error::AppError;
 use crate::extraction::{self, ExtractionError, PageOrigin};
-use crate::file_key::Root;
 use crate::file_profile::build::Domain;
 use crate::gateway::GatewayClient;
 use crate::index_store::{self, IndexStore};
@@ -407,20 +406,9 @@ pub async fn run_cancellable(
     let ocr: Option<&dyn OcrProvider> = timed_ocr.as_ref().map(|engine| engine as &dyn OcrProvider);
     let everything = discovery::discover_all(work_folder);
     let unread_formats = unread_formats(&everything);
-    let mut files: Vec<DiscoveredFile> = everything
-        .into_iter()
-        .filter(|file| discovery::is_supported(&file.extension))
-        .collect();
-    // The documents found in the other folder are read where they sit, under their own key
-    // (`file_key`): the family decides who reads a file, not the folder it is in.
-    if let Some(foreign) = foreign_root {
-        files.extend(discovery::discover_foreign(
-            foreign,
-            Root::Data,
-            Domain::Documents,
-        ));
-        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
-    }
+    // The documents of both folders, each under its key by the one rule (`file_key`) and a file reachable
+    // from both listed once: the family decides who reads a file, not the folder it is in.
+    let files = discovery::discover_family(work_folder, foreign_root, Domain::Documents);
     // Before reading anything: a document she deleted must stop being citable, and that is true
     // whether or not the rest of the pass succeeds. Keyed on the same walk the pass itself uses,
     // so the index and the folder panel cannot disagree about what is there.

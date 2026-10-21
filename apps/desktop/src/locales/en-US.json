@@ -803,7 +803,6 @@
     "no_work_folder_set": "Choose a documents folder before asking a question about your documents.",
     "no_data_folder_set": "Choose the tables folder first, in the left-hand panel.",
     "data_folder_no_longer_allowed": "Your tables folder no longer meets the safety rules, most often because a cloud service now copies it. Choose it again.",
-    "folders_overlap": "The documents folder and the tables folder must be two separate folders: neither can be the other, or inside the other. Choose another folder.",
     "invalid_request": "The AI refused the request because it was malformed. Please report it.",
     "model_alias_not_allowed": "The profile {requested} is not offered by this AI. Choose another one in the settings.",
     "ocr_failed": "This page could not be read by recognition ({path}, page {page}).",

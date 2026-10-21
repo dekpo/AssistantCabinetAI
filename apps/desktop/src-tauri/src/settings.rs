@@ -570,13 +570,6 @@ pub fn save(
         Some(chosen) if chosen.trim().is_empty() => None,
         Some(chosen) => Some(display(&policy.validate(Path::new(chosen))?)),
     };
-    // Two places, never one inside the other: a file reachable from both would have two keys.
-    if let (Some(documents), Some(data)) = (&checked.work_folder, &checked.data_folder) {
-        if crate::work_folder::folders_overlap(Path::new(documents), Path::new(data)) {
-            return Err(AppError::FoldersOverlap);
-        }
-    }
-
     let path = settings_path(app)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| AppError::SettingsWriteFailed)?;

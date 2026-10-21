@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::file_profile::build::Domain;
 use crate::file_record::FileKind;
+use crate::work_folder::components_for_comparison;
 
 /// The physical folder a file sits in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -88,6 +89,68 @@ pub fn index_key(root: Root, family: Domain, path: &str) -> String {
     }
 }
 
+/// What is left of `path` once the folder `base` is taken off, as plain names joined by forward
+/// slashes. `None` when `path` is not under `base` (compared by components, with the platform's case
+/// rule: `C:\Docs` is not `C:\Docs2`), is `base` itself, or would climb out of it.
+fn inside(base: &Path, path: &Path) -> Option<String> {
+    let base_parts = components_for_comparison(base);
+    let path_parts = components_for_comparison(path);
+    if base_parts.len() >= path_parts.len() || path_parts[..base_parts.len()] != base_parts[..] {
+        return None;
+    }
+    let mut names = Vec::new();
+    for component in path.components().skip(base_parts.len()) {
+        match component {
+            Component::Normal(name) => names.push(name.to_string_lossy().to_string()),
+            _ => return None,
+        }
+    }
+    Some(names.join("/"))
+}
+
+/// The one rule that decides the key of a file, from its **absolute path** and the folder of its own
+/// family (`own`) and the other one (`other`), each when chosen (`docs/DECISIONS.md`, "any two folders,
+/// never a duplicate"):
+///
+/// 1. under `own`: the path inside it, a plain key;
+/// 2. else under `other`: `/<root of other>/<path inside other>`;
+/// 3. under neither: `None`, the file is not read.
+///
+/// A file lying under both folders (equal or nested folders) takes rule 1: its own family's folder wins,
+/// so a physical file can never have two keys. Everything that gives a file a key calls this.
+pub fn key_under(
+    family: Domain,
+    own: Option<&Path>,
+    other: Option<&Path>,
+    absolute: &Path,
+) -> Option<String> {
+    if let Some(path) = own.and_then(|own| inside(own, absolute)) {
+        return Some(path);
+    }
+    let path = inside(other?, absolute)?;
+    Some(index_key(home_root(family).other(), family, &path))
+}
+
+/// [`key_under`] with the two folders given by what they are, the Documents folder and the Data folder.
+pub fn key_for(
+    family: Domain,
+    documents: Option<&Path>,
+    data: Option<&Path>,
+    absolute: &Path,
+) -> Option<String> {
+    match home_root(family) {
+        Root::Documents => key_under(family, documents, data, absolute),
+        Root::Data => key_under(family, data, documents, absolute),
+    }
+}
+
+/// What makes two paths the same physical file, however they were reached: the components, with the
+/// platform's case rule. The belt and braces of every list of files: a list is de-duplicated on this
+/// before any key is written, so a mistake in the rule could not store a file twice.
+pub fn physical_identity(path: &Path) -> String {
+    components_for_comparison(path).join("\u{0}")
+}
+
 /// The root and the path inside it that a key of `family` stands for. `None` for a key that starts
 /// with a slash but names no root or no path: such a key is never produced here and is refused.
 pub fn parse_key(family: Domain, key: &str) -> Option<(Root, &str)> {
@@ -135,9 +198,9 @@ impl<'a> FamilyRoots<'a> {
         }
     }
 
-    /// The key of a file of this family found in `root`.
-    pub fn key_in(&self, root: Root, path: &str) -> String {
-        index_key(root, self.family, path)
+    /// The key of the file at `absolute`, by the one rule (`key_under`).
+    pub fn key_of(&self, absolute: &Path) -> Option<String> {
+        key_under(self.family, Some(self.native), self.foreign, absolute)
     }
 
     /// The file a key of this family names, rebuilt from plain names only: `..`, a drive letter or an
@@ -294,6 +357,135 @@ mod tests {
         assert_eq!(roots.resolve("a/../../secret.pdf"), None);
         assert_eq!(roots.resolve(""), None);
         assert_eq!(roots.resolve("/data/"), None);
+    }
+
+    /// The key of `absolute` for `family`, the folders given as paths under a made-up parent.
+    fn key(family: Domain, documents: &str, data: &str, absolute: &str) -> Option<String> {
+        key_for(
+            family,
+            Some(Path::new(documents)),
+            Some(Path::new(data)),
+            Path::new(absolute),
+        )
+    }
+
+    #[test]
+    fn separate_folders_key_a_file_of_the_other_family_by_the_folder_it_sits_in() {
+        let (docs, data) = ("r/docs", "r/data");
+        assert_eq!(
+            key(Domain::Documents, docs, data, "r/docs/a/b.pdf").as_deref(),
+            Some("a/b.pdf")
+        );
+        assert_eq!(
+            key(Domain::Data, docs, data, "r/data/t.xlsx").as_deref(),
+            Some("t.xlsx")
+        );
+        assert_eq!(
+            key(Domain::Data, docs, data, "r/docs/x/t.xlsx").as_deref(),
+            Some("/documents/x/t.xlsx")
+        );
+        assert_eq!(
+            key(Domain::Documents, docs, data, "r/data/n.txt").as_deref(),
+            Some("/data/n.txt")
+        );
+        assert_eq!(
+            key(Domain::Documents, docs, data, "r/elsewhere/n.txt"),
+            None
+        );
+    }
+
+    #[test]
+    fn the_same_folder_has_no_foreign_key_at_all() {
+        for family in [Domain::Documents, Domain::Data] {
+            let found = key(family, "r/both", "r/both", "r/both/sub/f.ext");
+            assert_eq!(found.as_deref(), Some("sub/f.ext"));
+        }
+    }
+
+    #[test]
+    fn tables_inside_documents_key_each_file_once_and_by_its_own_family() {
+        let (docs, data) = ("r/docs", "r/docs/Tables");
+        // A workbook in the nested folder is native for the tabular family, relative to that folder.
+        assert_eq!(
+            key(Domain::Data, docs, data, "r/docs/Tables/a.xlsx").as_deref(),
+            Some("a.xlsx")
+        );
+        // A workbook elsewhere in the Documents folder is foreign to it.
+        assert_eq!(
+            key(Domain::Data, docs, data, "r/docs/b.xlsx").as_deref(),
+            Some("/documents/b.xlsx")
+        );
+        // A document in the nested folder is native for the document family, relative to the Documents folder.
+        assert_eq!(
+            key(Domain::Documents, docs, data, "r/docs/Tables/c.pdf").as_deref(),
+            Some("Tables/c.pdf")
+        );
+    }
+
+    #[test]
+    fn documents_inside_tables_key_each_file_once_and_by_its_own_family() {
+        let (docs, data) = ("r/data/Docs", "r/data");
+        assert_eq!(
+            key(Domain::Documents, docs, data, "r/data/Docs/c.pdf").as_deref(),
+            Some("c.pdf")
+        );
+        assert_eq!(
+            key(Domain::Documents, docs, data, "r/data/d.pdf").as_deref(),
+            Some("/data/d.pdf")
+        );
+        assert_eq!(
+            key(Domain::Data, docs, data, "r/data/Docs/t.xlsx").as_deref(),
+            Some("Docs/t.xlsx")
+        );
+    }
+
+    #[test]
+    fn a_folder_is_compared_by_components_never_by_prefix() {
+        assert_eq!(
+            key(Domain::Documents, "r/Docs", "r/Data", "r/Docs2/a.pdf"),
+            None
+        );
+        // Neither the folder itself nor a way out of it is a file of it.
+        assert_eq!(key(Domain::Documents, "r/Docs", "r/Data", "r/Docs"), None);
+        assert_eq!(
+            key(
+                Domain::Documents,
+                "r/Docs",
+                "r/Data",
+                "r/Docs/../Other/a.pdf"
+            ),
+            None
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_folder_that_differs_only_by_case_is_the_same_folder_on_this_platform() {
+        assert_eq!(
+            key(Domain::Documents, "R/DOCS", "R/Data", "r/docs/Tables/a.pdf").as_deref(),
+            Some("Tables/a.pdf")
+        );
+        assert_eq!(
+            physical_identity(Path::new("R/Docs/A.pdf")),
+            physical_identity(Path::new("r/docs/a.PDF"))
+        );
+    }
+
+    #[test]
+    fn a_key_is_given_by_the_family_roots_the_same_way() {
+        let roots = FamilyRoots::new(
+            Domain::Data,
+            Path::new("r/docs/Tables"),
+            Some(Path::new("r/docs")),
+        );
+        assert_eq!(
+            roots.key_of(Path::new("r/docs/Tables/a.xlsx")).as_deref(),
+            Some("a.xlsx")
+        );
+        assert_eq!(
+            roots.key_of(Path::new("r/docs/b.xlsx")).as_deref(),
+            Some("/documents/b.xlsx")
+        );
     }
 
     #[test]

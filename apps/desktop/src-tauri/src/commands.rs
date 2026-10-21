@@ -268,14 +268,6 @@ pub fn load_app_snapshot(
             warnings.push(AppError::DataFolderNoLongerAllowed.code().to_string());
         }
     }
-    // Settings written before the rule can hold two folders that overlap: the Data folder is set aside
-    // (in memory, the file is not rewritten) and the interface says why.
-    if let (Some(documents), Some(data)) = (&stored.work_folder, &stored.data_folder) {
-        if crate::work_folder::folders_overlap(Path::new(documents), Path::new(data)) {
-            stored.data_folder = None;
-            warnings.push(AppError::FoldersOverlap.code().to_string());
-        }
-    }
 
     let home = app.path().home_dir().ok();
     state.replace(stored.clone())?;
@@ -643,15 +635,18 @@ pub fn work_folder_inventory(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<InventoryReport, AppError> {
-    let work_folder = state.read(|settings| settings.work_folder.clone())?;
+    let (work_folder, data_folder) =
+        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
     let Some(work_folder) = work_folder else {
         return Err(AppError::NoWorkFolderSet);
     };
     // A folder that has never been analysed still has an inventory; it simply has no index to
-    // join onto, which is exactly what "nothing has been read yet" should look like.
+    // join onto, which is exactly what "nothing has been read yet" should look like. The Data folder
+    // is given too: it decides the key of a file the two folders share.
     let index = open_index(&app).ok();
-    let inventory = WorkFolderInventory::discover_with_cache(
+    let inventory = WorkFolderInventory::discover_alongside(
         Path::new(&work_folder),
+        data_folder.as_deref().map(Path::new),
         index.as_ref(),
         &state.file_hashes,
     )?;
@@ -819,13 +814,15 @@ pub fn data_folder_inventory(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DataFolderReport, AppError> {
-    let data_folder = state.read(|settings| settings.data_folder.clone())?;
+    let (work_folder, data_folder) =
+        state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
     let Some(data_folder) = data_folder else {
         return Err(AppError::NoDataFolderSet);
     };
     let index = open_index(&app).ok();
-    let folder = DataFolder::discover(
+    let folder = DataFolder::discover_alongside(
         Path::new(&data_folder),
+        work_folder.as_deref().map(Path::new),
         index.as_ref(),
         &state.data_file_hashes,
     )?;

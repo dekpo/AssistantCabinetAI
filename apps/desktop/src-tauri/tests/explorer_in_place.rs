@@ -172,6 +172,7 @@ async fn a_workbook_in_the_documents_folder_is_analysed_in_place_and_answers_a_t
     let (physical, _) = WorkFolderInventory::discover_in(
         Root::Documents,
         lab.work.path(),
+        Some(lab.data.path()),
         Some(&lab.index),
         &FileHashCache::new(),
     )
@@ -245,6 +246,7 @@ async fn a_document_in_the_data_folder_is_analysed_in_place_and_answers_a_docume
     let (physical, _) = WorkFolderInventory::discover_in(
         Root::Data,
         lab.data.path(),
+        Some(lab.work.path()),
         Some(&lab.index),
         &FileHashCache::new(),
     )

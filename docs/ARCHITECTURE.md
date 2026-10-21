@@ -441,7 +441,7 @@ Disk writes happen **only** inside a chosen work folder (allow-list), like a pro
 Windows profile, not the whole Documents folder, and never Open WebUI Computer. Excerpts go to the server,
 the plan is approved, deletions go to a dedicated trash folder. See `docs/CLIENT.md`.
 
-There are two such folders, the Documents folder and the Data folder (two **roots**, never equal or nested), and two
+There are two such folders, the Documents folder and the Data folder (two **roots**, any two folders: separate, the same, or one inside the other), and two
 pipelines (two **families**, chosen by extension). Each pipeline reads its family's files in both roots, in place; the
 index names a file of the other family by a key that starts with a slash. Root, family and key:
 `docs/DECISIONS.md`, "root and family", and `docs/WORK-FOLDER-INVENTORY.md`, "The key of a file".

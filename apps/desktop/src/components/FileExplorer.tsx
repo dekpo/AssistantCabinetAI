@@ -125,7 +125,6 @@ export function FileExplorer({
   suggestedDataFolder,
   onWorkFolderChosen,
   onDataFolderChosen,
-  folderError,
   indexing,
   dataIndexing,
   scope,
@@ -157,9 +156,6 @@ export function FileExplorer({
    * ask first); the Data one just saves the setting. */
   onWorkFolderChosen: (path: string) => void;
   onDataFolderChosen: (path: string) => void;
-  /** A folder just chosen was refused when the settings were saved (the two folders overlap): the box
-   * is where it was chosen, so it says so here too. */
-  folderError?: AppError | null;
   /** The documents' pass and the workbooks' pass: two folders, two passes. */
   indexing: IndexingState;
   dataIndexing: IndexingState;
@@ -911,7 +907,6 @@ export function FileExplorer({
       )}
 
       {error === null ? null : <ErrorBanner error={error} />}
-      {folderError == null ? null : <ErrorBanner error={folderError} />}
       {indexing.error === null ? null : <ErrorBanner error={indexing.error} />}
       {dataIndexing.error === null ? null : <ErrorBanner error={dataIndexing.error} />}
 

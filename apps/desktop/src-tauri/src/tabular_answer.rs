@@ -1080,9 +1080,245 @@ pub fn names_a_workbook(question: &str, data: &DataFolder, selection: &ScopeMode
         data.files().root(),
         chosen.iter().map(|each| each.record.clone()).collect(),
     );
-    FileReferenceResolver::new(&scoped)
-        .resolve_in_question(question)
-        .is_some()
+    !FileReferenceResolver::new(&scoped)
+        .resolve_all_in_question(question)
+        .is_empty()
+}
+
+/// What a question names among the workbooks, by index key (`file_key`): a workbook of the
+/// Documents folder is named like any other and carries its `/documents/<path>` key.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NamedWorkbooks {
+    /// The selected workbooks the question names, each once, in the order it writes them.
+    pub exact: Vec<String>,
+    /// A name that more than one selected workbook carries, as the user typed it, with the keys of
+    /// the workbooks it could mean. Never resolved by a guess.
+    pub ambiguous: Vec<(String, Vec<String>)>,
+    /// A name, as typed, of a workbook of the folder that exists but is not ticked.
+    pub not_selected: Vec<String>,
+}
+
+impl NamedWorkbooks {
+    pub fn is_empty(&self) -> bool {
+        self.exact.is_empty() && self.ambiguous.is_empty() && self.not_selected.is_empty()
+    }
+
+    /// Whether `file` is one the question names, or one it may mean.
+    fn covers(&self, file: &str) -> bool {
+        self.exact.iter().any(|named| named == file)
+            || self
+                .ambiguous
+                .iter()
+                .any(|(_, candidates)| candidates.iter().any(|candidate| candidate == file))
+    }
+}
+
+/// Every workbook the question names, not only whether one is: a question may cross two files
+/// ("compare the totals of A.xlsx and B.xlsx"). `selection` is what the user ticked
+/// (`scope.data_mode`), never the knowledge base's narrowed list, or a narrowing would hide a name.
+///
+/// Names are resolved against the **selected** workbooks, exactly as `pick_target` does, and a name
+/// that matches none of them is looked up in every workbook of the folder to tell a workbook that
+/// is not ticked from one that does not exist (the `FileNotSelected` logic of `pick_target`). A name
+/// that exists nowhere is not reported here: it may be a document.
+pub fn named_workbooks(question: &str, data: &DataFolder, selection: &ScopeMode) -> NamedWorkbooks {
+    let mut named = NamedWorkbooks::default();
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return named;
+    };
+    let scoped = WorkFolderInventory::from_records(
+        data.files().root(),
+        chosen.iter().map(|each| each.record.clone()).collect(),
+    );
+    for found in FileReferenceResolver::new(&scoped).resolve_all_in_question(question) {
+        let resolution = found.resolution;
+        match resolution.status {
+            ReferenceStatus::Exact => {
+                if let Some(record) = resolution.exact_match {
+                    if !named.exact.contains(&record.relative_path) {
+                        named.exact.push(record.relative_path);
+                    }
+                }
+            }
+            ReferenceStatus::MultipleMatches => named.ambiguous.push((
+                resolution.query,
+                resolution
+                    .candidates
+                    .into_iter()
+                    .map(|record| record.relative_path)
+                    .collect(),
+            )),
+            ReferenceStatus::NoMatch => {
+                if !matches!(
+                    workbook_elsewhere(data, &resolution.query),
+                    WorkbookElsewhere::Absent
+                ) && !named.not_selected.contains(&resolution.query)
+                {
+                    named.not_selected.push(resolution.query);
+                }
+            }
+        }
+    }
+    named
+}
+
+/// Why a ticked workbook is implied, as the usage trace writes it (plan 4.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImpliedReason {
+    /// Exactly one workbook is ticked.
+    ImpliedSingle,
+    /// The question talks about a table and few workbooks are ticked.
+    ImpliedByWord,
+    /// The question names a column that only this ticked workbook has.
+    ImpliedByColumn,
+    /// The knowledge base found what the question names in this workbook.
+    ImpliedByEntity,
+}
+
+impl ImpliedReason {
+    pub fn as_code(self) -> &'static str {
+        match self {
+            Self::ImpliedSingle => "implied_single",
+            Self::ImpliedByWord => "implied_by_word",
+            Self::ImpliedByColumn => "implied_by_column",
+            Self::ImpliedByEntity => "implied_by_entity",
+        }
+    }
+}
+
+/// A ticked workbook the question does not name but concerns.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ImpliedWorkbook {
+    /// The index key.
+    pub file: String,
+    pub reason: ImpliedReason,
+}
+
+/// The most workbooks an implication may bring in. A named workbook is never capped.
+pub const MAX_IMPLIED_WORKBOOKS: usize = 3;
+
+/// The ticked workbooks the question does not name but is about, cheaply and without a model
+/// (TABULAR plan 4.2). The rules are tried in this order and the first one that decides wins:
+///
+/// 1. `implied_single`: exactly one workbook is ticked. **The caller decides** whether it counts:
+///    doors 1 to 3 of `commands::sourced_answer` have their own answer and drop this reason.
+/// 2. `implied_by_word`: nothing is named, the question uses a table word of the locale pack
+///    (`question::mentions_a_table`), and at most `MAX_IMPLIED_WORKBOOKS` workbooks are ticked. With
+///    more, the word says nothing about which, so the next rules look and otherwise none is implied
+///    (the usage trace then says how many ticked workbooks were not used).
+/// 3. `implied_by_column`: the question names a column that some but not all of the ticked
+///    workbooks have and exactly one does. This is the rule `pick_target` already applies when no
+///    name is given, with the same `names_a_column`, so the card and the engine agree; with
+///    several workbooks naming the column both stay undecided.
+/// 4. `implied_by_entity`: the knowledge base found what the question names in some but not all
+///    of the ticked workbooks. `entity_candidates` is the file list of
+///    `TargetingPlan.reduction.data.candidates`, best first, whether or not the reduction was
+///    applied, and empty when the mode is `off`. The caller leaves out `kept_unread`: a workbook the
+///    base never read holds no evidence.
+///
+/// A workbook that is named, or that a name may mean, is never returned; neither is one without a
+/// usable analysis (no card can be written for it, and the trace says so). `selection` is the
+/// original `scope.data_mode`.
+pub fn implied_workbooks(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+) -> Vec<ImpliedWorkbook> {
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return Vec::new();
+    };
+    let named = named_workbooks(question, data, selection);
+    let usable: Vec<&str> = chosen
+        .iter()
+        .filter(|each| each.record.processing_status == ProcessingStatus::Indexed)
+        .map(|each| each.record.relative_path.as_str())
+        .filter(|path| data.usable_inventory(path).is_some())
+        .collect();
+    let implied = |files: Vec<&str>, reason: ImpliedReason| -> Vec<ImpliedWorkbook> {
+        files
+            .into_iter()
+            .filter(|file| !named.covers(file))
+            .take(MAX_IMPLIED_WORKBOOKS)
+            .map(|file| ImpliedWorkbook {
+                file: file.to_string(),
+                reason,
+            })
+            .collect()
+    };
+
+    // 1. Exactly one ticked.
+    if chosen.len() == 1 {
+        return implied(usable, ImpliedReason::ImpliedSingle);
+    }
+    // 2. A table word, nothing named, few ticked.
+    if named.is_empty()
+        && !usable.is_empty()
+        && usable.len() <= MAX_IMPLIED_WORKBOOKS
+        && question::mentions_a_table(question, locale)
+    {
+        return implied(usable, ImpliedReason::ImpliedByWord);
+    }
+    // 3. A column only one ticked workbook has.
+    let folded_words: std::collections::HashSet<String> =
+        name_words(question).into_iter().collect();
+    let naming: Vec<&str> = usable
+        .iter()
+        .copied()
+        .filter(|path| {
+            data.usable_inventory(path)
+                .is_some_and(|inventory| names_a_column(inventory, &folded_words))
+        })
+        .collect();
+    if naming.len() == 1 && naming.len() < usable.len() {
+        return implied(naming, ImpliedReason::ImpliedByColumn);
+    }
+    // 4. What the knowledge base found, in some but not all of them.
+    let by_entity: Vec<&str> = entity_candidates
+        .iter()
+        .map(String::as_str)
+        .filter(|candidate| usable.contains(candidate))
+        .collect();
+    if !by_entity.is_empty() && by_entity.len() < usable.len() {
+        return implied(by_entity, ImpliedReason::ImpliedByEntity);
+    }
+    Vec::new()
+}
+
+/// Whether a name the selected workbooks do not carry is still a workbook of the folder.
+enum WorkbookElsewhere {
+    /// It is there but analysis found nothing usable in it (red on the listing).
+    Unreadable(String),
+    /// It is there and not ticked.
+    NotSelected,
+    /// No workbook of the folder carries it.
+    Absent,
+}
+
+/// Looks a name up among **every** workbook of the folder, not only the ticked ones. Only a
+/// workbook can be "in the folder but not selected": the Data folder also holds documents (a
+/// letter kept beside its table), and a document of the other family is not a workbook that was
+/// left unticked.
+fn workbook_elsewhere(data: &DataFolder, query: &str) -> WorkbookElsewhere {
+    let tables = WorkFolderInventory::from_records(
+        data.files().root(),
+        data.files()
+            .all_files()
+            .iter()
+            .filter(|record| record.kind == FileKind::TabularCandidate)
+            .cloned()
+            .collect(),
+    );
+    let elsewhere = FileReferenceResolver::new(&tables).resolve(query);
+    match elsewhere.exact_match {
+        Some(record) if record.processing_status == ProcessingStatus::Failed => {
+            WorkbookElsewhere::Unreadable(record.relative_path)
+        }
+        _ if elsewhere.status != ReferenceStatus::NoMatch => WorkbookElsewhere::NotSelected,
+        _ => WorkbookElsewhere::Absent,
+    }
 }
 
 /// The workbooks the selection keeps. "Tous" keeps every green workbook, so an empty result
@@ -1167,36 +1403,15 @@ fn pick_target<'c, 'a>(
                     .map(|record| record.relative_path)
                     .collect(),
             }),
-            ReferenceStatus::NoMatch => {
-                // Only a workbook can be "in the folder but not selected": the Data folder also holds
-                // documents (a letter kept beside its table), and a document of the other family is not a
-                // workbook that was left unticked.
-                let tables = WorkFolderInventory::from_records(
-                    data.files().root(),
-                    data.files()
-                        .all_files()
-                        .iter()
-                        .filter(|record| record.kind == FileKind::TabularCandidate)
-                        .cloned()
-                        .collect(),
-                );
-                let elsewhere = FileReferenceResolver::new(&tables).resolve(&resolution.query);
-                Err(match elsewhere.exact_match {
-                    Some(record) if record.processing_status == ProcessingStatus::Failed => {
-                        TabularAnswer::WorkbookUnreadable {
-                            file: record.relative_path,
-                        }
-                    }
-                    _ if elsewhere.status != ReferenceStatus::NoMatch => {
-                        TabularAnswer::FileNotSelected {
-                            query: resolution.query,
-                        }
-                    }
-                    _ => TabularAnswer::NoMatchingFile {
-                        query: resolution.query,
-                    },
-                })
-            }
+            ReferenceStatus::NoMatch => Err(match workbook_elsewhere(data, &resolution.query) {
+                WorkbookElsewhere::Unreadable(file) => TabularAnswer::WorkbookUnreadable { file },
+                WorkbookElsewhere::NotSelected => TabularAnswer::FileNotSelected {
+                    query: resolution.query,
+                },
+                WorkbookElsewhere::Absent => TabularAnswer::NoMatchingFile {
+                    query: resolution.query,
+                },
+            }),
         },
         None => {
             let usable: Vec<&Chosen> = chosen
@@ -2935,6 +3150,446 @@ mod tests {
             TabularAnswer::WorkbookNotAnalysed {
                 file: "factures.csv".into()
             }
+        );
+    }
+
+    // --- Which workbooks a question names or implies (TABULAR step 02) ------------------------
+
+    /// Two columns that make a table: a name and an amount, or any pair of headers.
+    fn table(headers: &str) -> String {
+        format!("{headers}\nAlpha;10,5\nBeta;20\nGamma;30,25\n")
+    }
+
+    fn named_of(folder: &Folder, question: &str, selection: &ScopeMode) -> NamedWorkbooks {
+        named_workbooks(question, &folder.open(), selection)
+    }
+
+    fn implied_of(
+        folder: &Folder,
+        question: &str,
+        selection: &ScopeMode,
+        entity_candidates: &[&str],
+    ) -> Vec<(String, &'static str)> {
+        let candidates: Vec<String> = entity_candidates
+            .iter()
+            .map(|each| each.to_string())
+            .collect();
+        implied_workbooks(question, &folder.open(), selection, "en-US", &candidates)
+            .into_iter()
+            .map(|each| (each.file, each.reason.as_code()))
+            .collect()
+    }
+
+    #[test]
+    fn one_name_is_named_by_its_extension_and_by_its_stem() {
+        let folder = Folder::with(&[("achats.csv", &invoices()), ("ventes.csv", &invoices())]);
+        let all = ScopeMode::WholeFolder;
+
+        assert_eq!(
+            named_of(&folder, "How many rows in ventes.csv?", &all).exact,
+            ["ventes.csv"]
+        );
+        assert_eq!(
+            named_of(&folder, "How many rows in ventes?", &all).exact,
+            ["ventes.csv"]
+        );
+        assert!(named_of(&folder, "How many rows are there?", &all).is_empty());
+    }
+
+    #[test]
+    fn two_names_come_back_in_the_order_the_question_writes_them() {
+        let folder = Folder::with(&[
+            ("achats.csv", &invoices()),
+            ("ventes.csv", &invoices()),
+            ("stock.csv", &invoices()),
+        ]);
+        let all = ScopeMode::WholeFolder;
+
+        let forward = named_of(
+            &folder,
+            "Compare the total of achats.csv with ventes.csv",
+            &all,
+        );
+        assert_eq!(forward.exact, ["achats.csv", "ventes.csv"]);
+        let backward = named_of(&folder, "Compare ventes with achats.csv", &all);
+        assert_eq!(backward.exact, ["ventes.csv", "achats.csv"]);
+        // The same workbook named twice is named once.
+        let twice = named_of(&folder, "ventes.csv against ventes.csv", &all);
+        assert_eq!(twice.exact, ["ventes.csv"]);
+    }
+
+    #[test]
+    fn a_name_with_spaces_accents_and_capitals_names_the_workbook() {
+        let folder = Folder::with(&[
+            ("Mes ventes 2025.csv", &invoices()),
+            ("ventes 2025.csv", &invoices()),
+            ("Bilan \u{e9}t\u{e9}.csv", &invoices()),
+        ]);
+        let all = ScopeMode::WholeFolder;
+
+        // `2025.csv` ends two names: the whole name is what decides.
+        assert_eq!(
+            named_of(&folder, "total of ventes 2025.csv", &all).exact,
+            ["ventes 2025.csv"]
+        );
+        assert_eq!(
+            named_of(&folder, "total of Mes ventes 2025.csv", &all).exact,
+            ["Mes ventes 2025.csv"]
+        );
+        assert_eq!(
+            named_of(&folder, "total of \"MES VENTES 2025\"", &all).exact,
+            ["Mes ventes 2025.csv"]
+        );
+        assert_eq!(
+            named_of(&folder, "total of bilan ete", &all).exact,
+            ["Bilan \u{e9}t\u{e9}.csv"]
+        );
+        assert_eq!(
+            named_of(&folder, "total of BILAN \u{c9}T\u{c9}.CSV", &all).exact,
+            ["Bilan \u{e9}t\u{e9}.csv"]
+        );
+    }
+
+    #[test]
+    fn a_name_two_workbooks_carry_is_ambiguous_and_never_chosen() {
+        let folder = Folder::with(&[
+            ("2025/ventes.csv", &invoices()),
+            ("2026/ventes.csv", &invoices()),
+            ("achats.csv", &invoices()),
+        ]);
+
+        let named = named_of(&folder, "total of ventes.csv", &ScopeMode::WholeFolder);
+
+        assert!(named.exact.is_empty());
+        assert_eq!(named.ambiguous.len(), 1);
+        assert_eq!(named.ambiguous[0].0, "ventes.csv");
+        assert_eq!(named.ambiguous[0].1, ["2025/ventes.csv", "2026/ventes.csv"]);
+    }
+
+    #[test]
+    fn a_workbook_that_exists_but_is_not_ticked_is_reported_by_the_name_typed() {
+        let folder = Folder::with(&[("achats.csv", &invoices()), ("ventes.csv", &invoices())]);
+        let selection = folder.ticked(&["achats.csv"]);
+
+        let named = named_of(
+            &folder,
+            "How many rows in ventes.csv and in achats.csv?",
+            &selection,
+        );
+
+        assert_eq!(named.exact, ["achats.csv"]);
+        assert_eq!(named.not_selected, ["ventes.csv"]);
+        // A name that exists nowhere may be a document: it is not reported.
+        let nowhere = named_of(&folder, "Summarise rapport.docx and absent.csv", &selection);
+        assert!(nowhere.is_empty(), "{nowhere:?}");
+    }
+
+    #[test]
+    fn a_workbook_of_the_documents_folder_is_named_by_its_key() {
+        let documents = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let app = tempfile::tempdir().unwrap();
+        let mut index = IndexStore::open_at(&app.path().join("index.sqlite3")).unwrap();
+        write(
+            documents.path(),
+            "Suivi ventes.csv",
+            table("client;montant").as_bytes(),
+        );
+        write(
+            data.path(),
+            "achats.csv",
+            table("fournisseur;montant").as_bytes(),
+        );
+        data_folder::analyse_cancellable(
+            data.path(),
+            Some(documents.path()),
+            &mut index,
+            "en-US",
+            &|_| {},
+            None,
+            &|| false,
+        )
+        .unwrap();
+        let views = crate::family_view::family_views(
+            Some(documents.path()),
+            Some(data.path()),
+            Some(&index),
+            &FileHashCache::new(),
+            &FileHashCache::new(),
+        )
+        .unwrap();
+        let tables = views.data.unwrap();
+        let all = ScopeMode::WholeFolder;
+
+        let named = named_workbooks("total of Suivi ventes.csv and achats.csv", &tables, &all);
+        assert_eq!(named.exact, ["/documents/Suivi ventes.csv", "achats.csv"]);
+        assert_eq!(
+            named_workbooks("total of suivi ventes", &tables, &all).exact,
+            ["/documents/Suivi ventes.csv"]
+        );
+
+        let implied = implied_workbooks("what is in the spreadsheet?", &tables, &all, "en-US", &[]);
+        let mut files: Vec<&str> = implied.iter().map(|each| each.file.as_str()).collect();
+        files.sort_unstable();
+        assert_eq!(files, ["/documents/Suivi ventes.csv", "achats.csv"]);
+        assert!(implied
+            .iter()
+            .all(|each| each.reason == ImpliedReason::ImpliedByWord));
+    }
+
+    #[test]
+    fn names_a_workbook_is_still_true_for_every_spelling_it_read_before() {
+        let folder = Folder::with(&[
+            ("achats.csv", &invoices()),
+            ("Mes ventes 2025.csv", &invoices()),
+        ]);
+        let all = ScopeMode::WholeFolder;
+        let data = folder.open();
+
+        for question in [
+            "total of achats.csv",
+            "total of achats",
+            "total of Mes ventes 2025",
+            "total of Mes ventes 2025.csv",
+            "total of absent.csv",
+        ] {
+            assert!(names_a_workbook(question, &data, &all), "{question}");
+        }
+        for question in ["What is the total?", "cost is 1.5 per unit"] {
+            assert!(!names_a_workbook(question, &data, &all), "{question}");
+        }
+    }
+
+    #[test]
+    fn exactly_one_ticked_workbook_is_implied_unless_it_is_named() {
+        let folder = Folder::with(&[("achats.csv", &invoices()), ("ventes.csv", &invoices())]);
+        let one = folder.ticked(&["achats.csv"]);
+
+        assert_eq!(
+            implied_of(&folder, "Tell me about this", &one, &[]),
+            [("achats.csv".to_string(), "implied_single")]
+        );
+        assert!(implied_of(&folder, "Tell me about achats.csv", &one, &[]).is_empty());
+        assert!(implied_of(&folder, "Tell me about this", &ScopeMode::WholeFolder, &[]).is_empty());
+    }
+
+    #[test]
+    fn a_table_word_implies_few_ticked_workbooks_in_the_order_ticked() {
+        let folder = Folder::with(&[
+            ("achats.csv", &invoices()),
+            ("ventes.csv", &invoices()),
+            ("stock.csv", &invoices()),
+        ]);
+        let two = folder.ticked(&["stock.csv", "achats.csv"]);
+
+        assert_eq!(
+            implied_of(&folder, "What is in the spreadsheet?", &two, &[]),
+            [
+                ("stock.csv".to_string(), "implied_by_word"),
+                ("achats.csv".to_string(), "implied_by_word")
+            ]
+        );
+        assert!(implied_of(&folder, "What is the weather?", &two, &[]).is_empty());
+        // A table word beside a name says nothing about the others.
+        assert!(implied_of(&folder, "Which columns has achats.csv?", &two, &[]).is_empty());
+    }
+
+    #[test]
+    fn a_table_word_does_not_pick_three_of_many() {
+        let files = ["a.csv", "b.csv", "c.csv", "d.csv", "e.csv"];
+        let content = invoices();
+        let folder = Folder::with(&files.map(|name| (name, content.as_str())));
+        let all = ScopeMode::WholeFolder;
+
+        assert!(implied_of(&folder, "What is in the spreadsheet?", &all, &[]).is_empty());
+        // The knowledge base can still narrow: three of the five, best first, never a fourth.
+        let narrowed = implied_of(
+            &folder,
+            "What is in the spreadsheet?",
+            &all,
+            &["d.csv", "b.csv", "e.csv", "a.csv"],
+        );
+        assert_eq!(
+            narrowed,
+            [
+                ("d.csv".to_string(), "implied_by_entity"),
+                ("b.csv".to_string(), "implied_by_entity"),
+                ("e.csv".to_string(), "implied_by_entity")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_column_only_one_ticked_workbook_has_implies_it_and_the_engine_agrees() {
+        let achats = table("fournisseur;montant");
+        let clients = table("client;ville");
+        let ventes = table("client;montant");
+        let folder = Folder::with(&[("achats.csv", &achats), ("clients.csv", &clients)]);
+        let all = ScopeMode::WholeFolder;
+
+        assert_eq!(
+            implied_of(&folder, "What is the total montant?", &all, &[]),
+            [("achats.csv".to_string(), "implied_by_column")]
+        );
+        // The engine picks the same workbook for the same question.
+        match folder.ask("What is the total montant?", &all).unwrap() {
+            TabularAnswer::Value { file, .. } => assert_eq!(file, "achats.csv"),
+            other => panic!("expected a value, got {other:?}"),
+        }
+
+        // Two workbooks have the column: both stay undecided, the engine asks which one.
+        let both = Folder::with(&[
+            ("achats.csv", &achats),
+            ("ventes.csv", &ventes),
+            ("clients.csv", &clients),
+        ]);
+        assert!(implied_of(&both, "What is the total montant?", &all, &[]).is_empty());
+        assert!(matches!(
+            both.ask("What is the total montant?", &all).unwrap(),
+            TabularAnswer::WhichWorkbook { .. }
+        ));
+        // All of them having it is no sign either.
+        let same = Folder::with(&[("achats.csv", &achats), ("ventes.csv", &ventes)]);
+        assert!(implied_of(&same, "What is the total montant?", &all, &[]).is_empty());
+    }
+
+    #[test]
+    fn the_knowledge_base_candidates_imply_in_their_order_capped_and_never_unticked() {
+        let folder = Folder::with(&[
+            ("a.csv", &invoices()),
+            ("b.csv", &invoices()),
+            ("c.csv", &invoices()),
+            ("d.csv", &invoices()),
+            ("e.csv", &invoices()),
+        ]);
+        let ticked = folder.ticked(&["a.csv", "b.csv", "c.csv", "d.csv"]);
+
+        // `e.csv` is not ticked, `gone.csv` is not a workbook: neither is implied.
+        let found = implied_of(
+            &folder,
+            "Anything about Alpha?",
+            &ticked,
+            &["e.csv", "c.csv", "gone.csv", "a.csv", "b.csv"],
+        );
+        assert_eq!(
+            found,
+            [
+                ("c.csv".to_string(), "implied_by_entity"),
+                ("a.csv".to_string(), "implied_by_entity"),
+                ("b.csv".to_string(), "implied_by_entity")
+            ]
+        );
+        // Every ticked workbook holding it is no sign.
+        assert!(implied_of(
+            &folder,
+            "Anything about Alpha?",
+            &ticked,
+            &["a.csv", "b.csv", "c.csv", "d.csv"]
+        )
+        .is_empty());
+        assert!(implied_of(&folder, "Anything about Alpha?", &ticked, &[]).is_empty());
+    }
+
+    #[test]
+    fn an_implied_workbook_never_repeats_a_named_one() {
+        let folder = Folder::with(&[
+            ("a.csv", &invoices()),
+            ("b.csv", &invoices()),
+            ("c.csv", &invoices()),
+        ]);
+        let all = ScopeMode::WholeFolder;
+
+        let found = implied_of(
+            &folder,
+            "Anything about Alpha in a.csv?",
+            &all,
+            &["a.csv", "b.csv"],
+        );
+        assert_eq!(found, [("b.csv".to_string(), "implied_by_entity")]);
+        // A name that may mean two workbooks leaves both out as well.
+        let twins = Folder::with(&[
+            ("2025/v.csv", &invoices()),
+            ("2026/v.csv", &invoices()),
+            ("w.csv", &invoices()),
+        ]);
+        assert!(implied_of(
+            &twins,
+            "total of v.csv, a spreadsheet",
+            &all,
+            &["2025/v.csv", "w.csv"]
+        )
+        .iter()
+        .all(|(file, _)| file == "w.csv"));
+    }
+
+    #[test]
+    fn the_rules_are_tried_in_the_order_of_the_plan() {
+        let achats = table("fournisseur;montant");
+        let clients = table("client;ville");
+        let folder = Folder::with(&[("achats.csv", &achats), ("clients.csv", &clients)]);
+        let all = ScopeMode::WholeFolder;
+
+        // A table word wins over a column and over the knowledge base.
+        let by_word = implied_of(
+            &folder,
+            "In the spreadsheet, what is the total montant?",
+            &all,
+            &["clients.csv"],
+        );
+        assert_eq!(
+            by_word
+                .iter()
+                .map(|(_, reason)| *reason)
+                .collect::<Vec<_>>(),
+            ["implied_by_word", "implied_by_word"]
+        );
+        // A column wins over the knowledge base.
+        let by_column = implied_of(
+            &folder,
+            "What is the total montant?",
+            &all,
+            &["clients.csv"],
+        );
+        assert_eq!(by_column, [("achats.csv".to_string(), "implied_by_column")]);
+        // One ticked workbook wins over everything.
+        let one = folder.ticked(&["clients.csv"]);
+        assert_eq!(
+            implied_of(&folder, "In the spreadsheet, total montant?", &one, &[]),
+            [("clients.csv".to_string(), "implied_single")]
+        );
+    }
+
+    #[test]
+    fn a_workbook_without_an_analysis_is_not_implied() {
+        let mut folder = Folder::with(&[("achats.csv", &invoices()), ("ventes.csv", &invoices())]);
+        let one = folder.ticked(&["achats.csv"]);
+        folder.index.clear_tabular_inventories().unwrap();
+
+        assert!(implied_of(&folder, "Tell me about this", &one, &[]).is_empty());
+    }
+
+    #[test]
+    fn the_implied_reasons_are_the_machine_codes_of_the_trace() {
+        let codes: Vec<&str> = [
+            ImpliedReason::ImpliedSingle,
+            ImpliedReason::ImpliedByWord,
+            ImpliedReason::ImpliedByColumn,
+            ImpliedReason::ImpliedByEntity,
+        ]
+        .map(ImpliedReason::as_code)
+        .to_vec();
+        assert_eq!(
+            codes,
+            [
+                "implied_single",
+                "implied_by_word",
+                "implied_by_column",
+                "implied_by_entity"
+            ]
+        );
+        assert_eq!(
+            serde_json::to_string(&ImpliedReason::ImpliedByEntity).unwrap(),
+            "\"implied_by_entity\""
         );
     }
 

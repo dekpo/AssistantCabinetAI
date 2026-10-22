@@ -113,8 +113,13 @@ export function tabularSourceLine(t: Translator, source: TabularSource): string 
  * how many, and that identifiers were masked (step 03b). */
 export function workbookCardSourceLine(t: Translator, use: WorkbookCardUse): string {
   const path = displayPathOfKey("data", use.file);
-  if (use.rowsSent === null || use.rowsSent === undefined || use.rowsSent === 0) {
+  if (use.rowsSent === null || use.rowsSent === undefined) {
     return t("chat.sourceItemCard", { path });
+  }
+  // No row of this workbook was sent (the room held too few to be of use), but the figures the
+  // program computed over its whole table were.
+  if (use.rowsSent === 0) {
+    return t("chat.sourceItemCardProfile", { path });
   }
   return t("chat.sourceItemCardRows", {
     path,

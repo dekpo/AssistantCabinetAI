@@ -245,6 +245,7 @@
     "sourceItemSheet": "{path}, feuille {sheet}",
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
     "sourceItemCard": "{path} (structure seulement, aucune donnée lue par l'IA)",
+    "sourceItemCardProfile": "{path} (structure et chiffres de colonnes, identifiants masqués)",
     "sourceItemCardRows": "{path} (structure et {rows} sur {total}, identifiants masqués)",
     "rowOne": "ligne",
     "rowMany": "lignes",

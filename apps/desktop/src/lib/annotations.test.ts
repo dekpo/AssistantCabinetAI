@@ -165,8 +165,17 @@ describe("copying the sources of an answer", () => {
     expect(sourceLines(english, shown(1, 1))[1]).toBe(
       "- factures.csv (structure and 1 row of 1, identifiers masked)",
     );
-    // No row sent, whatever the reason: the structure alone.
-    expect(sourceLines(english, shown(0, 60))[1]).toContain("structure only");
+    // No row sent but the figures of the whole table were: said so.
+    expect(sourceLines(english, shown(0, 60))[1]).toBe(
+      "- factures.csv (structure and column figures, identifiers masked)",
+    );
+    expect(sourceLines(french, shown(0, 60))[1]).toBe(
+      "- factures.csv (structure et chiffres de colonnes, identifiants masqués)",
+    );
+    // Nothing of the data was sent: the structure alone.
+    expect(
+      sourceLines(english, entry({ workbookCards: [{ file: "factures.csv", rowsSent: null, rowsTotal: null }] }))[1],
+    ).toContain("structure only");
   });
 
   it("gives the screen and the copy one list, documents first, then the sheet, then the workbooks read as a card", () => {

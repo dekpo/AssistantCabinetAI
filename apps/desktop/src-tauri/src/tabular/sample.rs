@@ -65,6 +65,10 @@ const MAX_ROW_CHARS: usize = 240;
 const MEASURED_ROWS: usize = 50;
 /// How many cells of a column are read to decide whether it holds identifiers.
 const IDENTIFIER_PROBE_CELLS: usize = 200;
+/// The fewest rows a partial sample may hold. One or two rows of a large table tell a model
+/// nothing it can use (owner's test of step 03b, 23 October 2026: `1 ligne sur 35854`), so a sheet
+/// whose room holds fewer sends none, and its profile still carries the figures.
+const MIN_SAMPLE_ROWS: usize = 3;
 /// The values a text column reports as its most frequent.
 const FREQUENT_VALUES: usize = 3;
 
@@ -343,43 +347,45 @@ struct Rendered {
 /// cannot be reached by one name (two sheets with the same name) has none either.
 pub fn build_sample(requests: &[SampleRequest<'_>], options: &SampleOptions<'_>) -> SampleBlock {
     let units = units_of(requests);
-    if units.is_empty() || options.sample_budget_chars == 0 {
+    if units.is_empty() || (options.sample_budget_chars == 0 && options.profile_budget_chars == 0) {
         return SampleBlock::default();
     }
     let decimal = inventory::decimal_mark(options.locale);
 
     // 1. The rows.
-    let needs: Vec<usize> = units
-        .iter()
-        .map(|unit| estimated_size(unit, options, decimal))
-        .collect();
-    let shares = share_out(&needs, options.sample_budget_chars);
-    let rendered: Vec<Option<Rendered>> = units
-        .iter()
-        .zip(&shares)
-        .map(|(unit, share)| render_rows(unit, *share, options, decimal))
-        .collect();
-    if rendered.iter().all(Option::is_none) {
-        return SampleBlock::default();
-    }
+    let rendered: Vec<Option<Rendered>> = if options.sample_budget_chars == 0 {
+        units.iter().map(|_| None).collect()
+    } else {
+        let needs: Vec<usize> = units
+            .iter()
+            .map(|unit| estimated_size(unit, options, decimal))
+            .collect();
+        let shares = share_out(&needs, options.sample_budget_chars);
+        units
+            .iter()
+            .zip(&shares)
+            .map(|(unit, share)| render_rows(unit, *share, options, decimal))
+            .collect()
+    };
 
-    // 2. The profile of every sheet that has rows in the sample.
-    let sampled: Vec<usize> = (0..units.len())
-        .filter(|i| rendered[*i].is_some())
-        .collect();
-    let profile_share = options.profile_budget_chars / sampled.len().max(1);
+    // 2. The profile of every data sheet, whether or not rows of it are sampled: a sheet too large
+    // for a useful sample still has its figures.
+    let profiled: Vec<usize> = (0..units.len()).collect();
+    let profile_share = options.profile_budget_chars / profiled.len().max(1);
     let mut profiles: Vec<Option<ProfileRendered>> = units.iter().map(|_| None).collect();
-    for &index in &sampled {
-        profiles[index] = render_profile(&units[index], profile_share, options, decimal);
+    if profile_share > 0 {
+        for &index in &profiled {
+            profiles[index] = render_profile(&units[index], profile_share, options, decimal);
+        }
     }
     // What a short profile leaves unused goes to the profiles that had to be cut.
-    let leftover: usize = sampled
+    let leftover: usize = profiled
         .iter()
         .filter_map(|index| profiles[*index].as_ref())
         .filter(|profile| !profile.cut)
         .map(|profile| profile_share.saturating_sub(profile.used))
         .sum();
-    let cut: Vec<usize> = sampled
+    let cut: Vec<usize> = profiled
         .iter()
         .copied()
         .filter(|index| profiles[*index].as_ref().is_some_and(|profile| profile.cut))
@@ -394,36 +400,46 @@ pub fn build_sample(requests: &[SampleRequest<'_>], options: &SampleOptions<'_>)
         }
     }
 
-    let mut sample_text = vec!["Table sample".to_string()];
+    let mut sample_text: Vec<String> = Vec::new();
     let mut profile_text: Vec<String> = Vec::new();
     let mut uses: Vec<WorkbookSampleUse> = Vec::new();
-    for index in sampled {
-        let unit = &units[index];
-        let Some(rows) = &rendered[index] else {
-            continue;
-        };
-        sample_text.push(rows.text.clone());
-        if let Some(profile) = &profiles[index] {
+    for (index, unit) in units.iter().enumerate() {
+        let rows = rendered[index].as_ref();
+        let profile = profiles[index].as_ref();
+        if let Some(rows) = rows {
+            sample_text.push(rows.text.clone());
+        }
+        if let Some(profile) = profile {
             profile_text.push(profile.text.clone());
         }
+        if rows.is_none() && profile.is_none() {
+            continue;
+        }
+        let sent = rows.map_or(0, |each| each.rows_sent);
         match uses.iter_mut().find(|each| each.file == unit.file) {
             Some(entry) => {
-                entry.rows_sent += rows.rows_sent;
+                entry.rows_sent += sent;
                 entry.rows_total += unit.rows.len();
             }
             None => uses.push(WorkbookSampleUse {
                 file: unit.file.to_string(),
-                rows_sent: rows.rows_sent,
+                rows_sent: sent,
                 rows_total: unit.rows.len(),
             }),
         }
     }
-
-    let mut body = sample_text.join("\n");
-    if !profile_text.is_empty() {
-        body.push('\n');
-        body.push_str(&profile_text.join("\n"));
+    if sample_text.is_empty() && profile_text.is_empty() {
+        return SampleBlock::default();
     }
+
+    let mut parts: Vec<String> = Vec::new();
+    if !sample_text.is_empty() {
+        parts.push(format!("Table sample\n{}", sample_text.join("\n")));
+    }
+    if !profile_text.is_empty() {
+        parts.push(profile_text.join("\n"));
+    }
+    let body = parts.join("\n");
     let token = options.token;
     SampleBlock {
         text: format!(
@@ -691,7 +707,7 @@ fn render_rows(
     let header_cost = unit.label.chars().count() + columns_text.chars().count() + 120;
     let mut count = share.saturating_sub(header_cost) / line_estimate.max(1);
     count = count.min(total.saturating_sub(1));
-    while count > 0 {
+    while count >= MIN_SAMPLE_ROWS {
         let indices = sampled_indices(total, count);
         let head = count.div_ceil(2).max(1).min(indices.len());
         let text = build(&indices, head);
@@ -1396,6 +1412,50 @@ mod tests {
                 .contains("A Date: 120 dates, from 2026-03-13 to 2026-03-27"),
             "{}",
             block.text
+        );
+    }
+
+    #[test]
+    fn a_large_table_never_gets_a_sample_of_one_or_two_rows() {
+        let (workbook, inventory) = invoices(300);
+        let mut seen_none = false;
+        let mut seen_some = false;
+        for sample_budget in (150..1_200).step_by(10) {
+            let block = sample_of(
+                "t.csv",
+                &workbook,
+                &inventory,
+                &options(sample_budget, 1_000),
+            );
+            let sent = block.uses.first().map_or(0, |each| each.rows_sent);
+            assert!(
+                sent == 0 || sent >= MIN_SAMPLE_ROWS,
+                "{sent} rows at {sample_budget}"
+            );
+            // Whatever the room for rows, the figures of the whole table are there.
+            assert!(
+                block.text.contains("over all 300 data rows"),
+                "no profile at {sample_budget}"
+            );
+            seen_none |= sent == 0;
+            seen_some |= sent > 0;
+        }
+        assert!(seen_none && seen_some, "the sweep must cross the minimum");
+    }
+
+    #[test]
+    fn a_sheet_without_rows_still_counts_in_the_trace_when_its_profile_is_sent() {
+        let (workbook, inventory) = invoices(300);
+        let block = sample_of("t.csv", &workbook, &inventory, &options(200, 1_000));
+
+        assert!(!block.text.contains("Table sample\n"), "{}", block.text);
+        assert_eq!(
+            block.uses,
+            vec![WorkbookSampleUse {
+                file: "t.csv".into(),
+                rows_sent: 0,
+                rows_total: 300
+            }]
         );
     }
 

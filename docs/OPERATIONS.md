@@ -13,7 +13,7 @@ Data rules: `docs/PRIVACY-AND-SECURITY.md`. Layers: `docs/ARCHITECTURE.md`.
 ## Decisions
 
 - Compose is the environment baseline from the first prototype.
-- Services today: `server` + `ollama` + `open-webui`, internal network, ports published on `127.0.0.1`
+- Services today: `server` + `ollama`, internal network, ports published on `127.0.0.1`; `open-webui` is optional behind the `workbench` profile since 22 October 2026 (`docker compose --profile workbench up -d open-webui`; to be deleted, `docs/DECISIONS.md` row 41)
   only.
 - The gateway (`apps/server`, `/v1`) is **in the same** Compose file since 16 September 2026, not a
   parallel "Windows only" script.

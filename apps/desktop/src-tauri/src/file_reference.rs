@@ -107,6 +107,49 @@ impl FileReferenceResolution {
     }
 }
 
+/// One reference found in a question by `resolve_all_in_question`, with where it was written.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PositionedResolution {
+    /// How many of the question's words (folded: case, accents and punctuation set aside) come
+    /// before the reference. Only the order is meant: two references never share a position.
+    pub position: usize,
+    pub resolution: FileReferenceResolution,
+}
+
+/// A reference and the run of the question's words it was read from.
+struct Hit {
+    start: usize,
+    end: usize,
+    resolution: FileReferenceResolution,
+}
+
+impl Hit {
+    /// Whether this run holds the other one, which is then a piece of it.
+    fn covers(&self, other: &Hit) -> bool {
+        self.start <= other.start && other.end <= self.end
+    }
+}
+
+impl FileReferenceResolution {
+    /// What makes two resolutions the same reference: the file for an exact one, the set of
+    /// candidates for an ambiguous one, the folded query for one that matched nothing.
+    fn identity(&self) -> String {
+        match (&self.status, &self.exact_match) {
+            (ReferenceStatus::Exact, Some(record)) => format!("file:{}", record.relative_path),
+            (ReferenceStatus::MultipleMatches, _) => {
+                let mut paths: Vec<&str> = self
+                    .candidates
+                    .iter()
+                    .map(|record| record.relative_path.as_str())
+                    .collect();
+                paths.sort_unstable();
+                format!("several:{}", paths.join("|"))
+            }
+            _ => format!("none:{}", fold_words(&self.query)),
+        }
+    }
+}
+
 /// Resolves references against one inventory snapshot.
 ///
 /// Deterministic metadata matching only, in a fixed order: canonical path, file name, stem. That
@@ -299,6 +342,163 @@ impl<'a> FileReferenceResolver<'a> {
         }
     }
 
+    /// Every file a question names, in the order the question writes them.
+    ///
+    /// `resolve_in_question` stops at the first hit, which is right for a document search and wrong
+    /// for a question that crosses two workbooks. This keeps its three routes (a token shaped like
+    /// a path or a file name, a word equal to a stem, a multi-word stem) and adds a fourth that
+    /// reads a name **as a whole run of words**, because a name that holds spaces
+    /// (`Ventes 2025 (final).xlsx`, `Mes ventes.xlsx`) is split by the first route and reached only
+    /// by its last token: `ventes 2025.xlsx` came back ambiguous with every other file ending in
+    /// `2025.xlsx`. The whole-name route matches, folded like every other route (case, accents,
+    /// punctuation):
+    ///
+    /// - the full name with its extension, whatever the length of the name;
+    /// - the name without its extension when it holds several words and at least
+    ///   `MIN_PHRASE_CHARS` characters, as before;
+    /// - the name without its extension, whatever its length, when it is quoted.
+    ///
+    /// The longest run wins: a token that lies inside a longer name that matched is that name's
+    /// token, not a second reference. The same file named twice is returned once, at its first
+    /// position. The existing function is unchanged.
+    pub fn resolve_all_in_question(&self, question: &str) -> Vec<PositionedResolution> {
+        let folded_question = format!("-{}-", fold_words(question));
+        let word_start = |byte_offset: usize| {
+            fold_words(&question[..byte_offset])
+                .split('-')
+                .filter(|word| !word.is_empty())
+                .count()
+        };
+        let word_count = |text: &str| {
+            fold_words(text)
+                .split('-')
+                .filter(|word| !word.is_empty())
+                .count()
+        };
+
+        let mut whole_names = self.whole_name_hits(question, &folded_question);
+        whole_names.sort_by_key(|hit| std::cmp::Reverse(hit.end - hit.start));
+        let mut kept_names: Vec<Hit> = Vec::new();
+        for hit in whole_names {
+            if !kept_names.iter().any(|kept| kept.covers(&hit)) {
+                kept_names.push(hit);
+            }
+        }
+
+        let mut hits: Vec<Hit> = Vec::new();
+        for (offset, token) in tokens_with_offsets(question) {
+            let trimmed = token.trim_matches(is_reference_edge);
+            if trimmed.is_empty() || !(trimmed.contains(['/', '\\', '.'])) {
+                continue;
+            }
+            let lead = token.len() - token.trim_start_matches(is_reference_edge).len();
+            let resolution = self.resolve(trimmed);
+            if resolution.status == ReferenceStatus::NoMatch
+                && resolution.reason != ResolutionReason::OutsideWorkFolder
+                && !looks_like_a_file_name(trimmed)
+            {
+                continue;
+            }
+            let start = word_start(offset + lead);
+            hits.push(Hit {
+                start,
+                end: start + word_count(trimmed).max(1),
+                resolution,
+            });
+        }
+        for (offset, token) in word_spans(question) {
+            let matches = self.case_insensitive_stems(token);
+            let resolution = match matches.len() {
+                0 => continue,
+                1 => FileReferenceResolution::exact(token, matches[0], ResolutionReason::StemToken),
+                _ => FileReferenceResolution::several(token, matches),
+            };
+            let start = word_start(offset);
+            hits.push(Hit {
+                start,
+                end: start + word_count(token).max(1),
+                resolution,
+            });
+        }
+        // A token that is a piece of a longer name that matched is not a reference of its own.
+        hits.retain(|hit| !kept_names.iter().any(|name| name.covers(hit)));
+        hits.extend(kept_names);
+
+        hits.sort_by_key(|hit| (hit.start, std::cmp::Reverse(hit.end)));
+        let mut seen: Vec<String> = Vec::new();
+        let mut out: Vec<PositionedResolution> = Vec::new();
+        for hit in hits {
+            let identity = hit.resolution.identity();
+            if seen.contains(&identity) {
+                continue;
+            }
+            seen.push(identity);
+            out.push(PositionedResolution {
+                position: hit.start,
+                resolution: hit.resolution,
+            });
+        }
+        out
+    }
+
+    /// The files whose whole name is written in the question, as runs of folded words (see
+    /// `resolve_all_in_question`). Files that carry the same name are one hit, and ambiguous.
+    fn whole_name_hits(&self, question: &str, folded_question: &str) -> Vec<Hit> {
+        let quoted = quoted_phrases(question);
+        let mut by_phrase: Vec<(String, ResolutionReason, Vec<&'a FileRecord>)> = Vec::new();
+        for file in self.inventory.all_files() {
+            let stem = fold_words(&file.stem);
+            if stem.is_empty() {
+                continue;
+            }
+            let multi_word = stem.contains('-');
+            let mut phrases: Vec<(String, ResolutionReason)> = Vec::new();
+            if multi_word {
+                phrases.push((fold_words(&file.name), ResolutionReason::FileName));
+                if stem.chars().count() >= MIN_PHRASE_CHARS || quoted.contains(&stem) {
+                    phrases.push((stem.clone(), ResolutionReason::StemToken));
+                }
+            } else if quoted.contains(&stem) {
+                phrases.push((stem.clone(), ResolutionReason::StemToken));
+            }
+            for (phrase, reason) in phrases {
+                if !folded_question.contains(&format!("-{phrase}-")) {
+                    continue;
+                }
+                match by_phrase.iter_mut().find(|(known, _, _)| *known == phrase) {
+                    Some((_, _, files)) => files.push(file),
+                    None => by_phrase.push((phrase, reason, vec![file])),
+                }
+            }
+        }
+        // Every place the name is written, so a second mention is not read word by word.
+        by_phrase
+            .into_iter()
+            .flat_map(|(phrase, reason, files)| {
+                let query = files[0].stem.clone();
+                let resolution = match files.len() {
+                    1 => FileReferenceResolution::exact(&query, files[0], reason),
+                    _ => FileReferenceResolution::several(&query, files),
+                };
+                let width = phrase.matches('-').count() + 1;
+                folded_question
+                    .match_indices(&format!("-{phrase}-"))
+                    .map(|(at, _)| {
+                        let start = folded_question[..=at]
+                            .matches('-')
+                            .count()
+                            .saturating_sub(1);
+                        Hit {
+                            start,
+                            end: start + width,
+                            resolution: resolution.clone(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     fn case_insensitive_paths(&self, path: &str) -> Vec<&'a FileRecord> {
         let wanted = fold_text(&path);
         self.inventory
@@ -364,6 +564,98 @@ fn escapes_work_folder(path: &str) -> bool {
         return true;
     }
     path.split('/').any(|part| part == "..")
+}
+
+/// The characters a reference is not written with at either end: quotes and sentence punctuation.
+fn is_reference_edge(c: char) -> bool {
+    matches!(
+        c,
+        '"' | '\'' | ',' | ';' | ':' | '?' | '!' | '(' | ')' | '.'
+    )
+}
+
+/// The whitespace-separated tokens of a text, each with the byte offset it starts at.
+fn tokens_with_offsets(text: &str) -> Vec<(usize, &str)> {
+    let mut out = Vec::new();
+    let mut start: Option<usize> = None;
+    for (index, c) in text.char_indices() {
+        if c.is_whitespace() {
+            if let Some(from) = start.take() {
+                out.push((from, &text[from..index]));
+            }
+        } else if start.is_none() {
+            start = Some(index);
+        }
+    }
+    if let Some(from) = start {
+        out.push((from, &text[from..]));
+    }
+    out
+}
+
+/// `word_tokens`, with the byte offset each word starts at.
+fn word_spans(question: &str) -> Vec<(usize, &str)> {
+    let mut out = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut push = |from: usize, to: usize| {
+        let token = &question[from..to];
+        if token.chars().count() >= MIN_TOKEN_CHARS && token.chars().any(|c| c.is_alphabetic()) {
+            out.push((from, token));
+        }
+    };
+    for (index, c) in question.char_indices() {
+        let in_word = c.is_alphanumeric() || c == '-' || c == '_';
+        match (in_word, start) {
+            (true, None) => start = Some(index),
+            (false, Some(from)) => {
+                push(from, index);
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(from) = start {
+        push(from, question.len());
+    }
+    out
+}
+
+/// What the question puts between quotes, as folded words (`fold_words`): `"Mes ventes"`,
+/// `\u{ab} Mes ventes \u{bb}`, a typographic pair, or single quotes that open a word and are
+/// not an apostrophe (`l'annee` opens nothing).
+fn quoted_phrases(question: &str) -> Vec<String> {
+    let chars: Vec<char> = question.chars().collect();
+    let mut out = Vec::new();
+    let mut index = 0;
+    while index < chars.len() {
+        let closer = match chars[index] {
+            '"' => Some('"'),
+            '\u{201c}' => Some('\u{201d}'),
+            '\u{ab}' => Some('\u{bb}'),
+            '\u{2018}' => Some('\u{2019}'),
+            '\'' if index == 0 || !chars[index - 1].is_alphanumeric() => Some('\''),
+            _ => None,
+        };
+        let Some(closer) = closer else {
+            index += 1;
+            continue;
+        };
+        let end = (index + 1..chars.len()).find(|&at| {
+            chars[at] == closer
+                && (closer != '\'' || !chars.get(at + 1).is_some_and(|c| c.is_alphanumeric()))
+        });
+        match end {
+            Some(end) => {
+                let phrase = fold_words(&chars[index + 1..end].iter().collect::<String>());
+                if !phrase.is_empty() {
+                    out.push(phrase);
+                }
+                index = end + 1;
+            }
+            None => index += 1,
+        }
+    }
+    out
 }
 
 /// Tokens from a sentence that could be a path or a file name: they carry a separator or a dot.
@@ -879,6 +1171,249 @@ mod tests {
         assert!(resolver
             .resolve_in_question("What dose was given to Esaie ?")
             .is_none());
+    }
+
+    /// Names that hold spaces, accents, parentheses, plus a plain neighbour for each, and a
+    /// workbook of the other folder (a foreign key).
+    fn spaced() -> WorkFolderInventory {
+        WorkFolderInventory::from_records(
+            Path::new("root"),
+            vec![
+                record("Ventes 2025 (final).xlsx"),
+                record("Mes ventes.xlsx"),
+                record("ventes 2025.xlsx"),
+                record("Ventes.xlsx"),
+                record("Bilan \u{e9}t\u{e9} 2025.xlsx"),
+                record("/documents/Suivi commandes clients.xlsx"),
+                record("Q1 24.xlsx"),
+            ],
+        )
+    }
+
+    fn named(inventory: &WorkFolderInventory, question: &str) -> Vec<String> {
+        FileReferenceResolver::new(inventory)
+            .resolve_all_in_question(question)
+            .into_iter()
+            .map(|found| match found.resolution.exact_match {
+                Some(record) => record.relative_path,
+                None => format!("?{}", found.resolution.candidates.len()),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_name_with_spaces_resolves_in_every_spelling_a_person_types() {
+        let inventory = spaced();
+        let cases: [(&str, &str); 22] = [
+            (
+                "total of Ventes 2025 (final).xlsx",
+                "Ventes 2025 (final).xlsx",
+            ),
+            (
+                "total of \"Ventes 2025 (final).xlsx\"",
+                "Ventes 2025 (final).xlsx",
+            ),
+            ("total of Ventes 2025 (final)", "Ventes 2025 (final).xlsx"),
+            (
+                "total of \"Ventes 2025 (final)\"",
+                "Ventes 2025 (final).xlsx",
+            ),
+            (
+                "total of ventes 2025 (final) please",
+                "Ventes 2025 (final).xlsx",
+            ),
+            (
+                "TOTAL OF VENTES 2025 (FINAL).XLSX",
+                "Ventes 2025 (final).xlsx",
+            ),
+            ("total of Mes ventes.xlsx", "Mes ventes.xlsx"),
+            ("total of \"Mes ventes.xlsx\"", "Mes ventes.xlsx"),
+            ("total of Mes ventes", "Mes ventes.xlsx"),
+            ("total of \"Mes ventes\"", "Mes ventes.xlsx"),
+            ("TOTAL OF MES VENTES", "Mes ventes.xlsx"),
+            ("total of ventes 2025.xlsx", "ventes 2025.xlsx"),
+            ("total of ventes 2025", "ventes 2025.xlsx"),
+            ("total of \"ventes 2025\"", "ventes 2025.xlsx"),
+            (
+                "total of Bilan \u{e9}t\u{e9} 2025.xlsx",
+                "Bilan \u{e9}t\u{e9} 2025.xlsx",
+            ),
+            (
+                "total of bilan ete 2025.xlsx",
+                "Bilan \u{e9}t\u{e9} 2025.xlsx",
+            ),
+            (
+                "total of BILAN \u{c9}T\u{c9} 2025",
+                "Bilan \u{e9}t\u{e9} 2025.xlsx",
+            ),
+            (
+                "total of Suivi commandes clients.xlsx",
+                "/documents/Suivi commandes clients.xlsx",
+            ),
+            (
+                "total of suivi commandes clients",
+                "/documents/Suivi commandes clients.xlsx",
+            ),
+            (
+                "total of \"Suivi commandes clients\"",
+                "/documents/Suivi commandes clients.xlsx",
+            ),
+            ("total of \u{ab} Mes ventes \u{bb}", "Mes ventes.xlsx"),
+            ("total of \"Q1 24\"", "Q1 24.xlsx"),
+        ];
+        for (question, expected) in cases {
+            assert_eq!(
+                named(&inventory, question),
+                vec![expected.to_string()],
+                "{question}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_longest_name_in_a_run_wins_and_a_plain_neighbour_is_not_named() {
+        let inventory = spaced();
+        // `Ventes.xlsx` ends the text of `Mes ventes.xlsx` and `ventes 2025.xlsx` is the start of
+        // `Ventes 2025 (final).xlsx`: each question names exactly one file.
+        assert_eq!(
+            named(&inventory, "sum Mes ventes.xlsx"),
+            vec!["Mes ventes.xlsx"]
+        );
+        assert_eq!(named(&inventory, "sum Ventes.xlsx"), vec!["Ventes.xlsx"]);
+        assert_eq!(
+            named(&inventory, "sum Ventes 2025 (final).xlsx"),
+            vec!["Ventes 2025 (final).xlsx"]
+        );
+    }
+
+    #[test]
+    fn several_names_come_back_in_the_order_the_question_writes_them() {
+        let inventory = spaced();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        let found = resolver.resolve_all_in_question(
+            "compare Mes ventes.xlsx with ventes 2025.xlsx and Ventes.xlsx",
+        );
+        let files: Vec<_> = found
+            .iter()
+            .map(|each| each.resolution.exact_match.clone().unwrap().relative_path)
+            .collect();
+        assert_eq!(
+            files,
+            ["Mes ventes.xlsx", "ventes 2025.xlsx", "Ventes.xlsx"]
+        );
+        assert!(found
+            .windows(2)
+            .all(|pair| pair[0].position < pair[1].position));
+
+        assert_eq!(
+            named(&inventory, "compare ventes 2025.xlsx with Mes ventes.xlsx"),
+            ["ventes 2025.xlsx", "Mes ventes.xlsx"]
+        );
+        // The same file twice is one reference, at its first place.
+        assert_eq!(
+            named(&inventory, "Mes ventes.xlsx against Mes ventes"),
+            ["Mes ventes.xlsx"]
+        );
+    }
+
+    #[test]
+    fn a_stem_word_and_a_path_are_still_named_beside_a_spaced_name() {
+        let inventory = WorkFolderInventory::from_records(
+            Path::new("root"),
+            vec![
+                record("2026/mars/neurologie.pdf"),
+                record("Mes ventes.xlsx"),
+                record("montants.csv"),
+            ],
+        );
+        assert_eq!(
+            named(
+                &inventory,
+                "compare montants with Mes ventes.xlsx and 2026/mars/neurologie.pdf"
+            ),
+            [
+                "montants.csv",
+                "Mes ventes.xlsx",
+                "2026/mars/neurologie.pdf"
+            ]
+        );
+    }
+
+    #[test]
+    fn two_files_with_the_same_name_are_one_ambiguous_reference() {
+        let inventory = WorkFolderInventory::from_records(
+            Path::new("root"),
+            vec![
+                record("2025/Mes ventes.xlsx"),
+                record("2026/Mes ventes.xlsx"),
+            ],
+        );
+        let found = FileReferenceResolver::new(&inventory)
+            .resolve_all_in_question("total of Mes ventes.xlsx");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].resolution.status, ReferenceStatus::MultipleMatches);
+        assert_eq!(found[0].resolution.candidates.len(), 2);
+    }
+
+    #[test]
+    fn a_name_that_exists_nowhere_is_reported_and_an_ordinary_sentence_names_nothing() {
+        let inventory = spaced();
+        let resolver = FileReferenceResolver::new(&inventory);
+
+        let found = resolver.resolve_all_in_question("total of Absent.xlsx");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].resolution.status, ReferenceStatus::NoMatch);
+
+        assert!(resolver
+            .resolve_all_in_question("what is the total of the year")
+            .is_empty());
+        assert!(resolver
+            .resolve_all_in_question("cost is 1.5 per unit")
+            .is_empty());
+    }
+
+    #[test]
+    fn the_known_limits_of_a_name_with_spaces_stay_unresolved() {
+        let inventory = spaced();
+        // Too short to be told from a phrase of the sentence unless it is quoted or written with
+        // its extension (`Q1 24.xlsx` and `"Q1 24"` resolve, see above).
+        assert!(named(&inventory, "total of q1 24").is_empty());
+        // A part of a name, or its words in another order, is not the name.
+        assert!(named(&inventory, "total of final 2025").is_empty());
+        assert!(named(&inventory, "total of 2025 final").is_empty());
+    }
+
+    #[test]
+    fn the_first_reference_is_the_one_resolve_in_question_returns() {
+        let inventory = esaie();
+        let resolver = FileReferenceResolver::new(&inventory);
+        for question in [
+            "Que dit Absence pour Esa\u{ef}e ?",
+            "Resume Ordonnance pour Esaie 2 s'il te plait",
+            "What dose was given to Esaie ?",
+        ] {
+            let first = resolver.resolve_in_question(question);
+            let all = resolver.resolve_all_in_question(question);
+            assert_eq!(
+                first.as_ref().map(|each| each.exact_match.clone()),
+                all.first().map(|each| each.resolution.exact_match.clone()),
+                "{question}"
+            );
+        }
+    }
+
+    #[test]
+    fn quoted_phrases_ignore_apostrophes() {
+        assert_eq!(
+            quoted_phrases("sum \"Mes ventes\" and 'Q1 24' ok"),
+            ["mes-ventes", "q1-24"]
+        );
+        assert_eq!(
+            quoted_phrases("sum \u{ab} Mes ventes \u{bb}"),
+            ["mes-ventes"]
+        );
+        assert!(quoted_phrases("the customer's total and l'annee").is_empty());
     }
 
     /// The body `fold_text` had before it moved to `knowledge::normalize::fold`, kept verbatim so

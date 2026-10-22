@@ -67,6 +67,7 @@
   "distributive": ["chaque", "tous", "toutes", "tout", "toute"],
   "writing_intents": ["rédige", "rédiger", "rédigez", "écris", "écrire", "écrivez", "génère", "générer", "générez", "compose", "composer", "composez", "prépare", "préparer", "préparez", "produis", "produire", "brouillon"],
   "document_references": ["cette lettre", "la lettre", "ce courrier", "le courrier", "ce devis", "le devis", "ce document", "le document", "ce pdf", "ce mail", "cet email", "cet e-mail", "ce contrat", "ce rapport", "cette note", "mentionne dans", "mentionnee dans", "mentionnes dans", "mentionnees dans", "cité dans", "cite dans"],
+  "table_words": ["tableur", "tableurs", "tableau", "tableaux", "feuille de calcul", "feuilles de calcul", "feuille", "feuilles", "onglet", "onglets", "colonne", "colonnes", "ligne", "lignes", "cellule", "cellules", "formule", "formules", "classeur", "classeurs", "excel", "csv", "xlsx", "ods", "fichier de données"],
   "between": ["entre"],
   "numbers": {
     "1": ["un", "une"],

@@ -67,6 +67,7 @@
   "distributive": ["each", "every", "all"],
   "writing_intents": ["write", "draft", "compose", "generate", "prepare", "produce", "create"],
   "document_references": ["this letter", "the letter", "this quote", "the quote", "this document", "the document", "this pdf", "this email", "this e-mail", "this contract", "this report", "this note", "mentioned in", "named in"],
+  "table_words": ["table", "tables", "spreadsheet", "spreadsheets", "worksheet", "worksheets", "sheet", "sheets", "workbook", "workbooks", "column", "columns", "row", "rows", "cell", "cells", "formula", "formulas", "excel", "csv", "xlsx", "ods", "data file"],
   "between": ["between"],
   "numbers": {
     "1": ["one"],

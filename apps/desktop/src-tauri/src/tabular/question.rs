@@ -69,6 +69,12 @@ struct PatternPack {
     /// table is, so the data-only router leaves it to the mixed tier (`refers_to_a_document`).
     #[serde(default)]
     document_references: Vec<String>,
+    /// Words that show a question talks about a table at all ("spreadsheet", "column", "tableur",
+    /// "classeur"), read only by `mentions_a_table`. A separate list from `structural`, which
+    /// answers another question (which structural fact is asked) and must not change the
+    /// classifier when this one grows.
+    #[serde(default)]
+    table_words: Vec<String>,
     /// Verbs that ask for a document to be written ("write", "generate", "draft"). A question with
     /// one is not a question about the data alone, even when it names no document: the table feeds
     /// the writing, so it goes to the tier that reads both (`has_writing_intent`).
@@ -226,6 +232,22 @@ pub(crate) fn refers_to_a_document(question: &str, locale: &str) -> bool {
     pack.document_references
         .iter()
         .any(|phrase| question.contains(&spaced_words(phrase)))
+}
+
+/// True when the question uses a word of the table vocabulary ("spreadsheet", "column", "tableur"),
+/// by whole words, in the interface language's pack or in any other shipped pack: a question typed
+/// in English on a French interface still talks about a table. Evidence that a ticked workbook is
+/// meant (`tabular_answer::implied_workbooks`), never a classification.
+pub(crate) fn mentions_a_table(question: &str, locale: &str) -> bool {
+    let question = spaced_words(question);
+    let own = pack_for(locale);
+    let others = PACKS
+        .iter()
+        .filter_map(|(_, body)| serde_json::from_str::<PatternPack>(body).ok());
+    own.into_iter()
+        .chain(others)
+        .flat_map(|pack| pack.table_words)
+        .any(|word| question.contains(&spaced_words(&word)))
 }
 
 /// True when the question asks for something to be written ("generate the letter", "write a
@@ -1284,6 +1306,34 @@ mod tests {
                 "{question}"
             );
         }
+    }
+
+    #[test]
+    fn a_table_word_is_found_in_the_interface_language_and_in_the_other_one() {
+        assert!(mentions_a_table("what is in the spreadsheet?", "en-US"));
+        assert!(mentions_a_table(
+            "Quelles colonnes dans ce tableur ?",
+            "fr-FR"
+        ));
+        assert!(mentions_a_table("Que contient ce classeur ?", "fr-FR"));
+        assert!(mentions_a_table("which columns are there?", "fr-FR"));
+        assert!(mentions_a_table("Quelle feuille de calcul ?", "en-US"));
+        assert!(mentions_a_table("EXCEL", "en-US"));
+    }
+
+    #[test]
+    fn a_table_word_is_a_whole_word_and_an_ordinary_sentence_has_none() {
+        assert!(!mentions_a_table(
+            "What did the supplier say about the delivery?",
+            "en-US"
+        ));
+        assert!(!mentions_a_table(
+            "Resume ce courrier du fournisseur.",
+            "fr-FR"
+        ));
+        // A word that merely contains one is not one.
+        assert!(!mentions_a_table("The portable stable cabling", "en-US"));
+        assert!(!mentions_a_table("Mes tablettes de cuisine", "fr-FR"));
     }
 
     #[test]

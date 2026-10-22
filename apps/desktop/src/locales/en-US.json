@@ -244,6 +244,7 @@
     "clearBody": "Every question and answer on screen will be forgotten. Your documents and their analysis are not affected.",
     "sourceItemSheet": "{path}, sheet {sheet}",
     "sourceItemSheetColumn": "{path}, sheet {sheet}, column {column}",
+    "sourceItemCard": "{path} (structure only, no data read by the AI)",
     "deterministicData": "Answer computed from your tables folder, without the AI.",
     "documentsNotNeeded": "Answered from your tables; the selected documents were not needed.",
     "unverifiedNumber": "The figure “{number}” appears in none of the excerpts used, nor in your question: check it in your documents.",

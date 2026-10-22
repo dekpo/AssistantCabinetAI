@@ -57,12 +57,14 @@ use crate::retrieval::{self, Evidence, EvidenceCoverage};
 use crate::reveal;
 use crate::settings::{self, Settings};
 use crate::speech::repair;
+use crate::tabular::card::card_budget_chars;
 use crate::tabular_answer::{self, TabularAnswer, WorkbookChoice};
 use crate::viewer_source;
 use crate::work_folder::{
     self, display, suggested_data_folder, suggested_work_folder, WorkFolderPolicy,
 };
 use crate::work_folder_context::{self, ContextView};
+use crate::workbook_use::{self, WorkbookUse};
 
 pub struct AppState {
     pub settings: Mutex<Settings>,
@@ -910,7 +912,7 @@ fn log_renames(app: &AppHandle, renamed: &[filename_sanitizer::Renamed]) {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AskAnswer {
     pub answer: String,
@@ -966,6 +968,9 @@ pub struct AskAnswer {
     /// applied reduction (and who asked for it), or names that need a question. `None` otherwise;
     /// in `suggest` an unapplied reduction is invisible by design.
     pub targeting: Option<TargetingReport>,
+    /// What this answer did with each workbook the question named or concerned: a card sent, a
+    /// figure computed (TABULAR plan 4.3). Machine codes; nothing in the interface shows it yet.
+    pub workbook_use: Vec<WorkbookUse>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -1986,23 +1991,13 @@ async fn sourced_answer(
             let _ = on_event.send(ChatStreamEvent::FolderAnswer {
                 answer: answer.clone(),
             });
+            // A folder answer is read from the filesystem, not from the index, so it already
+            // accounts for every file there is (`unanalysed_files` stays 0): nothing about it is
+            // waiting on a pass.
             return Ok(AskAnswer {
-                answer: String::new(),
-                sources: Vec::new(),
                 folder_answer: Some(answer),
-                coverage: None,
-                // A folder answer is read from the filesystem, not from the index, so it already
-                // accounts for every file there is. Nothing about it is waiting on a pass.
-                unanalysed_files: 0,
                 scope_outdated,
-                without_documents: false,
-                tabular_answer: None,
-                documents_not_needed: false,
-                mixed_answer: None,
-                unverified_numbers: Vec::new(),
-                fill_plan: None,
-                diagnostics: None,
-                targeting: None,
+                ..AskAnswer::default()
             });
         }
         QuestionRoute::SetSearch(set) => {
@@ -2046,20 +2041,10 @@ async fn sourced_answer(
                 answer: answer.clone(),
             });
             return Ok(AskAnswer {
-                answer: String::new(),
-                sources: Vec::new(),
                 folder_answer: Some(answer),
-                coverage: None,
                 unanalysed_files: unanalysed,
                 scope_outdated,
-                without_documents: false,
-                tabular_answer: None,
-                documents_not_needed: false,
-                mixed_answer: None,
-                unverified_numbers: Vec::new(),
-                fill_plan: None,
-                diagnostics: None,
-                targeting: None,
+                ..AskAnswer::default()
             });
         }
         QuestionRoute::TargetedRetrieval { file } => Plan::OneFile(file.relative_path.clone()),
@@ -2095,19 +2080,8 @@ async fn sourced_answer(
         measured.generation_total_ms = generated.total_ms;
         return Ok(AskAnswer {
             answer: generated.text,
-            sources: Vec::new(),
-            folder_answer: None,
-            coverage: None,
-            unanalysed_files: 0,
-            scope_outdated: Vec::new(),
             without_documents: true,
-            tabular_answer: None,
-            documents_not_needed: false,
-            mixed_answer: None,
-            unverified_numbers: Vec::new(),
-            fill_plan: None,
-            diagnostics: None,
-            targeting: None,
+            ..AskAnswer::default()
         });
     }
 
@@ -2285,18 +2259,12 @@ async fn sourced_answer(
     Ok(AskAnswer {
         answer,
         sources: evidence,
-        folder_answer: None,
         coverage,
         unanalysed_files: inventory.unanalysed_documents(),
         scope_outdated,
-        without_documents: false,
-        tabular_answer: None,
-        documents_not_needed: false,
-        mixed_answer: None,
         unverified_numbers,
-        fill_plan: None,
-        diagnostics: None,
         targeting: targeting_report,
+        ..AskAnswer::default()
     })
 }
 
@@ -2386,20 +2354,9 @@ async fn tabular_tier(
     let answered = targeting::answered_file(&answer);
     targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
     Ok(AskAnswer {
-        answer: String::new(),
-        sources: Vec::new(),
-        folder_answer: None,
-        coverage: None,
-        unanalysed_files: 0,
-        scope_outdated: Vec::new(),
-        without_documents: false,
         tabular_answer: Some(answer),
-        documents_not_needed: false,
-        mixed_answer: None,
-        unverified_numbers: Vec::new(),
-        fill_plan: None,
-        diagnostics: None,
         targeting: targeting_plan.report(false),
+        ..AskAnswer::default()
     })
 }
 
@@ -2498,20 +2455,10 @@ async fn mixed_data_only_tier(
     let answered = targeting::answered_file(&answer);
     targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
     Ok(Some(AskAnswer {
-        answer: String::new(),
-        sources: Vec::new(),
-        folder_answer: None,
-        coverage: None,
-        unanalysed_files: 0,
-        scope_outdated: Vec::new(),
-        without_documents: false,
         tabular_answer: Some(answer),
         documents_not_needed: true,
-        mixed_answer: None,
-        unverified_numbers: Vec::new(),
-        fill_plan: None,
-        diagnostics: None,
         targeting: targeting_plan.report(false),
+        ..AskAnswer::default()
     }))
 }
 
@@ -2643,20 +2590,9 @@ fn mixed_folder_tier(
         answer: answer.clone(),
     });
     Ok(Some(AskAnswer {
-        answer: String::new(),
-        sources: Vec::new(),
         folder_answer: Some(answer),
-        coverage: None,
-        unanalysed_files: 0,
         scope_outdated,
-        without_documents: false,
-        tabular_answer: None,
-        documents_not_needed: false,
-        mixed_answer: None,
-        unverified_numbers: Vec::new(),
-        fill_plan: None,
-        diagnostics: None,
-        targeting: None,
+        ..AskAnswer::default()
     }))
 }
 
@@ -2721,20 +2657,8 @@ fn fill_tier(
         source.key,
     )?;
     Ok(Some(AskAnswer {
-        answer: String::new(),
-        sources: Vec::new(),
-        folder_answer: None,
-        coverage: None,
-        unanalysed_files: 0,
-        scope_outdated: Vec::new(),
-        without_documents: false,
-        tabular_answer: None,
-        documents_not_needed: false,
-        mixed_answer: None,
-        unverified_numbers: Vec::new(),
         fill_plan: Some(plan),
-        diagnostics: None,
-        targeting: None,
+        ..AskAnswer::default()
     }))
 }
 
@@ -2816,6 +2740,18 @@ pub fn fill_generate(
         &table,
         &request,
     )
+}
+
+/// The workbooks the knowledge base found what the question names in, best first, whether or not
+/// its reduction was applied (empty when the mode is `off` or the plan is `unplanned`). A workbook
+/// the base never read is left out: it holds no evidence of anything.
+fn implied_by_entity_candidates(plan: &TargetingPlan) -> Vec<String> {
+    let side = &plan.reduction.data;
+    side.candidates
+        .iter()
+        .filter(|file| !side.kept_unread.contains(file))
+        .cloned()
+        .collect()
 }
 
 /// Session 16 (`docs/SESSION-DATA-16-Mixed-Tier.md`): documents and tables are both selected, and
@@ -3013,6 +2949,21 @@ async fn mixed_tier(
             }
         };
 
+    // The workbooks the question names or concerns reach the model as cards (structure only, no
+    // value), computed from what the user ticked and not from the knowledge base's narrowed list
+    // (`tabular_answer::question_cards`). Doors 1 to 3 have returned before this function, so
+    // `implied_single` needs no filtering here.
+    let cards = tabular_answer::question_cards(
+        question,
+        &folder,
+        &scope.data_mode,
+        &locale,
+        &implied_by_entity_candidates(&targeting_plan),
+        card_budget_chars(&budget),
+    );
+    let card_block = &cards.block;
+    let implied = &cards.implied;
+
     let context = mixed_answer::MixedContext {
         locale: &locale,
         gateway: &state.gateway,
@@ -3021,6 +2972,7 @@ async fn mixed_tier(
         idle_timeout,
         history,
         budget,
+        cards_text: &card_block.text,
     };
 
     // Nothing below touches `index`, `folder` or the document inventory again: everything either
@@ -3070,21 +3022,21 @@ async fn mixed_tier(
         });
     }
 
+    // What this answer did with each workbook: the model read a card only if it wrote an answer, and
+    // a figure was computed only if the table side holds a value.
+    let workbook_use = workbook_use::of_mixed_answer(
+        &card_block.cards,
+        implied,
+        &result.table,
+        generated && !result.answer.is_empty(),
+    );
+
     Ok(AskAnswer {
-        answer: String::new(),
-        sources: Vec::new(),
-        folder_answer: None,
-        coverage: None,
-        unanalysed_files: 0,
         scope_outdated,
-        without_documents: false,
-        tabular_answer: None,
-        documents_not_needed: false,
         mixed_answer: Some(result),
-        unverified_numbers: Vec::new(),
-        fill_plan: None,
-        diagnostics: None,
         targeting: targeting_report,
+        workbook_use,
+        ..AskAnswer::default()
     })
 }
 
@@ -3210,19 +3162,9 @@ mod answer_shape_tests {
     fn bare_answer() -> AskAnswer {
         AskAnswer {
             answer: "Reponse".to_string(),
-            sources: Vec::new(),
-            folder_answer: None,
-            coverage: None,
             unanalysed_files: 2,
             scope_outdated: vec!["a.pdf".to_string()],
-            without_documents: false,
-            tabular_answer: None,
-            documents_not_needed: false,
-            mixed_answer: None,
-            unverified_numbers: Vec::new(),
-            fill_plan: None,
-            diagnostics: None,
-            targeting: None,
+            ..AskAnswer::default()
         }
     }
 
@@ -3245,6 +3187,7 @@ mod answer_shape_tests {
             "unverifiedNumbers",
             "fillPlan",
             "targeting",
+            "workbookUse",
         ] {
             assert!(json.get(key).is_some(), "{key} is missing from {json}");
         }

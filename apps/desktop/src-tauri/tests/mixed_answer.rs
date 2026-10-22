@@ -180,6 +180,7 @@ async fn run(
         idle_timeout: IDLE_TIMEOUT,
         history: &[],
         budget: ContextBudget::DEFAULT,
+        cards_text: "",
     };
     mixed_answer::answer(question, pending, document_sources, documents_unavailable, &context, |_| {}, |_| {})
         .await

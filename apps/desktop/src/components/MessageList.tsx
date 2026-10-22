@@ -4,9 +4,8 @@ import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
-import { annotationLines, answerForCopy, sourceGroupLine } from "../lib/annotations";
-import { groupSources } from "../lib/sourceGroups";
-import { formatTabularAnswer, tabularSourceLine } from "../lib/tabularAnswer";
+import { annotationLines, answerForCopy, sourceItems } from "../lib/annotations";
+import { formatTabularAnswer } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
 import {
   isNearBottom,
@@ -300,32 +299,21 @@ export function MessageList({
                   </button>
                 </p>
               ) : null}
-              {entry.sources !== undefined && entry.sources.length > 0 ? (
+              {/* One "Sources" disclosure for everything the answer rests on: its documents (pages), the
+                  sheet and column the engine computed from, and the workbooks whose structure the model
+                  was given (`sourceItems`, also what the copy lists). */}
+              {sourceItems(t, entry).length === 0 ? null : (
                 <details className="message__sources">
                   <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
                   <ul className="message__sources-list">
-                    {groupSources(entry.sources).map((group) => (
-                      <li key={group.relativePath} className="message__source">
-                        {sourceGroupLine(t, group)}
+                    {sourceItems(t, entry).map((item, index) => (
+                      <li key={`source-${index}`} className="message__source">
+                        {item}
                       </li>
                     ))}
                   </ul>
                 </details>
-              ) : null}
-              {/* The same disclosure for an answer the tabular engine computed: a workbook cites
-                  the sheet (and column) its value came from, where a document cites its page. */}
-              {entry.tabularSource === undefined ? null : (
-                <details className="message__sources">
-                  <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
-                  <ul className="message__sources-list">
-                    <li className="message__source">{tabularSourceLine(t, entry.tabularSource)}</li>
-                  </ul>
-                </details>
               )}
-              {/* A mixed answer's own table "based on" line, its own disclosure beside the document
-                  sources' one above - two labelled groups, pages and sheets/columns, so she can
-                  always tell which engine each fact came from (`docs/SESSION-DATA-16-Mixed-Tier.md`,
-                  mechanism 5). */}
               {/* The figure the engine computed, shown beside the model's prose, always (HAP-1,
                   BUG-16): the prose may be wrong or terse, and the reader must have the number to check
                   it against, with the filters it was computed under. Not repeated when the table's
@@ -336,14 +324,6 @@ export function MessageList({
                   <Markdown text={formatTabularAnswer(t, entry.mixedTable, locale)} />
                 </div>
               ) : null}
-              {entry.mixedTableSource === undefined ? null : (
-                <details className="message__sources">
-                  <summary className="disclosure">{t("chat.sourcesToggle")}</summary>
-                  <ul className="message__sources-list">
-                    <li className="message__source">{tabularSourceLine(t, entry.mixedTableSource)}</li>
-                  </ul>
-                </details>
-              )}
               {/* A letter was asked for: the plan she approves (`FillPlanCard`). */}
               {entry.fillPlan === undefined ? null : <FillPlanCard plan={entry.fillPlan} />}
               {/* Every note under the answer, as lines: where it came from, what it rests on, what could

@@ -1287,6 +1287,58 @@ pub fn implied_workbooks(
     Vec::new()
 }
 
+/// The cards a question's turn carries, and why each unnamed workbook is among them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuestionCards {
+    /// The cards of the named workbooks (question order) then the implied ones, built to fit
+    /// `budget_chars`. A named workbook with no usable analysis, or that a name may mean among
+    /// several, gets no card.
+    pub block: crate::tabular::card::CardBlock,
+    /// The implied workbooks, whether or not they got a card, with the rule that implied them.
+    pub implied: Vec<ImpliedWorkbook>,
+}
+
+/// The workbook cards for one question (TABULAR plan 4.1 and 4.2): every workbook it names, then
+/// every ticked workbook it concerns without naming, each described by structure alone. Computed
+/// from `selection`, what the user ticked (`scope.data_mode`), never from a list the knowledge base
+/// narrowed: a name is never reduced away, and a narrowing must not be mistaken for "exactly one
+/// workbook is ticked". `entity_candidates` is as for `implied_workbooks`.
+pub fn question_cards(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+    budget_chars: usize,
+) -> QuestionCards {
+    let named = named_workbooks(question, data, selection);
+    let implied = implied_workbooks(question, data, selection, locale, entity_candidates);
+    let choices = selected_workbook_choices(data, selection);
+    let files: Vec<&str> = named
+        .exact
+        .iter()
+        .map(String::as_str)
+        .chain(implied.iter().map(|each| each.file.as_str()))
+        .collect();
+    let requests: Vec<crate::tabular::card::CardRequest<'_>> = files
+        .iter()
+        .filter_map(|file| {
+            Some(crate::tabular::card::CardRequest {
+                file,
+                inventory: data.usable_inventory(file)?,
+                sheets: choices
+                    .iter()
+                    .find(|choice| choice.relative_path == *file)
+                    .and_then(|choice| choice.sheets.as_deref()),
+            })
+        })
+        .collect();
+    QuestionCards {
+        block: crate::tabular::card::build_cards(&requests, budget_chars),
+        implied,
+    }
+}
+
 /// Whether a name the selected workbooks do not carry is still a workbook of the folder.
 enum WorkbookElsewhere {
     /// It is there but analysis found nothing usable in it (red on the listing).

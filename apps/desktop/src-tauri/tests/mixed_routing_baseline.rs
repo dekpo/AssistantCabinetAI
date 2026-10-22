@@ -30,10 +30,13 @@ use assistant_cabinet_ai_lib::mixed_answer::{
     self, MixedAnswer, MixedContext, MixedPartUnavailable,
 };
 use assistant_cabinet_ai_lib::retrieval::Evidence;
+use assistant_cabinet_ai_lib::tabular::card::card_budget_chars;
 use assistant_cabinet_ai_lib::tabular::engine::{NotAnswerableReason, TabularValue};
 use assistant_cabinet_ai_lib::tabular::question::{has_distributive_word, has_writing_intent};
 use assistant_cabinet_ai_lib::tabular::structural::StructuralAnswer;
-use assistant_cabinet_ai_lib::tabular_answer::{self, ModelAssist, PendingAnswer, TabularAnswer};
+use assistant_cabinet_ai_lib::tabular_answer::{
+    self, ImpliedReason, ModelAssist, PendingAnswer, TabularAnswer,
+};
 use common::counting_gateway::{start_counting_gateway, start_gateway_replying, CountingGateway};
 use common::tabular_fixtures::{self, Cell, AGENCIES, FACTURES};
 
@@ -255,13 +258,51 @@ fn evidence(text: &str) -> Evidence {
     }
 }
 
-/// The mixed tier from `mixed_answer::answer` on, with one document excerpt retrieved.
+/// The mixed tier from `mixed_answer::answer` on, with one document excerpt retrieved and the
+/// workbook cards `commands::mixed_tier` would build (`tabular_answer::question_cards`, from what is
+/// ticked).
 async fn mixed(
+    folders: &Folders,
+    selection: &ScopeMode,
     pending: PendingAnswer,
     question: &str,
     locale: &str,
     gateway_url: &str,
 ) -> (MixedAnswer, bool) {
+    mixed_from(
+        folders,
+        selection,
+        pending,
+        question,
+        locale,
+        gateway_url,
+        vec![evidence(
+            "The contract was signed in January and covers all suppliers.",
+        )],
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn mixed_from(
+    folders: &Folders,
+    selection: &ScopeMode,
+    pending: PendingAnswer,
+    question: &str,
+    locale: &str,
+    gateway_url: &str,
+    document_sources: Vec<Evidence>,
+    documents_unavailable: Option<MixedPartUnavailable>,
+) -> (MixedAnswer, bool) {
+    let cards = tabular_answer::question_cards(
+        question,
+        &folders.open(),
+        selection,
+        locale,
+        &[],
+        card_budget_chars(&ContextBudget::DEFAULT),
+    );
     let gateway = GatewayClient::new().expect("builds a client");
     let context = MixedContext {
         locale,
@@ -271,14 +312,13 @@ async fn mixed(
         idle_timeout: IDLE_TIMEOUT,
         history: &[],
         budget: ContextBudget::DEFAULT,
+        cards_text: &cards.block.text,
     };
     mixed_answer::answer(
         question,
         pending,
-        vec![evidence(
-            "The contract was signed in January and covers all suppliers.",
-        )],
-        None,
+        document_sources,
+        documents_unavailable,
         &context,
         |_| {},
         |_| {},
@@ -348,19 +388,27 @@ async fn baseline_case_a_a_named_workbook_and_an_operation_is_answered_by_the_en
     }
 }
 
-// --- B: the figure sent to the model carries no file name ---------------------------------------
+// --- B: the figure sent to the model names its workbook -----------------------------------------
 
 #[tokio::test]
-async fn baseline_case_b_the_figure_sent_to_the_model_names_no_file() {
-    // Frozen 20 October 2026. DEFECT, changes in step 03: the writer gets sheet, column, operation
-    // and value, but not the workbook they come from, and no card describing it.
+async fn baseline_case_b_the_figure_sent_to_the_model_names_its_workbook() {
+    // Frozen 20 October 2026 with the defect that the writer got the figure and no file name.
+    // Changed on purpose by step 03: the block names the workbook, and its card is sent too.
     let folders = Folders::build();
     let selection = folders.ticked(&[AGENCIES, FACTURES]);
     let question = "What is the total amount of agencies.csv?";
     let pending = folders.for_mixed(question, "en-US", &selection);
     let gateway = start_gateway_replying("The table gives the total.");
 
-    let (result, generated) = mixed(pending, question, "en-US", &gateway.url).await;
+    let (result, generated) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+    )
+    .await;
 
     assert!(generated);
     assert!(
@@ -376,35 +424,41 @@ async fn baseline_case_b_the_figure_sent_to_the_model_names_no_file() {
     );
     let sources = sent_sources(&gateway);
     let table_block = sources
-        .split_once("Table results:\n")
-        .expect("the table block carries the figure")
+        .split_once("Table results (workbook \"agencies.csv\"):\n")
+        .expect("the table block names the workbook")
         .1;
     assert_eq!(
         table_block,
         "Sheet agencies, column amount: sum = 270599.5 (computed over 2400 rows)"
     );
-    assert!(
-        !sources.contains("agencies.csv"),
-        "no file name reaches the model: {sources}"
-    );
-    assert!(
-        !sources.contains(".csv"),
-        "no file name reaches the model: {sources}"
-    );
+    // Only the named workbook has a card; the other ticked one is neither named nor implied.
+    assert!(sources.contains("Workbook \"agencies.csv\""), "{sources}");
+    assert!(!sources.contains("factures.csv"), "{sources}");
 }
 
-// --- C: a named workbook, no operation: the table side is "not asked about" -----------------------
+// --- C: a named workbook, no operation: its card reaches the writer -----------------------------
 
 #[tokio::test]
-async fn baseline_case_c_a_named_workbook_without_an_operation_is_not_asked_about() {
-    // Frozen 20 October 2026. DEFECT, changes in step 03: the user named a workbook, the model
-    // receives `Table results: none.`, and the interface says the question concerned none of the
-    // tables.
+async fn baseline_case_c_a_named_workbook_without_an_operation_reaches_the_writer_as_a_card() {
+    // Frozen 20 October 2026 as "not asked about": the model got `Table results: none.` and the
+    // interface said the question concerned none of the tables. Flipped on purpose by step 03.
     let folders = Folders::build();
     let selection = folders.ticked(&[AGENCIES, FACTURES]);
-    for (question, locale) in [
-        ("Summarise agencies.csv", "en-US"),
-        ("R\u{e9}sume factures.csv", "fr-FR"),
+    for (question, locale, file, columns, value) in [
+        (
+            "Summarise agencies.csv",
+            "en-US",
+            AGENCIES,
+            ["A  agency", "B  amount", "C  year"],
+            "Harbor",
+        ),
+        (
+            "R\u{e9}sume factures.csv",
+            "fr-FR",
+            FACTURES,
+            ["A  date", "B  fournisseur", "C  client"],
+            "Gamma",
+        ),
     ] {
         assert!(
             folders.data_only(question, locale, &selection).is_none(),
@@ -418,26 +472,45 @@ async fn baseline_case_c_a_named_workbook_without_an_operation_is_not_asked_abou
         );
         assert!(!skip_model, "{question:?}");
 
-        let gateway = start_gateway_replying("A summary written from the documents.");
+        let gateway = start_gateway_replying("A summary written from the card.");
         let pending = folders.for_mixed(question, locale, &selection);
-        let (result, generated) = mixed(pending, question, locale, &gateway.url).await;
+        let (result, generated) = mixed(
+            &folders,
+            &selection,
+            pending,
+            question,
+            locale,
+            &gateway.url,
+        )
+        .await;
 
         assert!(generated, "{question:?}");
         assert_eq!(result.table, None, "{question:?}");
-        assert_eq!(
-            result.table_unavailable,
-            Some(MixedPartUnavailable::NotAskedAbout),
-            "{question:?}"
-        );
+        assert_eq!(result.table_unavailable, None, "{question:?}");
         assert_eq!(
             gateway.calls(),
             1,
             "{question:?}: the writer only, the hidden interpreter is not asked"
         );
+        let sources = sent_sources(&gateway);
         assert!(
-            sent_sources(&gateway).ends_with("Table results: none."),
-            "{question:?}"
+            sources.contains("Workbook cards (structure only, no data values):"),
+            "{question:?}: {sources}"
         );
+        assert!(
+            sources.contains(&format!("Workbook \"{file}\"")),
+            "{sources}"
+        );
+        for column in columns {
+            assert!(
+                sources.contains(column),
+                "{question:?}: {column} in {sources}"
+            );
+        }
+        // Structure only: no cell value, no row.
+        assert!(!sources.contains(value), "{question:?}: {sources}");
+        assert!(!sources.contains("9999.75"), "{sources}");
+        assert!(sources.ends_with("Table results: none."), "{question:?}");
     }
 }
 
@@ -543,7 +616,15 @@ async fn baseline_case_f_an_operation_with_a_word_matching_no_data_is_left_to_th
 
     let gateway = start_counting_gateway();
     let pending = folders.for_mixed(question, "en-US", &selection);
-    let (result, generated) = mixed(pending, question, "en-US", &gateway.url).await;
+    let (result, generated) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+    )
+    .await;
     assert!(!generated);
     assert!(
         matches!(
@@ -668,14 +749,16 @@ async fn baseline_case_h_a_letter_for_each_row_of_a_named_workbook_finds_no_sour
     assert!(is_unrecognised_nudge(&fallback), "{fallback:?}");
     let gateway = start_gateway_replying("Dear supplier, a letter written from the documents.");
     let pending = folders.for_mixed(question, "en-US", &both);
-    let (result, generated) = mixed(pending, question, "en-US", &gateway.url).await;
+    let (result, generated) =
+        mixed(&folders, &both, pending, question, "en-US", &gateway.url).await;
     assert!(generated);
     assert_eq!(result.table, None);
-    assert_eq!(
-        result.table_unavailable,
-        Some(MixedPartUnavailable::NotAskedAbout)
-    );
-    assert!(sent_sources(&gateway).ends_with("Table results: none."));
+    // The question names factures.csv, so its card reaches the writer: the table side is present as
+    // that card and only the table value is absent (flipped by step 03).
+    assert_eq!(result.table_unavailable, None);
+    let sources = sent_sources(&gateway);
+    assert!(sources.contains("Workbook \"factures.csv\""), "{sources}");
+    assert!(sources.ends_with("Table results: none."));
 }
 
 // --- I (partial): a name that no workbook carries has no table part -------------------------------
@@ -699,12 +782,21 @@ async fn baseline_case_i_a_name_no_workbook_carries_is_left_to_the_documents() {
 
     let gateway = start_gateway_replying("The contract says nothing about it.");
     let pending = folders.for_mixed(question, "en-US", &selection);
-    let (result, generated) = mixed(pending, question, "en-US", &gateway.url).await;
+    let (result, generated) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+    )
+    .await;
     assert!(generated);
-    assert_eq!(
-        result.table_unavailable,
-        Some(MixedPartUnavailable::NotAskedAbout)
-    );
+    // Changed by step 03: the only ticked workbook is implied (`implied_single`, plan 4.2 rule 1), so
+    // its card reaches the writer and the table side is no longer "not asked about". With two
+    // workbooks ticked and no sign, nothing is implied and the answer stays as it was frozen.
+    assert_eq!(result.table_unavailable, None);
+    assert!(sent_sources(&gateway).contains("Workbook \"agencies.csv\""));
     assert_eq!(gateway.calls(), 1);
 }
 
@@ -750,7 +842,15 @@ async fn baseline_case_k_a_formula_question_is_answered_with_a_yes_or_no() {
     assert!(folders.data_only(question, "en-US", &selection).is_none());
     let pending = folders.for_mixed(question, "en-US", &selection);
     let gateway = start_gateway_replying("=B2+C2");
-    let (result, generated) = mixed(pending, question, "en-US", &gateway.url).await;
+    let (result, generated) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+    )
+    .await;
     assert!(
         matches!(
             &result.table,
@@ -790,12 +890,19 @@ async fn baseline_case_l_a_writing_request_without_a_merge_sign_stays_editorial(
 
     let gateway = start_gateway_replying("Dear Alpha, here is the mail.");
     let pending = folders.for_mixed(question, "en-US", &selection);
-    let (result, generated) = mixed(pending, question, "en-US", &gateway.url).await;
+    let (result, generated) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+    )
+    .await;
     assert!(generated);
-    assert_eq!(
-        result.table_unavailable,
-        Some(MixedPartUnavailable::NotAskedAbout)
-    );
+    // The named workbook reaches the writer as a card (flipped by step 03); step 10 adds its rows.
+    assert_eq!(result.table_unavailable, None);
+    assert!(sent_sources(&gateway).contains("Workbook \"factures.csv\""));
     assert!(sent_sources(&gateway).ends_with("Table results: none."));
 }
 
@@ -841,4 +948,273 @@ async fn baseline_case_m_a_tables_only_question_without_an_operation_ends_in_the
             "{question:?}: exactly one call, the hidden interpreter"
         );
     }
+}
+
+// --- Step 03: the cards the writer receives ---------------------------------------------------------
+//
+// Added by TABULAR step 03 beside the frozen cases, because they use the same folders and the same
+// calls. They run the real card selection (`tabular_answer::question_cards`, which `commands::
+// mixed_tier` calls) and then the real writer, one level below the Tauri command.
+
+#[tokio::test]
+async fn step_03_two_named_workbooks_both_get_a_card_in_the_order_of_the_question() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[AGENCIES, FACTURES, COMMANDES]);
+    // Written in the opposite order to the selection on purpose.
+    // No formula word: a formula question is still a yes-or-no fact until steps 05 and 07 (case K).
+    let question = "Compare the montant of factures.csv with the amount of agencies.csv";
+    let pending = folders.for_mixed(question, "en-US", &selection);
+    let gateway = start_gateway_replying("=SUMIF(...)");
+
+    let (result, generated) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+    )
+    .await;
+
+    assert!(generated);
+    assert_eq!(result.table_unavailable, None);
+    let sources = sent_sources(&gateway);
+    let factures = sources
+        .find("Workbook \"factures.csv\"")
+        .expect("factures card");
+    let agencies = sources
+        .find("Workbook \"agencies.csv\"")
+        .expect("agencies card");
+    assert!(
+        factures < agencies,
+        "question order, not selection order: {sources}"
+    );
+    assert!(!sources.contains("commandes.csv"), "{sources}");
+    assert_eq!(gateway.calls(), 1);
+}
+
+#[test]
+fn step_03_implied_workbooks_follow_the_rules_of_the_plan() {
+    let folders = Folders::build();
+    let budget = card_budget_chars(&ContextBudget::DEFAULT);
+    let cards = |question: &str, locale: &str, selection: &ScopeMode, candidates: &[String]| {
+        tabular_answer::question_cards(
+            question,
+            &folders.open(),
+            selection,
+            locale,
+            candidates,
+            budget,
+        )
+    };
+
+    // One ticked workbook, nothing named: it is the one the user means.
+    let single = folders.ticked(&[FACTURES]);
+    let found = cards(
+        "What would a lookup formula look like?",
+        "en-US",
+        &single,
+        &[],
+    );
+    assert_eq!(found.implied.len(), 1);
+    assert_eq!(found.implied[0].reason, ImpliedReason::ImpliedSingle);
+    assert_eq!(found.block.cards.len(), 1);
+    assert_eq!(found.block.cards[0].file, FACTURES);
+
+    // Two ticked and a table word: both are candidates.
+    let two = folders.ticked(&[FACTURES, AGENCIES]);
+    let found = cards(
+        "Which column should I use in this spreadsheet?",
+        "en-US",
+        &two,
+        &[],
+    );
+    assert!(found
+        .implied
+        .iter()
+        .all(|each| each.reason == ImpliedReason::ImpliedByWord));
+    assert_eq!(found.block.cards.len(), 2);
+
+    // Several ticked, no sign at all: no card, as before.
+    let many = folders.ticked(&[FACTURES, AGENCIES, COMMANDES, CALCULS]);
+    let found = cards(
+        "Write a polite reminder for the supplier",
+        "en-US",
+        &many,
+        &[],
+    );
+    assert!(found.implied.is_empty());
+    assert!(found.block.cards.is_empty());
+    assert!(found.block.text.is_empty() || found.block.cards.is_empty());
+}
+
+#[test]
+fn step_03_a_narrowed_list_never_hides_a_name_and_never_makes_a_workbook_the_only_one() {
+    let folders = Folders::build();
+    let budget = card_budget_chars(&ContextBudget::DEFAULT);
+    let ticked = folders.ticked(&[AGENCIES, FACTURES, COMMANDES]);
+
+    // The knowledge base found the question's entity in commandes.csv alone. The workbooks the user
+    // ticked are still three, so this is "implied by entity" and not "the only ticked workbook".
+    let entity = vec![COMMANDES.to_string()];
+    let found = tabular_answer::question_cards(
+        "Anything about CMD-2026-003?",
+        &folders.open(),
+        &ticked,
+        "en-US",
+        &entity,
+        budget,
+    );
+    assert_eq!(found.implied.len(), 1);
+    assert_eq!(found.implied[0].file, COMMANDES);
+    assert_eq!(found.implied[0].reason, ImpliedReason::ImpliedByEntity);
+
+    // The same list says nothing about a workbook the question names.
+    let found = tabular_answer::question_cards(
+        "What are the columns of agencies.csv?",
+        &folders.open(),
+        &ticked,
+        "en-US",
+        &entity,
+        budget,
+    );
+    let files: Vec<&str> = found
+        .block
+        .cards
+        .iter()
+        .map(|card| card.file.as_str())
+        .collect();
+    assert_eq!(files.first().copied(), Some(AGENCIES), "{files:?}");
+}
+
+#[test]
+fn step_03_a_small_card_budget_shrinks_the_cards_and_never_drops_a_named_one() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES, AGENCIES, COMMANDES]);
+    let question = "Compare factures.csv, agencies.csv and commandes.csv";
+    let open = folders.open();
+    let roomy = tabular_answer::question_cards(question, &open, &selection, "en-US", &[], 4_000);
+    let tight = tabular_answer::question_cards(question, &open, &selection, "en-US", &[], 300);
+
+    assert_eq!(roomy.block.cards.len(), 3);
+    assert!(!roomy.block.truncated);
+    assert_eq!(
+        tight.block.cards.len(),
+        3,
+        "a named workbook is shrunk, not dropped"
+    );
+    assert!(tight.block.truncated);
+    assert!(tight.block.text.chars().count() < roomy.block.text.chars().count());
+    for card in &tight.block.cards {
+        assert!(tight
+            .block
+            .text
+            .contains(&format!("Workbook \"{}\"", card.file)));
+    }
+}
+
+#[tokio::test]
+async fn step_03_cards_without_documents_still_reach_the_model() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES, AGENCIES]);
+    let question = "Draft a short note about factures.csv";
+    let pending = folders.for_mixed(question, "en-US", &selection);
+    let gateway = start_gateway_replying("A short note.");
+
+    let (result, generated) = mixed_from(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &gateway.url,
+        Vec::new(),
+        Some(MixedPartUnavailable::NoEvidence),
+    )
+    .await;
+
+    assert!(generated, "documents are empty, the cards are not");
+    assert_eq!(gateway.calls(), 1);
+    assert_eq!(result.answer, "A short note.");
+    assert_eq!(
+        result.documents_unavailable,
+        Some(MixedPartUnavailable::NoEvidence)
+    );
+    assert_eq!(result.table_unavailable, None);
+    let sources = sent_sources(&gateway);
+    assert!(sources.contains("Document excerpts: none."));
+    assert!(sources.contains("D  montant"), "{sources}");
+}
+
+#[tokio::test]
+async fn step_03_no_card_and_no_documents_is_still_insufficient_evidence() {
+    let folders = Folders::build();
+    // Four ticked, no name, no table word: no card. Documents unavailable: nothing to answer from.
+    let selection = folders.ticked(&[FACTURES, AGENCIES, COMMANDES, CALCULS]);
+    let question = "Write a polite reminder for the supplier";
+    let pending = folders.for_mixed(question, "en-US", &selection);
+    let gateway = start_counting_gateway();
+    let cards =
+        tabular_answer::question_cards(question, &folders.open(), &selection, "en-US", &[], 4_000);
+    assert!(cards.block.cards.is_empty());
+    let client = GatewayClient::new().expect("builds a client");
+    let context = MixedContext {
+        locale: "en-US",
+        gateway: &client,
+        server_url: &gateway.url,
+        model_alias: "cabinet-chat",
+        idle_timeout: IDLE_TIMEOUT,
+        history: &[],
+        budget: ContextBudget::DEFAULT,
+        cards_text: &cards.block.text,
+    };
+    let outcome = mixed_answer::answer(
+        question,
+        pending,
+        Vec::new(),
+        Some(MixedPartUnavailable::NoEvidence),
+        &context,
+        |_| {},
+        |_| {},
+    )
+    .await;
+    assert!(outcome.is_err());
+    assert_eq!(gateway.calls(), 0);
+}
+
+#[tokio::test]
+async fn step_03_a_figure_the_card_states_is_not_reported_as_unverified() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[AGENCIES, FACTURES]);
+    let question = "Summarise agencies.csv";
+    // agencies.csv has 2 400 data rows, which its card says.
+    let supported = start_gateway_replying("The workbook holds 2400 rows over three columns.");
+    let pending = folders.for_mixed(question, "en-US", &selection);
+    let (result, _) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &supported.url,
+    )
+    .await;
+    assert!(
+        result.unverified_numbers.is_empty(),
+        "{:?}",
+        result.unverified_numbers
+    );
+
+    let invented = start_gateway_replying("The workbook holds 7777 rows over three columns.");
+    let pending = folders.for_mixed(question, "en-US", &selection);
+    let (result, _) = mixed(
+        &folders,
+        &selection,
+        pending,
+        question,
+        "en-US",
+        &invented.url,
+    )
+    .await;
+    assert_eq!(result.unverified_numbers, vec!["7777".to_string()]);
 }

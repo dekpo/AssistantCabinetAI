@@ -181,10 +181,23 @@ struct SheetBlock {
 }
 
 fn sheet_block(sheet: &SheetInventory, format: TabularFormat, lean: bool) -> SheetBlock {
-    let rows = count_text(sheet.row_count, "data row", "data rows");
-    let header = match sheet.header_row {
-        Some(index) => format!("header on row {}, data from row {}", index + 1, index + 2),
-        None => "no header row detected, columns are numbered column_1, column_2, ...".to_string(),
+    let counted = count_text(sheet.row_count, "data row", "data rows");
+    // The rows are named by their spreadsheet numbers, so a figure the model derives from them
+    // ("rows 2 to 10") is a figure the card states, and the header is plainly not a data row.
+    let (rows, header) = match sheet.header_row {
+        Some(index) => {
+            let first = index + 2;
+            let located = match sheet.row_count {
+                0 => counted,
+                1 => format!("{counted}, on row {first}"),
+                many => format!("{counted}, on rows {first} to {}", first + many - 1),
+            };
+            (located, format!("header on row {}, not counted", index + 1))
+        }
+        None => (
+            counted,
+            "no header row detected, columns are numbered column_1, column_2, ...".to_string(),
+        ),
     };
     let label = match format {
         TabularFormat::Csv => "Table".to_string(),
@@ -250,6 +263,18 @@ fn workbook_line(file: &str, inventory: &TabularInventory) -> String {
         clean(plain_path(file), MAX_PATH_CHARS),
         facts.join(", ")
     )
+}
+
+/// How a block of the turn names a workbook: the quoted plain path, and the folder of a workbook of
+/// the other one (`"t.xlsx", in the documents folder`). The same naming as the card's own line.
+pub fn file_label(file: &str) -> String {
+    let path = format!("\"{}\"", clean(plain_path(file), MAX_PATH_CHARS));
+    match parse_key(Domain::Data, file) {
+        Some((root, _)) if is_foreign_key(file) => {
+            format!("{path}, in the {} folder", root.as_str())
+        }
+        _ => path,
+    }
 }
 
 /// What a card shows of its sheets: how many columns of each (`shown`), and how many sheets are
@@ -534,7 +559,7 @@ mod tests {
         assert!(!card.truncated);
         assert_eq!(card.file, "factures/fournisseurs-2026-t1.xlsx");
         let expected = "Workbook \"factures/fournisseurs-2026-t1.xlsx\" (xlsx)\n\
-            \x20 Sheet \"Factures\": 124 data rows; header on row 1, data from row 2\n\
+            \x20 Sheet \"Factures\": 124 data rows, on rows 2 to 125; header on row 1, not counted\n\
             \x20   A  Date         date\n\
             \x20   B  Fournisseur  text\n\
             \x20   C  Montant TTC  numeric (EUR)\n\
@@ -561,7 +586,7 @@ mod tests {
         };
         let third = build_card(&two(Some(2)), &options("x.xlsx", 10_000)).text;
         assert!(
-            third.contains("header on row 3, data from row 4"),
+            third.contains("10 data rows, on rows 4 to 13; header on row 3, not counted"),
             "{third}"
         );
         let none = build_card(&two(None), &options("x.xlsx", 10_000)).text;
@@ -584,7 +609,7 @@ mod tests {
         );
         assert!(build_card(&one, &options("x.xlsx", 10_000))
             .text
-            .contains("1 data row;"));
+            .contains("1 data row, on row 2;"));
     }
 
     #[test]
@@ -684,9 +709,9 @@ mod tests {
         )
         .text;
 
-        assert!(text.contains("Sheet \"Calculs\": 20 data rows; header on row 1, data from row 2 (not a data table)"), "{text}");
+        assert!(text.contains("Sheet \"Calculs\": 20 data rows, on rows 2 to 21; header on row 1, not counted (not a data table)"), "{text}");
         assert!(
-            text.contains("Sheet \"Donnees\": 20 data rows; header on row 1, data from row 2\n"),
+            text.contains("Sheet \"Donnees\": 20 data rows, on rows 2 to 21; header on row 1, not counted\n"),
             "{text}"
         );
         assert_eq!(

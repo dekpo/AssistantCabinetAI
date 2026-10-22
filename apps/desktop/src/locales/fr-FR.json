@@ -244,6 +244,7 @@
     "clearBody": "Toutes les questions et réponses affichées seront oubliées. Vos documents et leur analyse ne sont pas concernés.",
     "sourceItemSheet": "{path}, feuille {sheet}",
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
+    "sourceItemCard": "{path} (structure seulement, aucune donnée lue par l'IA)",
     "deterministicData": "Réponse calculée depuis votre dossier des tableaux, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
     "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",

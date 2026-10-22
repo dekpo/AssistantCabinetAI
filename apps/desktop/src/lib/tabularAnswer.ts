@@ -106,6 +106,13 @@ export function tabularSourceLine(t: Translator, source: TabularSource): string 
       });
 }
 
+/** A workbook whose structure (its card: sheets, columns, types, row counts - no cell) was given to the
+ * model, as a line of the sources: the model may name it in its answer, so the reader must be able to
+ * find it there (TABULAR step 03). */
+export function workbookCardSourceLine(t: Translator, file: string): string {
+  return t("chat.sourceItemCard", { path: displayPathOfKey("data", file) });
+}
+
 /** A weekday name (1 Monday .. 7 Sunday) in her language, from a fixed reference Monday - no
  * catalogue keys needed, `Intl` already knows every shipped locale's weekday names. */
 function weekdayName(weekday: number, locale: string): string {

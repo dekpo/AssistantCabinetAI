@@ -49,6 +49,7 @@ pub mod template_fill;
 pub mod viewer_source;
 mod work_folder;
 pub mod work_folder_context;
+pub mod workbook_use;
 
 use commands::AppState;
 

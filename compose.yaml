@@ -1,4 +1,7 @@
 # Official local stack. Same file on Windows and later on the Mac mini.
+# Open WebUI is an OPTIONAL owner workbench behind the `workbench` profile: `docker compose up -d`
+# does not start it; `docker compose --profile workbench up -d open-webui` does (development only,
+# never on a practice machine: it keeps its own chat database in ./data/open-webui).
 # Bind published ports to 127.0.0.1 only. Do not add Open WebUI Computer.
 # Settings in this file are the source of truth (ENABLE_PERSISTENT_CONFIG=false).
 # Account, chats, prompts, and models live in ./data on the host (not named
@@ -93,6 +96,7 @@ services:
       - cabinet
 
   open-webui:
+    profiles: ["workbench"]
     image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG:-main}
     container_name: assistant-cabinet-open-webui
     restart: unless-stopped

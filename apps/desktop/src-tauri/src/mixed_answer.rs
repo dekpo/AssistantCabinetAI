@@ -12,10 +12,12 @@
 //! index, the `Channel` - that calls into this module and nowhere else does the mixed tier's own
 //! reasoning live.
 //!
-//! The model never receives a cell value or a row: the table block is built from
-//! `tabular::escalation::format_evidence`, the same function tier 2 keeps unsent for exactly this
-//! session, which already refuses a raw row list, and a workbook it is told about reaches it as a
-//! card, which holds structure only (`tabular::card`). Entity linking (`entity_link`) reads retrieved
+//! The table block is built from `tabular::escalation::format_evidence`, the same function tier 2
+//! keeps unsent for exactly this session, which already refuses a raw row list, and a workbook it is
+//! told about reaches it as a card, which holds structure only (`tabular::card`). Since TABULAR step
+//! 03b a controlled sample of its rows and the engine's column profile may follow the card, identifiers
+//! masked and the cells held between random markers (`tabular::sample`, the setting
+//! `tabular_rows_mode`); with that setting off the turn is exactly the turn without them. Entity linking (`entity_link`) reads retrieved
 //! excerpt text, never the question's own words a second time - `tabular_answer::detect_filters`
 //! (gap A, session 11) already tried those - and anchors a candidate word against real column
 //! values through `tabular_answer::column_value_words`, the same anchoring rule, applied to a
@@ -35,6 +37,7 @@ use crate::retrieval::Evidence;
 use crate::tabular::engine::{self, FilterSpec, TabularValue};
 use crate::tabular::inventory::{ColumnType, TabularInventory};
 use crate::tabular::question::{self, TabularRoute};
+use crate::tabular::sample::SAMPLE_INSTRUCTION;
 use crate::tabular::Workbook;
 use crate::tabular_answer::{self, PendingAnswer, TabularAnswer};
 
@@ -61,6 +64,13 @@ pub const MIXED_INSTRUCTION: &str =
      ask for. A workbook card is a real source about structure: use it to say what a workbook \
      contains, which columns to use and how to relate or combine files, even though no cell value \
      is available, and do not refuse a question about structure for lack of data.";
+
+/// The words of the formula sentence of `MIXED_INSTRUCTION` that are true only without a sample, and
+/// what a turn that carries a sample says instead (`build_turn`). Measured on 22 October 2026
+/// (TABULAR step 03b): with rows in the turn, `qwen3:4b-instruct` answered "the data is not visible
+/// here, so I cannot test the formula", which the sample contradicts.
+const FORMULA_NO_DATA_PHRASE: &str = "because you do not see the data";
+const FORMULA_WITH_SAMPLE_PHRASE: &str = "because you cannot run it on the data";
 
 /// How much of the document share of the budget this tier sends, under the existing cap
 /// (mechanism 4: "the context cap is split between the blocks, a documented share each"). Smaller
@@ -137,6 +147,10 @@ pub struct MixedAnswer {
     /// only when no table figure is shown (a table value is checked by `corrections` instead).
     /// Reported beside the answer, never edited into it (`number_check`).
     pub unverified_numbers: Vec<String>,
+    /// The explicit arithmetic the model wrote itself (`10 + 40 = 50`), as written: the interface
+    /// says under the answer that only the engine is reliable, and the answer is never edited
+    /// (`number_check::arithmetic_expressions`, TABULAR step 03b).
+    pub model_arithmetic: Vec<String>,
 }
 
 /// Everything `answer` needs, owned or borrowed, with no `AppHandle` and - on purpose - no
@@ -159,6 +173,10 @@ pub struct MixedContext<'a> {
     /// built by the caller from the workbooks the question names or concerns. Empty when there is
     /// none: the turn then reads `Workbook cards: none.`
     pub cards_text: &'a str,
+    /// The block of sample and profile (`tabular::sample::SampleBlock::text`, markers included),
+    /// empty when the setting is `off` or there is nothing to send. Its figures are known facts of
+    /// the turn for the number checks, as the cards are.
+    pub sample_text: &'a str,
 }
 
 /// The full mixed tier, from where `commands::mixed_tier` leaves off: entity linking, compute,
@@ -215,6 +233,7 @@ pub async fn answer(
                     corrections: Vec::new(),
                     rejected_citations: Vec::new(),
                     unverified_numbers: Vec::new(),
+                    model_arithmetic: Vec::new(),
                 },
                 false,
             ));
@@ -254,6 +273,7 @@ pub async fn answer(
                 corrections: Vec::new(),
                 rejected_citations: Vec::new(),
                 unverified_numbers: Vec::new(),
+                model_arithmetic: Vec::new(),
             },
             false,
         ));
@@ -262,6 +282,7 @@ pub async fn answer(
     let instruction = build_turn(
         &document_sources,
         non_empty(context.cards_text),
+        non_empty(context.sample_text),
         table_text.as_deref(),
     );
     let final_turn = format!("{instruction}\n\nQuestion: {question}");
@@ -302,6 +323,7 @@ pub async fn answer(
                     corrections: Vec::new(),
                     rejected_citations: Vec::new(),
                     unverified_numbers: Vec::new(),
+                    model_arithmetic: Vec::new(),
                 },
                 true,
             ));
@@ -314,7 +336,7 @@ pub async fn answer(
         &answer_text,
         expected,
         &document_sources,
-        &[context.cards_text],
+        &[context.cards_text, context.sample_text],
     );
     let rejected_citations = reject_citations(&answer_text, document_sources.len());
     // With no table figure on screen there is nothing to correct the prose against, so the figures it
@@ -323,11 +345,14 @@ pub async fn answer(
         let mut known: Vec<&str> = document_sources.iter().map(|item| item.text.as_str()).collect();
         known.extend(document_sources.iter().map(|item| item.relative_path.as_str()));
         known.push(context.cards_text);
+        known.push(context.sample_text);
         known.push(question);
         number_check::unsupported_numbers(&answer_text, &known, 2)
     } else {
         Vec::new()
     };
+
+    let model_arithmetic = number_check::arithmetic_expressions(&answer_text);
 
     Ok((
         MixedAnswer {
@@ -339,6 +364,7 @@ pub async fn answer(
             corrections,
             rejected_citations,
             unverified_numbers,
+            model_arithmetic,
         },
         true,
     ))
@@ -489,12 +515,15 @@ pub(crate) fn cap_document_share(evidence: &[Evidence], budget_chars: usize) -> 
 /// `retrieval::build_context_turn` and `tabular::escalation::build_context_turn`. `document_sources`
 /// must already be the capped set (`cap_document_share`): this function only formats what it is
 /// given, so citation numbers in the model's answer and `document_sources.len()` always agree.
-/// `cards` is the block of workbook cards as `tabular::card` writes it (header included) and
+/// `cards` is the block of workbook cards as `tabular::card` writes it (header included),
+/// `sample` the block of sample and profile as `tabular::sample` writes it (markers included) and
 /// `table_block` the block of `table_evidence_text` (header included); an absent block reads
-/// `<name>: none.`
+/// `<name>: none.` The sample is the exception: with none there is no block at all and no sentence
+/// about it in the instruction, so a turn with the setting `off` is the turn of step 03 to the byte.
 pub(crate) fn build_turn(
     document_sources: &[Evidence],
     cards: Option<&str>,
+    sample: Option<&str>,
     table_block: Option<&str>,
 ) -> String {
     let documents_block = if document_sources.is_empty() {
@@ -513,7 +542,20 @@ pub(crate) fn build_turn(
         Some(text) => text.to_string(),
         None => "Table results: none.".to_string(),
     };
-    format!("{MIXED_INSTRUCTION}\n\n{documents_block}\n\n{cards_block}\n\n{table_block}")
+    match sample {
+        Some(sample) => {
+            // With rows in the turn the writer does see data, so the formula sentence must not say
+            // it does not: it cannot run the formula, which is what it is asked to admit.
+            let instruction =
+                MIXED_INSTRUCTION.replace(FORMULA_NO_DATA_PHRASE, FORMULA_WITH_SAMPLE_PHRASE);
+            format!(
+                "{instruction} {SAMPLE_INSTRUCTION}\n\n{documents_block}\n\n{cards_block}\n\n{sample}\n\n{table_block}"
+            )
+        }
+        None => format!(
+            "{MIXED_INSTRUCTION}\n\n{documents_block}\n\n{cards_block}\n\n{table_block}"
+        ),
+    }
 }
 
 // --- Entity linking: a retrieved excerpt naming a real table value ----------------------------
@@ -845,21 +887,26 @@ mod tests {
 
     #[test]
     fn the_blocks_of_a_turn_stay_neutral_about_who_the_user_is() {
-        let turn = build_turn(&[], None, None).to_lowercase();
+        let turn = build_turn(&[], None, None, None).to_lowercase();
         for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
             assert!(!turn.contains(word), "{word:?} found in the empty turn");
         }
     }
 
-    // The instruction, the document share, the card share, a table block and a long question fit
-    // under the default window with room left for the history. Step 10 adds its rows share here.
+    // The instruction, the document share, the card share, the sample and profile shares, a table
+    // block and a long question fit under the default window with room left for the history.
+    // Step 10 adds its rows share here.
     #[test]
     fn the_shares_fit_the_default_window() {
+        use crate::tabular::sample::{PROFILE_SHARE_CHARS, SAMPLE_INSTRUCTION, SAMPLE_SHARE_CHARS};
         let question = "q".repeat(400);
         let table_block = format!("Table results (workbook \"t.xlsx\"):\n{}", "t".repeat(300));
         let fixed = MIXED_INSTRUCTION.chars().count()
+            + SAMPLE_INSTRUCTION.chars().count()
             + MIXED_DOCUMENT_SHARE_CHARS
             + crate::tabular::card::CARD_SHARE_CHARS
+            + SAMPLE_SHARE_CHARS
+            + PROFILE_SHARE_CHARS
             + table_block.chars().count()
             + question.chars().count();
         let budget = ContextBudget::DEFAULT;
@@ -872,6 +919,32 @@ mod tests {
             "{} characters left for the history",
             budget.history_chars(fixed)
         );
+    }
+
+    #[test]
+    fn the_sample_sits_between_the_cards_and_the_table_results_and_off_adds_nothing() {
+        use crate::tabular::sample::SAMPLE_INSTRUCTION;
+        let sample =
+            "Table sample and profile of the user's tables:\n<<DATA-abc123>>\nrows\n<<END-abc123>>";
+        let with = build_turn(&[], Some(CARDS), Some(sample), Some(FIGURE_BLOCK));
+        let cards = with.find("Workbook cards (structure only").expect("cards");
+        let block = with.find("<<DATA-abc123>>").expect("sample");
+        let table = with.find("Table results (workbook").expect("table");
+        assert!(cards < block && block < table);
+        // The instruction of a turn with a sample no longer says the data is not seen.
+        assert!(MIXED_INSTRUCTION.contains(FORMULA_NO_DATA_PHRASE));
+        assert!(!with.contains(FORMULA_NO_DATA_PHRASE));
+        assert!(with.contains(FORMULA_WITH_SAMPLE_PHRASE));
+        assert!(with.contains(SAMPLE_INSTRUCTION));
+
+        // With no sample the turn is the turn of step 03, byte for byte.
+        let without = build_turn(&[], Some(CARDS), None, Some(FIGURE_BLOCK));
+        assert_eq!(
+            without,
+            format!("{MIXED_INSTRUCTION}\n\nDocument excerpts: none.\n\n{CARDS}\n\n{FIGURE_BLOCK}")
+        );
+        assert!(!without.contains("Table sample"));
+        assert!(!without.contains("data markers"));
     }
 
     fn evidence(text: &str) -> Evidence {
@@ -903,6 +976,7 @@ mod tests {
             &[evidence("The contract covers all suppliers.")],
             None,
             None,
+            None,
         );
         assert_eq!(
             turn,
@@ -922,6 +996,7 @@ mod tests {
         let turn = build_turn(
             &[evidence("The contract covers all suppliers.")],
             None,
+            None,
             Some(FIGURE_BLOCK),
         );
         assert_eq!(
@@ -939,7 +1014,7 @@ mod tests {
 
     #[test]
     fn the_turn_with_no_documents_and_one_figure() {
-        let turn = build_turn(&[], None, Some(FIGURE_BLOCK));
+        let turn = build_turn(&[], None, None, Some(FIGURE_BLOCK));
         assert_eq!(
             turn,
             format!(
@@ -956,6 +1031,7 @@ mod tests {
         let turn = build_turn(
             &[evidence("The contract covers all suppliers.")],
             Some(CARDS),
+            None,
             Some(FIGURE_BLOCK),
         );
         let documents = turn.find("Document excerpts:").expect("documents");

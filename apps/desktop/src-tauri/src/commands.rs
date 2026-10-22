@@ -2772,18 +2772,27 @@ async fn mixed_tier(
     on_event: &Channel<ChatStreamEvent>,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<AskAnswer, AppError> {
-    let (work_folder, data_folder, server_url, model_alias, embedding_alias, locale, idle_timeout) =
-        state.read(|settings| {
-            (
-                settings.work_folder.clone(),
-                settings.data_folder.clone(),
-                settings.server_url.clone(),
-                settings.model_alias.clone(),
-                settings.embedding_alias.clone(),
-                settings.locale.clone(),
-                settings.answer_idle_timeout(),
-            )
-        })?;
+    let (
+        work_folder,
+        data_folder,
+        server_url,
+        model_alias,
+        embedding_alias,
+        locale,
+        idle_timeout,
+        rows_mode,
+    ) = state.read(|settings| {
+        (
+            settings.work_folder.clone(),
+            settings.data_folder.clone(),
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.embedding_alias.clone(),
+            settings.locale.clone(),
+            settings.answer_idle_timeout(),
+            settings.tabular_rows_mode,
+        )
+    })?;
     if work_folder.is_none() {
         return Err(AppError::NoWorkFolderSet);
     }
@@ -2964,6 +2973,22 @@ async fn mixed_tier(
     let card_block = &cards.block;
     let implied = &cards.implied;
 
+    // The sample of rows and the column profile of the workbooks that got a card, when the setting
+    // allows it: read through the cache the answer path uses, synchronously, before the first
+    // `.await` below. With the setting `off` nothing is read and the turn is the turn without it.
+    let sample_block = match rows_mode {
+        settings::TabularRowsMode::Off => crate::tabular::sample::SampleBlock::default(),
+        settings::TabularRowsMode::Sample => tabular_answer::question_samples(
+            card_block,
+            &folder,
+            &scope.data_mode,
+            &locale,
+            &index,
+            &budget,
+            &crate::tabular::sample::fresh_token(),
+        ),
+    };
+
     let context = mixed_answer::MixedContext {
         locale: &locale,
         gateway: &state.gateway,
@@ -2973,6 +2998,7 @@ async fn mixed_tier(
         history,
         budget,
         cards_text: &card_block.text,
+        sample_text: &sample_block.text,
     };
 
     // Nothing below touches `index`, `folder` or the document inventory again: everything either
@@ -3029,6 +3055,7 @@ async fn mixed_tier(
         implied,
         &result.table,
         generated && !result.answer.is_empty(),
+        &sample_block.uses,
     );
 
     Ok(AskAnswer {

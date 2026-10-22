@@ -245,12 +245,16 @@
     "sourceItemSheet": "{path}, sheet {sheet}",
     "sourceItemSheetColumn": "{path}, sheet {sheet}, column {column}",
     "sourceItemCard": "{path} (structure only, no data read by the AI)",
+    "sourceItemCardRows": "{path} (structure and {rows} of {total}, identifiers masked)",
+    "rowOne": "row",
+    "rowMany": "rows",
     "deterministicData": "Answer computed from your tables folder, without the AI.",
     "documentsNotNeeded": "Answered from your tables; the selected documents were not needed.",
     "unverifiedNumber": "The figure “{number}” appears in none of the excerpts used, nor in your question: check it in your documents.",
+    "modelArithmetic": "The AI did a calculation itself (“{expression}”): only the engine is reliable. Ask for this total to get it.",
     "mixedComputedTitle": "Computed from your data (by the engine, not by the AI):",
     "mixedTableUnavailable": {
-      "not_asked_about": "This question had nothing for your tables.",
+      "not_asked_about": "None of your spreadsheets was used for this answer: the question did not mention one. Name a spreadsheet, or say \"the spreadsheet\", to include it.",
       "no_evidence": "Nothing in your tables answered this part.",
       "gateway_unavailable": "The AI could not be reached to interpret the data part.",
       "not_linked": "The total of your tables could not be tied to what the document says (for example the supplier it names): no overall total is shown, because it would not answer your question."
@@ -549,6 +553,12 @@
       "suggest": "Suggestions only",
       "off": "Off",
       "auto": "Automatic"
+    },
+    "tabularRowsModeLabel": "Data sent to the AI from your spreadsheets",
+    "tabularRowsModeDescription": "When a question concerns a spreadsheet, the AI always receives its structure (column names, types, number of rows); “Structure and sample of rows” also sends a few of its rows and summary figures computed by the program, to a model that runs on your own network and never online, with identifiers (insurance numbers, telephone numbers, e-mail addresses, IBAN) masked. Applies from the next question.",
+    "tabularRowsMode": {
+      "off": "Structure only",
+      "sample": "Structure and sample of rows"
     },
     "healthModuleLabel": "Health module",
     "healthModuleDescription": "Tick the country or countries of your patients: a cross-border worker can have both a French social security number and an AVS number. A module helps read the numbers and vocabulary of its country, and never removes or changes the type of a name. Applied at the next analysis you start.",

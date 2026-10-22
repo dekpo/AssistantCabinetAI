@@ -181,6 +181,7 @@ async fn run(
         history: &[],
         budget: ContextBudget::DEFAULT,
         cards_text: "",
+        sample_text: "",
     };
     mixed_answer::answer(question, pending, document_sources, documents_unavailable, &context, |_| {}, |_| {})
         .await

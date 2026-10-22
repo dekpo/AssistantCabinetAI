@@ -33,10 +33,12 @@ use assistant_cabinet_ai_lib::retrieval::Evidence;
 use assistant_cabinet_ai_lib::tabular::card::card_budget_chars;
 use assistant_cabinet_ai_lib::tabular::engine::{NotAnswerableReason, TabularValue};
 use assistant_cabinet_ai_lib::tabular::question::{has_distributive_word, has_writing_intent};
+use assistant_cabinet_ai_lib::tabular::sample::SampleBlock;
 use assistant_cabinet_ai_lib::tabular::structural::StructuralAnswer;
 use assistant_cabinet_ai_lib::tabular_answer::{
     self, ImpliedReason, ModelAssist, PendingAnswer, TabularAnswer,
 };
+use assistant_cabinet_ai_lib::TabularRowsMode;
 use common::counting_gateway::{start_counting_gateway, start_gateway_replying, CountingGateway};
 use common::tabular_fixtures::{self, Cell, AGENCIES, FACTURES};
 
@@ -45,6 +47,8 @@ const COMMANDES: &str = "commandes.csv";
 const CALCULS: &str = "calculs.xlsx";
 const TEMPLATE: &str = "lettre-type.txt";
 const DOCUMENT: &str = "contrat.pdf";
+/// The token of the markers in every test that samples rows: fixed, so a test can read the block.
+const SAMPLE_TOKEN: &str = "t0k3n";
 
 // --- The folders every case asks its question about ----------------------------------------------
 
@@ -295,6 +299,35 @@ async fn mixed_from(
     document_sources: Vec<Evidence>,
     documents_unavailable: Option<MixedPartUnavailable>,
 ) -> (MixedAnswer, bool) {
+    mixed_with_rows_mode(
+        folders,
+        selection,
+        pending,
+        question,
+        locale,
+        gateway_url,
+        document_sources,
+        documents_unavailable,
+        TabularRowsMode::Off,
+    )
+    .await
+}
+
+/// [`mixed_from`] with the setting `tabular_rows_mode` given: `Off` is the turn of step 03 (the
+/// frozen baselines assert the exact blocks), `Sample` adds the sample and the profile exactly as
+/// `commands::mixed_tier` builds them (`tabular_answer::question_samples`).
+#[allow(clippy::too_many_arguments)]
+async fn mixed_with_rows_mode(
+    folders: &Folders,
+    selection: &ScopeMode,
+    pending: PendingAnswer,
+    question: &str,
+    locale: &str,
+    gateway_url: &str,
+    document_sources: Vec<Evidence>,
+    documents_unavailable: Option<MixedPartUnavailable>,
+    rows_mode: TabularRowsMode,
+) -> (MixedAnswer, bool) {
     let cards = tabular_answer::question_cards(
         question,
         &folders.open(),
@@ -303,6 +336,18 @@ async fn mixed_from(
         &[],
         card_budget_chars(&ContextBudget::DEFAULT),
     );
+    let sample = match rows_mode {
+        TabularRowsMode::Off => SampleBlock::default(),
+        TabularRowsMode::Sample => tabular_answer::question_samples(
+            &cards.block,
+            &folders.open(),
+            selection,
+            locale,
+            &folders.index,
+            &ContextBudget::DEFAULT,
+            SAMPLE_TOKEN,
+        ),
+    };
     let gateway = GatewayClient::new().expect("builds a client");
     let context = MixedContext {
         locale,
@@ -313,6 +358,7 @@ async fn mixed_from(
         history: &[],
         budget: ContextBudget::DEFAULT,
         cards_text: &cards.block.text,
+        sample_text: &sample.text,
     };
     mixed_answer::answer(
         question,
@@ -1046,6 +1092,21 @@ fn step_03_implied_workbooks_follow_the_rules_of_the_plan() {
     assert!(found.implied.is_empty());
     assert!(found.block.cards.is_empty());
     assert!(found.block.text.is_empty() || found.block.cards.is_empty());
+
+    // Four ticked and a table word: all four are read, none is picked for the user (the owner's test
+    // of step 03b, 22 October 2026: with four ticked, "this spreadsheet" used to read none).
+    let found = cards(
+        "What can you tell me about this spreadsheet?",
+        "en-US",
+        &many,
+        &[],
+    );
+    assert_eq!(found.implied.len(), 4);
+    assert!(found
+        .implied
+        .iter()
+        .all(|each| each.reason == ImpliedReason::ImpliedByWord));
+    assert_eq!(found.block.cards.len(), 4);
 }
 
 #[test]
@@ -1167,6 +1228,7 @@ async fn step_03_no_card_and_no_documents_is_still_insufficient_evidence() {
         history: &[],
         budget: ContextBudget::DEFAULT,
         cards_text: &cards.block.text,
+        sample_text: "",
     };
     let outcome = mixed_answer::answer(
         question,

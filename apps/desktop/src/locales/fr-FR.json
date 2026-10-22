@@ -245,12 +245,16 @@
     "sourceItemSheet": "{path}, feuille {sheet}",
     "sourceItemSheetColumn": "{path}, feuille {sheet}, colonne {column}",
     "sourceItemCard": "{path} (structure seulement, aucune donnée lue par l'IA)",
+    "sourceItemCardRows": "{path} (structure et {rows} sur {total}, identifiants masqués)",
+    "rowOne": "ligne",
+    "rowMany": "lignes",
     "deterministicData": "Réponse calculée depuis votre dossier des tableaux, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
     "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",
+    "modelArithmetic": "L'IA a effectué elle-même un calcul (« {expression} ») : seul le moteur est fiable. Demandez ce total pour l'obtenir.",
     "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
     "mixedTableUnavailable": {
-      "not_asked_about": "Cette question ne portait sur aucune de vos tables.",
+      "not_asked_about": "Aucun de vos tableurs n'a été utilisé pour cette réponse : la question n'en parlait pas. Citez un tableur par son nom, ou dites « le tableur », pour l'inclure.",
       "no_evidence": "Rien dans vos tables ne répond à cette partie.",
       "gateway_unavailable": "L'IA n'a pas pu être contactée pour interpréter la partie données.",
       "not_linked": "Le total de vos tables n'a pas pu être rattaché à ce que dit le document (par exemple le fournisseur cité) : aucun total global n'est affiché, il ne répondrait pas à votre question."
@@ -549,6 +553,12 @@
       "suggest": "Suggestions seulement",
       "off": "Désactivé",
       "auto": "Automatique"
+    },
+    "tabularRowsModeLabel": "Données envoyées à l'IA depuis vos tableurs",
+    "tabularRowsModeDescription": "Quand une question concerne un tableur, l'IA reçoit toujours sa structure (noms des colonnes, types, nombre de lignes) ; « Structure et échantillon de lignes » y ajoute quelques lignes et des chiffres de synthèse calculés par le programme, envoyés à un modèle qui tourne sur votre propre réseau et jamais en ligne, avec les identifiants (numéros d'assurance, téléphones, adresses e-mail, IBAN) masqués. Pris en compte dès la question suivante.",
+    "tabularRowsMode": {
+      "off": "Structure seulement",
+      "sample": "Structure et échantillon de lignes"
     },
     "healthModuleLabel": "Module santé",
     "healthModuleDescription": "Cochez le ou les pays de vos patients : un frontalier peut avoir un numéro de sécurité sociale français et un numéro AVS. Un module aide à mieux lire les numéros et le vocabulaire de son pays, sans jamais retirer ni changer le type d'un nom. Pris en compte à la prochaine analyse que vous lancez.",

@@ -20,6 +20,7 @@ pub mod escalation;
 pub mod inventory;
 pub mod question;
 pub mod query_plan;
+pub mod sample;
 pub mod structural;
 pub mod xlsx_adapter;
 

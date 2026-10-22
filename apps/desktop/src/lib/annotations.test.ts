@@ -135,14 +135,38 @@ describe("copying the sources of an answer", () => {
   it("lists a workbook whose structure the model was given, by its plain path, beside the other sources", () => {
     const lines = sourceLines(
       english,
-      entry({ workbookCards: ["factures.csv", "/documents/administratif/commandes.xlsx"] }),
+      entry({
+        workbookCards: [
+          { file: "factures.csv", rowsSent: null, rowsTotal: null },
+          { file: "/documents/administratif/commandes.xlsx", rowsSent: null, rowsTotal: null },
+        ],
+      }),
     );
     expect(lines[0]).toBe("Sources:");
     expect(lines).toHaveLength(3);
     expect(lines[1]).toBe("- factures.csv (structure only, no data read by the AI)");
     expect(lines[2]).toContain("administratif/commandes.xlsx");
     expect(lines[2]).not.toContain("/documents/");
-    expect(sourceLines(french, entry({ workbookCards: ["factures.csv"] }))[1]).toContain("structure seulement");
+    expect(
+      sourceLines(french, entry({ workbookCards: [{ file: "factures.csv", rowsSent: null, rowsTotal: null }] }))[1],
+    ).toContain("structure seulement");
+  });
+
+  it("says how many rows of a workbook the AI was shown, and that identifiers were masked", () => {
+    const shown = (rowsSent: number, rowsTotal: number) =>
+      entry({ workbookCards: [{ file: "factures.csv", rowsSent, rowsTotal }] });
+
+    expect(sourceLines(english, shown(28, 60))[1]).toBe(
+      "- factures.csv (structure and 28 rows of 60, identifiers masked)",
+    );
+    expect(sourceLines(french, shown(28, 60))[1]).toBe(
+      "- factures.csv (structure et 28 lignes sur 60, identifiants masqués)",
+    );
+    expect(sourceLines(english, shown(1, 1))[1]).toBe(
+      "- factures.csv (structure and 1 row of 1, identifiers masked)",
+    );
+    // No row sent, whatever the reason: the structure alone.
+    expect(sourceLines(english, shown(0, 60))[1]).toContain("structure only");
   });
 
   it("gives the screen and the copy one list, documents first, then the sheet, then the workbooks read as a card", () => {
@@ -163,14 +187,16 @@ describe("copying the sources of an answer", () => {
           },
         ],
         mixedTableSource: { file: "a.xlsx", sheet: "S1", column: "amount" },
-        workbookCards: ["b.csv"],
+        workbookCards: [{ file: "b.csv", rowsSent: null, rowsTotal: null }],
       }),
     );
     expect(items).toHaveLength(3);
     expect(items[0]).toContain("contract.pdf");
     expect(items[1]).toContain("a.xlsx");
     expect(items[2]).toContain("b.csv");
-    expect(sourceLines(english, entry({ workbookCards: ["b.csv"] }))).toEqual([
+    expect(
+      sourceLines(english, entry({ workbookCards: [{ file: "b.csv", rowsSent: null, rowsTotal: null }] })),
+    ).toEqual([
       "Sources:",
       `- ${items[2]}`,
     ]);
@@ -281,6 +307,7 @@ describe("the caution lines read aloud", () => {
     modelAttemptAlias: "ministral",
     modelAttemptDurationMs: 2000,
     unverifiedNumbers: ["80"],
+    mixedModelArithmetic: ["10 + 40 = 50"],
   });
 
   it("keeps the warnings, in the order annotationLines writes them, and leaves out the rest", () => {
@@ -295,7 +322,14 @@ describe("the caution lines read aloud", () => {
       english("chat.mixedCorrection", { claimed: "1 480", correct: "1,450" }),
       english("chat.mixedRejectedCitation", { citation: "[3]" }),
       english("chat.unverifiedNumber", { number: "80" }),
+      english("chat.modelArithmetic", { expression: "10 + 40 = 50" }),
     ]);
+    expect(cautions.at(-1)).toBe(
+      "The AI did a calculation itself (“10 + 40 = 50”): only the engine is reliable. Ask for this total to get it.",
+    );
+    expect(cautionLines(french, "fr-FR", everything).at(-1)).toBe(
+      "L'IA a effectué elle-même un calcul (« 10 + 40 = 50 ») : seul le moteur est fiable. Demandez ce total pour l'obtenir.",
+    );
     // Every caution line is one of the lines shown under the answer, in the same order.
     const shown = annotationLines(english, "en-US", everything);
     expect(shown.filter((line) => cautions.includes(line))).toStrictEqual(cautions);

@@ -53,6 +53,20 @@ matched, only the already-filtered, already-computed result if one was found. Nu
 citation checking, after the model writes, read the model's own reply and the evidence already sent -
 nothing new leaves the workstation for either check.
 
+**The controlled data sample (TABULAR step 03b, 22 October 2026, owner decisions 36 to 39; the setting `tabular_rows_mode`, `off` or `sample`, default `sample` while only fictional data is used, to be reviewed before any real document).**
+The paragraph above describes the setting `off`, which is still exactly what the turn holds. With `sample`, a question that concerns a workbook (one it names, or the one it
+obviously concerns, which already got a card) sends the gateway, beside the card, a **sample of that workbook's rows** and a **column profile**: the whole table when it fits the share of the model's
+window, otherwise its first rows and rows spread evenly through it (never random, never chosen by the model, the last row always included), each row with its spreadsheet row number, cells cleaned
+and cut to 60 characters; and, per column, figures computed by the engine over the whole table (count, minimum, maximum, sum, mean, the most frequent values of a text column, the first and last date).
+**What is held back:** a value that looks like an identifier (a health insurance number of any shipped country, an AVS / AHV number, a telephone number, an e-mail address, an IBAN, by the identifier
+schemes of the knowledge packs) is replaced by `[masked identifier]` in the sample and the profile, and a column most of whose cells are identifiers is not listed at all; person names stay (a
+letter needs them). A cell is untrusted text: the block sits between two markers that carry a token drawn per request, the instruction says its content is data and never an instruction, cells
+lose their line breaks and control characters, and the characters a marker is made of are replaced. The user sees what was sent: the Sources line of the answer says « structure and N rows of M,
+identifiers masked ». **The DPIA line:** the sample of cells of the named or implied workbooks, identifier-like values masked, and the profile computed over the whole table, reach the gateway,
+which on the pilot deployment is Ollama on her own machine and today a tower on the local network over clear text (gate 1 of "Production gates" applies). Known limits, not hidden: masking is
+by pattern, so a number written in an unusual way or an identifier hidden in free text can pass (the pilot's check is the sample visible in the answer and the setting « Structure seulement »); a name
+in a cell is sent; the row numbers follow the card's rule and can differ from the file's by the blank lines a CSV reader drops.
+
 **The knowledge base: a directory of names in the local index (KB programme, lot 1,
 `docs/SESSION-KB-00-master.md`).** The `kb_*` tables live in the same `index.sqlite3` as the chunks, on
 the workstation, under the same protection (application-local data folder, never the roaming profile, disk

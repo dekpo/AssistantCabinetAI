@@ -50,6 +50,7 @@ const SETTINGS = {
   workFolder: "/home/her/Docs",
   dataFolder: "/home/her/Data",
   knowledgeMode: "suggest",
+  tabularRowsMode: "sample",
   knowledgePacks: [],
   knowledgeHideNamesInSuggestions: true,
   copySources: false,
@@ -113,6 +114,18 @@ describe("the settings panel, drawn", () => {
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toStrictEqual(positions);
     expect(html).toContain('<h3 class="dialog__subtitle settings-wide">Section principale</h3>');
+  });
+
+  it("offers the data sent to the AI from spreadsheets beside the smart targeting, sample selected", () => {
+    const html = dialog();
+    const targeting = at(html, "Ciblage intelligent");
+    const sent = at(html, "Données envoyées à l&#x27;IA depuis vos tableurs");
+
+    expect(targeting).toBeGreaterThan(0);
+    expect(sent).toBeGreaterThan(targeting);
+    expect(sent - targeting).toBeLessThan(2_500);
+    expect(html).toContain('<option value="off">Structure seulement</option>');
+    expect(html).toContain('<option value="sample" selected="">Structure et échantillon de lignes</option>');
   });
 
   it("puts the two folders among the main settings, whole row each, not in the advanced ones", () => {

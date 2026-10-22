@@ -76,6 +76,19 @@ pub enum Theme {
     System,
 }
 
+/// What the model is told about the spreadsheets a question concerns (TABULAR step 03b, owner
+/// decision 36 of 22 October 2026). `Off` is the structure alone (the workbook card). `Sample` adds
+/// the controlled sample of rows and the column profile, identifiers masked
+/// (`tabular::sample`). The default is `Sample` while only fictional data is used; it is to be
+/// reviewed before any real document. Step 10 adds `auto` (rows chosen by filters).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TabularRowsMode {
+    Off,
+    #[default]
+    Sample,
+}
+
 /// The widths of the three zones (resources, workspace, chat) as percentages of the window.
 type PanelTriple = [f64; 3];
 
@@ -342,6 +355,10 @@ pub struct Settings {
     /// knowledge base and writes no `kb_*` row. Edited in `settings.json` until the settings dialog
     /// gets its "Advanced" group.
     pub knowledge_mode: KnowledgeMode,
+    /// What the AI receives from the spreadsheets a question concerns: the structure only, or the
+    /// structure with a sample of rows and the column figures, identifiers masked
+    /// (`TabularRowsMode`). Chosen in the settings dialog.
+    pub tabular_rows_mode: TabularRowsMode,
     /// The optional lexicon packs the knowledge base reads names with, on top of the neutral base.
     /// A pack id is `<domain>-<country>`: `health-fr`, `health-ch`, `legal-fr`, `accounting-fr`,
     /// and later `health-eu`, `legal-ch`... (`docs/DECISIONS.md`, "Knowledge packs are named
@@ -410,6 +427,7 @@ impl Default for Settings {
             show_diagnostics: false,
             write_timing_log: false,
             knowledge_mode: KnowledgeMode::default(),
+            tabular_rows_mode: TabularRowsMode::default(),
             knowledge_packs: vec!["health-fr".to_string()],
             knowledge_min_scope_files: DEFAULT_KNOWLEDGE_MIN_SCOPE_FILES,
             knowledge_max_selectivity: DEFAULT_KNOWLEDGE_MAX_SELECTIVITY,
@@ -688,6 +706,7 @@ mod tests {
             show_diagnostics: true,
             write_timing_log: true,
             knowledge_mode: KnowledgeMode::Auto,
+            tabular_rows_mode: TabularRowsMode::Off,
             knowledge_packs: vec!["health-fr".into(), "health-ch".into()],
             knowledge_min_scope_files: 12,
             knowledge_max_selectivity: 0.5,
@@ -719,6 +738,7 @@ mod tests {
         assert_eq!(json["showDiagnostics"], true);
         assert_eq!(json["writeTimingLog"], true);
         assert_eq!(json["knowledgeMode"], "auto");
+        assert_eq!(json["tabularRowsMode"], "off");
         assert_eq!(json["knowledgePacks"][1], "health-ch");
         assert_eq!(json["knowledgeMinScopeFiles"], 12);
         assert_eq!(json["knowledgeMaxCandidates"], 20);
@@ -1162,6 +1182,26 @@ mod tests {
             let body = format!(r#"{{"knowledgeMode":"{text}"}}"#);
             let settings: Settings = serde_json::from_str(&body).expect("loads");
             assert_eq!(settings.knowledge_mode, mode);
+        }
+    }
+
+    #[test]
+    fn the_sample_of_rows_is_on_by_default_and_for_a_file_that_predates_it() {
+        assert_eq!(
+            Settings::default().tabular_rows_mode,
+            TabularRowsMode::Sample
+        );
+        let old: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+        assert_eq!(old.tabular_rows_mode, TabularRowsMode::Sample);
+
+        for (text, mode) in [
+            ("off", TabularRowsMode::Off),
+            ("sample", TabularRowsMode::Sample),
+        ] {
+            let body = format!(r#"{{"tabularRowsMode":"{text}"}}"#);
+            let settings: Settings = serde_json::from_str(&body).expect("loads");
+            assert_eq!(settings.tabular_rows_mode, mode);
         }
     }
 

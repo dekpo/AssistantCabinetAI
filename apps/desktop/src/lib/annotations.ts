@@ -27,7 +27,7 @@ export function annotationLines(t: Translator, locale: string, entry: ChatEntry)
  * those, in the order `annotationLines` writes them: no documents, unanalysed documents, files that
  * changed, an answer that stopped, a part of a mixed question that could not be established (not the
  * variant that only says the question did not concern that side), corrections and rejected citations,
- * and figures that could not be verified. Read aloud, a listener who does not see the screen must
+ * and figures that could not be verified, and arithmetic the model did itself. Read aloud, a listener who does not see the screen must
  * still hear that the answer cannot be taken as complete. Never the coverage, the model, the
  * duration or the engine lines (`annotationLines` keeps those).
  */
@@ -132,6 +132,11 @@ function noteLines(
   for (const number of entry.unverifiedNumbers ?? []) {
     lines.push(t("chat.unverifiedNumber", { number }));
   }
+  // A sum, a product or a difference the model worked out itself: the answer stays as written, and
+  // the reader is told that only the engine's figures are reliable (read aloud, like the others).
+  for (const expression of entry.mixedModelArithmetic ?? []) {
+    lines.push(t("chat.modelArithmetic", { expression }));
+  }
   return lines;
 }
 
@@ -167,7 +172,7 @@ export function sourceItems(t: Translator, entry: ChatEntry): string[] {
     ...groupSources(entry.sources ?? []).map((group) => sourceGroupLine(t, group)),
     ...(entry.tabularSource === undefined ? [] : [tabularSourceLine(t, entry.tabularSource)]),
     ...(entry.mixedTableSource === undefined ? [] : [tabularSourceLine(t, entry.mixedTableSource)]),
-    ...(entry.workbookCards ?? []).map((file) => workbookCardSourceLine(t, file)),
+    ...(entry.workbookCards ?? []).map((use) => workbookCardSourceLine(t, use)),
   ];
 }
 

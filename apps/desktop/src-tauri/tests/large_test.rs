@@ -1134,6 +1134,7 @@ impl<'a> Replay<'a> {
             // The replay does not send workbook cards: it stays the replay of step 24 (a later step
             // that wants them calls `tabular_answer::question_cards`, as `commands::mixed_tier` does).
             cards_text: "",
+            sample_text: "",
         };
         let started = Instant::now();
         let (result, generated) = mixed_answer::answer(

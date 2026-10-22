@@ -1195,18 +1195,21 @@ pub struct ImpliedWorkbook {
     pub reason: ImpliedReason,
 }
 
-/// The most workbooks an implication may bring in. A named workbook is never capped.
-pub const MAX_IMPLIED_WORKBOOKS: usize = 3;
+/// The least a card takes in characters (the workbook line, one sheet line, a few columns): how many
+/// workbooks the room of the cards can hold at the very least. An implied workbook is not capped by a
+/// count (owner decision of 22 October 2026: a limit follows the model's room, never a constant);
+/// `question_cards` keeps as many as the room holds, a named workbook is never dropped.
+pub const MIN_CARD_CHARS: usize = 300;
 
 /// The ticked workbooks the question does not name but is about, cheaply and without a model
 /// (TABULAR plan 4.2). The rules are tried in this order and the first one that decides wins:
 ///
 /// 1. `implied_single`: exactly one workbook is ticked. **The caller decides** whether it counts:
 ///    doors 1 to 3 of `commands::sourced_answer` have their own answer and drop this reason.
-/// 2. `implied_by_word`: nothing is named, the question uses a table word of the locale pack
-///    (`question::mentions_a_table`), and at most `MAX_IMPLIED_WORKBOOKS` workbooks are ticked. With
-///    more, the word says nothing about which, so the next rules look and otherwise none is implied
-///    (the usage trace then says how many ticked workbooks were not used).
+/// 2. `implied_by_word`: nothing is named and the question uses a table word of the locale pack
+///    (`question::mentions_a_table`): every ticked workbook is a candidate, however many (they
+///    share the room of the cards and of the sample, `question_cards`). The user ticked them on
+///    purpose and asked about "the spreadsheet": reading none of them would be the worse guess.
 /// 3. `implied_by_column`: the question names a column that some but not all of the ticked
 ///    workbooks have and exactly one does. This is the rule `pick_target` already applies when no
 ///    name is given, with the same `names_a_column`, so the card and the engine agree; with
@@ -1241,7 +1244,6 @@ pub fn implied_workbooks(
         files
             .into_iter()
             .filter(|file| !named.covers(file))
-            .take(MAX_IMPLIED_WORKBOOKS)
             .map(|file| ImpliedWorkbook {
                 file: file.to_string(),
                 reason,
@@ -1253,12 +1255,8 @@ pub fn implied_workbooks(
     if chosen.len() == 1 {
         return implied(usable, ImpliedReason::ImpliedSingle);
     }
-    // 2. A table word, nothing named, few ticked.
-    if named.is_empty()
-        && !usable.is_empty()
-        && usable.len() <= MAX_IMPLIED_WORKBOOKS
-        && question::mentions_a_table(question, locale)
-    {
+    // 2. A table word, nothing named: every ticked workbook.
+    if named.is_empty() && !usable.is_empty() && question::mentions_a_table(question, locale) {
         return implied(usable, ImpliedReason::ImpliedByWord);
     }
     // 3. A column only one ticked workbook has.
@@ -1312,7 +1310,11 @@ pub fn question_cards(
     budget_chars: usize,
 ) -> QuestionCards {
     let named = named_workbooks(question, data, selection);
-    let implied = implied_workbooks(question, data, selection, locale, entity_candidates);
+    let mut implied = implied_workbooks(question, data, selection, locale, entity_candidates);
+    // The room of the cards holds so many workbooks at the very least; a named one is never dropped,
+    // an implied one beyond the room is left out (the order is the order ticked).
+    let room = (budget_chars / MIN_CARD_CHARS).max(1);
+    implied.truncate(room.saturating_sub(named.exact.len()));
     let choices = selected_workbook_choices(data, selection);
     let files: Vec<&str> = named
         .exact
@@ -1337,6 +1339,71 @@ pub fn question_cards(
         block: crate::tabular::card::build_cards(&requests, budget_chars),
         implied,
     }
+}
+
+/// The sample of rows and the column profile of the workbooks that got a card (TABULAR step 03b):
+/// each is read through the typed workbook cache the answer path already uses, so reading it for
+/// a question costs one cache hit, never a pass over the folder. A workbook that cannot be read
+/// again (changed or gone since the card was built) has no sample, and the card stands alone.
+/// `selection` is what the user ticked, for the sheets a workbook was narrowed to.
+pub fn question_samples(
+    cards: &crate::tabular::card::CardBlock,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    budget: &crate::conversation::ContextBudget,
+    token: &str,
+) -> crate::tabular::sample::SampleBlock {
+    use crate::tabular::sample;
+
+    let choices = selected_workbook_choices(data, selection);
+    let mut opened: Vec<(String, Workbook, TabularInventory, Option<Vec<String>>)> = Vec::new();
+    for card in &cards.cards {
+        let Some(inventory) = data.usable_inventory(&card.file) else {
+            continue;
+        };
+        let Some(record) = data
+            .files()
+            .all_files()
+            .iter()
+            .find(|record| record.relative_path == card.file)
+        else {
+            continue;
+        };
+        let Some(path) = data.files().absolute_path(record) else {
+            continue;
+        };
+        let Ok((workbook, fresh)) =
+            load_workbook_cached(index, &path, &card.file, inventory, locale)
+        else {
+            continue;
+        };
+        let sheets = choices
+            .iter()
+            .find(|choice| choice.relative_path == card.file)
+            .and_then(|choice| choice.sheets.clone());
+        opened.push((card.file.clone(), workbook, fresh, sheets));
+    }
+    let mut requests: Vec<sample::SampleRequest<'_>> = Vec::new();
+    for (file, workbook, inventory, sheets) in &opened {
+        requests.push(sample::SampleRequest {
+            file,
+            inventory,
+            workbook,
+            sheets: sheets.as_deref(),
+        });
+    }
+    sample::build_sample(
+        &requests,
+        &sample::SampleOptions {
+            locale,
+            sample_budget_chars: sample::sample_budget_chars(budget),
+            profile_budget_chars: sample::profile_budget_chars(budget),
+            token,
+            masker: sample::Masker::shipped(),
+        },
+    )
 }
 
 /// Whether a name the selected workbooks do not carry is still a workbook of the folder.
@@ -3447,17 +3514,23 @@ mod tests {
     }
 
     #[test]
-    fn a_table_word_does_not_pick_three_of_many() {
+    fn a_table_word_implies_every_ticked_workbook_however_many() {
         let files = ["a.csv", "b.csv", "c.csv", "d.csv", "e.csv"];
         let content = invoices();
         let folder = Folder::with(&files.map(|name| (name, content.as_str())));
         let all = ScopeMode::WholeFolder;
 
-        assert!(implied_of(&folder, "What is in the spreadsheet?", &all, &[]).is_empty());
-        // The knowledge base can still narrow: three of the five, best first, never a fourth.
+        // Five ticked and a table word: all five are candidates (owner decision of 22 October 2026;
+        // it was none of them while the count was capped at three).
+        let by_word = implied_of(&folder, "What is in the spreadsheet?", &all, &[]);
+        assert_eq!(by_word.len(), 5);
+        assert!(by_word
+            .iter()
+            .all(|(_, reason)| *reason == "implied_by_word"));
+        // Without a table word the knowledge base still narrows, best first.
         let narrowed = implied_of(
             &folder,
-            "What is in the spreadsheet?",
+            "Tell me about Dupont",
             &all,
             &["d.csv", "b.csv", "e.csv", "a.csv"],
         );
@@ -3466,9 +3539,40 @@ mod tests {
             [
                 ("d.csv".to_string(), "implied_by_entity"),
                 ("b.csv".to_string(), "implied_by_entity"),
-                ("e.csv".to_string(), "implied_by_entity")
+                ("e.csv".to_string(), "implied_by_entity"),
+                ("a.csv".to_string(), "implied_by_entity")
             ]
         );
+    }
+
+    #[test]
+    fn the_cards_keep_as_many_implied_workbooks_as_their_room_holds() {
+        let names: Vec<String> = (0..12).map(|i| format!("w{i:02}.csv")).collect();
+        let content = invoices();
+        let files: Vec<(&str, &str)> = names
+            .iter()
+            .map(|name| (name.as_str(), content.as_str()))
+            .collect();
+        let folder = Folder::with(&files);
+        let all = ScopeMode::WholeFolder;
+        let cards = |budget: usize| {
+            question_cards(
+                "What is in the spreadsheet?",
+                &folder.open(),
+                &all,
+                "en-US",
+                &[],
+                budget,
+            )
+        };
+
+        // 4 000 characters hold thirteen cards of 300 at the very least: all twelve come in.
+        assert_eq!(cards(4_000).implied.len(), 12);
+        // A small room holds fewer, in the order of the folder, and never none.
+        let small = cards(1_000);
+        assert_eq!(small.implied.len(), 3);
+        assert_eq!(small.block.cards.len(), 3);
+        assert_eq!(cards(10).implied.len(), 1);
     }
 
     #[test]

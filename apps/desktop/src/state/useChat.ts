@@ -27,6 +27,7 @@ import {
   type RetrievalDiagnostics,
   type TabularAnswer,
   type TargetingReport,
+  type WorkbookCardUse,
 } from "../lib/ipc";
 import { targetingRequestFor, type TargetingChoice } from "../lib/targeting";
 import { truncateForRegenerate, truncateForResend } from "../lib/turns";
@@ -142,7 +143,10 @@ export interface ChatEntry extends ChatTurn {
   mixedTableSource?: TabularSource;
   /** The workbooks whose structure (card) the model was given for this answer, by index key: listed
    * among the sources, because the model may name them in its prose. */
-  workbookCards?: string[];
+  workbookCards?: WorkbookCardUse[];
+  /** The arithmetic the model wrote itself in a mixed answer (`10 + 40 = 50`): said under the
+   * answer, which is never edited (`number_check::arithmetic_expressions`). */
+  mixedModelArithmetic?: string[];
   mixedTableUnavailable?: MixedPartUnavailable;
   mixedDocumentsUnavailable?: MixedPartUnavailable;
   /** A number the model wrote that did not match the table or any excerpt - appended under the
@@ -374,9 +378,9 @@ export function useChat(
              disambiguation) is the whole answer, formatted the same way tier 2's own is. */
           const mixed = result.mixedAnswer;
           const source = mixed.table === null ? null : tabularSourceOf(mixed.table);
-          const cards = result.workbookUse
+          const cards: WorkbookCardUse[] = result.workbookUse
             .filter((use) => use.how === "card_sent")
-            .map((use) => use.file);
+            .map(({ file, rowsSent, rowsTotal }) => ({ file, rowsSent, rowsTotal }));
           setEntries((current) =>
             current.map((entry) =>
               entry.id === answerId
@@ -405,6 +409,9 @@ export function useChat(
                       : {}),
                     ...(mixed.unverifiedNumbers.length > 0
                       ? { unverifiedNumbers: mixed.unverifiedNumbers }
+                      : {}),
+                    ...(mixed.modelArithmetic.length > 0
+                      ? { mixedModelArithmetic: mixed.modelArithmetic }
                       : {}),
                   }
                 : entry,

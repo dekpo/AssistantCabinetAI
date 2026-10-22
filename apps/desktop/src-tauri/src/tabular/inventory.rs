@@ -552,6 +552,12 @@ impl NumberConvention {
     }
 }
 
+/// The decimal mark the interface language writes a number with: the same default the numeric
+/// columns fall back on (`NumberConvention::locale_default`), for a number the file stored typed.
+pub(crate) fn decimal_mark(locale: &str) -> char {
+    NumberConvention::locale_default(locale).decimal
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum NumberShape {
     /// A value with nothing left to decide: no separator at all, two different separators (the

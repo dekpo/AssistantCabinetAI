@@ -1066,6 +1066,18 @@ export interface AskAnswer {
   /** What the knowledge base did to the search, when there is something to tell: an applied
    * reduction, or names that need a question. */
   targeting: TargetingReport | null;
+  /** What this answer did with each workbook the question named or concerned. Machine codes; the
+   * interface renders nothing from it yet (TABULAR plan 4.3). */
+  workbookUse: WorkbookUse[];
+}
+
+/** One workbook an answer was built from. `file` is the index key; `reason` is an implied-reason
+ * code (`implied_single`, `implied_by_word`, `implied_by_column`, `implied_by_entity`) and is null
+ * for a workbook the question names. */
+export interface WorkbookUse {
+  file: string;
+  how: "card_sent" | "computed";
+  reason: string | null;
 }
 
 export type RetrievalPath =

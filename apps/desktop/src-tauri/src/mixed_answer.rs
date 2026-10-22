@@ -14,7 +14,8 @@
 //!
 //! The model never receives a cell value or a row: the table block is built from
 //! `tabular::escalation::format_evidence`, the same function tier 2 keeps unsent for exactly this
-//! session, which already refuses a raw row list. Entity linking (`entity_link`) reads retrieved
+//! session, which already refuses a raw row list, and a workbook it is told about reaches it as a
+//! card, which holds structure only (`tabular::card`). Entity linking (`entity_link`) reads retrieved
 //! excerpt text, never the question's own words a second time - `tabular_answer::detect_filters`
 //! (gap A, session 11) already tried those - and anchors a candidate word against real column
 //! values through `tabular_answer::column_value_words`, the same anchoring rule, applied to a
@@ -38,19 +39,28 @@ use crate::tabular::Workbook;
 use crate::tabular_answer::{self, PendingAnswer, TabularAnswer};
 
 /// English, profession-neutral, short - the same reasons every other model-facing constant in
-/// this product is (`docs/DECISIONS.md`, "profession-neutral model-facing text"). Tells the model
-/// the two blocks are the only sources, forbids it from computing or swapping one block in for
-/// the other, and asks it to say plainly when a part cannot be answered rather than guessing -
-/// mechanisms 3, 4 and 6 of `docs/SESSION-DATA-REFERENCE-report.md` section 5, stated as one
-/// instruction the way `RETRIEVAL_INSTRUCTION` and `TABULAR_INSTRUCTION` each state their own tier.
+/// this product is (`docs/DECISIONS.md`, "profession-neutral model-facing text"). Lists the sources a
+/// turn may carry (the blocks that are absent read "none"), forbids computing or second-guessing a
+/// number of the table results, and asks the model to say plainly when a part cannot be answered
+/// rather than guess - mechanisms 3, 4 and 6 of `docs/SESSION-DATA-REFERENCE-report.md` section 5,
+/// stated as one instruction the way `RETRIEVAL_INSTRUCTION` and `TABULAR_INSTRUCTION` each state
+/// their own tier. The formula sentence is TABULAR plan 4.4: each formula on a line of its own
+/// starting with `=`, so that a later step can find it and check it.
 pub const MIXED_INSTRUCTION: &str =
-    "You are given two sources: a 'Document excerpts' block, retrieved from the user's own \
-     documents, and a 'Table results' block, computed directly from the user's own data table, \
-     not by you. Treat these two blocks as the only sources - never use one in place of the \
-     other, and never compute, re-derive or second-guess a number in the table results: report it \
-     exactly as given. Cite a document fact with its bracketed number, exactly as supplied, and \
-     never cite a document number for a fact that came from the table instead. If one block \
-     cannot establish part of the question, say so plainly instead of guessing.";
+    "You are given sources, each labelled: 'Document excerpts' from the user's own documents; \
+     'Workbook cards' describing only the structure of the user's own data tables (sheet names, \
+     column letters, column names, types, row counts - never the data); and 'Table results' \
+     computed by the program, not by you. Use only these sources. Never invent a value, a total, \
+     a date or a name that is not in them, and never compute or second-guess a number from the \
+     table results: report it as given. Cite a document fact with its bracketed number, exactly \
+     as supplied, and never cite a document number for a fact that came from a table. For a \
+     formula, use the column letters of the cards, write it in the spreadsheet conventions of the \
+     answer language, put each formula on a line of its own starting with =, and say you cannot \
+     test it because you do not see the data. If the sources cannot establish part of the \
+     question, say so plainly and, when a calculation would settle it, say which calculation to \
+     ask for. A workbook card is a real source about structure: use it to say what a workbook \
+     contains, which columns to use and how to relate or combine files, even though no cell value \
+     is available, and do not refuse a question about structure for lack of data.";
 
 /// How much of the document share of the budget this tier sends, under the existing cap
 /// (mechanism 4: "the context cap is split between the blocks, a documented share each"). Smaller
@@ -107,8 +117,9 @@ pub struct MixedAnswer {
     /// with no gateway call, because the document side had nothing to add
     /// (`documents_unavailable`).
     pub answer: String,
-    /// The tabular part's own computed value, when the question had one. `None` exactly when
-    /// `table_unavailable` is set.
+    /// The tabular part's own computed value, when the question had one. `None` when
+    /// `table_unavailable` is set, and also when the question concerned a workbook that reached
+    /// the model as a card but asked for no calculation.
     pub table: Option<TabularAnswer>,
     pub table_unavailable: Option<MixedPartUnavailable>,
     /// The document excerpts the model was actually sent - already capped to this tier's own
@@ -144,6 +155,10 @@ pub struct MixedContext<'a> {
     pub idle_timeout: Duration,
     pub history: &'a [ChatTurn],
     pub budget: ContextBudget,
+    /// The block of workbook cards (`tabular::card::CardBlock::text`, header included), already
+    /// built by the caller from the workbooks the question names or concerns. Empty when there is
+    /// none: the turn then reads `Workbook cards: none.`
+    pub cards_text: &'a str,
 }
 
 /// The full mixed tier, from where `commands::mixed_tier` leaves off: entity linking, compute,
@@ -176,7 +191,9 @@ pub async fn answer(
         .or_else(|| document_sources.is_empty().then_some(MixedPartUnavailable::NoEvidence));
 
     // The tabular part, finished now that the excerpts exist to link an entity against.
-    let (table, table_unavailable) = resolve_table(pending, question, context, &document_sources).await;
+    let has_cards = !context.cards_text.is_empty();
+    let (table, table_unavailable) =
+        resolve_table(pending, question, context, &document_sources, has_cards).await;
     let (table, mut table_unavailable) = if points_at_a_document(question, context.locale, &table) {
         (None, Some(MixedPartUnavailable::NotLinked))
     } else {
@@ -204,7 +221,9 @@ pub async fn answer(
         }
     }
     let computed_value = matches!(table, Some(TabularAnswer::Value { .. }));
-    if table.is_none() && table_unavailable.is_none() {
+    // A card stands for the table side of a question that asks for no calculation: the model reads
+    // the real structure of the workbook it names. Without a card there is no table part at all.
+    if table.is_none() && table_unavailable.is_none() && !has_cards {
         table_unavailable = Some(MixedPartUnavailable::NotAskedAbout);
     }
 
@@ -221,8 +240,10 @@ pub async fn answer(
 
     // Zero gateway calls when there is nothing on the document side to write about - the same
     // guarantee a deterministic tabular answer already keeps (`docs/DECISIONS.md`), extended to a
-    // mixed question whose document half came back empty.
-    if let Some(reason) = documents_unavailable {
+    // mixed question whose document half came back empty. Only a computed value can answer alone:
+    // a question about a workbook's structure has no document evidence either, and the model still
+    // reads the cards (the guard above already refused a turn with neither).
+    if let Some(reason) = documents_unavailable.filter(|_| computed_value) {
         return Ok((
             MixedAnswer {
                 answer: String::new(),
@@ -238,7 +259,11 @@ pub async fn answer(
         ));
     }
 
-    let instruction = build_two_block_turn(&document_sources, table_text.as_deref());
+    let instruction = build_turn(
+        &document_sources,
+        non_empty(context.cards_text),
+        table_text.as_deref(),
+    );
     let final_turn = format!("{instruction}\n\nQuestion: {question}");
     // Both blocks are sources: the memory yields to them (`conversation::history_beside_sources`).
     let remembered = conversation::history_beside_sources(context.history, context.budget);
@@ -284,13 +309,20 @@ pub async fn answer(
         Err(error) => return Err(error),
     };
 
-    let corrections = verify_numbers(&answer_text, expected, &document_sources);
+    // A figure a card states (a row count, a year) is a fact of the turn, not a claim to correct.
+    let corrections = verify_numbers(
+        &answer_text,
+        expected,
+        &document_sources,
+        &[context.cards_text],
+    );
     let rejected_citations = reject_citations(&answer_text, document_sources.len());
     // With no table figure on screen there is nothing to correct the prose against, so the figures it
     // states are held to the excerpts and the question, as a document answer's are.
     let unverified_numbers = if expected.is_none() && table.is_none() {
         let mut known: Vec<&str> = document_sources.iter().map(|item| item.text.as_str()).collect();
         known.extend(document_sources.iter().map(|item| item.relative_path.as_str()));
+        known.push(context.cards_text);
         known.push(question);
         number_check::unsupported_numbers(&answer_text, &known, 2)
     } else {
@@ -303,7 +335,7 @@ pub async fn answer(
             table,
             table_unavailable,
             document_sources,
-            documents_unavailable: None,
+            documents_unavailable,
             corrections,
             rejected_citations,
             unverified_numbers,
@@ -335,13 +367,19 @@ async fn resolve_table(
     question: &str,
     context: &MixedContext<'_>,
     document_sources: &[Evidence],
+    has_cards: bool,
 ) -> (Option<TabularAnswer>, Option<MixedPartUnavailable>) {
+    // The classifier found no data operation in the question. With a card in the turn the table side
+    // is present as that card and only the table *value* is absent; without one the question has no
+    // table part and the documents answer it alone.
+    let no_operation = || match has_cards {
+        true => (None, None),
+        false => (None, Some(MixedPartUnavailable::NotAskedAbout)),
+    };
     match pending {
         // The question has no table part (`prepare_for_mixed` says so with an unrecognised nudge, the same
-        // sign a question the classifier could not read leaves): the documents answer it alone.
-        PendingAnswer::Done(TabularAnswer::Nudge { reason: None, .. }) => {
-            (None, Some(MixedPartUnavailable::NotAskedAbout))
-        }
+        // sign a question the classifier could not read leaves).
+        PendingAnswer::Done(TabularAnswer::Nudge { reason: None, .. }) => no_operation(),
         PendingAnswer::Done(answer) => (Some(answer), None),
         PendingAnswer::TryModel {
             file,
@@ -352,7 +390,7 @@ async fn resolve_table(
             skip_model,
         } => {
             if matches!(fallback, TabularAnswer::Nudge { reason: None, .. }) {
-                return (None, Some(MixedPartUnavailable::NotAskedAbout));
+                return no_operation();
             }
             match try_entity_filled_operation(
                 question,
@@ -392,14 +430,19 @@ async fn resolve_table(
     }
 }
 
-/// The table block's own evidence text, built the same way tier 2 keeps unsent
-/// (`tabular::escalation::format_evidence`): never a raw row list, never a cell value outside the
-/// one computed result. `None` for anything that is not a computed `Value` - a disambiguation
-/// never reaches this function at all (the caller returns before generation for those), and a
-/// content-only question legitimately has no table evidence to send.
+/// The table block, header included: `Table results (workbook "<file>"):` and then the table's own
+/// evidence text, built the same way tier 2 keeps unsent (`tabular::escalation::format_evidence`):
+/// never a raw row list, never a cell value outside the one computed result. The file is named by
+/// its plain path (and the folder it lies in when it is the other family's), because the model has
+/// to be able to tell which workbook a figure comes from when several are named. `None` for
+/// anything that is not a computed `Value` - a disambiguation never reaches this function at all
+/// (the caller returns before generation for those), and a question about no calculation has no
+/// table evidence to send. This is the one place that decides what the block says, so a later step
+/// can swap the one-line figure for the full calculation record without touching the rest.
 fn table_evidence_text(table: &Option<TabularAnswer>) -> Option<String> {
     match table {
         Some(TabularAnswer::Value {
+            file,
             value,
             locator,
             derivation,
@@ -408,9 +451,20 @@ fn table_evidence_text(table: &Option<TabularAnswer>) -> Option<String> {
             value: value.clone(),
             locator: locator.clone(),
             derivation: derivation.clone(),
+        })
+        .map(|evidence| {
+            format!(
+                "Table results (workbook {}):\n{evidence}",
+                crate::tabular::card::file_label(file)
+            )
         }),
         _ => None,
     }
+}
+
+/// `Some(text)` for a non-empty string.
+fn non_empty(text: &str) -> Option<&str> {
+    (!text.is_empty()).then_some(text)
 }
 
 // --- Building the turn sent to the model -----------------------------------------------------
@@ -431,11 +485,18 @@ pub(crate) fn cap_document_share(evidence: &[Evidence], budget_chars: usize) -> 
     selected
 }
 
-/// The instruction plus both blocks, one turn ready to send - the mixed-tier counterpart of
+/// The instruction plus the three blocks, one turn ready to send - the mixed-tier counterpart of
 /// `retrieval::build_context_turn` and `tabular::escalation::build_context_turn`. `document_sources`
 /// must already be the capped set (`cap_document_share`): this function only formats what it is
 /// given, so citation numbers in the model's answer and `document_sources.len()` always agree.
-pub(crate) fn build_two_block_turn(document_sources: &[Evidence], table_text: Option<&str>) -> String {
+/// `cards` is the block of workbook cards as `tabular::card` writes it (header included) and
+/// `table_block` the block of `table_evidence_text` (header included); an absent block reads
+/// `<name>: none.`
+pub(crate) fn build_turn(
+    document_sources: &[Evidence],
+    cards: Option<&str>,
+    table_block: Option<&str>,
+) -> String {
     let documents_block = if document_sources.is_empty() {
         "Document excerpts: none.".to_string()
     } else {
@@ -444,11 +505,15 @@ pub(crate) fn build_two_block_turn(document_sources: &[Evidence], table_text: Op
             crate::retrieval::format_evidence(document_sources)
         )
     };
-    let table_block = match table_text {
-        Some(text) => format!("Table results:\n{text}"),
+    let cards_block = match cards {
+        Some(text) => text.to_string(),
+        None => "Workbook cards: none.".to_string(),
+    };
+    let table_block = match table_block {
+        Some(text) => text.to_string(),
         None => "Table results: none.".to_string(),
     };
-    format!("{MIXED_INSTRUCTION}\n\n{documents_block}\n\n{table_block}")
+    format!("{MIXED_INSTRUCTION}\n\n{documents_block}\n\n{cards_block}\n\n{table_block}")
 }
 
 // --- Entity linking: a retrieved excerpt naming a real table value ----------------------------
@@ -675,13 +740,16 @@ pub(crate) fn verify_numbers(
     answer: &str,
     expected: Option<f64>,
     excerpts: &[Evidence],
+    other_known_texts: &[&str],
 ) -> Vec<NumericCorrection> {
     let Some(expected) = expected else {
         return Vec::new();
     };
     let known: Vec<number_check::Number> = excerpts
         .iter()
-        .flat_map(|excerpt| number_check::scan(&excerpt.text, 1))
+        .map(|excerpt| excerpt.text.as_str())
+        .chain(other_known_texts.iter().copied())
+        .flat_map(|text| number_check::scan(text, 1))
         .collect();
     let mut corrections = Vec::new();
     let mut seen = HashSet::new();
@@ -692,6 +760,7 @@ pub(crate) fn verify_numbers(
             continue;
         }
         let written_in_an_excerpt = excerpts.iter().any(|excerpt| excerpt.text.contains(&number.text))
+            || other_known_texts.iter().any(|text| text.contains(&number.text))
             || known.iter().any(|other| {
                 other
                     .values
@@ -759,6 +828,52 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_mixed_instruction_names_every_block_the_turn_can_carry() {
+        for label in ["'Document excerpts'", "'Workbook cards'", "'Table results'"] {
+            assert!(MIXED_INSTRUCTION.contains(label), "{label} missing");
+        }
+        // The formula rule step 07 relies on: one formula per line, starting with `=`.
+        assert!(MIXED_INSTRUCTION.contains("on a line of its own starting with ="));
+        assert!(MIXED_INSTRUCTION.contains("cannot test it"));
+        // Measured on 22 October 2026: without this sentence `qwen3:4b-instruct` refused to summarise
+        // or relate workbooks "for lack of data" although their structure was in the cards.
+        assert!(MIXED_INSTRUCTION.contains("do not refuse a question about structure"));
+        // The labels in the instruction are the ones the blocks are written with.
+        assert!(crate::tabular::card::CARDS_HEADER.starts_with("Workbook cards"));
+    }
+
+    #[test]
+    fn the_blocks_of_a_turn_stay_neutral_about_who_the_user_is() {
+        let turn = build_turn(&[], None, None).to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(!turn.contains(word), "{word:?} found in the empty turn");
+        }
+    }
+
+    // The instruction, the document share, the card share, a table block and a long question fit
+    // under the default window with room left for the history. Step 10 adds its rows share here.
+    #[test]
+    fn the_shares_fit_the_default_window() {
+        let question = "q".repeat(400);
+        let table_block = format!("Table results (workbook \"t.xlsx\"):\n{}", "t".repeat(300));
+        let fixed = MIXED_INSTRUCTION.chars().count()
+            + MIXED_DOCUMENT_SHARE_CHARS
+            + crate::tabular::card::CARD_SHARE_CHARS
+            + table_block.chars().count()
+            + question.chars().count();
+        let budget = ContextBudget::DEFAULT;
+        assert!(
+            fixed < budget.prompt_chars(),
+            "{fixed} characters of fixed shares"
+        );
+        assert!(
+            budget.history_chars(fixed) >= 3_000,
+            "{} characters left for the history",
+            budget.history_chars(fixed)
+        );
+    }
+
     fn evidence(text: &str) -> Evidence {
         Evidence {
             chunk_id: "chunk-1".to_string(),
@@ -773,15 +888,22 @@ mod tests {
         }
     }
 
-    // The turn the model receives, frozen in full for TABULAR step 01 (20 October 2026). Step 03
-    // extends it (workbook cards, a family of one instruction); these three tests are the ones that
-    // change on purpose, and show the shape they start from. The excerpt block ends with a blank
-    // line of its own, hence the four newlines before the table block.
-    const FIGURE: &str = "Sheet Planning, column amount: sum = 1840 (computed over 8 rows)";
+    // The turn the model receives, frozen in full for TABULAR step 01 (20 October 2026) and changed
+    // on purpose by step 03: the turn now carries three blocks (documents, workbook cards, table
+    // results) and the table block names its workbook. The excerpt block ends with a blank line of
+    // its own, hence the four newlines before the next block.
+    const FIGURE_BLOCK: &str = "Table results (workbook \"planning.xlsx\"):\n\
+         Sheet Planning, column amount: sum = 1840 (computed over 8 rows)";
+    const CARDS: &str = "Workbook cards (structure only, no data values):\n\
+         Workbook \"planning.xlsx\" (xlsx)\n  Sheet \"Planning\": 8 data rows";
 
     #[test]
-    fn the_turn_with_documents_and_no_table_result() {
-        let turn = build_two_block_turn(&[evidence("The contract covers all suppliers.")], None);
+    fn the_turn_with_documents_and_no_other_block() {
+        let turn = build_turn(
+            &[evidence("The contract covers all suppliers.")],
+            None,
+            None,
+        );
         assert_eq!(
             turn,
             format!(
@@ -789,6 +911,7 @@ mod tests {
                  Document excerpts:\n\
                  [1] contrat.pdf (page 1):\n\
                  The contract covers all suppliers.\n\n\n\n\
+                 Workbook cards: none.\n\n\
                  Table results: none."
             )
         );
@@ -796,9 +919,10 @@ mod tests {
 
     #[test]
     fn the_turn_with_documents_and_one_figure() {
-        let turn = build_two_block_turn(
+        let turn = build_turn(
             &[evidence("The contract covers all suppliers.")],
-            Some(FIGURE),
+            None,
+            Some(FIGURE_BLOCK),
         );
         assert_eq!(
             turn,
@@ -807,29 +931,99 @@ mod tests {
                  Document excerpts:\n\
                  [1] contrat.pdf (page 1):\n\
                  The contract covers all suppliers.\n\n\n\n\
-                 Table results:\n\
-                 {FIGURE}"
+                 Workbook cards: none.\n\n\
+                 {FIGURE_BLOCK}"
             )
         );
     }
 
     #[test]
     fn the_turn_with_no_documents_and_one_figure() {
-        let turn = build_two_block_turn(&[], Some(FIGURE));
+        let turn = build_turn(&[], None, Some(FIGURE_BLOCK));
         assert_eq!(
             turn,
             format!(
                 "{MIXED_INSTRUCTION}\n\n\
                  Document excerpts: none.\n\n\
-                 Table results:\n\
-                 {FIGURE}"
+                 Workbook cards: none.\n\n\
+                 {FIGURE_BLOCK}"
             )
         );
     }
 
     #[test]
+    fn the_cards_sit_between_the_documents_and_the_table_results() {
+        let turn = build_turn(
+            &[evidence("The contract covers all suppliers.")],
+            Some(CARDS),
+            Some(FIGURE_BLOCK),
+        );
+        let documents = turn.find("Document excerpts:").expect("documents");
+        let cards = turn.find("Workbook cards (structure only").expect("cards");
+        let table = turn.find("Table results (workbook").expect("table");
+        assert!(documents < cards && cards < table);
+        assert!(!turn.contains("Workbook cards: none."));
+    }
+
+    #[test]
+    fn the_table_block_names_the_workbook_by_its_plain_path() {
+        use crate::tabular::engine::{TabularDerivation, TabularLocator};
+        let value = |file: &str| {
+            Some(TabularAnswer::Value {
+                file: file.to_string(),
+                value: TabularValue::Count(8),
+                locator: TabularLocator {
+                    sheet: "Planning".to_string(),
+                    header_row: Some(0),
+                    column: None,
+                    row_range: None,
+                    filters: Vec::new(),
+                },
+                derivation: TabularDerivation::Computed {
+                    operation: "count".to_string(),
+                    row_count: 8,
+                },
+                model_attempt: None,
+            })
+        };
+        let native = table_evidence_text(&value("factures/planning.xlsx")).expect("a block");
+        assert!(
+            native.starts_with("Table results (workbook \"factures/planning.xlsx\"):\n"),
+            "{native}"
+        );
+        let foreign = table_evidence_text(&value("/documents/planning.xlsx")).expect("a block");
+        assert!(
+            foreign.starts_with(
+                "Table results (workbook \"planning.xlsx\", in the documents folder):\n"
+            ),
+            "{foreign}"
+        );
+        assert_eq!(table_evidence_text(&None), None);
+    }
+
+    #[test]
+    fn a_figure_a_card_states_is_not_corrected_against_the_table() {
+        // The card says 124 data rows; the table figure is 8412.5. Quoting the row count is fine.
+        let corrections = verify_numbers(
+            "The sheet has 124 rows and the total is 8412.5.",
+            Some(8412.5),
+            &[],
+            &["Sheet \"Factures\": 124 data rows"],
+        );
+        assert!(corrections.is_empty(), "{corrections:?}");
+        let invented = verify_numbers(
+            "The sheet has 999 rows.",
+            Some(8412.5),
+            &[],
+            &["124 data rows"],
+        );
+        assert_eq!(invented.len(), 1);
+    }
+
+    #[test]
     fn an_altered_number_is_flagged_against_the_table() {
-        let corrections = verify_numbers("The total billed was 1480 euros.", Some(1840.0), &[]);
+        let corrections =
+            verify_numbers("The total billed was 1480 euros.", Some(1840.0), &[], &[]);
         assert_eq!(corrections.len(), 1);
         assert_eq!(corrections[0].claimed, "1480");
         assert_eq!(corrections[0].correct, 1840.0);
@@ -837,7 +1031,8 @@ mod tests {
 
     #[test]
     fn the_real_number_is_never_flagged() {
-        let corrections = verify_numbers("The total billed was 1840 euros.", Some(1840.0), &[]);
+        let corrections =
+            verify_numbers("The total billed was 1840 euros.", Some(1840.0), &[], &[]);
         assert!(corrections.is_empty());
     }
 
@@ -850,19 +1045,20 @@ mod tests {
             "An earlier estimate of 1480 euros is mentioned.",
             Some(1840.0),
             &excerpts,
+            &[],
         );
         assert!(corrections.is_empty());
     }
 
     #[test]
     fn a_short_number_such_as_a_page_reference_is_left_alone() {
-        let corrections = verify_numbers("See page 3 for details.", Some(1840.0), &[]);
+        let corrections = verify_numbers("See page 3 for details.", Some(1840.0), &[], &[]);
         assert!(corrections.is_empty());
     }
 
     #[test]
     fn no_scalar_table_value_means_nothing_is_checked() {
-        let corrections = verify_numbers("The total billed was 1480 euros.", None, &[]);
+        let corrections = verify_numbers("The total billed was 1480 euros.", None, &[], &[]);
         assert!(corrections.is_empty());
     }
 

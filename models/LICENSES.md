@@ -133,6 +133,54 @@ docker compose exec ollama ollama pull qwen3:0.6b
 docker compose exec ollama ollama pull gemma4:e2b
 ```
 
+## gemma4:e4b (Gemma 4, comparison candidate on the tower, 22 October 2026)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `gemma4:e4b` (6.6 to 9.5 GB on disk per the Ollama page; 4.5B effective, 8B with embeddings; 128K window) |
+| Hugging Face source | [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it) |
+| Licence | **Apache License 2.0** per the card metadata and text. The card also links "Gemma 4 license" (https://ai.google.dev/gemma/docs/gemma_4_license) without saying how it relates; the Ollama library page states no licence. Same reservation as `gemma4:e2b`: **read that link before any sale** |
+| Commercial use | Allowed under Apache 2.0 |
+| Why this one | Larger sibling of `gemma4:e2b`, compared with `ministral-3:3b` on the TABULAR step 03 questions (22 October 2026). Must fit the tower's 8 GB GPU |
+| Health / legal limits | Not a medical device. Not MedGemma. Admin drafting only. A human must review every letter. |
+| Next review | After the comparison on spreadsheet tasks (TABULAR step 25) |
+
+```text
+docker compose exec ollama ollama pull gemma4:e4b
+```
+
+## qwen3:4b-instruct (proposed for the spreadsheet comparison, 22 October 2026, not pulled)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `qwen3:4b-instruct` (= `qwen3:4b-instruct-2507-q4_K_M`, 2.5 GB on disk, 256K window per the Ollama page) |
+| Hugging Face source | [Qwen/Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507) |
+| Licence | **Apache License 2.0** (card metadata `apache-2.0`; the Ollama page states none). 4.0B parameters, 3.6B non-embedding. Non-thinking only: the card says it does not produce `<think>` blocks |
+| Commercial use | Allowed under Apache 2.0 |
+| Why this one | Fits the tower's 8 GB GPU with room for the window; no thinking blocks to strip; reported good at instruction following and formulas. To compare with `ministral-3:3b` and `gemma4:e4b` on the TABULAR step 03 questions |
+| Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. |
+| Next review | After the comparison (TABULAR step 25) |
+
+```text
+docker compose exec ollama ollama pull qwen3:4b-instruct
+```
+
+## qwen2.5-coder:7b (proposed for the spreadsheet comparison, 22 October 2026, not pulled)
+
+| Field | Value |
+| --- | --- |
+| Ollama name | `qwen2.5-coder:7b` (= `qwen2.5-coder:7b-instruct-q4_K_M`, 4.7 GB on disk, 32K window per the Ollama page) |
+| Hugging Face source | [Qwen/Qwen2.5-Coder-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct) |
+| Licence | **Apache License 2.0** (card metadata `apache-2.0`). 7.61B parameters. **Only the 7B, 14B and 32B Coder sizes are Apache 2.0; the 3B Coder is under the Qwen research licence and is out** |
+| Commercial use | Allowed under Apache 2.0 |
+| Why this one | A code model is the natural candidate for spreadsheet formulas. Fits an 8 GB GPU in Q4 with a short window; French prose quality to be checked |
+| Health / legal limits | Not a medical device. Admin drafting only. A human must review every letter. |
+| Next review | After the comparison (TABULAR step 25) |
+
+```text
+docker compose exec ollama ollama pull qwen2.5-coder:7b
+```
+
 ## qwen3.5:2b (tried, removed from `MODEL_ALIASES` on 9 October 2026)
 
 | Field | Value |

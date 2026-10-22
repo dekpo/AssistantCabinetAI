@@ -661,6 +661,15 @@ If it slips, sprints 1 to 3 run against the development PC over the LAN; only sp
 
 Defects found during the programme are kept in `docs/test-reports/knowledge-base-pass-1/defects-register.md`. Those that would block the KB are fixed first; the others are deliberately left until the programme ends, then handled as one targeted battery of fixes that lot 11 proposes (owner instruction, 9 October 2026). The first entries: a column whose name contains a "rows" word (`Total_Ligne`) is answered as a row count, and a partial path such as `mars/neurologie.pdf` matches no file.
 
+## Order of the coming work (owner, 22 October 2026)
+
+1. The tabular series (`docs/SESSION-TABULAR/`), now with **step 03b, a controlled sample of the data for the writer**, before step 04.
+2. After it, the audit of prompt injection on the text paths (`docs/DECISIONS.md`, row 38).
+3. The chat interface and the saving of conversations on the client machine.
+4. The connection to Google Agenda and the management of a calendar.
+5. External data sources: APIs and other databases.
+6. A possible publication for beta tests in practices, **only once the production gates are closed** (`docs/PRIVACY-AND-SECURITY.md`, "Production gates": TLS first, then disk encryption, DPIA and controller, the audit, the Open WebUI decision).
+
 ## Later, with no date
 
 *(Headed "After 14 October, not before" until 8 October 2026, when that date was withdrawn.)*

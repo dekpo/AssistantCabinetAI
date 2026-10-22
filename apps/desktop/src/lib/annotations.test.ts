@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
-import { annotationLines, answerForCopy, cautionLines, computedBlock, sourceLines } from "./annotations";
+import { annotationLines, answerForCopy, cautionLines, computedBlock, sourceItems, sourceLines } from "./annotations";
 import type { TabularAnswer, TargetingReport } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
@@ -130,6 +130,51 @@ describe("copying the sources of an answer", () => {
     expect(lines[0]).toBe("Sources:");
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain("a.xlsx");
+  });
+
+  it("lists a workbook whose structure the model was given, by its plain path, beside the other sources", () => {
+    const lines = sourceLines(
+      english,
+      entry({ workbookCards: ["factures.csv", "/documents/administratif/commandes.xlsx"] }),
+    );
+    expect(lines[0]).toBe("Sources:");
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toBe("- factures.csv (structure only, no data read by the AI)");
+    expect(lines[2]).toContain("administratif/commandes.xlsx");
+    expect(lines[2]).not.toContain("/documents/");
+    expect(sourceLines(french, entry({ workbookCards: ["factures.csv"] }))[1]).toContain("structure seulement");
+  });
+
+  it("gives the screen and the copy one list, documents first, then the sheet, then the workbooks read as a card", () => {
+    const items = sourceItems(
+      english,
+      entry({
+        sources: [
+          {
+            chunkId: "c1",
+            relativePath: "contract.pdf",
+            pageNumber: 2,
+            ordinal: 1,
+            section: null,
+            text: "t",
+            score: 1,
+            origin: "textLayer",
+            confidence: null,
+          },
+        ],
+        mixedTableSource: { file: "a.xlsx", sheet: "S1", column: "amount" },
+        workbookCards: ["b.csv"],
+      }),
+    );
+    expect(items).toHaveLength(3);
+    expect(items[0]).toContain("contract.pdf");
+    expect(items[1]).toContain("a.xlsx");
+    expect(items[2]).toContain("b.csv");
+    expect(sourceLines(english, entry({ workbookCards: ["b.csv"] }))).toEqual([
+      "Sources:",
+      `- ${items[2]}`,
+    ]);
+    expect(sourceItems(english, entry({}))).toEqual([]);
   });
 
   it("leaves them out when the setting is off, which is the default", () => {

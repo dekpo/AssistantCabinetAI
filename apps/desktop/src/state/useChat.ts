@@ -140,6 +140,9 @@ export interface ChatEntry extends ChatTurn {
   /** Where the table part came from: the workbook and sheet, for its own "based on" line beside
    * the document sources' one. */
   mixedTableSource?: TabularSource;
+  /** The workbooks whose structure (card) the model was given for this answer, by index key: listed
+   * among the sources, because the model may name them in its prose. */
+  workbookCards?: string[];
   mixedTableUnavailable?: MixedPartUnavailable;
   mixedDocumentsUnavailable?: MixedPartUnavailable;
   /** A number the model wrote that did not match the table or any excerpt - appended under the
@@ -371,6 +374,9 @@ export function useChat(
              disambiguation) is the whole answer, formatted the same way tier 2's own is. */
           const mixed = result.mixedAnswer;
           const source = mixed.table === null ? null : tabularSourceOf(mixed.table);
+          const cards = result.workbookUse
+            .filter((use) => use.how === "card_sent")
+            .map((use) => use.file);
           setEntries((current) =>
             current.map((entry) =>
               entry.id === answerId
@@ -386,6 +392,7 @@ export function useChat(
                     mixed: true as const,
                     ...(mixed.table === null ? {} : { mixedTable: mixed.table }),
                     ...(source === null ? {} : { mixedTableSource: source }),
+                    ...(cards.length === 0 ? {} : { workbookCards: cards }),
                     ...(mixed.tableUnavailable === null
                       ? {}
                       : { mixedTableUnavailable: mixed.tableUnavailable }),

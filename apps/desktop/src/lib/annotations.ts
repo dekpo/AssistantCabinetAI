@@ -6,7 +6,7 @@ import { localiseInternalNames } from "./displayNames";
 import { displayPathOfKey } from "./indexKey";
 import { counted } from "./plural";
 import { groupSources, type SourceGroup } from "./sourceGroups";
-import { formatTabularAnswer, tabularSourceLine } from "./tabularAnswer";
+import { formatTabularAnswer, tabularSourceLine, workbookCardSourceLine } from "./tabularAnswer";
 import { targetingNoteText } from "./targeting";
 
 /**
@@ -158,15 +158,22 @@ export function sourceGroupLine(t: Translator, group: SourceGroup): string {
   );
 }
 
-/** The lists of sources under an answer, as plain lines under one heading: the documents (one line
- * per file, with its pages and sections), then the sheets and columns the engine read. Empty when
- * there are none. */
-export function sourceLines(t: Translator, entry: ChatEntry): string[] {
-  const items = [
+/** Every source of an answer, one line each, in the order they are listed: the documents (one line per
+ * file, with its pages and sections), the sheet and column the engine read, then the workbooks whose
+ * structure the model was given. The one list the screen's single "Sources" disclosure and the copy
+ * both use. Empty when there are none. */
+export function sourceItems(t: Translator, entry: ChatEntry): string[] {
+  return [
     ...groupSources(entry.sources ?? []).map((group) => sourceGroupLine(t, group)),
     ...(entry.tabularSource === undefined ? [] : [tabularSourceLine(t, entry.tabularSource)]),
     ...(entry.mixedTableSource === undefined ? [] : [tabularSourceLine(t, entry.mixedTableSource)]),
+    ...(entry.workbookCards ?? []).map((file) => workbookCardSourceLine(t, file)),
   ];
+}
+
+/** The lists of sources under an answer, as plain lines under one heading. Empty when there are none. */
+export function sourceLines(t: Translator, entry: ChatEntry): string[] {
+  const items = sourceItems(t, entry);
   return items.length === 0 ? [] : [t("chat.sourcesCopyHeading"), ...items.map((item) => `- ${item}`)];
 }
 

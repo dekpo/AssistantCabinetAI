@@ -206,9 +206,105 @@ pub fn unsupported_numbers_with_pages(
         .collect()
 }
 
+/// The explicit arithmetic a model wrote in its answer (`10 + 40 = 50`, `3 x 4 = 12`,
+/// `100 - 40 = 60`, `10 + 20 + 30 = 60`): two or more numbers joined by `+`, `-`, `x`, `*` or the
+/// multiplication sign, then `=` and a result. A number is read whole (space-grouped thousands,
+/// decimal comma or point) and may carry a currency sign or code. The result is returned as the
+/// model wrote it, without the unit that follows it.
+///
+/// A model that adds up the rows of a sample states a total the table does not hold (measured on
+/// 22 October 2026: `Alpha : 10 + 40 = 50` for a total of 120), so the interface says, beside the
+/// answer and never in it, that only the engine is reliable (TABULAR step 03b, decision 39). An
+/// expression with no `=`, a date, a citation, an identifier, a range of pages or a telephone
+/// number is not arithmetic, and an equals sign with a single number on its left is not either.
+/// Each distinct expression once, in the order written.
+pub fn arithmetic_expressions(answer: &str) -> Vec<String> {
+    use regex::Regex;
+    use std::sync::OnceLock;
+
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    let pattern = PATTERN.get_or_init(|| {
+        let number = r"\d(?:[\d \x{a0}\x{202f}.,]*\d)?";
+        let unit = r"(?:[ \x{a0}]?(?:\x{20ac}|\$|EUR|CHF))?";
+        let operator = r"[ \x{a0}]*(?:[+\-*]|\x{d7}|\x{2212}|\bx\b)[ \x{a0}]*";
+        Regex::new(&format!(
+            "{number}{unit}(?:{operator}{number}{unit})+[ \\x{{a0}}]*=[ \\x{{a0}}]*{number}"
+        ))
+        .expect("the arithmetic pattern is valid")
+    });
+    let chars_before = |end: usize| answer[..end].chars().next_back();
+    let mut found: Vec<String> = Vec::new();
+    for hit in pattern.find_iter(answer) {
+        // A run that starts inside a word, an identifier, a date or a longer number is not the
+        // start of an expression.
+        if chars_before(hit.start())
+            .is_some_and(|before| before.is_alphanumeric() || "-/.,_#".contains(before))
+        {
+            continue;
+        }
+        let expression = hit.as_str().trim().to_string();
+        if !found.contains(&expression) {
+            found.push(expression);
+        }
+    }
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_arithmetic_in_an_answer_is_found() {
+        for (text, expected) in [
+            ("Alpha : 10 + 40 = 50 EUR", "10 + 40 = 50"),
+            (
+                "Total 1 250,50 + 30 = 1 280,50 euros",
+                "1 250,50 + 30 = 1 280,50",
+            ),
+            ("We get 3 x 4 = 12 rows", "3 x 4 = 12"),
+            ("so 12 \u{d7} 3 = 36", "12 \u{d7} 3 = 36"),
+            ("net: 100 - 40 = 60", "100 - 40 = 60"),
+            ("10 + 20 + 30 = 60", "10 + 20 + 30 = 60"),
+            (
+                "10\u{20ac} + 5\u{20ac} = 15\u{20ac}",
+                "10\u{20ac} + 5\u{20ac} = 15",
+            ),
+            ("10+40=50", "10+40=50"),
+        ] {
+            assert_eq!(
+                arithmetic_expressions(text),
+                vec![expected.to_string()],
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_repeated_expression_is_reported_once_and_two_are_both_reported() {
+        let found = arithmetic_expressions("10 + 40 = 50, and again 10 + 40 = 50, then 2 x 3 = 6.");
+        assert_eq!(found, vec!["10 + 40 = 50", "2 x 3 = 6"]);
+    }
+
+    #[test]
+    fn what_is_not_arithmetic_is_left_alone() {
+        for text in [
+            "lignes 2 \u{e0} 10",
+            "see rows 2 to 10 of the sheet",
+            "the invoice of 02/03/2026 is due",
+            "dated 2026-03-02 and 02-03-2026",
+            "as stated in [1] and [2]",
+            "order CMD-2026-003 is open",
+            "3 + 4",
+            "call 06 12 34 56 78 or +33 6 12 34 56 78",
+            "Total = 120",
+            "rate = 7.5 percent",
+            "a size of A4 x 2",
+            "pages 12 - 14",
+        ] {
+            assert!(arithmetic_expressions(text).is_empty(), "{text:?}");
+        }
+    }
 
     #[test]
     fn a_cited_page_number_is_known_and_a_decimal_that_shares_its_digits_is_not() {

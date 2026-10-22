@@ -7,6 +7,7 @@ import type {
   TabularDerivation,
   TabularRow,
   TabularValue,
+  WorkbookCardUse,
 } from "./ipc";
 import { displayPathOfKey } from "./indexKey";
 import { counted } from "./plural";
@@ -106,11 +107,25 @@ export function tabularSourceLine(t: Translator, source: TabularSource): string 
       });
 }
 
-/** A workbook whose structure (its card: sheets, columns, types, row counts - no cell) was given to the
- * model, as a line of the sources: the model may name it in its answer, so the reader must be able to
- * find it there (TABULAR step 03). */
-export function workbookCardSourceLine(t: Translator, file: string): string {
-  return t("chat.sourceItemCard", { path: displayPathOfKey("data", file) });
+/** A workbook whose structure (its card: sheets, columns, types, row counts) was given to the model,
+ * as a line of the sources: the model may name it in its answer, so the reader must be able to find
+ * it there (TABULAR step 03). When a sample of its rows was sent too, the line says how many rows of
+ * how many, and that identifiers were masked (step 03b). */
+export function workbookCardSourceLine(t: Translator, use: WorkbookCardUse): string {
+  const path = displayPathOfKey("data", use.file);
+  if (use.rowsSent === null || use.rowsSent === undefined) {
+    return t("chat.sourceItemCard", { path });
+  }
+  // No row of this workbook was sent (the room held too few to be of use), but the figures the
+  // program computed over its whole table were.
+  if (use.rowsSent === 0) {
+    return t("chat.sourceItemCardProfile", { path });
+  }
+  return t("chat.sourceItemCardRows", {
+    path,
+    rows: counted(use.rowsSent, t("chat.rowOne"), t("chat.rowMany")),
+    total: String(use.rowsTotal ?? use.rowsSent),
+  });
 }
 
 /** A weekday name (1 Monday .. 7 Sunday) in her language, from a fixed reference Monday - no

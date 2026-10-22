@@ -7,6 +7,7 @@ import type {
   AppSettings,
   ExplorerDensity,
   KnowledgeMode,
+  TabularRowsMode,
   SpeechSettings,
   ThemeChoice,
 } from "../lib/ipc";
@@ -30,6 +31,7 @@ import { SpeechSettingsBlock } from "./SpeechSettings";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
 const KNOWLEDGE_MODES: KnowledgeMode[] = ["off", "suggest", "auto"];
+const TABULAR_ROWS_MODES: TabularRowsMode[] = ["off", "sample"];
 const DENSITY_CHOICES: ExplorerDensity[] = ["compact", "comfortable"];
 
 /* The same bounds Rust clamps to, so the control offers only what will actually be stored. They
@@ -357,6 +359,27 @@ export function SettingsDialog({
             {KNOWLEDGE_MODES.map((mode) => (
               <option key={mode} value={mode}>
                 {t(`settings.knowledgeMode.${mode}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* What leaves the computer for the AI when a question concerns a spreadsheet: the structure
+            alone, or the structure with a sample of rows (identifiers masked). Read at the next
+            question: nothing runs when it is changed. */}
+        <label className="field">
+          <span className="field__label">{t("settings.tabularRowsModeLabel")}</span>
+          <span className="field__description">{t("settings.tabularRowsModeDescription")}</span>
+          <select
+            className="field__control"
+            value={settings.tabularRowsMode}
+            onChange={(event) =>
+              onUpdate({ tabularRowsMode: event.target.value as TabularRowsMode })
+            }
+          >
+            {TABULAR_ROWS_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {t(`settings.tabularRowsMode.${mode}`)}
               </option>
             ))}
           </select>

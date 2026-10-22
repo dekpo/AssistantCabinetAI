@@ -5,6 +5,7 @@
 use serde::Serialize;
 
 use crate::tabular::card::WorkbookCard;
+use crate::tabular::sample::WorkbookSampleUse;
 use crate::tabular_answer::{ImpliedWorkbook, TabularAnswer};
 
 /// What was done with a workbook for this answer.
@@ -27,17 +28,23 @@ pub struct WorkbookUse {
     /// Why the workbook concerns the question when it was not named: an `ImpliedReason` code
     /// (`implied_single`, `implied_by_word`...). `None` for a workbook the question names.
     pub reason: Option<String>,
+    /// The rows of the workbook the model was shown in the sample (`tabular::sample`), with the data
+    /// rows of the sheets they come from. `None` when only the structure was sent (the setting is
+    /// `off`, or the workbook has no data table to sample) and for a computed figure.
+    pub rows_sent: Option<usize>,
+    pub rows_total: Option<usize>,
 }
 
 /// The usage trace of a mixed answer: one `card_sent` entry per card, only when the model wrote an
 /// answer (`model_wrote`, a turn that never reached it sent nothing), then a `computed` entry for
 /// the workbook a figure was computed from. `implied` gives the reason of a workbook the question
-/// did not name.
+/// did not name. `samples` says, for each workbook whose rows were sampled, how many were sent.
 pub fn of_mixed_answer(
     cards: &[WorkbookCard],
     implied: &[ImpliedWorkbook],
     table: &Option<TabularAnswer>,
     model_wrote: bool,
+    samples: &[WorkbookSampleUse],
 ) -> Vec<WorkbookUse> {
     let reason_of = |file: &str| {
         implied
@@ -48,10 +55,13 @@ pub fn of_mixed_answer(
     let mut trace = Vec::new();
     if model_wrote {
         for card in cards {
+            let sample = samples.iter().find(|each| each.file == card.file);
             trace.push(WorkbookUse {
                 file: card.file.clone(),
                 how: WorkbookUseHow::CardSent,
                 reason: reason_of(&card.file),
+                rows_sent: sample.map(|each| each.rows_sent),
+                rows_total: sample.map(|each| each.rows_total),
             });
         }
     }
@@ -60,6 +70,8 @@ pub fn of_mixed_answer(
             file: file.clone(),
             how: WorkbookUseHow::Computed,
             reason: reason_of(file),
+            rows_sent: None,
+            rows_total: None,
         });
     }
     trace
@@ -85,7 +97,7 @@ mod tests {
             file: "implied.xlsx".to_string(),
             reason: ImpliedReason::ImpliedByWord,
         }];
-        let trace = of_mixed_answer(&cards, &implied, &None, true);
+        let trace = of_mixed_answer(&cards, &implied, &None, true, &[]);
         assert_eq!(
             trace,
             vec![
@@ -93,15 +105,37 @@ mod tests {
                     file: "named.xlsx".to_string(),
                     how: WorkbookUseHow::CardSent,
                     reason: None,
+                    rows_sent: None,
+                    rows_total: None,
                 },
                 WorkbookUse {
                     file: "implied.xlsx".to_string(),
                     how: WorkbookUseHow::CardSent,
                     reason: Some("implied_by_word".to_string()),
+                    rows_sent: None,
+                    rows_total: None,
                 },
             ]
         );
-        assert!(of_mixed_answer(&cards, &implied, &None, false).is_empty());
+        assert!(of_mixed_answer(&cards, &implied, &None, false, &[]).is_empty());
+    }
+
+    #[test]
+    fn the_rows_sent_are_traced_beside_the_card_of_their_workbook() {
+        let cards = [card("named.xlsx"), card("other.xlsx")];
+        let samples = [WorkbookSampleUse {
+            file: "named.xlsx".to_string(),
+            rows_sent: 12,
+            rows_total: 480,
+        }];
+        let trace = of_mixed_answer(&cards, &[], &None, true, &samples);
+        assert_eq!(
+            (trace[0].rows_sent, trace[0].rows_total),
+            (Some(12), Some(480))
+        );
+        assert_eq!((trace[1].rows_sent, trace[1].rows_total), (None, None));
+        // A turn the model never read sent no rows either.
+        assert!(of_mixed_answer(&cards, &[], &None, false, &samples).is_empty());
     }
 
     #[test]
@@ -110,10 +144,14 @@ mod tests {
             file: "factures.xlsx".to_string(),
             how: WorkbookUseHow::CardSent,
             reason: Some("implied_single".to_string()),
+            rows_sent: Some(9),
+            rows_total: Some(9),
         };
         let json = serde_json::to_value(entry).expect("serialises");
         assert_eq!(json["file"], "factures.xlsx");
         assert_eq!(json["how"], "card_sent");
         assert_eq!(json["reason"], "implied_single");
+        assert_eq!(json["rowsSent"], 9);
+        assert_eq!(json["rowsTotal"], 9);
     }
 }

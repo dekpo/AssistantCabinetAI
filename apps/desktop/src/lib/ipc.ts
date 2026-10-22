@@ -16,6 +16,12 @@ export type ThemeChoice = "light" | "dark" | "system";
  */
 export type KnowledgeMode = "off" | "suggest" | "auto";
 
+/**
+ * What the AI receives from the spreadsheets a question concerns: `off` is their structure alone
+ * (the workbook card); `sample` adds a sample of rows and the column figures, identifiers masked.
+ */
+export type TabularRowsMode = "off" | "sample";
+
 /** The widths of the three zones, `[resources, workspace, chat]`, in percent of the window. */
 export type PanelTriple = [number, number, number];
 
@@ -140,6 +146,8 @@ export interface AppSettings {
    * `retrieval-timings.jsonl` and `analysis-timings.jsonl` in the app-data folder. Off by default. */
   writeTimingLog: boolean;
   knowledgeMode: KnowledgeMode;
+  /** What the AI receives from the spreadsheets a question concerns (`TabularRowsMode`). */
+  tabularRowsMode: TabularRowsMode;
   /** The optional lexicon packs the knowledge base reads names with, named `<domain>-<country>`:
    * `health-fr` (France), `health-ch` (Switzerland: AVS / AHV number, Swiss IBAN and telephone),
    * `legal-fr`, `accounting-fr`, and later `health-eu`, `legal-ch`... Rust keeps only the ids a
@@ -1031,6 +1039,9 @@ export interface MixedAnswer {
   rejectedCitations: string[];
   /** Figures the model stated that are in none of the excerpts and not in the question, when no table figure is shown. */
   unverifiedNumbers: string[];
+  /** The explicit arithmetic the model wrote itself (`10 + 40 = 50`), as written: said under the
+   * answer, which is never edited. Only the engine's figures are reliable. */
+  modelArithmetic: string[];
 }
 
 export interface AskAnswer {
@@ -1078,7 +1089,14 @@ export interface WorkbookUse {
   file: string;
   how: "card_sent" | "computed";
   reason: string | null;
+  /** The rows of the workbook the model was shown in the sample, and the data rows of the sheets
+   * they come from. Null when only the structure was sent. */
+  rowsSent: number | null;
+  rowsTotal: number | null;
 }
+
+/** A workbook whose structure was given to the model, and the rows of it that were (null: none). */
+export type WorkbookCardUse = Pick<WorkbookUse, "file" | "rowsSent" | "rowsTotal">;
 
 export type RetrievalPath =
   | "documents"

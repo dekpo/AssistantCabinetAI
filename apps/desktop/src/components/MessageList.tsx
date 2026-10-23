@@ -5,6 +5,7 @@ import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
 import { annotationParts, answerForCopy, sourceItems } from "../lib/annotations";
+import { buttonsFor } from "../lib/calculationFollowUp";
 import { formatTabularAnswer } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
 import {
@@ -33,6 +34,8 @@ export function MessageList({
   onStop,
   onResend,
   onRegenerate,
+  onExplainCalculation,
+  onAnalyseCalculation,
   onAnalyse,
   analysing,
   onRetarget,
@@ -48,6 +51,10 @@ export function MessageList({
   onResend: (questionEntryId: string, text: string) => void;
   /** Regenerate a past answer (item 4). */
   onRegenerate: (answerEntryId: string) => void;
+  /** "Expliquer le calcul" under a computed figure: the explanation is added under the figure. */
+  onExplainCalculation: (answerEntryId: string) => void;
+  /** "Demander a l'IA" under a computed figure: the analysis replaces the answer, the figure stays. */
+  onAnalyseCalculation: (answerEntryId: string) => void;
   /** Analyse the folder, then ask this question again. Offered under the one answer that says the
    * documents have not been read yet, because that is the only thing that answer needs. */
   onAnalyse: (answerEntryId: string) => void;
@@ -259,6 +266,7 @@ export function MessageList({
           // The question this "which file?" answer asked about, to be resent with her pick in it.
           const askedAbout = entries[entries.indexOf(entry) - 1];
           const annotationNotes = annotationParts(t, locale, entry);
+          const buttons = buttonsFor(entry);
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
@@ -326,6 +334,34 @@ export function MessageList({
                   <Markdown text={formatTabularAnswer(t, entry.mixedTable, locale)} />
                 </div>
               ) : null}
+              {/* "Expliquer le calcul": the method behind the figure above, added under it and replaced
+                  (never stacked) when the button is pressed again. The figure is the program's, the
+                  explanation is the model's, so the two are never run together. */}
+              {entry.explanation === undefined ? null : (
+                <div className="message__explanation">
+                  <p className="message__timing">{t("chat.explanationTitle")}</p>
+                  {entry.explanation.status === "unavailable" ? (
+                    <p className="message__timing">{t("chat.explanationUnavailable")}</p>
+                  ) : (
+                    <Markdown text={entry.explanation.text} />
+                  )}
+                  {entry.explanation.status === "running" ? (
+                    <p className="message__actions">
+                      <span className="message__pending">
+                        <span className="spinner" aria-hidden="true" />
+                        {t("chat.explanationRunning")}
+                      </span>
+                      <button
+                        type="button"
+                        className="button button--compact message__stop"
+                        onClick={onStop}
+                      >
+                        {t("actions.stop")}
+                      </button>
+                    </p>
+                  ) : null}
+                </div>
+              )}
               {/* A letter was asked for: the plan she approves (`FillPlanCard`). */}
               {entry.fillPlan === undefined ? null : <FillPlanCard plan={entry.fillPlan} />}
               {/* Every note under the answer, as lines: where it came from, what it rests on, what could
@@ -411,17 +447,35 @@ export function MessageList({
                       those two, and the same control means "Demander a l'IA"/"Ask AI" for them,
                       found worth adding from a real wrong deterministic answer in a manual
                       validation pass (`docs/DECISIONS.md`, 1 October 2026). */}
-                  {entry.tabular === true && entry.tabularRetryable !== true ? null : (
+                  {/* Which buttons an answer gets is decided by one pure function
+                      (`lib/calculationFollowUp.ts`, `buttonsFor`): a computed figure is explained or
+                      analysed (TABULAR step 06, owner decision 11), a nudge keeps the old "Ask the
+                      AI", a structural fact and a human choice have none. */}
+                  {buttons.explain ? (
+                    <button
+                      type="button"
+                      className="button button--compact"
+                      onClick={() => onExplainCalculation(entry.id)}
+                    >
+                      {t("actions.explainCalculation")}
+                    </button>
+                  ) : null}
+                  {buttons.analyse ? (
+                    <button
+                      type="button"
+                      className="button button--compact"
+                      onClick={() => onAnalyseCalculation(entry.id)}
+                    >
+                      {t("actions.analyseCalculation")}
+                    </button>
+                  ) : null}
+                  {buttons.regenerate === null ? null : (
                     <button
                       type="button"
                       className="button button--compact"
                       onClick={() => onRegenerate(entry.id)}
                     >
-                      {t(
-                        entry.deterministic === true
-                          ? "actions.regenerateWithModel"
-                          : "actions.regenerate",
-                      )}
+                      {t(buttons.regenerate)}
                     </button>
                   )}
                   {/* Drawn only while the voice and read-aloud are on; nothing otherwise. It reads

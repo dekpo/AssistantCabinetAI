@@ -1,5 +1,6 @@
 import type { Translator } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
+import { explanationBlock } from "./calculationFollowUp";
 import { coverageLine } from "./coverage";
 import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
@@ -166,6 +167,13 @@ function noteLines(
   for (const expression of entry.mixedModelArithmetic ?? []) {
     lines.push(t("chat.modelArithmetic", { expression }));
   }
+  // The same two checks on the explanation of a calculation, beside the explanation (TABULAR step 06).
+  for (const number of entry.explanation?.unverifiedNumbers ?? []) {
+    lines.push(t("chat.explanationUnverifiedNumber", { number }));
+  }
+  for (const expression of entry.explanation?.modelArithmetic ?? []) {
+    lines.push(t("chat.modelArithmetic", { expression }));
+  }
   return lines;
 }
 
@@ -226,6 +234,11 @@ export function answerForCopy(
   const computed = computedBlock(t, locale, entry);
   if (computed !== null) {
     parts.push(computed);
+  }
+  // The explanation of the calculation sits under the figure, so it is copied with it.
+  const explanation = explanationBlock(t, entry);
+  if (explanation !== null) {
+    parts.push(explanation);
   }
   const notes = [...annotationLines(t, locale, entry), ...targetingNoteText(t, entry.targeting)];
   if (notes.length > 0) {

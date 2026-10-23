@@ -26,6 +26,8 @@ pub enum WorkbookUseHow {
     PlanPrepared,
     /// It was named, ticked or implied and did not serve; `reason` says why.
     NotUsed,
+    /// The model explained the method of a figure computed from it (TABULAR step 06). Informative.
+    Explained,
 }
 
 /// Why a workbook concerns the question without being named, or why it did not serve.
@@ -135,6 +137,9 @@ pub enum Answered<'a> {
     Plan(&'a str),
     /// A folder engine answered (door 2): no workbook was read for a figure.
     FolderSearch,
+    /// the "Explain the calculation" button: the model explained the calculation behind a figure of this workbook,
+    /// computed again by the program (TABULAR step 06). Written beside the lines the figure already has.
+    Explained(&'a str),
 }
 
 /// The file an answer was computed from: a value, a structural fact.
@@ -237,6 +242,11 @@ pub fn trace(facts: &SelectionFacts, answered: Answered<'_>) -> Vec<WorkbookUse>
             entries.push(WorkbookUse::of(file, WorkbookUseHow::PlanPrepared, None));
         }
         Answered::FolderSearch => aggregate = false,
+        Answered::Explained(file) => {
+            accounted.push(file.to_string());
+            entries.push(WorkbookUse::of(file, WorkbookUseHow::Explained, None));
+            aggregate = false;
+        }
     }
 
     // What the question named and did not get.
@@ -444,6 +454,20 @@ mod tests {
             (trace[0].file.as_str(), trace[0].how),
             ("clients.xlsx", WorkbookUseHow::PlanPrepared)
         );
+    }
+
+    #[test]
+    fn an_explanation_is_traced_as_explained_and_adds_no_other_line() {
+        // the "Explain the calculation" button (TABULAR step 06): one informative line for the workbook whose figure
+        // was explained, with no aggregate line even when several workbooks are ticked.
+        let trace = trace(&facts(&["a.csv", "b.csv"]), Answered::Explained("a.csv"));
+        assert_eq!(trace.len(), 1);
+        assert_eq!(
+            (trace[0].file.as_str(), trace[0].how, trace[0].reason),
+            ("a.csv", WorkbookUseHow::Explained, None)
+        );
+        let json = serde_json::to_value(&trace[0]).expect("serialises");
+        assert_eq!(json["how"], "explained");
     }
 
     #[test]

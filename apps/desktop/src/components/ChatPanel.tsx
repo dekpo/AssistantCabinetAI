@@ -82,6 +82,8 @@ export function ChatPanel({
     resend,
     regenerate,
     retarget,
+    explainCalculation,
+    analyseCalculation,
     stop,
     dismissError,
     clear,
@@ -189,6 +191,8 @@ export function ChatPanel({
         onStop={onStop}
         onResend={(questionEntryId, text) => void resend(questionEntryId, text)}
         onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
+        onExplainCalculation={(answerEntryId) => void explainCalculation(answerEntryId)}
+        onAnalyseCalculation={(answerEntryId) => void analyseCalculation(answerEntryId)}
         onRetarget={(answerEntryId, choice) => void retarget(answerEntryId, choice)}
         showDiagnostics={showDiagnostics}
         copySources={copySources}

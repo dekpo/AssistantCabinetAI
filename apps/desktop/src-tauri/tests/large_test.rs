@@ -1135,6 +1135,7 @@ impl<'a> Replay<'a> {
             // that wants them calls `tabular_answer::question_cards`, as `commands::mixed_tier` does).
             cards_text: "",
             sample_text: "",
+            calculation: Default::default(),
         };
         let started = Instant::now();
         let (result, generated) = mixed_answer::answer(

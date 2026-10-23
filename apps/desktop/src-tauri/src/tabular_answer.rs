@@ -40,6 +40,7 @@ use crate::tabular::engine::{
     self, Comparison, FilterSpec, NotAnswerableReason, Operation, TabularDerivation,
     TabularLocator, TabularOutcome, TabularValue,
 };
+use crate::tabular::escalation::{self, CalculationRecord};
 use crate::tabular::inventory::{
     self, data_rows, text_value, ColumnInventory, ColumnType, SheetInventory, TabularInventory,
 };
@@ -495,6 +496,123 @@ pub fn advisory_skips_documents(
         && advisory_target(question, data, selection, locale, entity_candidates).is_some()
 }
 
+/// The data rows of one sheet of one workbook, as the inventory counts them: what a calculation record
+/// says the rows it kept are "out of" (TABULAR step 06). `file` is the index key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetSize {
+    pub file: String,
+    pub sheet: String,
+    pub data_rows: usize,
+}
+
+/// The data rows of every reachable sheet of the usable workbooks a selection keeps. Inventory only:
+/// no workbook is read.
+pub fn sheet_sizes(data: &DataFolder, selection: &ScopeMode) -> Vec<SheetSize> {
+    let Ok(chosen) = chosen_workbooks(data, selection) else {
+        return Vec::new();
+    };
+    let mut sizes = Vec::new();
+    for each in &chosen {
+        let Some(inventory) = data.usable_inventory(&each.record.relative_path) else {
+            continue;
+        };
+        for sheet in engine::reachable_sheets(inventory, each.sheets.as_deref()) {
+            sizes.push(SheetSize {
+                file: each.record.relative_path.clone(),
+                sheet: sheet.name.clone(),
+                data_rows: sheet.row_count,
+            });
+        }
+    }
+    sizes
+}
+
+/// The record of the calculation behind a computed answer (`escalation::format_calculation_record`):
+/// what the writer is shown in the `Table results` block, and what the "Explain the calculation" button explains.
+/// `None` for anything but a value the model may read (a list of rows never reaches it).
+pub fn calculation_record(
+    question: Option<&str>,
+    answer: &TabularAnswer,
+    sizes: &[SheetSize],
+) -> Option<String> {
+    let TabularAnswer::Value {
+        file,
+        value,
+        locator,
+        derivation,
+        ..
+    } = answer
+    else {
+        return None;
+    };
+    let data_rows = sizes
+        .iter()
+        .find(|size| size.file == *file && size.sheet == locator.sheet)
+        .map(|size| size.data_rows);
+    let workbook = crate::tabular::card::file_label(file);
+    escalation::format_calculation_record(&CalculationRecord {
+        question,
+        workbook: &workbook,
+        data_rows,
+        value,
+        locator,
+        derivation,
+    })
+}
+
+/// A value the engine computed from a model-written plan, computed again from the plan the answer
+/// stored: no model is asked (TABULAR step 06, plan 4.7). The plan comes back from the interface, so it
+/// is untrusted JSON: `query_plan::resolve` validates it against the real workbook before
+/// `engine::execute` runs it, exactly as the first time. A plan that no longer parses, resolves or
+/// executes comes back as the answer the engine gives for it (never as a value), and a workbook that
+/// changed since is refused.
+pub fn replay_model_plan(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    plan: &serde_json::Value,
+    model_alias: &str,
+) -> Result<TabularAnswer, AppError> {
+    let chosen = chosen_workbooks(data, selection)?;
+    let (target, _) = match pick_target(question, data, &chosen) {
+        Ok(target) => target,
+        Err(answer) => return Ok(answer),
+    };
+    let file = target.record.relative_path.clone();
+    match target.record.processing_status {
+        ProcessingStatus::Indexed => {}
+        ProcessingStatus::Failed => return Ok(TabularAnswer::WorkbookUnreadable { file }),
+        _ => return Ok(TabularAnswer::WorkbookNotAnalysed { file }),
+    }
+    let Some(inventory) = data.usable_inventory(&file) else {
+        return Ok(TabularAnswer::WorkbookNotAnalysed { file });
+    };
+    let path = data
+        .files()
+        .absolute_path(target.record)
+        .ok_or(AppError::ScopeUnavailable)?;
+    let (workbook, fresh) = match load_workbook_cached(index, &path, &file, inventory, locale) {
+        Ok(pair) => pair,
+        Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
+        Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
+    };
+    let Ok(plan) = serde_json::from_value::<query_plan::QueryPlan>(plan.clone()) else {
+        return Ok(no_table_part());
+    };
+    Ok(apply_plan(
+        &plan,
+        &file,
+        &workbook,
+        &fresh,
+        target.sheets.as_deref(),
+        locale,
+        model_alias,
+    )
+    .unwrap_or_else(no_table_part))
+}
+
 /// The answer a model-free run gives: a finished answer as it is, and for a question left to the
 /// hidden interpreter the nudge it falls back to, taken **without** `resolve` (a second call to a
 /// server that just failed would only add a wait). The tables-only writer degrades to this when the
@@ -834,7 +952,11 @@ fn answer_sync(
             // her (session 14's manual validation pass found a real case of exactly that,
             // `docs/DECISIONS.md`). Reuses the workbook already loaded above, at no extra cost;
             // `computed` becomes the fallback if the model cannot do any better.
-            if force_model {
+            // Owner decision 11 (TABULAR step 06): the model no longer re-reads a question the engine
+            // answered with a figure; "Demander a l'IA" under a figure is the analysis of that figure
+            // (`calculation_follow_up`). `force_model` stays for a nudge: the only way left to try to
+            // understand a question the engine could not answer.
+            if force_model && !matches!(computed, TabularAnswer::Value { .. }) {
                 Ok(PendingAnswer::TryModel {
                     file,
                     workbook,

@@ -1,5 +1,6 @@
 import type { Translator } from "../../i18n/translate";
 import { cautionLines, computedBlock } from "../../lib/annotations";
+import { explanationBlock } from "../../lib/calculationFollowUp";
 import { localiseInternalNames } from "../../lib/displayNames";
 import type { ChatEntry } from "../../state/useChat";
 import type { ReadingPart } from "../ipc";
@@ -31,6 +32,11 @@ export function readingParts(t: Translator, locale: string, entry: ChatEntry): R
   const computed = computedBlock(t, locale, entry);
   if (computed !== null) {
     parts.push({ kind: holdsMarkdown(computed) ? "markdown" : "plain", text: computed });
+  }
+  // The explanation of the calculation is read after the figure it explains.
+  const explanation = explanationBlock(t, entry);
+  if (explanation !== null) {
+    parts.push({ kind: "markdown", text: explanation });
   }
   for (const line of cautionLines(t, locale, entry)) {
     parts.push({ kind: "plain", text: line });

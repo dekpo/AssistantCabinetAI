@@ -65,6 +65,12 @@ pub const MIXED_INSTRUCTION: &str =
      contains, which columns to use and how to relate or combine files, even though no cell value \
      is available, and do not refuse a question about structure for lack of data.";
 
+/// Appended to the instruction when the user asked for the analysis of a computed figure (TABULAR
+/// step 06, plan 4.7): the figure of the table results is final, the model comments on it and goes
+/// further, and never computes a new one.
+pub const ANALYSIS_ADDENDUM: &str =
+    "The user asked for an analysis of the table result. Treat the figure as final. Comment on what      it means, relate it to the document excerpts when there are any, point out anything that looks      unusual, and suggest next questions. Never compute a new figure; if one is needed, say which      calculation to ask for.";
+
 /// The words of the formula sentence of `MIXED_INSTRUCTION` that are true only without a sample, and
 /// what a turn that carries a sample says instead (`build_turn`). Measured on 22 October 2026
 /// (TABULAR step 03b): with rows in the turn, `qwen3:4b-instruct` answered "the data is not visible
@@ -181,6 +187,17 @@ pub struct MixedContext<'a> {
     /// empty when the setting is `off` or there is nothing to send. Its figures are known facts of
     /// the turn for the number checks, as the cards are.
     pub sample_text: &'a str,
+    /// What the calculation record and the analysis need beyond the figure (TABULAR step 06).
+    pub calculation: CalculationSide<'a>,
+}
+
+/// The part of a turn that exists only for a computed figure: the data rows of the sheets in play (the
+/// record says "41 kept out of 124 data rows") and whether the user asked for the analysis, which adds
+/// `ANALYSIS_ADDENDUM` to the instruction. `Default` is the ordinary turn.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CalculationSide<'a> {
+    pub sheet_sizes: &'a [tabular_answer::SheetSize],
+    pub analysis: bool,
 }
 
 /// The full mixed tier, from where `commands::mixed_tier` leaves off: entity linking, compute,
@@ -255,7 +272,7 @@ pub async fn answer(
         return Err(AppError::InsufficientEvidence);
     }
 
-    let table_text = table_evidence_text(&table);
+    let table_text = table_evidence_text(&table, context.calculation.sheet_sizes);
     let expected = match &table {
         Some(TabularAnswer::Value { value, .. }) => scalar_of(value),
         _ => None,
@@ -266,7 +283,11 @@ pub async fn answer(
     // mixed question whose document half came back empty. Only a computed value can answer alone:
     // a question about a workbook's structure has no document evidence either, and the model still
     // reads the cards (the guard above already refused a turn with neither).
-    if let Some(reason) = documents_unavailable.filter(|_| computed_value) {
+    // The analysis of a figure is the exception: it exists to give the model the figure, with or without
+    // documents (TABULAR step 06).
+    if let Some(reason) =
+        documents_unavailable.filter(|_| computed_value && !context.calculation.analysis)
+    {
         return Ok((
             MixedAnswer {
                 answer: String::new(),
@@ -283,11 +304,12 @@ pub async fn answer(
         ));
     }
 
-    let instruction = build_turn(
+    let instruction = build_turn_for(
         &document_sources,
         non_empty(context.cards_text),
         non_empty(context.sample_text),
         table_text.as_deref(),
+        context.calculation.analysis,
     );
     let final_turn = format!("{instruction}\n\nQuestion: {question}");
     // Both blocks are sources: the memory yields to them (`conversation::history_beside_sources`).
@@ -340,7 +362,11 @@ pub async fn answer(
         &answer_text,
         expected,
         &document_sources,
-        &[context.cards_text, context.sample_text],
+        &[
+            context.cards_text,
+            context.sample_text,
+            table_text.as_deref().unwrap_or_default(),
+        ],
     );
     let rejected_citations = reject_citations(&answer_text, document_sources.len());
     // With no table figure on screen there is nothing to correct the prose against, so the figures it
@@ -460,36 +486,28 @@ async fn resolve_table(
     }
 }
 
-/// The table block, header included: `Table results (workbook "<file>"):` and then the table's own
-/// evidence text, built the same way tier 2 keeps unsent (`tabular::escalation::format_evidence`):
-/// never a raw row list, never a cell value outside the one computed result. The file is named by
-/// its plain path (and the folder it lies in when it is the other family's), because the model has
-/// to be able to tell which workbook a figure comes from when several are named. `None` for
-/// anything that is not a computed `Value` - a disambiguation never reaches this function at all
-/// (the caller returns before generation for those), and a question about no calculation has no
-/// table evidence to send. This is the one place that decides what the block says, so a later step
-/// can swap the one-line figure for the full calculation record without touching the rest.
-fn table_evidence_text(table: &Option<TabularAnswer>) -> Option<String> {
-    match table {
-        Some(TabularAnswer::Value {
-            file,
-            value,
-            locator,
-            derivation,
-            ..
-        }) => crate::tabular::escalation::format_evidence(&engine::TabularOutcome::Value {
-            value: value.clone(),
-            locator: locator.clone(),
-            derivation: derivation.clone(),
-        })
-        .map(|evidence| {
-            format!(
-                "Table results (workbook {}):\n{evidence}",
-                crate::tabular::card::file_label(file)
-            )
-        }),
-        _ => None,
-    }
+/// The table block, header included: `Table results (workbook "<file>"):` and then the calculation
+/// record of the computed value (`tabular_answer::calculation_record`): the question is left out, the
+/// turn carries it; never a raw row list, never a cell value outside the one computed result. The file
+/// is named by its plain path (and the folder it lies in when it is the other family's), because the
+/// model has to be able to tell which workbook a figure comes from when several are named. `None` for
+/// anything that is not a computed `Value` - a disambiguation never reaches this function at all (the
+/// caller returns before generation for those), and a question about no calculation has no table
+/// evidence to send. This is the one place that decides what the block says.
+pub(crate) fn table_evidence_text(
+    table: &Option<TabularAnswer>,
+    sizes: &[tabular_answer::SheetSize],
+) -> Option<String> {
+    let Some(answer @ TabularAnswer::Value { file, .. }) = table else {
+        return None;
+    };
+    tabular_answer::calculation_record(None, answer, sizes).map(|record| {
+        format!(
+            "Table results (workbook {}):
+{record}",
+            crate::tabular::card::file_label(file)
+        )
+    })
 }
 
 /// `Some(text)` for a non-empty string.
@@ -524,11 +542,24 @@ pub(crate) fn cap_document_share(evidence: &[Evidence], budget_chars: usize) -> 
 /// `table_block` the block of `table_evidence_text` (header included); an absent block reads
 /// `<name>: none.` The sample is the exception: with none there is no block at all and no sentence
 /// about it in the instruction, so a turn with the setting `off` is the turn of step 03 to the byte.
+#[cfg(test)]
 pub(crate) fn build_turn(
     document_sources: &[Evidence],
     cards: Option<&str>,
     sample: Option<&str>,
     table_block: Option<&str>,
+) -> String {
+    build_turn_for(document_sources, cards, sample, table_block, false)
+}
+
+/// `build_turn`, with `ANALYSIS_ADDENDUM` ended onto the instruction when the user asked for the
+/// analysis of a figure (TABULAR step 06). Without it the turn is `build_turn`'s, byte for byte.
+pub(crate) fn build_turn_for(
+    document_sources: &[Evidence],
+    cards: Option<&str>,
+    sample: Option<&str>,
+    table_block: Option<&str>,
+    analysis: bool,
 ) -> String {
     let documents_block = if document_sources.is_empty() {
         "Document excerpts: none.".to_string()
@@ -546,6 +577,10 @@ pub(crate) fn build_turn(
         Some(text) => text.to_string(),
         None => "Table results: none.".to_string(),
     };
+    let addendum = match analysis {
+        true => format!(" {ANALYSIS_ADDENDUM}"),
+        false => String::new(),
+    };
     match sample {
         Some(sample) => {
             // With rows in the turn the writer does see data, so the formula sentence must not say
@@ -553,11 +588,11 @@ pub(crate) fn build_turn(
             let instruction =
                 MIXED_INSTRUCTION.replace(FORMULA_NO_DATA_PHRASE, FORMULA_WITH_SAMPLE_PHRASE);
             format!(
-                "{instruction} {SAMPLE_INSTRUCTION}\n\n{documents_block}\n\n{cards_block}\n\n{sample}\n\n{table_block}"
+                "{instruction} {SAMPLE_INSTRUCTION}{addendum}\n\n{documents_block}\n\n{cards_block}\n\n{sample}\n\n{table_block}"
             )
         }
         None => format!(
-            "{MIXED_INSTRUCTION}\n\n{documents_block}\n\n{cards_block}\n\n{table_block}"
+            "{MIXED_INSTRUCTION}{addendum}\n\n{documents_block}\n\n{cards_block}\n\n{table_block}"
         ),
     }
 }
@@ -890,6 +925,68 @@ mod tests {
     }
 
     #[test]
+    fn the_analysis_addendum_stays_neutral_about_who_the_user_is() {
+        let lower = ANALYSIS_ADDENDUM.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(!lower.contains(word), "{word:?} found in ANALYSIS_ADDENDUM");
+        }
+    }
+
+    #[test]
+    fn the_analysis_turn_adds_the_addendum_to_the_instruction_and_nothing_else() {
+        let ordinary = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), false);
+        assert_eq!(
+            ordinary,
+            build_turn(&[], Some(CARDS), None, Some(FIGURE_BLOCK))
+        );
+        assert!(!ordinary.contains("asked for an analysis"));
+
+        let analysis = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), true);
+        assert_eq!(
+            analysis,
+            format!(
+                "{MIXED_INSTRUCTION} {ANALYSIS_ADDENDUM}\n\nDocument excerpts: none.\n\n{CARDS}\n\n{FIGURE_BLOCK}"
+            )
+        );
+    }
+
+    #[test]
+    fn the_table_block_carries_the_calculation_record_without_the_question() {
+        use crate::tabular::engine::{NumericAggregate, TabularDerivation, TabularLocator};
+        let answer = Some(TabularAnswer::Value {
+            file: "commandes.xlsx".to_string(),
+            value: TabularValue::Sum(NumericAggregate {
+                value: 8412.5,
+                unit: None,
+                unparsed: 0,
+            }),
+            locator: TabularLocator {
+                sheet: "Commandes".to_string(),
+                header_row: Some(0),
+                column: Some("Montant".to_string()),
+                row_range: Some((0, 40)),
+                filters: Vec::new(),
+            },
+            derivation: TabularDerivation::Computed {
+                operation: "sum".to_string(),
+                row_count: 41,
+            },
+            model_attempt: None,
+        });
+        let sizes = [tabular_answer::SheetSize {
+            file: "commandes.xlsx".to_string(),
+            sheet: "Commandes".to_string(),
+            data_rows: 124,
+        }];
+        let block = table_evidence_text(&answer, &sizes).expect("a block");
+        assert!(block
+            .starts_with("Table results (workbook \"commandes.xlsx\"):\nCalculation record:\n"));
+        assert!(block.contains("Rows: 41 kept out of 124 data rows"));
+        assert!(block.ends_with("Result: 8412.5"));
+        assert!(!block.contains("Question:"));
+    }
+
+    #[test]
     fn the_blocks_of_a_turn_stay_neutral_about_who_the_user_is() {
         let turn = build_turn(&[], None, None, None).to_lowercase();
         for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
@@ -1066,19 +1163,20 @@ mod tests {
                 model_attempt: None,
             })
         };
-        let native = table_evidence_text(&value("factures/planning.xlsx")).expect("a block");
+        let native = table_evidence_text(&value("factures/planning.xlsx"), &[]).expect("a block");
         assert!(
             native.starts_with("Table results (workbook \"factures/planning.xlsx\"):\n"),
             "{native}"
         );
-        let foreign = table_evidence_text(&value("/documents/planning.xlsx")).expect("a block");
+        let foreign =
+            table_evidence_text(&value("/documents/planning.xlsx"), &[]).expect("a block");
         assert!(
             foreign.starts_with(
                 "Table results (workbook \"planning.xlsx\", in the documents folder):\n"
             ),
             "{foreign}"
         );
-        assert_eq!(table_evidence_text(&None), None);
+        assert_eq!(table_evidence_text(&None, &[]), None);
     }
 
     #[test]

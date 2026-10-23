@@ -186,6 +186,8 @@
     "openSettings": "Settings",
     "regenerate": "Regenerate",
     "regenerateWithModel": "Ask the AI instead",
+    "explainCalculation": "Explain the calculation",
+    "analyseCalculation": "Ask the AI",
     "retry": "Try again",
     "save": "Save",
     "send": "Send",
@@ -254,6 +256,10 @@
     "unverifiedNumber": "The figure “{number}” appears in none of the excerpts used, nor in your question: check it in your documents.",
     "modelArithmetic": "The AI did a calculation itself (“{expression}”): only the engine is reliable. Ask for this total to get it.",
     "mixedComputedTitle": "Computed from your data (by the engine, not by the AI):",
+    "explanationTitle": "How this figure was calculated:",
+    "explanationRunning": "Writing the explanation…",
+    "explanationUnavailable": "The explanation could not be written: the AI cannot be reached. The figure shown is still the program's.",
+    "explanationUnverifiedNumber": "The figure “{number}” of the explanation is not in the calculation record: do not rely on it.",
     "mixedTableUnavailable": {
       "not_asked_about": "No spreadsheet was needed for this question.",
       "no_evidence": "Nothing in your tables answered this part.",
@@ -324,6 +330,7 @@
   },
   "workbookUse": {
     "computed": "{path}: answer computed by the program, without the AI.",
+    "explained": "{path}: the AI explained the calculation from its record, without receiving any row of the spreadsheet.",
     "planPrepared": "{path}: the letter plan is prepared from its rows, on this computer.",
     "cardSent": {
       "named": "{path}: named in your question, the AI received its structure.",

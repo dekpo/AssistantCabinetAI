@@ -170,6 +170,7 @@ async fn ask(
         budget,
         cards_text: &cards.block.text,
         sample_text: &sample.text,
+        calculation: Default::default(),
     };
     let (answer, generated) = mixed_answer::answer(
         question,

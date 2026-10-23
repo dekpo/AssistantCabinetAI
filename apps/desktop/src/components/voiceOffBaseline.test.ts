@@ -93,6 +93,8 @@ describe("the conversation with the voice switch off", () => {
     onStop: () => {},
     onResend: () => {},
     onRegenerate: () => {},
+    onExplainCalculation: () => {},
+    onAnalyseCalculation: () => {},
     onAnalyse: () => {},
     analysing: false,
     onRetarget: () => {},

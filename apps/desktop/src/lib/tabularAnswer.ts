@@ -81,7 +81,16 @@ export function formatTabularAnswer(
     case "no_usable_table":
       return t("tabularAnswer.noUsableTable");
     case "fill_needs_template":
-      return t("tabularAnswer.fillNeedsTemplate", { file: displayPathOfKey("data", answer.file) });
+      // A draft was tried and failed (the AI machine could not be reached, or it wrote no usable
+      // template): said first, then what to do instead.
+      return [
+        answer.draft === undefined
+          ? ""
+          : t(`tabularAnswer.fillDraftFailed.${answer.draft}`),
+        t("tabularAnswer.fillNeedsTemplate", { file: displayPathOfKey("data", answer.file) }),
+      ]
+        .filter((part) => part !== "")
+        .join(" ");
     case "fill_needs_sheet":
       return [
         t("tabularAnswer.fillNeedsSheet", { file: displayPathOfKey("data", answer.file) }),

@@ -81,6 +81,7 @@ const OWNERS_QUESTION: &str = "G\u{e9}n\u{e8}re le courrier de la commande CMD-2
 fn request_from(plan: &assistant_cabinet_ai_lib::fill_plan::FillPlan, all: bool, key_column: Option<&str>) -> FillRequest {
     FillRequest {
         template: plan.template.clone(),
+        draft_text: None,
         data_file: plan.data_file.clone(),
         sheet: Some(plan.sheet.clone()),
         key_column: key_column.map(str::to_string).or_else(|| plan.key_column.clone()),

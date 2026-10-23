@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canGenerateOne,
+  draftBytes,
   initialDecisions,
+  isDrafted,
+  mergeDecisions,
+  MAX_DRAFT_BYTES,
   pendingConfirmations,
   requestOf,
   type FillPlaceholder,
@@ -69,8 +73,48 @@ describe("the request for Rust", () => {
     expect(request.keyColumn).toBe("No_Commande");
   });
 
+  it("sends no draft for a template file, and the text she edited for a drafted one", () => {
+    const state = { template: "modele.docx", all: true, keyColumn: null, decisions: {} };
+    expect(requestOf(plan, state).draftText).toBeNull();
+    const drafted = requestOf(plan, { ...state, template: "", draftText: "Bonjour {{Nom}}" });
+    expect(drafted.draftText).toBe("Bonjour {{Nom}}");
+    expect(drafted.template).toBe("");
+  });
+
   it("offers 'this order only' only when the question named one", () => {
     expect(canGenerateOne({ keyValue: "CMD-2026-002" })).toBe(true);
     expect(canGenerateOne({ keyValue: null })).toBe(false);
+  });
+});
+
+describe("a drafted template", () => {
+  it("is recognised by its origin", () => {
+    expect(isDrafted({ templateOrigin: "drafted" })).toBe(true);
+    expect(isDrafted({ templateOrigin: "file" })).toBe(false);
+  });
+
+  it("keeps what she decided for a field that stays, starts a new one as proposed, drops a field that left", () => {
+    const current = {
+      Nom: { column: "Nom", confirmed: true },
+      Prix_U: { column: "Total_Ligne", confirmed: true },
+    };
+    const merged = mergeDecisions(current, [
+      { name: "Prix_U", column: "Prix_Unitaire", status: "proposed" },
+      { name: "Suite", column: "Suite", status: "exact" },
+    ]);
+    expect(merged).toEqual({
+      Prix_U: { column: "Total_Ligne", confirmed: true },
+      Suite: { column: "Suite", confirmed: true },
+    });
+  });
+
+  it("returns the same decisions when the fields did not change, so a state update ends there", () => {
+    const current = { Nom: { column: "Nom", confirmed: true } };
+    expect(mergeDecisions(current, [{ name: "Nom", column: "Nom", status: "exact" }])).toBe(current);
+  });
+
+  it("counts the text as Rust does: in bytes, not in characters", () => {
+    expect(draftBytes("\u00e9")).toBe(2);
+    expect(draftBytes("a".repeat(MAX_DRAFT_BYTES))).toBe(MAX_DRAFT_BYTES);
   });
 });

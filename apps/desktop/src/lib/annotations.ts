@@ -158,6 +158,10 @@ function noteLines(
   // A letter plan: the program fills the letter, from the rows on this computer, no AI read them.
   if (!cautionOnly && entry.fillPlan !== undefined) {
     lines.push(t("fill.noModel"));
+    // The template itself was written by the AI, from the column names alone: said, and copied.
+    if (entry.fillPlan.templateOrigin === "drafted") {
+      lines.push(t("fill.draftNote"));
+    }
   }
   // A figure the model stated that is in none of the excerpts it was given and not in the question.
   for (const number of entry.unverifiedNumbers ?? []) {

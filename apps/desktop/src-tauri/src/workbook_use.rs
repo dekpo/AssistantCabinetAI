@@ -165,7 +165,7 @@ fn read_file(answer: &TabularAnswer) -> Option<&str> {
         TabularAnswer::Nudge { file, .. }
         | TabularAnswer::WhichMeasure { file, .. }
         | TabularAnswer::WhichColumn { file, .. }
-        | TabularAnswer::FillNeedsTemplate { file }
+        | TabularAnswer::FillNeedsTemplate { file, .. }
         | TabularAnswer::FillNeedsSheet { file, .. }
         | TabularAnswer::Structural { file, .. } => Some(file),
         other => computed_file(other),
@@ -525,6 +525,7 @@ mod tests {
 
         let template = TabularAnswer::FillNeedsTemplate {
             file: "a.csv".to_string(),
+            draft: None,
         };
         let trace_template = trace(&facts, Answered::Engine(&template));
         assert_eq!(

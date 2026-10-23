@@ -396,6 +396,12 @@
     "summary": "{letters} courrier(s), {lines} ligne(s) dans le premier. Nom du fichier : {name}, dans le dossier Generated de votre dossier de documents.",
     "generate": "Générer {letters} courrier(s)",
     "done": "{letters} courrier(s) créé(s). Le modèle et vos données n'ont pas été modifiés.",
+    "introDrafted": "Aucun modèle de vos documents ne correspond à ce tableau : j'en ai fait rédiger un par l'IA, à partir du nom des colonnes seulement. Relisez-le, corrigez-le si besoin et vérifiez l'aperçu : rien n'est écrit tant que vous n'avez pas validé.",
+    "draftTitle": "Modèle rédigé par l'IA (brouillon à relire)",
+    "draftNote": "Ce modèle a été rédigé par l'IA à partir du nom des colonnes seulement : aucune valeur de votre tableau ne lui a été envoyée. Les champs entre doubles accolades sont remplis par le programme, ligne par ligne. Vous pouvez modifier le texte.",
+    "draftTooLarge": "Ce modèle dépasse {limit} octets : raccourcissez-le pour pouvoir générer les courriers.",
+    "draftAgain": "Rédiger à nouveau",
+    "modelSaved": "Le texte du modèle a été enregistré : {file}. Pour le réutiliser comme modèle, copiez-le hors du dossier Generated, puis cochez-le.",
     "reveal": "Voir"
   },
   "names": {
@@ -816,6 +822,7 @@
     "fill_source_unavailable": "Le modèle ou le tableau de ce courrier est introuvable, n'a pas été analysé ou a été modifié. Posez la question à nouveau.",
     "fill_nothing_to_fill": "Le tableau ne contient aucune ligne à insérer dans un courrier.",
     "fill_too_many": "{count} courriers d'un coup, c'est plus que la limite de {limit}. Choisissez une colonne qui regroupe les lignes, ou une seule commande.",
+    "fill_draft_too_large": "Le modèle rédigé dépasse {limit} octets. Raccourcissez-le, puis réessayez.",
     "fill_write_failed": "Un courrier n'a pas pu être écrit. Ceux déjà créés sont dans le dossier Generated ; le modèle et vos données n'ont pas été modifiés.",
     "knowledge_unavailable": "La base de connaissances locale n'est pas disponible pour le moment. Vos documents et vos réponses ne sont pas touchés. Réessayez ; si cela persiste, redémarrez l'application.",
     "knowledge_entity_not_found": "Cet élément n'existe plus dans la base de connaissances.",
@@ -946,6 +953,10 @@
     "noMatch": "Aucun fichier nommé {query} ne se trouve dans votre dossier des tableaux.",
     "noUsableTable": "Aucun tableur de votre dossier des tableaux ne contient de tableau exploitable. Lancez l'analyse, ou ajoutez un fichier CSV ou XLSX.",
     "fillNeedsTemplate": "Vous demandez un courrier pour chaque ligne de {file}, mais aucun modèle de votre dossier des documents ne correspond à ses colonnes. Rien n'a été rédigé : l'IA n'invente pas de courriers à partir de vos documents. Ajoutez un modèle dont les champs portent le nom des colonnes (par exemple [Nom]), cochez-le dans la liste des documents, puis posez la question à nouveau.",
+    "fillDraftFailed": {
+      "unreachable": "La machine IA n'a pas pu être jointe pour rédiger un modèle de courrier.",
+      "unusable": "L'IA n'a pas écrit de modèle utilisable : aucun champ reconnu dans sa réponse, même après un nouvel essai."
+    },
     "fillNeedsSheet": "Le tableur {file} contient plusieurs feuilles, et je ne choisis pas à votre place celle qui remplit les courriers. Rien n'a été rédigé. Écrivez le nom de la feuille dans votre question. Feuilles :",
     "fillSheetNotATable": "(ne contient pas de tableau de données)",
     "fillSeveralSources": "Votre question cite plusieurs tableurs, et un courrier ne se remplit qu'à partir d'un seul. Rien n'a été rédigé. Nommez un seul fichier dans la question :",

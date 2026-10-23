@@ -16,17 +16,22 @@
 //!   `-2`, `-3`. The template and the data are never touched. Each file written is logged without any
 //!   cell value.
 //!
-//! No model is involved anywhere: the rows of a table never go to one.
+//! The rows of a table never go to a model. A template may itself have been **drafted** by one from the
+//! column names alone (`fill_draft`, TABULAR step 09): it then exists only in memory, on the plan card
+//! and in the request, is re-validated each time it comes back, and is written once, as a new file
+//! beside the letters, when the user approves.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::data_folder::DataFolder;
 use crate::error::AppError;
 use crate::filename_sanitizer::sanitize_file_name;
+use crate::fill_draft;
 use crate::inventory::WorkFolderInventory;
-use crate::tabular_answer::{FillLocation, NamedWorkbooks, TabularAnswer};
+use crate::tabular_answer::{FillLocation, FillSource, NamedWorkbooks, TabularAnswer};
 use crate::template_fill::{
     self, docx_placeholder_names, fill_docx, fill_text, groups, line_columns, placeholder_names,
     propose_mapping, FillContext, MappingEntry, MappingStatus, Table, TemplateKind,
@@ -46,9 +51,55 @@ pub struct TemplateFile {
     pub bytes: Vec<u8>,
     pub stem: String,
     pub extension: String,
+    /// Written by the model from the column names (TABULAR step 09): not a file, `relative_path` is
+    /// empty, the text is `bytes`.
+    pub drafted: bool,
 }
 
 impl TemplateFile {
+    /// A template drafted by the model, from the text the card holds. Nothing the interface sends is
+    /// trusted: a text over the cap is refused, a blank one is nothing to fill. A placeholder naming a
+    /// column the table lacks is not an error here; it stays unresolved when the letter is filled.
+    pub fn drafted(text: &str, data_file: &str) -> Result<Self, AppError> {
+        if text.len() > fill_draft::MAX_DRAFT_BYTES {
+            return Err(AppError::FillDraftTooLarge {
+                limit: fill_draft::MAX_DRAFT_BYTES,
+            });
+        }
+        if text.trim().is_empty() {
+            return Err(AppError::FillNothingToFill);
+        }
+        let file_name = data_file.rsplit('/').next().unwrap_or(data_file);
+        let name = match file_name.rfind('.') {
+            Some(position) if position > 0 => &file_name[..position],
+            _ => file_name,
+        };
+        Ok(Self {
+            relative_path: String::new(),
+            kind: TemplateKind::Text,
+            bytes: text.as_bytes().to_vec(),
+            stem: format!("{name}-letter"),
+            extension: "txt".to_string(),
+            drafted: true,
+        })
+    }
+
+    /// The column each field would be filled from, as proposed: the program's own table of
+    /// placeholder names for a drafted template, `propose_mapping` for a file.
+    pub fn proposed_mapping(&self, columns: &[String]) -> Vec<MappingEntry> {
+        if self.drafted {
+            fill_draft::resolve(&String::from_utf8_lossy(&self.bytes), columns)
+        } else {
+            propose_mapping(&self.placeholders(), columns)
+        }
+    }
+
+    /// The text of a drafted template.
+    fn draft_text(&self) -> Option<String> {
+        self.drafted
+            .then(|| String::from_utf8_lossy(&self.bytes).into_owned())
+    }
+
     /// The placeholder names the file holds, in order.
     pub fn placeholders(&self) -> Vec<String> {
         match self.kind {
@@ -76,7 +127,33 @@ pub fn read_template(inventory: &WorkFolderInventory, relative_path: &str) -> Op
         bytes,
         stem: record.stem.clone(),
         extension: record.extension.clone(),
+        drafted: false,
     })
+}
+
+/// The documents without the ones the program wrote itself: everything under `output_folder`, the
+/// folder the letters and the saved models go to. A letter is a result and a saved model is a draft the
+/// user keeps: neither is offered as a template on its own (owner decision of 23 October 2026, after
+/// her test: the saved model was found as a template and took the place of her own). A file she copies
+/// out of that folder is a template like any other.
+pub fn without_output_folder(
+    inventory: WorkFolderInventory,
+    output_folder: &str,
+) -> WorkFolderInventory {
+    let inside = |path: &str| {
+        path == output_folder
+            || path
+                .strip_prefix(output_folder)
+                .is_some_and(|rest| rest.starts_with('/'))
+    };
+    let kept: Vec<_> = inventory
+        .all_files()
+        .iter()
+        .filter(|record| !inside(&record.relative_path))
+        .cloned()
+        .collect();
+    WorkFolderInventory::from_records(inventory.root(), kept)
+        .with_foreign_root(inventory.foreign_root().map(Path::to_path_buf))
 }
 
 /// The templates of the inventory (the documents the conversation may use) that hold at least one
@@ -113,9 +190,15 @@ pub struct PlanPlaceholder {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FillPlan {
+    /// The template file; empty for a drafted template.
     pub template: String,
     /// Every template that could be used, the chosen one first: the card lets her pick another.
+    /// Empty for a drafted template.
     pub templates: Vec<String>,
+    /// "file", or "drafted" when the model wrote the template from the column names alone.
+    pub template_origin: &'static str,
+    /// The drafted template, which the card lets her edit.
+    pub draft_text: Option<String>,
     pub data_file: String,
     pub sheet: String,
     pub columns: Vec<String>,
@@ -156,7 +239,12 @@ pub struct RequestMapping {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FillRequest {
+    /// The template file; empty when `draft_text` is set.
     pub template: String,
+    /// The drafted template as edited on the card. Its presence makes the request a drafted one: no
+    /// template file is read, and the text is validated again.
+    #[serde(default)]
+    pub draft_text: Option<String>,
     pub data_file: String,
     /// The sheet the plan was built from. Looked up in the workbook again, never trusted; `None`
     /// reads the single sheet of a workbook that has one.
@@ -182,6 +270,10 @@ pub struct Written {
 pub struct FillReport {
     pub written: Vec<Written>,
     pub unresolved: Vec<String>,
+    /// Relative to the documents folder: the approved text of a drafted template, kept as a new file
+    /// so that it can be used as a template next time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_file: Option<String>,
 }
 
 // ------------------------------------------------------------------------------------------- plan
@@ -273,7 +365,8 @@ pub fn preview(template: &TemplateFile, table: &Table, request: &FillRequest) ->
         lines: first.rows.len(),
         unresolved: filled.unresolved,
         file_name: output_name(template, &first.key),
-        placeholders: propose_mapping(&template.placeholders(), &table.columns)
+        placeholders: template
+            .proposed_mapping(&table.columns)
             .into_iter()
             .map(|entry| PlanPlaceholder {
                 name: entry.placeholder,
@@ -294,14 +387,42 @@ pub fn build_plan(
     key: Option<(String, String)>,
 ) -> Result<FillPlan, AppError> {
     let chosen = templates.first().ok_or(AppError::FillNothingToFill)?;
-    let names = chosen.placeholders();
-    let proposed = propose_mapping(&names, &table.columns);
+    let listed = templates
+        .iter()
+        .map(|template| template.relative_path.clone())
+        .collect();
+    plan_for(chosen, listed, data_file, sheet, table, key)
+}
+
+/// The plan for a template the model drafted from the column names: the same card as a template file,
+/// with the text to review and edit. The template exists only in memory.
+pub fn build_drafted_plan(
+    text: &str,
+    data_file: &str,
+    sheet: &str,
+    table: &Table,
+    key: Option<(String, String)>,
+) -> Result<FillPlan, AppError> {
+    let template = TemplateFile::drafted(text, data_file)?;
+    plan_for(&template, Vec::new(), data_file, sheet, table, key)
+}
+
+fn plan_for(
+    chosen: &TemplateFile,
+    templates: Vec<String>,
+    data_file: &str,
+    sheet: &str,
+    table: &Table,
+    key: Option<(String, String)>,
+) -> Result<FillPlan, AppError> {
+    let proposed = chosen.proposed_mapping(&table.columns);
     let (key_column, key_value) = match key {
         Some((column, value)) => (Some(column), Some(value)),
         None => (None, None),
     };
     let request = FillRequest {
         template: chosen.relative_path.clone(),
+        draft_text: chosen.draft_text(),
         data_file: data_file.to_string(),
         sheet: Some(sheet.to_string()),
         key_column: key_column.clone(),
@@ -319,7 +440,9 @@ pub fn build_plan(
     let preview = preview(chosen, table, &request)?;
     Ok(FillPlan {
         template: chosen.relative_path.clone(),
-        templates: templates.iter().map(|template| template.relative_path.clone()).collect(),
+        templates,
+        template_origin: if chosen.drafted { "drafted" } else { "file" },
+        draft_text: chosen.draft_text(),
         data_file: data_file.to_string(),
         sheet: sheet.to_string(),
         columns: table.columns.clone(),
@@ -344,6 +467,10 @@ pub enum FillDecision {
     /// A deterministic answer that asks for what is missing. Nothing is written and no model is asked
     /// to improvise the letters the program could not prepare (TABULAR step 08).
     Ask(TabularAnswer),
+    /// A merge request for a workbook the question names and no template fits: the model is asked to
+    /// draft the template from the column names alone, and the plan is built from what it writes
+    /// (TABULAR step 09). No cell value goes with the request.
+    NeedsDraft(FillSource),
     /// Not a merge request the program can serve: the question reaches the writer as an editorial
     /// request, exactly as before.
     Editorial,
@@ -353,7 +480,7 @@ pub enum FillDecision {
 ///
 /// `documents` is the documents the conversation may use (where the templates are), `every_row` says
 /// whether the question asked for every row. A merge request whose workbook is named and for which no
-/// template fits asks for a template; a workbook that is only implied, with no template, stays an
+/// template fits has its template drafted; a workbook that is only implied, with no template, stays an
 /// editorial request as before.
 pub fn decide(
     location: FillLocation,
@@ -366,9 +493,7 @@ pub fn decide(
             let templates = candidate_templates(documents, &source.table.columns);
             if templates.is_empty() {
                 return Ok(match named.covers(&source.file) {
-                    true => {
-                        FillDecision::Ask(TabularAnswer::FillNeedsTemplate { file: source.file })
-                    }
+                    true => FillDecision::NeedsDraft(source),
                     false => FillDecision::Editorial,
                 });
             }
@@ -412,6 +537,62 @@ pub fn decide(
             }))
         }
         FillLocation::NoSource => Ok(FillDecision::Editorial),
+    }
+}
+
+/// The kind of each column of `sheet` as the analysis typed it (`date`, `numeric` with its unit, `text`),
+/// by position. Empty when the workbook has no usable analysis: the draft then names the fields only.
+pub fn column_kinds(data: &DataFolder, file: &str, sheet: &str) -> Vec<Option<String>> {
+    use crate::tabular::inventory::ColumnType;
+    let Some(inventory) = data.usable_inventory(file) else {
+        return Vec::new();
+    };
+    let Some(sheet) = inventory.sheets.iter().find(|each| each.name == sheet) else {
+        return Vec::new();
+    };
+    sheet
+        .columns
+        .iter()
+        .map(|column| {
+            Some(match (column.inferred_type, &column.unit) {
+                (ColumnType::Numeric, Some(unit)) => format!("numeric, {unit}"),
+                (ColumnType::Numeric, None) => "numeric".to_string(),
+                (ColumnType::Date, _) => "date".to_string(),
+                (ColumnType::Categorical, _) => "text".to_string(),
+            })
+        })
+        .collect()
+}
+
+/// The outcome of door 1 for a source whose template is drafted (`FillDecision::NeedsDraft`): one
+/// gateway call, from the column names, the kind of each column and the user's own request - no cell
+/// value, no row. A plan to approve when a template came back; the answer `FillNeedsTemplate`, naming
+/// why, when none could be drafted (the AI machine cannot be reached, or twice an answer with no
+/// placeholder): a model never improvises the letters. Only the user's own stop is an error.
+pub async fn draft_decision(
+    context: &fill_draft::DraftContext<'_>,
+    kinds: &[Option<String>],
+    request: &str,
+    source: FillSource,
+) -> Result<FillDecision, AppError> {
+    let described = fill_draft::DraftSource {
+        label: crate::tabular::card::file_label(&source.file),
+        sheet: source.sheet.clone(),
+        fields: fill_draft::fields_of(&source.table.columns, kinds),
+    };
+    match fill_draft::draft(context, &described, request).await {
+        Ok(text) => Ok(FillDecision::Plan(build_drafted_plan(
+            &text,
+            &source.file,
+            &source.sheet,
+            &source.table,
+            source.key,
+        )?)),
+        Err(fill_draft::DraftFailure::Cancelled) => Err(AppError::ChatCancelled),
+        Err(failure) => Ok(FillDecision::Ask(TabularAnswer::FillNeedsTemplate {
+            file: source.file,
+            draft: Some(failure.code().to_string()),
+        })),
     }
 }
 
@@ -468,6 +649,18 @@ pub fn generate(
     let directory = work_folder.join(output_folder);
     std::fs::create_dir_all(&directory).map_err(|_| AppError::FillWriteFailed)?;
 
+    // A drafted template is kept first, so that a failure here writes no letter at all.
+    let model_file = match template.drafted {
+        true => Some(write_model(
+            &directory,
+            output_folder,
+            log_path,
+            now_seconds,
+            template,
+            request,
+        )?),
+        false => None,
+    };
     let mut written = Vec::new();
     let mut unresolved: Vec<String> = Vec::new();
     for group in chosen {
@@ -491,19 +684,49 @@ pub fn generate(
             key: group.key.clone(),
         });
     }
-    Ok(FillReport { written, unresolved })
+    Ok(FillReport {
+        written,
+        unresolved,
+        model_file,
+    })
+}
+
+/// The approved text of a drafted template as a new file in the output folder, named after the
+/// letters (`<stem>-model.txt`), never over a file that exists.
+fn write_model(
+    directory: &Path,
+    output_folder: &str,
+    log_path: &Path,
+    now_seconds: i64,
+    template: &TemplateFile,
+    request: &FillRequest,
+) -> Result<String, AppError> {
+    let name = sanitize_file_name(&format!("{}-model.{}", template.stem, template.extension));
+    let (path, mut file) = create_unique(directory, &name).map_err(|_| AppError::FillWriteFailed)?;
+    file.write_all(&template.bytes).map_err(|_| AppError::FillWriteFailed)?;
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let relative = format!("{output_folder}/{file_name}");
+    append_log(log_path, now_seconds, template, &request.data_file, "model", &relative);
+    Ok(relative)
 }
 
 /// One line per file written: when, the template, the data file, the key and the output. Best effort:
 /// a log that cannot be written never stops the letter, which is already on disk.
 fn append_log(log_path: &Path, now_seconds: i64, template: &TemplateFile, data_file: &str, key: &str, output: &str) {
-    let line = serde_json::json!({
+    let mut line = serde_json::json!({
         "at": now_seconds,
         "template": template.relative_path,
         "dataFile": data_file,
         "key": key,
         "output": output,
     });
+    // A drafted template has no file: the line says so, and never holds its text.
+    if template.drafted {
+        line["drafted"] = serde_json::json!(true);
+    }
     if let Some(parent) = log_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -537,12 +760,14 @@ mod tests {
             bytes: b"Order [No_Commande] for [Nom]\n[Article] [Prix_U]\n".to_vec(),
             stem: "modele".to_string(),
             extension: "txt".to_string(),
+            drafted: false,
         }
     }
 
     fn request(all: bool, key_value: Option<&str>, prix: Option<&str>) -> FillRequest {
         FillRequest {
             template: "modele.txt".to_string(),
+            draft_text: None,
             data_file: "donnees.csv".to_string(),
             sheet: None,
             key_column: Some("No_Commande".to_string()),
@@ -555,6 +780,32 @@ mod tests {
                 RequestMapping { placeholder: "Prix_U".into(), column: prix.map(str::to_string) },
             ],
         }
+    }
+
+    #[test]
+    fn what_the_program_wrote_is_never_offered_as_a_template() {
+        let root = tempfile::tempdir().unwrap();
+        for (path, text) in [
+            ("modele.txt", "Dear [Nom]"),
+            ("Generated/model.txt", "Dear [Nom]"),
+            ("Generated/sub/model.txt", "Dear [Nom]"),
+            ("GeneratedNot/model.txt", "Dear [Nom]"),
+        ] {
+            let file = root.path().join(path);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, text).unwrap();
+        }
+        let all = WorkFolderInventory::discover(root.path(), None).unwrap();
+        let columns = vec!["Nom".to_string()];
+        assert_eq!(candidate_templates(&all, &columns).len(), 4);
+        let kept = without_output_folder(all, "Generated");
+        let mut names: Vec<String> = candidate_templates(&kept, &columns)
+            .into_iter()
+            .map(|template| template.relative_path)
+            .collect();
+        names.sort();
+        // A folder that merely starts with the same letters is not the output folder.
+        assert_eq!(names, ["GeneratedNot/model.txt", "modele.txt"]);
     }
 
     #[test]

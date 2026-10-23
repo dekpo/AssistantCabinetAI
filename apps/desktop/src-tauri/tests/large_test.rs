@@ -923,6 +923,13 @@ impl<'a> Replay<'a> {
                     out.structured = serde_json::to_value(&answer).ok();
                     return Ok(());
                 }
+                // No template fits a workbook she named: the template is drafted from the column
+                // names (TABULAR step 09). The replay has no model to draft with, so it stops here.
+                assistant_cabinet_ai_lib::fill_plan::FillDecision::NeedsDraft(source) => {
+                    out.route = "fill_draft".into();
+                    out.structured = Some(serde_json::json!({ "file": source.file }));
+                    return Ok(());
+                }
                 assistant_cabinet_ai_lib::fill_plan::FillDecision::Editorial => {}
             }
         }

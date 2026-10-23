@@ -296,18 +296,19 @@ fn a_named_workbook_with_several_sheets_asks_which_one_and_lists_them_all() {
 }
 
 #[test]
-fn a_merge_with_no_template_asks_for_one_and_never_reaches_the_writer() {
+fn a_merge_with_no_template_has_one_drafted_and_never_reaches_the_writer() {
     let folders = Folders::build();
     let selection = folders.every_workbook();
     let question = "Write a reminder letter for each invoice of depenses.csv";
     let (located, named, every_row) = folders.locate(question, &selection);
-    // No template among the documents: the decision is made without a gateway at all.
-    let FillDecision::Ask(TabularAnswer::FillNeedsTemplate { file }) =
+    // No template among the documents: the decision is made without a gateway at all, and it hands the
+    // source over to the draft (TABULAR step 09) instead of to the writer.
+    let FillDecision::NeedsDraft(source) =
         decide(located, &named, every_row, &folders.no_templates()).unwrap()
     else {
-        panic!("a named workbook and no template that fits: a template is asked for");
+        panic!("a named workbook and no template that fits: a template is drafted");
     };
-    assert_eq!(file, DEPENSES);
+    assert_eq!(source.file, DEPENSES);
 
     // The workbook is only implied (named nowhere): no template keeps the question editorial, as before.
     let single = folders.ticked(&[(FACTURES, &[])]);

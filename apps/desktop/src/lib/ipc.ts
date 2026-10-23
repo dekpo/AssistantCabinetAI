@@ -1000,7 +1000,7 @@ export type TabularAnswer =
   | { kind: "no_usable_table" }
   /** A letter for each row of a workbook the question names, and no template fits its columns:
    * nothing is written and no model improvises letters (TABULAR step 08). */
-  | { kind: "fill_needs_template"; file: string }
+  | { kind: "fill_needs_template"; file: string; draft?: "unreachable" | "unusable" }
   /** The workbook the letter is filled from has several sheets: asked, never picked. */
   | { kind: "fill_needs_sheet"; file: string; sheets: FillSheet[] }
   /** The question names several workbooks for a letter: asked, never picked. */

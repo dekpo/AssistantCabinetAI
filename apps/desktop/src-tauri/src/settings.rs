@@ -89,6 +89,26 @@ pub enum TabularRowsMode {
     Sample,
 }
 
+/// The spreadsheet application the user works in: it chooses the dictionary of function names, the
+/// argument separator and what reaches outside the file that the formula checker reads
+/// (`tabular::formula_check`, `resources/formula-functions/<application>/`). One value today; a
+/// LibreOffice dictionary is a file and a value here, not code.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SpreadsheetApplication {
+    #[default]
+    Excel,
+}
+
+impl SpreadsheetApplication {
+    /// The folder name of the application's dictionaries.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Excel => crate::tabular::formula_check::EXCEL,
+        }
+    }
+}
+
 /// The widths of the three zones (resources, workspace, chat) as percentages of the window.
 type PanelTriple = [f64; 3];
 
@@ -359,6 +379,9 @@ pub struct Settings {
     /// structure with a sample of rows and the column figures, identifiers masked
     /// (`TabularRowsMode`). Chosen in the settings dialog.
     pub tabular_rows_mode: TabularRowsMode,
+    /// The application whose formulas the program checks the model's formulas against
+    /// (`SpreadsheetApplication`). `excel` by default; nothing to choose between yet.
+    pub spreadsheet_application: SpreadsheetApplication,
     /// The optional lexicon packs the knowledge base reads names with, on top of the neutral base.
     /// A pack id is `<domain>-<country>`: `health-fr`, `health-ch`, `legal-fr`, `accounting-fr`,
     /// and later `health-eu`, `legal-ch`... (`docs/DECISIONS.md`, "Knowledge packs are named
@@ -428,6 +451,7 @@ impl Default for Settings {
             write_timing_log: false,
             knowledge_mode: KnowledgeMode::default(),
             tabular_rows_mode: TabularRowsMode::default(),
+            spreadsheet_application: SpreadsheetApplication::default(),
             knowledge_packs: vec!["health-fr".to_string()],
             knowledge_min_scope_files: DEFAULT_KNOWLEDGE_MIN_SCOPE_FILES,
             knowledge_max_selectivity: DEFAULT_KNOWLEDGE_MAX_SELECTIVITY,
@@ -707,6 +731,7 @@ mod tests {
             write_timing_log: true,
             knowledge_mode: KnowledgeMode::Auto,
             tabular_rows_mode: TabularRowsMode::Off,
+            spreadsheet_application: SpreadsheetApplication::Excel,
             knowledge_packs: vec!["health-fr".into(), "health-ch".into()],
             knowledge_min_scope_files: 12,
             knowledge_max_selectivity: 0.5,
@@ -1203,6 +1228,20 @@ mod tests {
             let settings: Settings = serde_json::from_str(&body).expect("loads");
             assert_eq!(settings.tabular_rows_mode, mode);
         }
+    }
+
+    #[test]
+    fn the_spreadsheet_application_is_excel_by_default_and_for_a_file_that_predates_it() {
+        assert_eq!(
+            Settings::default().spreadsheet_application,
+            SpreadsheetApplication::Excel
+        );
+        let old: Settings =
+            serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
+        assert_eq!(old.spreadsheet_application, SpreadsheetApplication::Excel);
+        let named: Settings =
+            serde_json::from_str(r#"{"spreadsheetApplication":"excel"}"#).expect("loads");
+        assert_eq!(named.spreadsheet_application.as_str(), "excel");
     }
 
     #[test]

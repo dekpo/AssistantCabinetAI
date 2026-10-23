@@ -83,6 +83,59 @@ pub struct WorkbookCard {
     pub text: String,
     /// Something was left out to fit the budget: the unit and the flags, then columns.
     pub truncated: bool,
+    /// The structure the text describes, whole (the text may have dropped columns to fit): what the
+    /// formula checker compares a written formula with (`tabular::formula_check`).
+    pub shape: WorkbookShape,
+}
+
+/// The structure of a workbook as a card describes it: no value, only names and positions.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorkbookShape {
+    /// The plain path, as the card writes it.
+    pub path: String,
+    /// A CSV is one table; a formula refers to it by its file name without the extension.
+    pub is_csv: bool,
+    pub sheets: Vec<SheetShape>,
+}
+
+/// One data sheet of a card: its name and its columns by position.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SheetShape {
+    pub name: String,
+    /// The header names by column index; empty strings where a position has no column.
+    pub columns: Vec<String>,
+    /// False when no header row was found: the names are then synthetic and mean nothing.
+    pub has_header: bool,
+}
+
+/// The shape a card describes: the data sheets the selection reaches, every column.
+fn shape_of(file: &str, inventory: &TabularInventory, sheets: Option<&[String]>) -> WorkbookShape {
+    let sheets = reachable_sheets(inventory, sheets)
+        .into_iter()
+        .filter(|sheet| sheet.looks_tabular())
+        .map(|sheet| {
+            let width = sheet
+                .columns
+                .iter()
+                .map(|column| column.index + 1)
+                .max()
+                .unwrap_or(0);
+            let mut columns = vec![String::new(); width];
+            for column in &sheet.columns {
+                columns[column.index] = column.name.clone();
+            }
+            SheetShape {
+                name: sheet.name.clone(),
+                columns,
+                has_header: sheet.header_row.is_some(),
+            }
+        })
+        .collect();
+    WorkbookShape {
+        path: plain_path(file).to_string(),
+        is_csv: inventory.format == TabularFormat::Csv,
+        sheets,
+    }
 }
 
 /// One workbook to describe, for `build_cards`.
@@ -317,10 +370,12 @@ fn length(text: &str) -> usize {
 pub fn build_card(inventory: &TabularInventory, options: &CardOptions<'_>) -> WorkbookCard {
     let head = workbook_line(options.file, inventory);
     let reachable = reachable_sheets(inventory, options.sheets);
+    let shape = shape_of(options.file, inventory, options.sheets);
     let card = |text: String, truncated: bool| WorkbookCard {
         file: options.file.to_string(),
         text,
         truncated,
+        shape: shape.clone(),
     };
 
     let full: Vec<SheetBlock> = reachable
@@ -747,6 +802,65 @@ mod tests {
                 .count(),
             3
         );
+    }
+
+    #[test]
+    fn the_shape_of_a_card_keeps_every_column_the_text_may_have_dropped() {
+        let card = build_card(&wide(), &options("dir/a.xlsx", 2_000));
+        assert!(card.truncated, "the text was shrunk");
+        assert_eq!(card.shape.path, "dir/a.xlsx");
+        assert!(!card.shape.is_csv);
+        assert_eq!(card.shape.sheets.len(), 3);
+        for sheet in &card.shape.sheets {
+            assert_eq!(sheet.columns.len(), 30);
+            assert_eq!(sheet.columns[7], "Colonne 7");
+            assert!(sheet.has_header);
+        }
+        let single = build_card(
+            &invoices(),
+            &options("/documents/Factures/ventes.xlsx", 10_000),
+        );
+        assert_eq!(single.shape.path, "Factures/ventes.xlsx");
+        assert_eq!(single.shape.sheets[0].columns[2], "Montant TTC");
+    }
+
+    #[test]
+    fn the_shape_follows_the_sheets_the_selection_narrowed_the_workbook_to() {
+        let only = vec!["Mars".to_string()];
+        let card = build_card(
+            &wide(),
+            &CardOptions {
+                file: "a.xlsx",
+                budget_chars: 10_000,
+                sheets: Some(&only),
+            },
+        );
+        let names: Vec<&str> = card
+            .shape
+            .sheets
+            .iter()
+            .map(|each| each.name.as_str())
+            .collect();
+        assert_eq!(names, ["Mars"]);
+    }
+
+    #[test]
+    fn a_csv_is_marked_and_a_sheet_without_a_header_says_so() {
+        let csv = inventory(
+            TabularFormat::Csv,
+            vec![sheet(
+                "t",
+                None,
+                20,
+                vec![
+                    column(0, "column_1", ColumnType::Numeric),
+                    column(1, "column_2", ColumnType::Numeric),
+                ],
+            )],
+        );
+        let card = build_card(&csv, &options("t.csv", 10_000));
+        assert!(card.shape.is_csv);
+        assert!(!card.shape.sheets[0].has_header);
     }
 
     #[test]

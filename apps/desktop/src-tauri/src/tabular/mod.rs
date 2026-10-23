@@ -17,6 +17,7 @@ pub mod card;
 pub mod csv_adapter;
 pub mod engine;
 pub mod escalation;
+pub mod formula_check;
 pub mod inventory;
 pub mod question;
 pub mod query_plan;

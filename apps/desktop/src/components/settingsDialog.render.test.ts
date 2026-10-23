@@ -51,6 +51,7 @@ const SETTINGS = {
   dataFolder: "/home/her/Data",
   knowledgeMode: "suggest",
   tabularRowsMode: "sample",
+  spreadsheetApplication: "excel",
   knowledgePacks: [],
   knowledgeHideNamesInSuggestions: true,
   copySources: false,

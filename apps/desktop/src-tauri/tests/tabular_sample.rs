@@ -171,6 +171,7 @@ async fn ask(
         cards_text: &cards.block.text,
         sample_text: &sample.text,
         calculation: Default::default(),
+        formulas: None,
     };
     let (answer, generated) = mixed_answer::answer(
         question,

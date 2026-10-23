@@ -183,6 +183,7 @@ async fn run(
         cards_text: "",
         sample_text: "",
         calculation: Default::default(),
+        formulas: None,
     };
     mixed_answer::answer(question, pending, document_sources, documents_unavailable, &context, |_| {}, |_| {})
         .await

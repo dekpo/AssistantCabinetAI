@@ -22,6 +22,10 @@ export type KnowledgeMode = "off" | "suggest" | "auto";
  */
 export type TabularRowsMode = "off" | "sample";
 
+/** The spreadsheet application whose formulas the program checks the model's formulas against
+ * (`SpreadsheetApplication`). One value today. */
+export type SpreadsheetApplication = "excel";
+
 /** The widths of the three zones, `[resources, workspace, chat]`, in percent of the window. */
 export type PanelTriple = [number, number, number];
 
@@ -148,6 +152,8 @@ export interface AppSettings {
   knowledgeMode: KnowledgeMode;
   /** What the AI receives from the spreadsheets a question concerns (`TabularRowsMode`). */
   tabularRowsMode: TabularRowsMode;
+  /** The application the formula checker reads its dictionaries for. */
+  spreadsheetApplication: SpreadsheetApplication;
   /** The optional lexicon packs the knowledge base reads names with, named `<domain>-<country>`:
    * `health-fr` (France), `health-ch` (Switzerland: AVS / AHV number, Swiss IBAN and telephone),
    * `legal-fr`, `accounting-fr`, and later `health-eu`, `legal-ch`... Rust keeps only the ids a
@@ -1019,6 +1025,33 @@ export interface NumericCorrection {
   correct: number;
 }
 
+export type FormulaIssueCode =
+  | "unknown_function"
+  | "function_in_other_language"
+  | "wrong_separator"
+  | "unbalanced_parentheses"
+  | "unbalanced_quotes"
+  | "unknown_column_letter"
+  | "unknown_column_name"
+  | "unknown_sheet"
+  | "file_used_as_sheet"
+  | "unknown_workbook"
+  | "reaches_outside";
+
+/** One problem the program found in a formula the model wrote: what was written, what was expected
+ * instead when the program knows, and the sheet or workbook it concerns (TABULAR step 07). */
+export interface FormulaIssue {
+  code: FormulaIssueCode;
+  found: string;
+  expected: string | null;
+  place: string | null;
+}
+
+export interface FormulaNote {
+  formula: string;
+  issue: FormulaIssue;
+}
+
 /** Documents and tables both selected, and the question was neither clearly data-only nor a pure
  * refusal: the mixed tier decomposed it, computed and cited across both sides, and checked the
  * model's prose against what it was actually given. */
@@ -1043,6 +1076,16 @@ export interface MixedAnswer {
   /** The explicit arithmetic the model wrote itself (`10 + 40 = 50`), as written: said under the
    * answer, which is never edited. Only the engine's figures are reliable. */
   modelArithmetic: string[];
+  /** The problems found in the formulas the model wrote; the answer is never edited. */
+  formulaNotes: FormulaNote[];
+  /** How many formulas had nothing the program could find wrong. */
+  formulasVerified: number;
+  /** The model was asked once to correct a function or a column that does not exist: `answer` is
+   * the corrected one. */
+  formulaRepaired: boolean;
+  /** What was wrong in the first answer, when it was corrected (each problem with the formula as
+   * first written). */
+  formulaRepairedFrom: FormulaNote[];
 }
 
 export interface AskAnswer {

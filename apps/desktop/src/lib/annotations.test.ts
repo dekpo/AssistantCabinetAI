@@ -3,7 +3,7 @@ import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
 import { annotationLines, answerForCopy, cautionLines, computedBlock, sourceItems, sourceLines } from "./annotations";
-import type { TabularAnswer, TargetingReport } from "./ipc";
+import type { TabularAnswer, TargetingReport, WorkbookUse } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
 const english = createTranslator(reference, reference);
@@ -356,5 +356,71 @@ describe("the caution lines read aloud", () => {
 
   it("is empty for a plain answer", () => {
     expect(cautionLines(english, "en-US", entry({ durationMs: 1000, modelAlias: "m" }))).toStrictEqual([]);
+  });
+});
+
+function use(extra: Partial<WorkbookUse>): WorkbookUse {
+  return {
+    file: "ventes.csv",
+    how: "card_sent",
+    reason: null,
+    rowsSent: null,
+    rowsTotal: null,
+    truncated: false,
+    count: null,
+    candidates: [],
+    ...extra,
+  };
+}
+
+describe("the lines about the workbooks of an answer", () => {
+  const trace: WorkbookUse[] = [
+    use({ file: "ventes.csv" }),
+    use({ file: "/documents/Factures/2025.xlsx", reason: "implied_by_word", truncated: true }),
+    use({ file: "stock.csv", how: "not_used", reason: "named_not_selected" }),
+    use({ file: "", how: "not_used", reason: "not_relevant", count: 2 }),
+  ];
+
+  it("come last among the notes, the same in the copy as on the screen", () => {
+    const shown = annotationLines(
+      french,
+      "fr-FR",
+      entry({ durationMs: 1000, modelAlias: "m", workbookUse: trace }),
+    );
+
+    expect(shown).toHaveLength(5);
+    expect(shown[1]).toBe(french("workbookUse.cardSent.named", { path: "ventes.csv" }));
+    expect(shown.at(-1)).toBe(french("workbookUse.notUsed.not_relevant_many", { count: "2" }));
+    expect(answerForCopy(french, "fr-FR", entry({ workbookUse: trace }))).toContain(shown[2]);
+  });
+
+  it("read aloud: a refusal and a shrunk card, not the card sent, the figure or the count left out", () => {
+    const cautions = cautionLines(english, "en-US", entry({ workbookUse: trace }));
+
+    expect(cautions).toStrictEqual([
+      `${english("workbookUse.cardSent.implied_by_word", { path: "Factures/2025.xlsx" })}${english("workbookUse.cardTruncated")}`,
+      english("workbookUse.notUsed.named_not_selected", { path: "stock.csv" }),
+    ]);
+  });
+
+  it("replace the old sentence once they say what happened to the workbooks", () => {
+    const quiet = entry({ mixedTableUnavailable: "not_asked_about" });
+
+    expect(annotationLines(english, "en-US", quiet)).toStrictEqual([
+      english("chat.mixedTableUnavailable.not_asked_about"),
+    ]);
+    expect(
+      annotationLines(
+        english,
+        "en-US",
+        entry({
+          mixedTableUnavailable: "not_asked_about",
+          workbookUse: [use({ file: "", how: "not_used", reason: "not_relevant", count: 3 })],
+        }),
+      ),
+    ).toStrictEqual([english("workbookUse.notUsed.not_relevant_many", { count: "3" })]);
+    expect(english("chat.mixedTableUnavailable.not_asked_about")).toBe(
+      "No spreadsheet was needed for this question.",
+    );
   });
 });

@@ -968,8 +968,11 @@ pub struct AskAnswer {
     /// applied reduction (and who asked for it), or names that need a question. `None` otherwise;
     /// in `suggest` an unapplied reduction is invisible by design.
     pub targeting: Option<TargetingReport>,
-    /// What this answer did with each workbook the question named or concerned: a card sent, a
-    /// figure computed (TABULAR plan 4.3). Machine codes; nothing in the interface shows it yet.
+    /// What this answer did with each workbook the question named, implied or the user ticked: a
+    /// card sent, a figure computed, a plan prepared, or why a workbook did not serve (TABULAR plan
+    /// 4.3, `workbook_use::trace`). Machine codes; the interface writes the lines. Set by every door
+    /// of a question with tables selected; empty for a question on documents alone, where no table
+    /// is ticked and none can be used.
     pub workbook_use: Vec<WorkbookUse>,
 }
 
@@ -2353,9 +2356,14 @@ async fn tabular_tier(
     measured.generation_total_ms += stage.lap_ms();
     let answered = targeting::answered_file(&answer);
     targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
+    let workbook_use = workbook_use::trace(
+        &tabular_answer::selection_facts(question, &folder, &scope.data_mode),
+        workbook_use::Answered::Engine(&answer),
+    );
     Ok(AskAnswer {
         tabular_answer: Some(answer),
         targeting: targeting_plan.report(false),
+        workbook_use,
         ..AskAnswer::default()
     })
 }
@@ -2454,10 +2462,15 @@ async fn mixed_data_only_tier(
     measured.generation_total_ms += stage.lap_ms();
     let answered = targeting::answered_file(&answer);
     targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
+    let workbook_use = workbook_use::trace(
+        &tabular_answer::selection_facts(question, &folder, &scope.data_mode),
+        workbook_use::Answered::Engine(&answer),
+    );
     Ok(Some(AskAnswer {
         tabular_answer: Some(answer),
         documents_not_needed: true,
         targeting: targeting_plan.report(false),
+        workbook_use,
         ..AskAnswer::default()
     }))
 }
@@ -2589,9 +2602,19 @@ fn mixed_folder_tier(
     let _ = on_event.send(ChatStreamEvent::FolderAnswer {
         answer: answer.clone(),
     });
+    // No workbook was read for a figure; a workbook the question names and the selection does not
+    // hold is still said (`workbook_use::Answered::FolderSearch`).
+    let workbook_use = match family_views_of(state, &index)?.data {
+        Some(data) => workbook_use::trace(
+            &tabular_answer::selection_facts(question, &data, &scope.data_mode),
+            workbook_use::Answered::FolderSearch,
+        ),
+        None => Vec::new(),
+    };
     Ok(Some(AskAnswer {
         folder_answer: Some(answer),
         scope_outdated,
+        workbook_use,
         ..AskAnswer::default()
     }))
 }
@@ -2649,6 +2672,7 @@ fn fill_tier(
     if templates.is_empty() {
         return Ok(None);
     }
+    let source_file = source.file.clone();
     let plan = fill_plan::build_plan(
         templates,
         &source.file,
@@ -2656,8 +2680,13 @@ fn fill_tier(
         &source.table,
         source.key,
     )?;
+    let workbook_use = workbook_use::trace(
+        &tabular_answer::selection_facts(question, &data, &scope.data_mode),
+        workbook_use::Answered::Plan(&source_file),
+    );
     Ok(Some(AskAnswer {
         fill_plan: Some(plan),
+        workbook_use,
         ..AskAnswer::default()
     }))
 }
@@ -3050,12 +3079,15 @@ async fn mixed_tier(
 
     // What this answer did with each workbook: the model read a card only if it wrote an answer, and
     // a figure was computed only if the table side holds a value.
-    let workbook_use = workbook_use::of_mixed_answer(
-        &card_block.cards,
-        implied,
-        &result.table,
-        generated && !result.answer.is_empty(),
-        &sample_block.uses,
+    let workbook_use = workbook_use::trace(
+        &tabular_answer::selection_facts(question, &folder, &scope.data_mode),
+        workbook_use::Answered::Mixed {
+            cards: &card_block.cards,
+            implied,
+            table: &result.table,
+            model_wrote: generated && !result.answer.is_empty(),
+            samples: &sample_block.uses,
+        },
     );
 
     Ok(AskAnswer {

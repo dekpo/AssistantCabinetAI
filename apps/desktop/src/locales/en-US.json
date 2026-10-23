@@ -255,7 +255,7 @@
     "modelArithmetic": "The AI did a calculation itself (“{expression}”): only the engine is reliable. Ask for this total to get it.",
     "mixedComputedTitle": "Computed from your data (by the engine, not by the AI):",
     "mixedTableUnavailable": {
-      "not_asked_about": "None of your spreadsheets was used for this answer: the question did not mention one. Name a spreadsheet, or say \"the spreadsheet\", to include it.",
+      "not_asked_about": "No spreadsheet was needed for this question.",
       "no_evidence": "Nothing in your tables answered this part.",
       "gateway_unavailable": "The AI could not be reached to interpret the data part.",
       "not_linked": "The total of your tables could not be tied to what the document says (for example the supplier it names): no overall total is shown, because it would not answer your question."
@@ -320,6 +320,29 @@
       "outsideFileMany": "files that are not selected",
       "addToSelection": "Add to my selection"
     }
+  },
+  "workbookUse": {
+    "computed": "{path}: answer computed by the program, without the AI.",
+    "planPrepared": "{path}: the letter plan is prepared from its rows, on this computer.",
+    "cardSent": {
+      "named": "{path}: named in your question, the AI received its structure.",
+      "implied_single": "{path}: the only spreadsheet ticked, the AI received its structure.",
+      "implied_by_word": "{path}: your question talks about a spreadsheet, the AI received its structure.",
+      "implied_by_column": "{path}: your question names one of its columns, the AI received its structure.",
+      "implied_by_entity": "{path}: it holds what your question mentions, the AI received its structure."
+    },
+    "cardTruncated": " It is too wide: some of its columns were not passed on.",
+    "notUsed": {
+      "named_not_selected": "“{path}” is named in your question but is not ticked: tick it in the left panel to use it.",
+      "not_analysed": "{path} has not been analysed: it was not used. Run the analysis of the tables folder.",
+      "unreadable": "{path} holds no readable table: it was not used.",
+      "changed_since_analysis": "{path} has changed or is gone since you ticked it: it was not used. Run the analysis again, then tick it again.",
+      "ambiguous_name": "“{path}” may mean several spreadsheets ({candidates}): none was used. Write the full name of the one you want.",
+      "not_sent": "{path}: the AI wrote no answer, so it did not read its structure.",
+      "not_relevant_one": "{count} ticked spreadsheet was not used for this answer: name it in your question to include it.",
+      "not_relevant_many": "{count} ticked spreadsheets were not used for this answer: name the one you want to include."
+    },
+    "foldTitle": "What was done with your spreadsheets ({count})"
   },
   "choices": {
     "hint": "Click a file to ask the question about it.",

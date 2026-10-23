@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CATALOGUES, REFERENCE_LOCALE } from "../../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../../i18n/translate";
-import type { TabularAnswer } from "../../lib/ipc";
+import type { TabularAnswer, WorkbookUse } from "../../lib/ipc";
 import type { ChatEntry } from "../../state/useChat";
 import { holdsMarkdown, readingParts } from "./readingParts";
 
@@ -112,6 +112,39 @@ describe("what is read of an answer", () => {
 
     expect(read).toContain(french("chat.timedOut"));
     expect(read).toContain(french("chat.mixedRejectedCitation", { citation: "[3]" }));
+  });
+
+  it("reads a refusal about a workbook, and leaves out what was only informative", () => {
+    const use = (extra: Partial<WorkbookUse>): WorkbookUse => ({
+      file: "ventes.csv",
+      how: "not_used",
+      reason: null,
+      rowsSent: null,
+      rowsTotal: null,
+      truncated: false,
+      count: null,
+      candidates: [],
+      ...extra,
+    });
+    const read = texts(
+      readingParts(
+        french,
+        "fr-FR",
+        entry({
+          workbookUse: [
+            use({ how: "card_sent", file: "a.csv" }),
+            use({ how: "computed", file: "b.csv" }),
+            use({ reason: "named_not_selected" }),
+            use({ file: "", reason: "not_relevant", count: 2 }),
+          ],
+        }),
+      ),
+    );
+
+    expect(read).toContain(french("workbookUse.notUsed.named_not_selected", { path: "ventes.csv" }));
+    expect(read.join("\n")).not.toContain("a.csv");
+    expect(read.join("\n")).not.toContain("b.csv");
+    expect(read.join("\n")).not.toContain("2 tableurs");
   });
 
   it("gives no part for an empty answer without notes", () => {

@@ -4,7 +4,7 @@ import { copyToClipboard } from "../lib/clipboard";
 import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
-import { annotationLines, answerForCopy, sourceItems } from "../lib/annotations";
+import { annotationParts, answerForCopy, sourceItems } from "../lib/annotations";
 import { formatTabularAnswer } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
 import {
@@ -24,6 +24,7 @@ import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { Markdown } from "./Markdown";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { TargetingNote } from "./TargetingNote";
+import { WorkbookUseNotes } from "./WorkbookUseNotes";
 
 export function MessageList({
   entries,
@@ -257,6 +258,7 @@ export function MessageList({
           const shown = localiseInternalNames(entry.content, t);
           // The question this "which file?" answer asked about, to be resent with her pick in it.
           const askedAbout = entries[entries.indexOf(entry) - 1];
+          const annotationNotes = annotationParts(t, locale, entry);
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
@@ -328,11 +330,13 @@ export function MessageList({
               {entry.fillPlan === undefined ? null : <FillPlanCard plan={entry.fillPlan} />}
               {/* Every note under the answer, as lines: where it came from, what it rests on, what could
                   not be established (`lib/annotations.ts`, also what "Copy the conversation" copies). */}
-              {annotationLines(t, locale, entry).map((line, index) => (
+              {annotationNotes.notes.map((line, index) => (
                 <p className="message__timing" key={`note-${index}`}>
                   {line}
                 </p>
               ))}
+              {/* What was done with each workbook the question named or she ticked, last among the notes. */}
+              <WorkbookUseNotes lines={annotationNotes.workbook} />
               {/* What the knowledge base did to the search, and the names it asks about. Under the
                   other notes, above the buttons that re-ask the question. */}
               <TargetingNote

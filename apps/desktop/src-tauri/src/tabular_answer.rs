@@ -1162,6 +1162,100 @@ pub fn named_workbooks(question: &str, data: &DataFolder, selection: &ScopeMode)
     named
 }
 
+/// Why a workbook the user ticked cannot be used for an answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unusable {
+    /// Its content changed since it was ticked, or the file is no longer there. `chosen_workbooks`
+    /// drops such an entry silently.
+    ChangedSinceAnalysis,
+    /// Never analysed, or its analysis is gone.
+    NotAnalysed,
+    /// Analysed, and nothing in it looks like a table.
+    Unreadable,
+}
+
+/// What the user ticked and named, read before an answer is built: the facts the usage trace
+/// (`workbook_use`) needs besides what the answer itself did. Computed from the **original**
+/// selection (`scope.data_mode`), never from a list the knowledge base narrowed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SelectionFacts {
+    /// What the question names.
+    pub named: NamedWorkbooks,
+    /// The ticked workbooks that cannot be used, by index key (for an entry whose file is gone, the
+    /// path it pinned), with why. A "tous" selection lists none: nothing was ticked one by one.
+    pub unusable: Vec<(String, Unusable)>,
+    /// The ticked workbooks with a usable analysis, by index key, in the order ticked.
+    pub usable: Vec<String>,
+}
+
+/// The facts of `SelectionFacts` for one question. Unlike `chosen_workbooks`, an entry whose content
+/// changed or whose file vanished is reported, not skipped, and nothing here fails: an empty or
+/// unavailable selection gives empty facts.
+pub fn selection_facts(question: &str, data: &DataFolder, selection: &ScopeMode) -> SelectionFacts {
+    let mut facts = SelectionFacts {
+        named: named_workbooks(question, data, selection),
+        ..SelectionFacts::default()
+    };
+    match selection {
+        ScopeMode::WholeFolder => {
+            facts.usable = data
+                .files()
+                .all_files()
+                .iter()
+                .filter(|record| record.processing_status == ProcessingStatus::Indexed)
+                .filter(|record| data.usable_inventory(&record.relative_path).is_some())
+                .map(|record| record.relative_path.clone())
+                .collect();
+        }
+        ScopeMode::Explicit(entries) => {
+            let mut seen: Vec<String> = Vec::new();
+            for entry in entries {
+                let Some(record) = entry.find_in(data.files()) else {
+                    facts
+                        .unusable
+                        .push((entry.relative_path.clone(), Unusable::ChangedSinceAnalysis));
+                    continue;
+                };
+                if seen.contains(&record.relative_path) {
+                    continue;
+                }
+                seen.push(record.relative_path.clone());
+                let file = record.relative_path.clone();
+                if record.id != entry.pinned_id {
+                    facts.unusable.push((file, Unusable::ChangedSinceAnalysis));
+                } else if record.processing_status == ProcessingStatus::Failed {
+                    facts.unusable.push((file, Unusable::Unreadable));
+                } else if record.processing_status != ProcessingStatus::Indexed
+                    || data.usable_inventory(&file).is_none()
+                {
+                    facts.unusable.push((file, Unusable::NotAnalysed));
+                } else {
+                    facts.usable.push(file);
+                }
+            }
+        }
+    }
+    // A workbook the user ticked that changed since is not "selected" for `named_workbooks`, which
+    // resolves among the usable entries: the name then looks like a workbook that is not ticked.
+    // It is ticked; the entry of `unusable` says why it did not serve.
+    let unusable = &facts.unusable;
+    facts
+        .named
+        .not_selected
+        .retain(|typed| !unusable.iter().any(|(file, _)| is_written_as(typed, file)));
+    facts
+}
+
+/// Whether a name typed in a question can be this index key: the whole key, the file name, or the
+/// file name without its extension, whatever the case.
+fn is_written_as(typed: &str, key: &str) -> bool {
+    let typed = typed.trim().to_lowercase();
+    let key = key.to_lowercase();
+    let name = key.rsplit('/').next().unwrap_or(&key);
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+    typed == key || typed == name || typed == stem
+}
+
 /// Why a ticked workbook is implied, as the usage trace writes it (plan 4.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

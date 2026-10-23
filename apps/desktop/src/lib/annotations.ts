@@ -8,6 +8,7 @@ import { counted } from "./plural";
 import { groupSources, type SourceGroup } from "./sourceGroups";
 import { formatTabularAnswer, tabularSourceLine, workbookCardSourceLine } from "./tabularAnswer";
 import { targetingNoteText } from "./targeting";
+import { workbookUseLines, type WorkbookUseLine } from "./workbookUse";
 
 /**
  * Everything written under an answer, as plain lines: where it came from, what it rests on, what could
@@ -19,7 +20,21 @@ import { targetingNoteText } from "./targeting";
  * disclosure and copied only when the user turned the `copySources` setting on (`sourceLines`).
  */
 export function annotationLines(t: Translator, locale: string, entry: ChatEntry): string[] {
-  return noteLines(t, locale, entry, false);
+  const { notes, workbook } = annotationParts(t, locale, entry);
+  return [...notes, ...workbook.map((line) => line.text)];
+}
+
+/**
+ * The same notes as `annotationLines`, in two parts: the ordinary notes, and the lines about the
+ * workbooks (`lib/workbookUse.ts`), which come last. The conversation view folds the second part
+ * when it is long; the copy and the read-aloud use the flat list, so they see the same words.
+ */
+export function annotationParts(
+  t: Translator,
+  locale: string,
+  entry: ChatEntry,
+): { notes: string[]; workbook: WorkbookUseLine[] } {
+  return { notes: noteLines(t, locale, entry, false), workbook: workbookUseLines(t, entry.workbookUse ?? []) };
 }
 
 /**
@@ -32,7 +47,12 @@ export function annotationLines(t: Translator, locale: string, entry: ChatEntry)
  * duration or the engine lines (`annotationLines` keeps those).
  */
 export function cautionLines(t: Translator, locale: string, entry: ChatEntry): string[] {
-  return noteLines(t, locale, entry, true);
+  return [
+    ...noteLines(t, locale, entry, true),
+    ...workbookUseLines(t, entry.workbookUse ?? [])
+      .filter((line) => line.caution)
+      .map((line) => line.text),
+  ];
 }
 
 /** The one list of notes, so the caution lines are never a second copy of the logic. */
@@ -90,9 +110,13 @@ function noteLines(
     lines.push(t("chat.documentsNotNeeded"));
   }
   // The mixed tier's own partial-refusal lines: which side could not be established.
+  // "No spreadsheet was needed" is said only when the trace under the answer says nothing about any
+  // workbook: once it does (a card, a figure, a refusal, the count of those left out), that line is
+  // the account of what happened and this one would repeat it, or contradict it.
   if (
     entry.mixedTableUnavailable !== undefined &&
-    !(cautionOnly && entry.mixedTableUnavailable === "not_asked_about")
+    !(cautionOnly && entry.mixedTableUnavailable === "not_asked_about") &&
+    !(entry.mixedTableUnavailable === "not_asked_about" && (entry.workbookUse ?? []).length > 0)
   ) {
     lines.push(t(`chat.mixedTableUnavailable.${entry.mixedTableUnavailable}`));
   }

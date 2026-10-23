@@ -255,7 +255,7 @@
     "modelArithmetic": "L'IA a effectué elle-même un calcul (« {expression} ») : seul le moteur est fiable. Demandez ce total pour l'obtenir.",
     "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
     "mixedTableUnavailable": {
-      "not_asked_about": "Aucun de vos tableurs n'a été utilisé pour cette réponse : la question n'en parlait pas. Citez un tableur par son nom, ou dites « le tableur », pour l'inclure.",
+      "not_asked_about": "Aucun tableur n'était nécessaire pour cette question.",
       "no_evidence": "Rien dans vos tables ne répond à cette partie.",
       "gateway_unavailable": "L'IA n'a pas pu être contactée pour interpréter la partie données.",
       "not_linked": "Le total de vos tables n'a pas pu être rattaché à ce que dit le document (par exemple le fournisseur cité) : aucun total global n'est affiché, il ne répondrait pas à votre question."
@@ -320,6 +320,29 @@
       "outsideFileMany": "fichiers non sélectionnés",
       "addToSelection": "Ajouter à ma sélection"
     }
+  },
+  "workbookUse": {
+    "computed": "{path} : réponse calculée par le programme, sans l'IA.",
+    "planPrepared": "{path} : le plan de lettres est préparé à partir de ses lignes, sur cet ordinateur.",
+    "cardSent": {
+      "named": "{path} : cité dans votre question, l'IA en a reçu la structure.",
+      "implied_single": "{path} : seul tableur coché, l'IA en a reçu la structure.",
+      "implied_by_word": "{path} : votre question parle d'un tableur, l'IA en a reçu la structure.",
+      "implied_by_column": "{path} : votre question cite l'une de ses colonnes, l'IA en a reçu la structure.",
+      "implied_by_entity": "{path} : il contient ce que votre question cite, l'IA en a reçu la structure."
+    },
+    "cardTruncated": " Il est trop large : une partie de ses colonnes n'a pas été transmise.",
+    "notUsed": {
+      "named_not_selected": "« {path} » est cité dans votre question mais n'est pas coché : cochez-le dans le panneau de gauche pour l'utiliser.",
+      "not_analysed": "{path} n'a pas été analysé : il n'a pas servi. Lancez l'analyse du dossier des tableaux.",
+      "unreadable": "{path} ne contient aucun tableau lisible : il n'a pas servi.",
+      "changed_since_analysis": "{path} a changé ou n'existe plus depuis que vous l'avez coché : il n'a pas servi. Relancez l'analyse, puis cochez-le à nouveau.",
+      "ambiguous_name": "« {path} » peut désigner plusieurs tableurs ({candidates}) : aucun n'a servi. Écrivez le nom complet de celui que vous voulez.",
+      "not_sent": "{path} : l'IA n'a pas rédigé de réponse, elle n'a donc pas lu sa structure.",
+      "not_relevant_one": "{count} tableur coché n'a pas servi pour cette réponse : citez-le par son nom pour l'inclure.",
+      "not_relevant_many": "{count} tableurs cochés n'ont pas servi pour cette réponse : citez par son nom celui que vous voulez inclure."
+    },
+    "foldTitle": "Ce qui a été fait de vos tableurs ({count})"
   },
   "choices": {
     "hint": "Cliquez sur un fichier pour poser la question à son sujet.",

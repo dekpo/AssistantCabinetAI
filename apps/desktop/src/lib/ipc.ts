@@ -1077,22 +1077,43 @@ export interface AskAnswer {
   /** What the knowledge base did to the search, when there is something to tell: an applied
    * reduction, or names that need a question. */
   targeting: TargetingReport | null;
-  /** What this answer did with each workbook the question named or concerned. Machine codes; the
-   * interface renders nothing from it yet (TABULAR plan 4.3). */
+  /** What this answer did with each workbook the question named, implied or the user ticked, and
+   * why one did not serve (TABULAR plan 4.3). Machine codes; `lib/workbookUse.ts` writes the lines. */
   workbookUse: WorkbookUse[];
 }
 
-/** One workbook an answer was built from. `file` is the index key; `reason` is an implied-reason
- * code (`implied_single`, `implied_by_word`, `implied_by_column`, `implied_by_entity`) and is null
- * for a workbook the question names. */
+export type WorkbookUseHow = "card_sent" | "computed" | "plan_prepared" | "not_used";
+
+export type WorkbookUseReason =
+  | "implied_single"
+  | "implied_by_word"
+  | "implied_by_column"
+  | "implied_by_entity"
+  | "named_not_selected"
+  | "not_analysed"
+  | "unreadable"
+  | "changed_since_analysis"
+  | "ambiguous_name"
+  | "not_relevant"
+  | "not_sent";
+
+/** One workbook an answer was built from, or one that did not serve. `file` is the index key; for
+ * `named_not_selected` and `ambiguous_name` it is the name as the user typed it, and for the aggregate
+ * `not_relevant` entry it is empty and `count` says how many ticked workbooks it stands for. `reason`
+ * is null for a workbook the question names and the answer used. */
 export interface WorkbookUse {
   file: string;
-  how: "card_sent" | "computed";
-  reason: string | null;
+  how: WorkbookUseHow;
+  reason: WorkbookUseReason | null;
   /** The rows of the workbook the model was shown in the sample, and the data rows of the sheets
    * they come from. Null when only the structure was sent. */
   rowsSent: number | null;
   rowsTotal: number | null;
+  /** The card was shrunk to fit the model's room: columns or flags were left out. */
+  truncated: boolean;
+  count: number | null;
+  /** The index keys an ambiguous name may mean. */
+  candidates: string[];
 }
 
 /** A workbook whose structure was given to the model, and the rows of it that were (null: none). */

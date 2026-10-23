@@ -28,6 +28,7 @@ import {
   type TabularAnswer,
   type TargetingReport,
   type WorkbookCardUse,
+  type WorkbookUse,
 } from "../lib/ipc";
 import { targetingRequestFor, type TargetingChoice } from "../lib/targeting";
 import { truncateForRegenerate, truncateForResend } from "../lib/turns";
@@ -144,6 +145,9 @@ export interface ChatEntry extends ChatTurn {
   /** The workbooks whose structure (card) the model was given for this answer, by index key: listed
    * among the sources, because the model may name them in its prose. */
   workbookCards?: WorkbookCardUse[];
+  /** What this answer did with each workbook the question named, implied or the user ticked, and
+   * why one did not serve: written as lines under the answer (`lib/workbookUse.ts`). */
+  workbookUse?: WorkbookUse[];
   /** The arithmetic the model wrote itself in a mixed answer (`10 + 40 = 50`): said under the
    * answer, which is never edited (`number_check::arithmetic_expressions`). */
   mixedModelArithmetic?: string[];
@@ -354,9 +358,10 @@ export function useChat(
           targetingRequestFor(choice, previousTargeting, text),
           onTargeting,
         );
-        /* Every path below merges into the entry, so what the knowledge base did and how long the
-           question took are put on it once, here, whichever path answered. */
-        if (result.targeting !== null || result.diagnostics !== null) {
+        /* Every path below merges into the entry, so what the knowledge base did, how long the
+           question took and what was done with each workbook are put on it once, here, whichever
+           path answered. */
+        if (result.targeting !== null || result.diagnostics !== null || result.workbookUse.length > 0) {
           setEntries((current) =>
             current.map((entry) =>
               entry.id === answerId
@@ -364,6 +369,7 @@ export function useChat(
                     ...entry,
                     ...(result.targeting === null ? {} : { targeting: result.targeting }),
                     ...(result.diagnostics === null ? {} : { diagnostics: result.diagnostics }),
+                    ...(result.workbookUse.length === 0 ? {} : { workbookUse: result.workbookUse }),
                   }
                 : entry,
             ),

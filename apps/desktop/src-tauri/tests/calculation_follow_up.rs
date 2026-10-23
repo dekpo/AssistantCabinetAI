@@ -500,6 +500,7 @@ async fn analyse(
             sheet_sizes: &sizes,
             analysis: true,
         },
+        formulas: None,
     };
     mixed_answer::answer(
         QUESTION,
@@ -648,6 +649,7 @@ async fn an_ordinary_figure_without_documents_still_answers_with_no_model_call()
         cards_text: "",
         sample_text: "",
         calculation: Default::default(),
+        formulas: None,
     };
 
     let (result, generated) = mixed_answer::answer(

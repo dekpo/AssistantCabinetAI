@@ -1,5 +1,6 @@
 import type { Translator } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
+import type { FormulaNote } from "./ipc";
 import { explanationBlock } from "./calculationFollowUp";
 import { coverageLine } from "./coverage";
 import { formatDuration } from "./duration";
@@ -167,6 +168,22 @@ function noteLines(
   for (const expression of entry.mixedModelArithmetic ?? []) {
     lines.push(t("chat.modelArithmetic", { expression }));
   }
+  // The formulas the model wrote, checked by the program (TABULAR step 07): a problem is a caution, read
+  // aloud with the others; that the check ran, and what it cannot cover, is said once and quietly.
+  for (const note of entry.mixedFormulaNotes ?? []) {
+    lines.push(formulaNoteLine(t, note));
+  }
+  if (!cautionOnly && (entry.mixedFormulasVerified ?? 0) > 0) {
+    lines.push(t("chat.formulaVerified"));
+  }
+  if (!cautionOnly && entry.mixedFormulaRepaired === true) {
+    lines.push(t("chat.formulaRepaired"));
+    // What was wrong in the first version, so the correction can be judged (not a caution: it is
+    // fixed in the answer shown).
+    for (const note of entry.mixedFormulaRepairedFrom ?? []) {
+      lines.push(t("chat.formulaRepairedFrom", { problem: formulaNoteLine(t, note) }));
+    }
+  }
   // The same two checks on the explanation of a calculation, beside the explanation (TABULAR step 06).
   for (const number of entry.explanation?.unverifiedNumbers ?? []) {
     lines.push(t("chat.explanationUnverifiedNumber", { number }));
@@ -175,6 +192,26 @@ function noteLines(
     lines.push(t("chat.modelArithmetic", { expression }));
   }
   return lines;
+}
+
+const LONGEST_FORMULA_SHOWN = 80;
+
+/** One problem of a formula the model wrote, as a sentence in the user's language. The formula is
+ * quoted as written, cut when it is long. */
+export function formulaNoteLine(t: Translator, note: FormulaNote): string {
+  const formula =
+    note.formula.length > LONGEST_FORMULA_SHOWN
+      ? `${note.formula.slice(0, LONGEST_FORMULA_SHOWN - 1)}…`
+      : note.formula;
+  const { code, found, expected, place } = note.issue;
+  // The sentence that names the sheet, the last column or the right name needs them: without, the plain one.
+  const key =
+    code === "unknown_column_letter" && place === null
+      ? "chat.formulaIssue.unknown_column_letter_anywhere"
+      : code === "function_in_other_language" && expected === null
+        ? "chat.formulaIssue.unknown_function"
+        : `chat.formulaIssue.${code}`;
+  return t(key, { formula, found, expected: expected ?? "", place: place ?? "" });
 }
 
 /** The engine's own figure in a mixed answer, as shown beside the model's prose: a title and the

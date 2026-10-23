@@ -1136,6 +1136,7 @@ impl<'a> Replay<'a> {
             cards_text: "",
             sample_text: "",
             calculation: Default::default(),
+            formulas: None,
         };
         let started = Instant::now();
         let (result, generated) = mixed_answer::answer(

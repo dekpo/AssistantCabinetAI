@@ -41,7 +41,7 @@ pub mod readers;
 pub mod retrieval;
 pub mod reveal;
 mod settings;
-pub use settings::TabularRowsMode;
+pub use settings::{SpreadsheetApplication, TabularRowsMode};
 pub mod speech;
 mod speech_commands;
 pub mod structure;

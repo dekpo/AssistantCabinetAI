@@ -2485,14 +2485,16 @@ async fn advisory_tier(
     on_event: &Channel<ChatStreamEvent>,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<AskAnswer, AppError> {
-    let (server_url, model_alias, idle_timeout, rows_mode) = state.read(|settings| {
-        (
-            settings.server_url.clone(),
-            settings.model_alias.clone(),
-            settings.answer_idle_timeout(),
-            settings.tabular_rows_mode,
-        )
-    })?;
+    let (server_url, model_alias, idle_timeout, rows_mode, application) =
+        state.read(|settings| {
+            (
+                settings.server_url.clone(),
+                settings.model_alias.clone(),
+                settings.answer_idle_timeout(),
+                settings.tabular_rows_mode,
+                settings.spreadsheet_application,
+            )
+        })?;
     let budget = state
         .model_budgets
         .lock()
@@ -2533,6 +2535,11 @@ async fn advisory_tier(
         ),
     };
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
+    let formula_context = crate::tabular::formula_check::FormulaContext::new(
+        application.as_str(),
+        &locale,
+        &card_block.cards,
+    );
     let context = mixed_answer::MixedContext {
         locale: &locale,
         gateway: &state.gateway,
@@ -2547,6 +2554,7 @@ async fn advisory_tier(
             sheet_sizes: &sheet_sizes,
             analysis: kept_figure.is_some(),
         },
+        formulas: formula_context.as_ref(),
     };
     let targeting_report = targeting_plan.report(false);
     if let Some(report) = &targeting_report {
@@ -2638,6 +2646,7 @@ async fn advisory_tier(
                     rejected_citations: Vec::new(),
                     unverified_numbers: Vec::new(),
                     model_arithmetic: Vec::new(),
+                    ..mixed_answer::MixedAnswer::default()
                 }),
                 targeting: targeting_report,
                 workbook_use,
@@ -3326,6 +3335,7 @@ async fn mixed_tier(
         locale,
         idle_timeout,
         rows_mode,
+        application,
     ) = state.read(|settings| {
         (
             settings.work_folder.clone(),
@@ -3336,6 +3346,7 @@ async fn mixed_tier(
             settings.locale.clone(),
             settings.answer_idle_timeout(),
             settings.tabular_rows_mode,
+            settings.spreadsheet_application,
         )
     })?;
     if work_folder.is_none() {
@@ -3557,6 +3568,11 @@ async fn mixed_tier(
     };
 
     let sheet_sizes = tabular_answer::sheet_sizes(&folder, &scope.data_mode);
+    let formula_context = crate::tabular::formula_check::FormulaContext::new(
+        application.as_str(),
+        &locale,
+        &card_block.cards,
+    );
     let context = mixed_answer::MixedContext {
         locale: &locale,
         gateway: &state.gateway,
@@ -3571,6 +3587,7 @@ async fn mixed_tier(
             sheet_sizes: &sheet_sizes,
             analysis,
         },
+        formulas: formula_context.as_ref(),
     };
 
     // Nothing below touches `index`, `folder` or the document inventory again: everything either

@@ -360,6 +360,7 @@ async fn mixed_with_rows_mode(
         cards_text: &cards.block.text,
         sample_text: &sample.text,
         calculation: Default::default(),
+        formulas: None,
     };
     mixed_answer::answer(
         question,
@@ -1267,6 +1268,7 @@ async fn step_03_no_card_and_no_documents_is_still_insufficient_evidence() {
         cards_text: &cards.block.text,
         sample_text: "",
         calculation: Default::default(),
+        formulas: None,
     };
     let outcome = mixed_answer::answer(
         question,
@@ -1525,6 +1527,7 @@ async fn step_05_a_gateway_that_hangs_up_degrades_to_the_engines_nudge() {
         cards_text: &cards.block.text,
         sample_text: "",
         calculation: Default::default(),
+        formulas: None,
     };
     let written = mixed_answer::answer(
         question,

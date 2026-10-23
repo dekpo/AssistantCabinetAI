@@ -34,6 +34,7 @@ import {
   type CombinedScope,
   type FolderAnswer,
   type MixedPartUnavailable,
+  type FormulaNote,
   type NumericCorrection,
   type RetrievalDiagnostics,
   type TabularAnswer,
@@ -162,6 +163,15 @@ export interface ChatEntry extends ChatTurn {
   /** The arithmetic the model wrote itself in a mixed answer (`10 + 40 = 50`): said under the
    * answer, which is never edited (`number_check::arithmetic_expressions`). */
   mixedModelArithmetic?: string[];
+  /** The problems the program found in the formulas of a mixed answer (`formula_check`): said under
+   * the answer, which is never edited. */
+  mixedFormulaNotes?: FormulaNote[];
+  /** How many formulas of the answer had nothing the program could find wrong. */
+  mixedFormulasVerified?: number;
+  /** The first answer was corrected once after the check. */
+  mixedFormulaRepaired?: boolean;
+  /** What was wrong in the first version of a corrected answer. */
+  mixedFormulaRepairedFrom?: FormulaNote[];
   mixedTableUnavailable?: MixedPartUnavailable;
   mixedDocumentsUnavailable?: MixedPartUnavailable;
   /** A number the model wrote that did not match the table or any excerpt - appended under the
@@ -454,6 +464,15 @@ export function useChat(
                       : {}),
                     ...(mixed.modelArithmetic.length > 0
                       ? { mixedModelArithmetic: mixed.modelArithmetic }
+                      : {}),
+                    ...(mixed.formulaRepaired ? { content: mixed.answer } : {}),
+                    ...(mixed.formulaNotes.length > 0 ? { mixedFormulaNotes: mixed.formulaNotes } : {}),
+                    ...(mixed.formulasVerified > 0
+                      ? { mixedFormulasVerified: mixed.formulasVerified }
+                      : {}),
+                    ...(mixed.formulaRepaired ? { mixedFormulaRepaired: true } : {}),
+                    ...(mixed.formulaRepairedFrom.length > 0
+                      ? { mixedFormulaRepairedFrom: mixed.formulaRepairedFrom }
                       : {}),
                   }
                 : entry,

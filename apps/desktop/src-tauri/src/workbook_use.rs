@@ -298,6 +298,7 @@ mod tests {
             file: file.to_string(),
             text: String::new(),
             truncated,
+            shape: Default::default(),
         }
     }
 

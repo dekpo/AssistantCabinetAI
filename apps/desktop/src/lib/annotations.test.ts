@@ -3,7 +3,7 @@ import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
 import { annotationLines, answerForCopy, cautionLines, computedBlock, sourceItems, sourceLines } from "./annotations";
-import type { TabularAnswer, TargetingReport, WorkbookUse } from "./ipc";
+import type { FormulaNote, TabularAnswer, TargetingReport, WorkbookUse } from "./ipc";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
 const english = createTranslator(reference, reference);
@@ -438,4 +438,108 @@ describe("the lines about the workbooks of an answer", () => {
       "No spreadsheet was needed for this question.",
     );
   });
+});
+
+describe("the formulas the model wrote, checked by the program", () => {
+  const note = (formula: string, issue: Partial<FormulaNote["issue"]>): FormulaNote => ({
+    formula,
+    issue: { code: "unknown_function", found: "", expected: null, place: null, ...issue },
+  });
+
+  it("writes one sentence per problem, in her language, quoting the formula", () => {
+    const wrongName = note("=SUMIF(B:B; 1)", {
+      code: "function_in_other_language",
+      found: "SUMIF",
+      expected: "SOMME.SI",
+    });
+    expect(
+      annotationLines(french, "fr-FR", entry({ mixed: true, mixedFormulaNotes: [wrongName] })),
+    ).toContain(
+      "La formule « =SUMIF(B:B; 1) » utilise SUMIF, qui s'écrit SOMME.SI dans votre version du tableur.",
+    );
+    expect(
+      annotationLines(english, "en-US", entry({ mixed: true, mixedFormulaNotes: [wrongName] })),
+    ).toContain("The formula “=SUMIF(B:B; 1)” uses SUMIF, which is written SOMME.SI in your version of the spreadsheet.");
+  });
+
+  it("names the sheet when it knows it and says so when it does not", () => {
+    const withSheet = note("=SOMME(F:F)", {
+      code: "unknown_column_letter",
+      found: "F",
+      expected: "E",
+      place: "Factures",
+    });
+    const anywhere = { ...withSheet, issue: { ...withSheet.issue, place: null } };
+    expect(formulaLines(withSheet)).toStrictEqual([
+      "La colonne F n'existe pas dans « Factures » (dernière colonne : E) : formule « =SOMME(F:F) ».",
+    ]);
+    expect(formulaLines(anywhere)).toStrictEqual([
+      "La colonne F n'existe dans aucun des tableaux décrits (dernière colonne : E) : formule « =SOMME(F:F) ».",
+    ]);
+  });
+
+  it("falls back to the plain sentence when the right name is not known", () => {
+    const unknown = note("=FOO(A1)", { code: "function_in_other_language", found: "FOO", expected: null });
+    expect(formulaLines(unknown)[0]).toContain("que je ne reconnais pas");
+  });
+
+  it("cuts a long formula and keeps the notes among the cautions, read aloud with the others", () => {
+    const long = `=SOMME(${"A1;".repeat(60)}A2)`;
+    const line = formulaLines(note(long, { code: "unbalanced_parentheses" }))[0] ?? "";
+    expect(line).toContain("…");
+    expect(line.length).toBeLessThan(long.length);
+    const withNote = entry({ mixed: true, mixedFormulaNotes: [note("=X(", { code: "unbalanced_quotes" })] });
+    expect(cautionLines(french, "fr-FR", withNote)).toContain(
+      "La formule « =X( » a un guillemet qui ne se ferme pas.",
+    );
+  });
+
+  it("says once, quietly, that a formula was checked and what that does not cover", () => {
+    const checked = entry({ mixed: true, mixedFormulasVerified: 2 });
+    expect(annotationLines(french, "fr-FR", checked)).toContain(
+      "Formule vérifiée : les noms de fonctions et les colonnes existent. Le résultat n'est pas testé.",
+    );
+    expect(
+      annotationLines(french, "fr-FR", checked).filter((each) => each.startsWith("Formule vérifiée")),
+    ).toHaveLength(1);
+    // Not a warning: it is not read aloud.
+    expect(cautionLines(french, "fr-FR", checked)).toStrictEqual([]);
+    expect(annotationLines(english, "en-US", entry({ mixed: true }))).not.toContain(
+      english("chat.formulaVerified"),
+    );
+  });
+
+  it("says that the model corrected its formula once, and only then", () => {
+    const repaired = entry({ mixed: true, mixedFormulaRepaired: true });
+    expect(annotationLines(english, "en-US", repaired)).toContain(
+      "The AI corrected its formula once, after the check.",
+    );
+    expect(cautionLines(english, "en-US", repaired)).toStrictEqual([]);
+  });
+
+  it("says what was wrong in the first version, formula included, without making it a caution", () => {
+    const first = note("=SUMIF(B:B; 1)", {
+      code: "function_in_other_language",
+      found: "SUMIF",
+      expected: "SOMME.SI",
+    });
+    const repaired = entry({
+      mixed: true,
+      mixedFormulaRepaired: true,
+      mixedFormulaRepairedFrom: [first],
+    });
+    expect(annotationLines(french, "fr-FR", repaired)).toContain(
+      "Avant la correction : La formule « =SUMIF(B:B; 1) » utilise SUMIF, qui s'écrit SOMME.SI dans votre version du tableur.",
+    );
+    expect(annotationLines(english, "en-US", repaired)).toContain(
+      "Before the correction: The formula “=SUMIF(B:B; 1)” uses SUMIF, which is written SOMME.SI in your version of the spreadsheet.",
+    );
+    expect(cautionLines(french, "fr-FR", repaired)).toStrictEqual([]);
+  });
+
+  function formulaLines(formulaNote: FormulaNote): string[] {
+    return annotationLines(french, "fr-FR", entry({ mixed: true, mixedFormulaNotes: [formulaNote] })).filter(
+      (each) => each.includes("formule") || each.includes("Formule") || each.includes("colonne") || each.includes("La colonne"),
+    );
+  }
 });

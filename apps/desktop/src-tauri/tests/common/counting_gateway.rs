@@ -42,6 +42,33 @@ pub fn start_gateway_replying(content: &str) -> CountingGateway {
     start(move || stream.clone())
 }
 
+/// Answers the requests with `replies` in order, as streamed chunks; a request beyond the last one gets
+/// the last reply again. A reply that is `None` is the body of an unsupported gateway (an error to
+/// the caller).
+pub fn start_gateway_replying_in_turn(replies: &[Option<&str>]) -> CountingGateway {
+    let streams: Vec<String> = replies
+        .iter()
+        .map(|reply| match reply {
+            Some(content) => {
+                let escaped = serde_json::to_string(content).expect("a string always serialises");
+                format!(
+                    "data: {{\"choices\":[{{\"delta\":{{\"content\":{escaped}}}}}]}}
+
+data: [DONE]
+
+"
+                )
+            }
+            None => r#"{"unsupported": true}"#.to_string(),
+        })
+        .collect();
+    let served = AtomicUsize::new(0);
+    start(move || {
+        let turn = served.fetch_add(1, Ordering::SeqCst).min(streams.len() - 1);
+        streams[turn].clone()
+    })
+}
+
 fn start(reply: impl Fn() -> String + Send + 'static) -> CountingGateway {
     let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").expect("binds a free port"));
     let url = format!("http://{}", server.server_addr());

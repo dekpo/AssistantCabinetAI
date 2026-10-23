@@ -35,6 +35,9 @@ use crate::gateway::{ChatTurn, GatewayClient};
 use crate::number_check;
 use crate::retrieval::Evidence;
 use crate::tabular::engine::{self, FilterSpec, TabularValue};
+use crate::tabular::formula_check::{
+    self, FormulaContext, FormulaIssue, FormulaNote, FormulaReport,
+};
 use crate::tabular::inventory::{ColumnType, TabularInventory};
 use crate::tabular::question::{self, TabularRoute};
 use crate::tabular::sample::SAMPLE_INSTRUCTION;
@@ -63,7 +66,18 @@ pub const MIXED_INSTRUCTION: &str =
      question, say so plainly and, when a calculation would settle it, say which calculation to \
      ask for. A workbook card is a real source about structure: use it to say what a workbook \
      contains, which columns to use and how to relate or combine files, even though no cell value \
-     is available, and do not refuse a question about structure for lack of data.";
+     is available, and do not refuse a question about structure for lack of data. Write in the \
+     language of the question and describe the sources in your own words: do not copy their lines.";
+
+/// The second request of the formula repair (TABULAR step 07): sent once, after the program found a
+/// function name or a column letter it could look up and that is wrong, followed by one line per
+/// problem (`repair_turn`). English, profession-neutral, short.
+pub const FORMULA_REPAIR_INSTRUCTION: &str =
+    "The program checked the formulas of your previous answer and found the problems listed below. \
+     Write the answer again with every formula corrected. Use only functions that exist in the \
+     spreadsheet application, write their names and the argument separator in the conventions of \
+     the answer language, use only the sheets and the column letters of the workbook cards, and put \
+     each formula on a line of its own starting with =. Keep the rest of the answer as it is.";
 
 /// Appended to the instruction when the user asked for the analysis of a computed figure (TABULAR
 /// step 06, plan 4.7): the figure of the table results is final, the model comments on it and goes
@@ -130,7 +144,7 @@ pub struct NumericCorrection {
 /// What a mixed question came to: a model's prose across two sources it is held to, the table
 /// part and the document part each carrying their own provenance and their own "could not
 /// establish" reason, plus whatever the post-generation checks found.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MixedAnswer {
     /// The model's prose. Empty when generation was never attempted - the table answered alone,
@@ -161,6 +175,19 @@ pub struct MixedAnswer {
     /// says under the answer that only the engine is reliable, and the answer is never edited
     /// (`number_check::arithmetic_expressions`, TABULAR step 03b).
     pub model_arithmetic: Vec<String>,
+    /// The problems the program found in the formulas the model wrote, each with its formula (TABULAR
+    /// step 07). The answer is never edited: these are shown beside it.
+    pub formula_notes: Vec<FormulaNote>,
+    /// How many formulas had nothing the program could find wrong: the interface then says once that
+    /// the names and columns exist and that the result is not tested.
+    pub formulas_verified: usize,
+    /// The first answer had a function or a column that does not exist and the model was asked once
+    /// to correct it: this answer is the second one.
+    pub formula_repaired: bool,
+    /// What was wrong in the first answer, when it was corrected (the problems that triggered the
+    /// request, each with the formula as first written): the interface says it beside the corrected
+    /// answer, so the correction can be judged. Empty when nothing was corrected.
+    pub formula_repaired_from: Vec<FormulaNote>,
 }
 
 /// Everything `answer` needs, owned or borrowed, with no `AppHandle` and - on purpose - no
@@ -189,6 +216,9 @@ pub struct MixedContext<'a> {
     pub sample_text: &'a str,
     /// What the calculation record and the analysis need beyond the figure (TABULAR step 06).
     pub calculation: CalculationSide<'a>,
+    /// What the formulas of the answer are checked against (TABULAR step 07): the dictionaries of the
+    /// spreadsheet application and the structure of the workbooks that were sent. `None` checks nothing.
+    pub formulas: Option<&'a FormulaContext>,
 }
 
 /// The part of a turn that exists only for a computed figure: the data rows of the sheets in play (the
@@ -255,6 +285,7 @@ pub async fn answer(
                     rejected_citations: Vec::new(),
                     unverified_numbers: Vec::new(),
                     model_arithmetic: Vec::new(),
+                    ..MixedAnswer::default()
                 },
                 false,
             ));
@@ -299,6 +330,7 @@ pub async fn answer(
                 rejected_citations: Vec::new(),
                 unverified_numbers: Vec::new(),
                 model_arithmetic: Vec::new(),
+                ..MixedAnswer::default()
             },
             false,
         ));
@@ -336,7 +368,7 @@ pub async fn answer(
         )
         .await;
 
-    let answer_text = match generated {
+    let mut answer_text = match generated {
         Ok(text) => text,
         Err(_) if computed_value => {
             return Ok((
@@ -350,12 +382,57 @@ pub async fn answer(
                     rejected_citations: Vec::new(),
                     unverified_numbers: Vec::new(),
                     model_arithmetic: Vec::new(),
+                    ..MixedAnswer::default()
                 },
                 true,
             ));
         }
         Err(error) => return Err(error),
     };
+
+    // The formulas the model wrote are looked up against the dictionaries and the cards; a function or a
+    // column letter that does not exist is worth one more request, and only one (TABULAR step 07).
+    let mut formula_report = check_formulas(&answer_text, context.formulas);
+    let mut formula_repaired = false;
+    let mut formula_repaired_from: Vec<FormulaNote> = Vec::new();
+    if let Some(formulas) = context.formulas.filter(|_| formula_report.has_repairable()) {
+        let mut again = turns.clone();
+        again.push(ChatTurn {
+            role: "assistant".to_string(),
+            content: answer_text.clone(),
+        });
+        again.push(ChatTurn {
+            role: "user".to_string(),
+            content: repair_turn(&formula_report.notes),
+        });
+        // Not streamed: the first answer is on screen and the corrected one replaces it. A request that
+        // fails, is stopped or writes no formula leaves the first answer and its notes.
+        let second = context
+            .gateway
+            .chat_at(
+                context.server_url,
+                context.model_alias,
+                Some(context.locale),
+                &again,
+                context.idle_timeout,
+                Some(crate::gateway::GROUNDED_TEMPERATURE),
+                |_| {},
+            )
+            .await;
+        if let Ok(text) = second {
+            if !formula_check::extract_formulas(&text).is_empty() {
+                formula_repaired_from = formula_report
+                    .notes
+                    .iter()
+                    .filter(|note| note.issue.code.is_repairable())
+                    .cloned()
+                    .collect();
+                formula_report = formula_check::check_answer(&text, formulas);
+                answer_text = text;
+                formula_repaired = true;
+            }
+        }
+    }
 
     // A figure a card states (a row count, a year) is a fact of the turn, not a claim to correct.
     let corrections = verify_numbers(
@@ -395,9 +472,53 @@ pub async fn answer(
             rejected_citations,
             unverified_numbers,
             model_arithmetic,
+            formula_notes: formula_report.notes,
+            formulas_verified: formula_report.verified,
+            formula_repaired,
+            formula_repaired_from,
         },
         true,
     ))
+}
+
+/// The notes of the formulas in `answer`; nothing when there is no context to check against.
+fn check_formulas(answer: &str, context: Option<&FormulaContext>) -> FormulaReport {
+    match context {
+        Some(context) => formula_check::check_answer(answer, context),
+        None => FormulaReport::default(),
+    }
+}
+
+/// One line of the repair request for a problem the program found: the formula and what is wrong, in
+/// English, as machine text (the user reads the interface's own sentence).
+fn repair_line(note: &FormulaNote) -> String {
+    let FormulaIssue {
+        code,
+        found,
+        expected,
+        place,
+    } = &note.issue;
+    let mut line = format!("{} - {}: {found}", note.formula, code.as_str());
+    if let Some(expected) = expected {
+        line.push_str(&format!(" (expected: {expected})"));
+    }
+    if let Some(place) = place {
+        line.push_str(&format!(" (in: {place})"));
+    }
+    line
+}
+
+/// The user turn of the formula repair: the instruction, then the problems that can be fixed.
+pub(crate) fn repair_turn(notes: &[FormulaNote]) -> String {
+    let lines: Vec<String> = notes
+        .iter()
+        .filter(|note| note.issue.code.is_repairable())
+        .map(repair_line)
+        .collect();
+    format!(
+        "{FORMULA_REPAIR_INSTRUCTION}\n\nProblems:\n{}",
+        lines.join("\n")
+    )
 }
 
 /// A question that points at a document whose table result carries no filter at all: a computed
@@ -922,6 +1043,66 @@ mod tests {
         assert!(MIXED_INSTRUCTION.contains("do not refuse a question about structure"));
         // The labels in the instruction are the ones the blocks are written with.
         assert!(crate::tabular::card::CARDS_HEADER.starts_with("Workbook cards"));
+    }
+
+    #[test]
+    fn the_formula_repair_instruction_stays_neutral_about_who_the_user_is() {
+        let lower = FORMULA_REPAIR_INSTRUCTION.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(
+                !lower.contains(word),
+                "{word:?} found in FORMULA_REPAIR_INSTRUCTION"
+            );
+        }
+        // The same rule as the writer's: one formula per line starting with `=`, names in the
+        // conventions of the answer language.
+        assert!(FORMULA_REPAIR_INSTRUCTION.contains("on a line of its own starting with ="));
+        assert!(FORMULA_REPAIR_INSTRUCTION.contains("conventions of the answer language"));
+    }
+
+    #[test]
+    fn the_writer_is_told_to_describe_its_sources_in_its_own_words() {
+        // Measured on 23 October 2026: `qwen3:1.7b` copied the English lines of the cards into an answer
+        // in another language.
+        assert!(MIXED_INSTRUCTION.contains("Write in the language of the question"));
+        assert!(MIXED_INSTRUCTION.contains("do not copy their lines"));
+    }
+
+    fn note(
+        code: formula_check::FormulaIssueCode,
+        found: &str,
+        expected: Option<&str>,
+    ) -> FormulaNote {
+        FormulaNote {
+            formula: "=F(A1)".to_string(),
+            issue: FormulaIssue {
+                code,
+                found: found.to_string(),
+                expected: expected.map(str::to_string),
+                place: None,
+            },
+        }
+    }
+
+    #[test]
+    fn the_repair_turn_lists_the_problems_a_second_request_can_fix_and_no_other() {
+        use formula_check::FormulaIssueCode::*;
+        let turn = repair_turn(&[
+            note(FunctionInOtherLanguage, "SUMIF", Some("SOMME.SI")),
+            note(WrongSeparator, ",", Some(";")),
+            note(UnknownColumnLetter, "F", Some("E")),
+            note(ReachesOutside, "WEBSERVICE", None),
+        ]);
+        assert!(turn.starts_with(FORMULA_REPAIR_INSTRUCTION));
+        assert!(turn.contains("\nProblems:\n"));
+        assert!(turn.contains("=F(A1) - function_in_other_language: SUMIF (expected: SOMME.SI)"));
+        assert!(turn.contains("unknown_column_letter: F (expected: E)"));
+        assert!(!turn.contains("wrong_separator"));
+        assert!(!turn.contains("reaches_outside"));
+        let lower = turn.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice"] {
+            assert!(!lower.contains(word), "{word:?} found in the repair turn");
+        }
     }
 
     #[test]

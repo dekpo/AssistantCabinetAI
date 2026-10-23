@@ -264,7 +264,8 @@
       "not_asked_about": "This question had nothing for your documents.",
       "no_evidence": "Nothing in your documents answered this part.",
       "gateway_unavailable": "The AI could not be reached to write the document part.",
-      "not_linked": "This part could not be tied to your tables."
+      "not_linked": "This part could not be tied to your tables.",
+      "not_selected": "You selected no document: this answer rests on your spreadsheets only."
     },
     "mixedCorrection": "The table gives {correct}, not {claimed}.",
     "mixedRejectedCitation": "A citation ({citation}) did not match a supplied source and was flagged.",

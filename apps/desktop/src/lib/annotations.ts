@@ -120,9 +120,14 @@ function noteLines(
   ) {
     lines.push(t(`chat.mixedTableUnavailable.${entry.mixedTableUnavailable}`));
   }
+  // "Nothing for your documents" and "no document selected" tell what happened, they warn of nothing.
   if (
     entry.mixedDocumentsUnavailable !== undefined &&
-    !(cautionOnly && entry.mixedDocumentsUnavailable === "not_asked_about")
+    !(
+      cautionOnly &&
+      (entry.mixedDocumentsUnavailable === "not_asked_about" ||
+        entry.mixedDocumentsUnavailable === "not_selected")
+    )
   ) {
     lines.push(t(`chat.mixedDocumentsUnavailable.${entry.mixedDocumentsUnavailable}`));
   }

@@ -101,6 +101,10 @@ pub enum MixedPartUnavailable {
     /// whole table's figure. That figure answers a different question, and is withheld rather
     /// than shown as if it were the one asked for (HAP-1, Q24; the real linking is lot D).
     NotLinked,
+    /// No document is ticked: the answer is written from the workbooks alone, which the interface
+    /// says in its own words (TABULAR step 05, the tables-only advisory writer). Informative, not a
+    /// caution.
+    NotSelected,
 }
 
 /// One number the model wrote that matched neither the table's own value nor any excerpt's text

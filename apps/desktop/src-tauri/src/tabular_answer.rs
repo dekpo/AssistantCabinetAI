@@ -263,6 +263,12 @@ pub fn prepare_for_mixed(
     index: &IndexStore,
     document_names: &[String],
 ) -> Result<PendingAnswer, AppError> {
+    // An advisory question (explain, describe, compare, a formula) has no table part either: the cards of
+    // the workbooks it concerns carry the table side. Without this the yes/no answer to "formula" would
+    // survive here (`advisory_target`, TABULAR step 05).
+    if advisory_target(question, data, selection, locale, &[]).is_some() {
+        return Ok(PendingAnswer::Done(no_table_part()));
+    }
     let pending = answer_sync(question, data, selection, locale, index, false, Some(document_names))?;
     // With several workbooks selected, a question that is not about a table has no table part: the
     // documents answer it. The choice of a workbook is never the whole mixed answer for it (KBD-21).
@@ -283,7 +289,7 @@ pub fn prepare_for_mixed(
 }
 
 /// The result `prepare_for_mixed` leaves for a question with no table part: an unrecognised nudge.
-fn no_table_part() -> TabularAnswer {
+pub fn no_table_part() -> TabularAnswer {
     TabularAnswer::Nudge {
         file: String::new(),
         reason: None,
@@ -353,6 +359,11 @@ pub fn prepare_if_data_only(
     {
         return Ok(None);
     }
+    // An explanation, a description, a comparison or a formula is for the writer, not for the engine:
+    // the mixed tier answers it from the cards, without reading the documents (TABULAR step 05).
+    if advisory_target(question, data, selection, locale, &[]).is_some() {
+        return Ok(None);
+    }
     match prepare(question, data, selection, locale, index, false)? {
         // "Which workbook?" is asked only of a question that points at a table: an operation or a
         // column. A plain question about a person or a subject has no table intent at all, and
@@ -388,6 +399,111 @@ fn points_at_a_table(question: &str, data: &DataFolder, selection: &ScopeMode, l
                 TabularRoute::NotRecognised
             )
     })
+}
+
+/// The workbooks an advisory question concerns (TABULAR step 05): the ones the writer gets a card for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdvisoryTarget {
+    /// The workbooks the question names, then the ones it concerns without naming them, by index key.
+    pub files: Vec<String>,
+}
+
+/// Whether a question is an explanation, a description, a comparison or a formula request about the
+/// tables (`question::is_advisory`), and which workbooks it concerns. Cheap: the inventory only, no
+/// workbook is loaded and no model is asked, so it runs before `prepare` and before any wait.
+///
+/// The workbooks are those of the cards (`question_cards`): the ones named, then the ones implied
+/// (`implied_workbooks`, one ticked workbook included). The question is advisory only if the
+/// classifier's route on **each** of them is `NotRecognised` or `HasFormulas`: a question the engine
+/// can answer on one of its workbooks ("explain the total of column Price" when only that workbook has
+/// the column) keeps going to the engine. A workbook is classified on the same text the engine reads,
+/// its own file name taken out. `None` when no workbook concerns the question, when a name it writes is
+/// ambiguous or points at a workbook that is not ticked (the engine says so), and when the selection is
+/// no longer there (`prepare` raises `ScopeUnavailable`, this never turns that into an answer).
+/// `selection` is what the user ticked; `entity_candidates` is as for `implied_workbooks`.
+pub fn advisory_target(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+) -> Option<AdvisoryTarget> {
+    let chosen = chosen_workbooks(data, selection).ok()?;
+    let named = named_workbooks(question, data, selection);
+    if !named.ambiguous.is_empty() || !named.not_selected.is_empty() {
+        return None;
+    }
+    let implied = implied_workbooks(question, data, selection, locale, entity_candidates);
+    let files: Vec<String> = named
+        .exact
+        .iter()
+        .cloned()
+        .chain(implied.into_iter().map(|each| each.file))
+        .collect();
+    if files.is_empty() {
+        return None;
+    }
+    for file in &files {
+        let each = chosen
+            .iter()
+            .find(|each| each.record.relative_path == *file)?;
+        let inventory = data.usable_inventory(file)?;
+        let read = match named.exact.contains(file) {
+            true => without_the_workbook_reference(question, each.record),
+            false => question.to_string(),
+        };
+        let (route, _, _) =
+            question::classify_traced(&read, inventory, each.sheets.as_deref(), locale);
+        if !question::is_advisory(&read, locale, named.exact.len(), &route) {
+            return None;
+        }
+    }
+    Some(AdvisoryTarget { files })
+}
+
+/// Whether the mixed tier leaves the documents unread for this question: it is advisory
+/// (`advisory_target`) and designates no document. A question that names a document, uses a document
+/// word of the pack or of the folder questions (`refers_to_a_document`, `names_the_documents`), or
+/// writes a word of a selected document's path (four letters or more, not a number: "compare this
+/// with the contract") keeps its retrieval. `names_a_document` is the mixed tier's own resolution of a
+/// document name in the question. Measured on 22 October 2026: with an unrelated excerpt beside the
+/// cards, `ministral-3:3b` described the contract instead of the workbook.
+pub fn advisory_skips_documents(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+    names_a_document: bool,
+    document_paths: &[String],
+) -> bool {
+    if names_a_document
+        || crate::folder_questions::names_the_documents(question, locale)
+        || question::refers_to_a_document(question, locale)
+    {
+        return false;
+    }
+    let asked: std::collections::HashSet<String> = name_words(question).into_iter().collect();
+    let names_a_word_of_a_document = document_paths.iter().any(|path| {
+        name_words(path).iter().any(|word| {
+            word.chars().count() >= 4
+                && !word.chars().all(|ch| ch.is_ascii_digit())
+                && asked.contains(word)
+        })
+    });
+    !names_a_word_of_a_document
+        && advisory_target(question, data, selection, locale, entity_candidates).is_some()
+}
+
+/// The answer a model-free run gives: a finished answer as it is, and for a question left to the
+/// hidden interpreter the nudge it falls back to, taken **without** `resolve` (a second call to a
+/// server that just failed would only add a wait). The tables-only writer degrades to this when the
+/// model cannot be reached or writes nothing (TABULAR step 05).
+pub fn without_the_model(pending: PendingAnswer) -> TabularAnswer {
+    match pending {
+        PendingAnswer::Done(answer) => answer,
+        PendingAnswer::TryModel { fallback, .. } => fallback,
+    }
 }
 
 /// The model-assisted half, with `index` already out of scope: awaits the gateway only for

@@ -64,6 +64,8 @@
     "11": ["november"],
     "12": ["december"]
   },
+  "advisory_intents": ["explain", "describe", "summarise", "summarize", "overview", "link", "join", "compare", "vlookup", "xlookup", "sumif", "sumifs", "countif", "formula for", "formula to", "formula that", "using a formula", "with a formula", "write a formula", "help me write", "tell me about", "what can you tell me", "wrong with", "this spreadsheet contains", "this spreadsheet contain", "this file contains", "this file contain", "this workbook contains", "this workbook contain"],
+  "advisory_intents_with_a_name": ["what is in", "what is inside", "contents of", "content of"],
   "distributive": ["each", "every", "all"],
   "writing_intents": ["write", "draft", "compose", "generate", "prepare", "produce", "create"],
   "document_references": ["this letter", "the letter", "this quote", "the quote", "this document", "the document", "this pdf", "this email", "this e-mail", "this contract", "this report", "this note", "mentioned in", "named in"],

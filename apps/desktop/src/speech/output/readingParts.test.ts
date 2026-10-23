@@ -101,6 +101,14 @@ describe("what is read of an answer", () => {
     expect(notAsked).toStrictEqual(["Le total est **1 450 euros**."]);
   });
 
+  it("does not read the sentence about documents that were not selected: it warns of nothing", () => {
+    const read = texts(
+      readingParts(french, "fr-FR", entry({ mixedDocumentsUnavailable: "not_selected" })),
+    );
+
+    expect(read).toStrictEqual(["Le total est **1 450 euros**."]);
+  });
+
   it("reads a rejected citation and an answer that stopped or timed out", () => {
     const read = texts(
       readingParts(

@@ -1888,7 +1888,9 @@ async fn sourced_answer(
                 &question,
                 &scope,
                 skip_deterministic,
+                &history,
                 &targeting_request,
+                on_event,
                 measured,
             )
             .await;
@@ -2281,13 +2283,16 @@ async fn sourced_answer(
 /// (`skip_deterministic`) - the tier's own form of the regenerate control every other tier already
 /// offers, asking the model in addition to a classified answer rather than instead of one. The
 /// conversation history is not needed and not read.
+#[allow(clippy::too_many_arguments)]
 async fn tabular_tier(
     app: &AppHandle,
     state: &AppState,
     question: &str,
     scope: &AnalysisScope,
     skip_deterministic: bool,
+    history: &[ChatTurn],
     targeting_request: &TargetingRequest,
+    on_event: &Channel<ChatStreamEvent>,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<AskAnswer, AppError> {
     let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
@@ -2335,6 +2340,36 @@ async fn tabular_tier(
         }
         None => scope.data_mode.clone(),
     };
+    // An explanation, a description, a comparison or a formula request is written by the model from
+    // the workbook cards, as in the mixed tier; the hidden interpreter, which can only propose a query
+    // plan, is not asked (TABULAR step 05). The decision is cheap and made before `prepare` loads
+    // anything. "Demander a l'IA" on such a question asks the writer again.
+    if tabular_answer::advisory_target(
+        question,
+        &folder,
+        &scope.data_mode,
+        locale,
+        &implied_by_entity_candidates(&targeting_plan),
+    )
+    .is_some()
+    {
+        measured.routing_ms += stage.lap_ms();
+        let locale = locale.to_string();
+        return advisory_tier(
+            state,
+            question,
+            scope,
+            history,
+            index,
+            folder,
+            locale,
+            targeting_plan,
+            tabular_answer::PendingAnswer::Done(tabular_answer::no_table_part()),
+            on_event,
+            measured,
+        )
+        .await;
+    }
     let pending = tabular_answer::prepare(
         question,
         &folder,
@@ -2366,6 +2401,176 @@ async fn tabular_tier(
         workbook_use,
         ..AskAnswer::default()
     })
+}
+
+/// The writer of the tables-only tier (TABULAR step 05): an advisory question (`tabular_answer::
+/// advisory_target`) is answered by the model from the workbook cards, with the controlled sample of
+/// rows and the engine's column profile when the setting allows, and no document block. It is the
+/// mixed tier's writer (`mixed_answer::answer`) with an empty document list, so the interface, the
+/// number checks and the usage trace are the ones of the mixed tier; the interface says that no
+/// document was selected (`MixedPartUnavailable::NotSelected`).
+///
+/// `pending` is the table side of the turn: `PendingAnswer::Done(no_table_part())` for an advisory
+/// question, and a calculation record for the analysis of step 06, which calls this same function.
+///
+/// Degrades to today's behaviour: when the model cannot be reached or writes nothing, the answer is
+/// the nudge the engine would have given, taken from `prepare` **without** `resolve` (a second call to
+/// an unreachable server would only add a wait). `index` is owned, never borrowed across an `.await`
+/// (`IndexStore` is not `Sync`, the reason `tabular_answer`'s module doc gives).
+#[allow(clippy::too_many_arguments)]
+async fn advisory_tier(
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+    history: &[ChatTurn],
+    index: IndexStore,
+    folder: DataFolder,
+    locale: String,
+    targeting_plan: TargetingPlan,
+    pending: tabular_answer::PendingAnswer,
+    on_event: &Channel<ChatStreamEvent>,
+    measured: &mut RetrievalDiagnostics,
+) -> Result<AskAnswer, AppError> {
+    let (server_url, model_alias, idle_timeout, rows_mode) = state.read(|settings| {
+        (
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.answer_idle_timeout(),
+            settings.tabular_rows_mode,
+        )
+    })?;
+    let budget = state
+        .model_budgets
+        .lock()
+        .map_err(|_| AppError::Internal)?
+        .for_alias(&model_alias);
+    // The cards and the sample, from what the user ticked and not from the knowledge base's narrowed
+    // list: one ticked workbook is implied here, which is right (the engine has no door of its own for
+    // an advisory question). Read synchronously, before the first `.await`.
+    let cards = tabular_answer::question_cards(
+        question,
+        &folder,
+        &scope.data_mode,
+        &locale,
+        &implied_by_entity_candidates(&targeting_plan),
+        card_budget_chars(&budget),
+    );
+    let card_block = &cards.block;
+    let implied = &cards.implied;
+    let sample_block = match rows_mode {
+        settings::TabularRowsMode::Off => crate::tabular::sample::SampleBlock::default(),
+        settings::TabularRowsMode::Sample => tabular_answer::question_samples(
+            card_block,
+            &folder,
+            &scope.data_mode,
+            &locale,
+            &index,
+            &budget,
+            &crate::tabular::sample::fresh_token(),
+        ),
+    };
+    measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
+    let context = mixed_answer::MixedContext {
+        locale: &locale,
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+        history,
+        budget,
+        cards_text: &card_block.text,
+        sample_text: &sample_block.text,
+    };
+    let targeting_report = targeting_plan.report(false);
+    if let Some(report) = &targeting_report {
+        let _ = on_event.send(ChatStreamEvent::Targeting {
+            report: Box::new(report.clone()),
+        });
+    }
+    let generation_started = std::time::Instant::now();
+    let first_token = std::sync::OnceLock::<u64>::new();
+    let written = mixed_answer::answer(
+        question,
+        pending,
+        Vec::new(),
+        Some(mixed_answer::MixedPartUnavailable::NotSelected),
+        &context,
+        |sources| {
+            let _ = on_event.send(ChatStreamEvent::Sources {
+                sources: sources.to_vec(),
+                coverage: None,
+            });
+        },
+        |delta| {
+            first_token.get_or_init(|| elapsed_ms(generation_started.elapsed()));
+            let _ = on_event.send(ChatStreamEvent::Delta {
+                text: delta.to_string(),
+            });
+        },
+    )
+    .await;
+    measured.generation_total_ms = elapsed_ms(generation_started.elapsed());
+    measured.generation_first_token_ms = first_token.get().copied();
+    let facts = tabular_answer::selection_facts(question, &folder, &scope.data_mode);
+
+    match written {
+        // The writer answered, or a computed figure stands without it (step 06's record).
+        Ok((result, generated))
+            if !(generated && result.answer.is_empty() && result.table.is_none()) =>
+        {
+            if generated {
+                let _ = on_event.send(ChatStreamEvent::Completed {
+                    text: result.answer.clone(),
+                });
+            }
+            targeting::note_workbooks(&index, &targeting_plan, None, measured);
+            let workbook_use = workbook_use::trace(
+                &facts,
+                workbook_use::Answered::Mixed {
+                    cards: &card_block.cards,
+                    implied,
+                    table: &result.table,
+                    model_wrote: generated && !result.answer.is_empty(),
+                    samples: &sample_block.uses,
+                },
+            );
+            Ok(AskAnswer {
+                mixed_answer: Some(result),
+                targeting: targeting_report,
+                workbook_use,
+                ..AskAnswer::default()
+            })
+        }
+        // Stopped by the user: not an answer to replace.
+        Err(AppError::ChatCancelled) => Err(AppError::ChatCancelled),
+        // The model could not be reached, or wrote nothing: the nudge the engine would have given.
+        Ok(_) | Err(_) => {
+            let effective_selection = match targeting_plan.applied_workbooks() {
+                Some(candidates) => {
+                    targeting::narrowed_data_selection(&folder, &scope.data_mode, candidates)
+                }
+                None => scope.data_mode.clone(),
+            };
+            let nudge = tabular_answer::without_the_model(tabular_answer::prepare(
+                question,
+                &folder,
+                &effective_selection,
+                &locale,
+                &index,
+                false,
+            )?);
+            measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
+            let answered = targeting::answered_file(&nudge);
+            targeting::note_workbooks(&index, &targeting_plan, answered.as_deref(), measured);
+            let workbook_use = workbook_use::trace(&facts, workbook_use::Answered::Engine(&nudge));
+            Ok(AskAnswer {
+                tabular_answer: Some(nudge),
+                targeting: targeting_plan.report(false),
+                workbook_use,
+                ..AskAnswer::default()
+            })
+        }
+    }
 }
 
 /// A "which workbook?" answer gets the knowledge base's order and notes; any other answer is left
@@ -2927,11 +3132,29 @@ async fn mixed_tier(
     // Retrieval, before anything else reads its result (mechanism 2): an embedding call, then a
     // search held to the document selection - `index` borrowed only in the synchronous stretch
     // right after the embed `.await`, exactly as tier 1's own retrieval already is.
+    // An explanation, a description, a comparison or a formula request about a workbook, that names no
+    // document, is written from the cards alone: the excerpts of an unrelated document made a small
+    // model answer from the contract instead of the table (measured 22 October 2026, TABULAR step 05).
+    // No embedding, no search, and the excerpt block reads `none`.
+    let advisory = tabular_answer::advisory_skips_documents(
+        question,
+        &folder,
+        &scope.data_mode,
+        &locale,
+        &implied_by_entity_candidates(&targeting_plan),
+        names_a_document,
+        &document_paths,
+    );
+    let documents_are_searchable =
+        !advisory && matches!(index.chunk_count(), Ok(count) if count > 0);
     let (document_sources, documents_unavailable) =
-        if document_paths.is_empty() || !matches!(index.chunk_count(), Ok(count) if count > 0) {
+        if document_paths.is_empty() || !documents_are_searchable {
             (
                 Vec::new(),
-                Some(mixed_answer::MixedPartUnavailable::NoEvidence),
+                Some(match advisory {
+                    true => mixed_answer::MixedPartUnavailable::NotAskedAbout,
+                    false => mixed_answer::MixedPartUnavailable::NoEvidence,
+                }),
             )
         } else {
             let search_text = conversation::retrieval_query(question, history);

@@ -128,3 +128,30 @@ fn both_packs_carry_the_table_vocabulary() {
         );
     }
 }
+
+#[test]
+fn both_packs_carry_the_advisory_lists() {
+    for (tag, body) in PACKS {
+        let pack = parse(body);
+        for list in ["advisory_intents", "advisory_intents_with_a_name"] {
+            let words = pack[list]
+                .as_array()
+                .unwrap_or_else(|| panic!("{tag}: no {list}"));
+            assert!(!words.is_empty(), "{tag}: {list} is empty");
+        }
+        // The general phrases only count beside a name: they are not in the unconditional list.
+        let plain: Vec<&str> = pack["advisory_intents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|word| word.as_str())
+            .collect();
+        for general in pack["advisory_intents_with_a_name"].as_array().unwrap() {
+            let general = general.as_str().unwrap();
+            assert!(
+                !plain.contains(&general),
+                "{tag}: {general:?} is in both advisory lists"
+            );
+        }
+    }
+}

@@ -264,7 +264,8 @@
       "not_asked_about": "Cette question ne portait sur aucun de vos documents.",
       "no_evidence": "Rien dans vos documents ne répond à cette partie.",
       "gateway_unavailable": "L'IA n'a pas pu être contactée pour rédiger la partie document.",
-      "not_linked": "Cette partie n'a pas pu être rattachée à vos tables."
+      "not_linked": "Cette partie n'a pas pu être rattachée à vos tables.",
+      "not_selected": "Vous n'avez sélectionné aucun document : cette réponse s'appuie sur vos tableaux seulement."
     },
     "mixedCorrection": "La table indique {correct}, et non {claimed}.",
     "mixedRejectedCitation": "Une citation ({citation}) ne correspond à aucune source fournie et a été signalée.",

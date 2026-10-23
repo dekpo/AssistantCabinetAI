@@ -1007,7 +1007,8 @@ export type MixedPartUnavailable =
   | "not_asked_about"
   | "no_evidence"
   | "gateway_unavailable"
-  | "not_linked";
+  | "not_linked"
+  | "not_selected";
 
 /** One number the model wrote that matched neither the table's own value nor any excerpt's text
  * verbatim - appended, never silently rewritten into the answer. */

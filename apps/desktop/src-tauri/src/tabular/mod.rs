@@ -21,6 +21,7 @@ pub mod formula_check;
 pub mod inventory;
 pub mod question;
 pub mod query_plan;
+pub mod rows;
 pub mod sample;
 pub mod structural;
 pub mod xlsx_adapter;

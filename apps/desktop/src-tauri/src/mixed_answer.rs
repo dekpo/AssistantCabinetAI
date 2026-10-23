@@ -40,6 +40,7 @@ use crate::tabular::formula_check::{
 };
 use crate::tabular::inventory::{ColumnType, TabularInventory};
 use crate::tabular::question::{self, TabularRoute};
+use crate::tabular::rows::{RowsBlock, RowsEvidence, ROWS_INSTRUCTION};
 use crate::tabular::sample::SAMPLE_INSTRUCTION;
 use crate::tabular::Workbook;
 use crate::tabular_answer::{self, PendingAnswer, TabularAnswer};
@@ -195,6 +196,11 @@ pub struct MixedAnswer {
     /// request, each with the formula as first written): the interface says it beside the corrected
     /// answer, so the correction can be judged. Empty when nothing was corrected.
     pub formula_repaired_from: Vec<FormulaNote>,
+    /// The rows of the user's tables the program chose and sent to the model with the question (TABULAR
+    /// step 10, owner decision of 20 October 2026): exactly what was written into the request, so the
+    /// interface can show it. Empty when no row was sent. Never part of a copied answer unless the
+    /// user turned `copySources` on.
+    pub rows_sent: Vec<RowsEvidence>,
 }
 
 /// Everything `answer` needs, owned or borrowed, with no `AppHandle` and - on purpose - no
@@ -221,6 +227,10 @@ pub struct MixedContext<'a> {
     /// empty when the setting is `off` or there is nothing to send. Its figures are known facts of
     /// the turn for the number checks, as the cards are.
     pub sample_text: &'a str,
+    /// The rows the engine chose for the writer (`tabular::rows`), when the setting allows it and the
+    /// question asks for writing or analysis. Its figures are known facts of the turn for the number
+    /// checks, as the sample's are.
+    pub rows: Option<&'a RowsBlock>,
     /// The folder facts of the one document the question names (`work_folder_context`), empty when no
     /// document is targeted. Known facts of the turn for the number checks, as the cards are.
     pub folder_facts: &'a str,
@@ -313,7 +323,18 @@ pub async fn answer(
         return Err(AppError::InsufficientEvidence);
     }
 
-    let table_text = table_evidence_text(&table, context.calculation.sheet_sizes);
+    let rows_listed = context.rows.filter(|block| !block.is_empty()).map(|block| {
+        (
+            block.items.iter().map(|item| item.shown).sum::<usize>(),
+            block
+                .items
+                .iter()
+                .map(|item| item.total_matching)
+                .sum::<usize>(),
+        )
+    });
+    let table_text =
+        table_evidence_text_listing(&table, context.calculation.sheet_sizes, rows_listed);
     let expected = match &table {
         Some(TabularAnswer::Value { value, .. }) => scalar_of(value),
         _ => None,
@@ -346,10 +367,15 @@ pub async fn answer(
         ));
     }
 
+    let rows_text = context
+        .rows
+        .map(|block| block.text.as_str())
+        .filter(|text| !text.is_empty());
     let instruction = build_turn_for(
         &document_sources,
         non_empty(context.cards_text),
         non_empty(context.sample_text),
+        rows_text,
         table_text.as_deref(),
         non_empty(context.folder_facts),
         context.calculation.analysis,
@@ -453,6 +479,7 @@ pub async fn answer(
         &[
             context.cards_text,
             context.sample_text,
+            rows_text.unwrap_or_default(),
             context.folder_facts,
             table_text.as_deref().unwrap_or_default(),
         ],
@@ -465,6 +492,7 @@ pub async fn answer(
         known.extend(document_sources.iter().map(|item| item.relative_path.as_str()));
         known.push(context.cards_text);
         known.push(context.sample_text);
+        known.push(rows_text.unwrap_or_default());
         known.push(context.folder_facts);
         known.push(question);
         number_check::unsupported_numbers(&answer_text, &known, 2)
@@ -489,6 +517,10 @@ pub async fn answer(
             formulas_verified: formula_report.verified,
             formula_repaired,
             formula_repaired_from,
+            rows_sent: context
+                .rows
+                .map(|block| block.items.clone())
+                .unwrap_or_default(),
         },
         true,
     ))
@@ -628,14 +660,25 @@ async fn resolve_table(
 /// anything that is not a computed `Value` - a disambiguation never reaches this function at all (the
 /// caller returns before generation for those), and a question about no calculation has no table
 /// evidence to send. This is the one place that decides what the block says.
+#[cfg(test)]
 pub(crate) fn table_evidence_text(
     table: &Option<TabularAnswer>,
     sizes: &[tabular_answer::SheetSize],
 ) -> Option<String> {
+    table_evidence_text_listing(table, sizes, None)
+}
+
+/// `table_evidence_text`, saying how many rows were listed beside the figure for the writer when there
+/// were some (TABULAR step 10): `(sent, matching)`.
+pub(crate) fn table_evidence_text_listing(
+    table: &Option<TabularAnswer>,
+    sizes: &[tabular_answer::SheetSize],
+    rows_listed: Option<(usize, usize)>,
+) -> Option<String> {
     let Some(answer @ TabularAnswer::Value { file, .. }) = table else {
         return None;
     };
-    tabular_answer::calculation_record(None, answer, sizes).map(|record| {
+    tabular_answer::calculation_record_listing(None, answer, sizes, rows_listed).map(|record| {
         format!(
             "Table results (workbook {}):
 {record}",
@@ -683,7 +726,15 @@ pub(crate) fn build_turn(
     sample: Option<&str>,
     table_block: Option<&str>,
 ) -> String {
-    build_turn_for(document_sources, cards, sample, table_block, None, false)
+    build_turn_for(
+        document_sources,
+        cards,
+        sample,
+        None,
+        table_block,
+        None,
+        false,
+    )
 }
 
 /// `build_turn`, with `ANALYSIS_ADDENDUM` ended onto the instruction when the user asked for the
@@ -692,6 +743,7 @@ pub(crate) fn build_turn_for(
     document_sources: &[Evidence],
     cards: Option<&str>,
     sample: Option<&str>,
+    rows: Option<&str>,
     table_block: Option<&str>,
     folder_facts: Option<&str>,
     analysis: bool,
@@ -726,20 +778,46 @@ pub(crate) fn build_turn_for(
         Some(text) => format!("\n\n{text}"),
         None => String::new(),
     };
-    match sample {
-        Some(sample) => {
-            // With rows in the turn the writer does see data, so the formula sentence must not say
-            // it does not: it cannot run the formula, which is what it is asked to admit.
-            let instruction =
-                MIXED_INSTRUCTION.replace(FORMULA_NO_DATA_PHRASE, FORMULA_WITH_SAMPLE_PHRASE);
-            format!(
-                "{instruction}{facts_sentence} {SAMPLE_INSTRUCTION}{addendum}\n\n{documents_block}{facts_block}\n\n{cards_block}\n\n{sample}\n\n{table_block}"
-            )
-        }
-        None => format!(
-            "{MIXED_INSTRUCTION}{facts_sentence}{addendum}\n\n{documents_block}{facts_block}\n\n{cards_block}\n\n{table_block}"
+    // With rows in the turn the writer does see data, so the formula sentence must not say it does not:
+    // it cannot run the formula, which is what it is asked to admit. A sample or chosen rows each add
+    // their own sentence; absent, the turn is the turn without them, byte for byte.
+    let instruction = match sample.is_some() || rows.is_some() {
+        true => MIXED_INSTRUCTION.replace(FORMULA_NO_DATA_PHRASE, FORMULA_WITH_SAMPLE_PHRASE),
+        false => MIXED_INSTRUCTION.to_string(),
+    };
+    let sample_sentence = match sample {
+        Some(_) => format!(" {SAMPLE_INSTRUCTION}"),
+        None => String::new(),
+    };
+    let rows_sentence = match rows {
+        Some(_) => format!(" {ROWS_INSTRUCTION}"),
+        None => String::new(),
+    };
+    let sample_block = match sample {
+        Some(text) => format!(
+            "
+
+{text}"
         ),
-    }
+        None => String::new(),
+    };
+    let rows_block = match rows {
+        Some(text) => format!(
+            "
+
+{text}"
+        ),
+        None => String::new(),
+    };
+    format!(
+        "{instruction}{facts_sentence}{sample_sentence}{rows_sentence}{addendum}
+
+{documents_block}{facts_block}
+
+{cards_block}{sample_block}{rows_block}
+
+{table_block}"
+    )
 }
 
 /// What a question says about a document, among the documents of the selection.
@@ -797,7 +875,7 @@ pub fn folder_facts_block(
 // --- Entity linking: a retrieved excerpt naming a real table value ----------------------------
 
 /// What scanning the retrieved excerpts for a real column value came to.
-enum EntityLink {
+pub(crate) enum EntityLink {
     /// No excerpt word matched any reachable column's real data.
     None,
     /// Exactly one reachable column's real data matched - the filter to run the operation under.
@@ -820,7 +898,7 @@ enum EntityLink {
 /// 2. **A word of a value**, the older rule mirroring `tabular_answer::detect_filters`: the first
 ///    word found, in excerpt order, that is a word of a real value, folded so an unaccented
 ///    excerpt word still finds an accented real value. Used only when no whole value was found.
-fn entity_link(
+pub(crate) fn entity_link(
     evidence: &[Evidence],
     sheet: &crate::tabular::inventory::SheetInventory,
     sheet_data: &crate::tabular::SheetData,
@@ -1208,11 +1286,20 @@ mod tests {
             &[],
             Some(CARDS),
             None,
+            None,
             Some(FIGURE_BLOCK),
             Some(facts),
             false,
         );
-        let without = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), None, false);
+        let without = build_turn_for(
+            &[],
+            Some(CARDS),
+            None,
+            None,
+            Some(FIGURE_BLOCK),
+            None,
+            false,
+        );
 
         // One sentence joins the instruction, the block sits between the excerpts and the cards.
         assert_eq!(
@@ -1231,14 +1318,22 @@ mod tests {
 
     #[test]
     fn the_analysis_turn_adds_the_addendum_to_the_instruction_and_nothing_else() {
-        let ordinary = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), None, false);
+        let ordinary = build_turn_for(
+            &[],
+            Some(CARDS),
+            None,
+            None,
+            Some(FIGURE_BLOCK),
+            None,
+            false,
+        );
         assert_eq!(
             ordinary,
             build_turn(&[], Some(CARDS), None, Some(FIGURE_BLOCK))
         );
         assert!(!ordinary.contains("asked for an analysis"));
 
-        let analysis = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), None, true);
+        let analysis = build_turn_for(&[], Some(CARDS), None, None, Some(FIGURE_BLOCK), None, true);
         assert_eq!(
             analysis,
             format!(
@@ -1296,9 +1391,11 @@ mod tests {
     // Step 10 adds its rows share here.
     #[test]
     fn the_shares_fit_the_default_window() {
+        use crate::tabular::rows::{ROWS_INSTRUCTION, TABLE_ROWS_SHARE_CHARS};
         use crate::tabular::sample::{PROFILE_SHARE_CHARS, SAMPLE_INSTRUCTION, SAMPLE_SHARE_CHARS};
         let question = "q".repeat(400);
         let table_block = format!("Table results (workbook \"t.xlsx\"):\n{}", "t".repeat(300));
+        let budget = ContextBudget::DEFAULT;
         let fixed = MIXED_INSTRUCTION.chars().count()
             + SAMPLE_INSTRUCTION.chars().count()
             + MIXED_DOCUMENT_SHARE_CHARS
@@ -1307,7 +1404,6 @@ mod tests {
             + PROFILE_SHARE_CHARS
             + table_block.chars().count()
             + question.chars().count();
-        let budget = ContextBudget::DEFAULT;
         assert!(
             fixed < budget.prompt_chars(),
             "{fixed} characters of fixed shares"
@@ -1317,6 +1413,104 @@ mod tests {
             "{} characters left for the history",
             budget.history_chars(fixed)
         );
+
+        // The rows the engine chooses for a sheet replace the sample rows of that sheet (its profile
+        // stays), so a turn that carries them is counted with the rows share instead of the sample's,
+        // and with the sentence that names them. The plan proposed 5 000 characters; that does not fit
+        // beside the documents, the cards and a history of 3 000 on this window, so the base is the
+        // largest value this test allows (DECISIONS, "Taken while building TABULAR step 10").
+        let with_rows = MIXED_INSTRUCTION.chars().count()
+            + SAMPLE_INSTRUCTION.chars().count()
+            + ROWS_INSTRUCTION.chars().count()
+            + MIXED_DOCUMENT_SHARE_CHARS
+            + crate::tabular::card::CARD_SHARE_CHARS
+            + TABLE_ROWS_SHARE_CHARS
+            + PROFILE_SHARE_CHARS
+            + table_block.chars().count()
+            + question.chars().count();
+        assert!(
+            with_rows < budget.prompt_chars(),
+            "{with_rows} characters with rows"
+        );
+        assert!(
+            budget.history_chars(with_rows) >= 3_000,
+            "{} characters left for the history with rows",
+            budget.history_chars(with_rows)
+        );
+
+        // On a larger window the documents and the rows grow in proportion; on the default one the
+        // rows share is the constant.
+        let roomy = ContextBudget {
+            window_tokens: 16_384,
+            output_tokens: 2_048,
+            gateway_cap_chars: 80_000,
+        };
+        assert!(
+            roomy.scaled_over_baseline(MIXED_DOCUMENT_SHARE_CHARS) > MIXED_DOCUMENT_SHARE_CHARS
+        );
+        assert!(
+            crate::tabular::rows::rows_budget_chars(&roomy)
+                > crate::tabular::rows::rows_budget_chars(&budget)
+        );
+        assert_eq!(
+            crate::tabular::rows::rows_budget_chars(&budget),
+            TABLE_ROWS_SHARE_CHARS
+        );
+    }
+
+    #[test]
+    fn the_rows_sit_after_the_sample_and_before_the_table_results_and_absent_add_nothing() {
+        use crate::tabular::rows::ROWS_INSTRUCTION;
+        let sample =
+            "Table sample and profile of the user's tables:\n<<DATA-abc123>>\nrows\n<<END-abc123>>";
+        let rows = "Table rows chosen by the program from the user's tables:\n<<DATA-abc123>>\nTable rows (2 of 2 matching rows) of Workbook \"t.csv\":\n<<END-abc123>>";
+        let with = build_turn_for(
+            &[],
+            Some(CARDS),
+            Some(sample),
+            Some(rows),
+            Some(FIGURE_BLOCK),
+            None,
+            false,
+        );
+        let at = |needle: &str| {
+            with.find(needle)
+                .unwrap_or_else(|| panic!("{needle:?} missing"))
+        };
+        assert!(at("Workbook cards (structure only") < at("Table sample and profile"));
+        assert!(at("Table sample and profile") < at("Table rows chosen by the program"));
+        assert!(at("Table rows chosen by the program") < at("Table results (workbook"));
+        // The instruction names the block, once, and the formula sentence no longer says no data is seen.
+        assert_eq!(with.matches(ROWS_INSTRUCTION).count(), 1);
+        assert!(!with.contains(FORMULA_NO_DATA_PHRASE));
+
+        // Rows without a sample (the setting cannot give that today, the builder can).
+        let rows_only = build_turn_for(
+            &[],
+            Some(CARDS),
+            None,
+            Some(rows),
+            Some(FIGURE_BLOCK),
+            None,
+            false,
+        );
+        assert!(rows_only.contains(ROWS_INSTRUCTION) && !rows_only.contains("Table sample"));
+
+        // Absent, the turn is the turn of step 03b, byte for byte.
+        let without = build_turn_for(
+            &[],
+            Some(CARDS),
+            Some(sample),
+            None,
+            Some(FIGURE_BLOCK),
+            None,
+            false,
+        );
+        assert_eq!(
+            without,
+            build_turn(&[], Some(CARDS), Some(sample), Some(FIGURE_BLOCK))
+        );
+        assert!(!without.contains("Table rows") && !without.contains(ROWS_INSTRUCTION));
     }
 
     #[test]

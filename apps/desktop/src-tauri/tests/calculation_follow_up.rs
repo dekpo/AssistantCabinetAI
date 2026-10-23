@@ -502,6 +502,7 @@ async fn analyse(
         },
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
     mixed_answer::answer(
         QUESTION,
@@ -652,6 +653,7 @@ async fn an_ordinary_figure_without_documents_still_answers_with_no_model_call()
         calculation: Default::default(),
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
 
     let (result, generated) = mixed_answer::answer(

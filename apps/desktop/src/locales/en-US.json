@@ -251,6 +251,16 @@
     "sourceItemCardRows": "{path} (structure and {rows} of {total}, identifiers masked)",
     "rowOne": "row",
     "rowMany": "rows",
+    "rowsSent": "{path}: {rows} of {total} sent to the AI.",
+    "rowsSentSample": "{path}: {rows} of {total} sent to the AI (a sample of the rows found, with the figures of all the rows found).",
+    "rowsSentToggle": "Rows sent to the AI",
+    "rowsSentSummary": "Rows sent to the AI: {heading}",
+    "rowsSentSheet": "{path}, sheet “{sheet}”",
+    "rowsSentFilters": "Filters: {filters}",
+    "rowsSentRow": "Row",
+    "rowsSentHiddenColumns": "Columns not sent: {count}",
+    "rowsSentTotals": "Totals computed by the program over these rows: {totals}",
+    "rowsSentTotal": "{column}: {sum}",
     "deterministicData": "Answer computed from your tables folder, without the AI.",
     "documentsNotNeeded": "Answered from your tables; the selected documents were not needed.",
     "unverifiedNumber": "The figure “{number}” appears in none of the excerpts used, nor in your question: check it in your documents.",
@@ -611,10 +621,11 @@
       "auto": "Automatic"
     },
     "tabularRowsModeLabel": "Data sent to the AI from your spreadsheets",
-    "tabularRowsModeDescription": "When a question concerns a spreadsheet, the AI always receives its structure (column names, types, number of rows); “Structure and sample of rows” also sends a few of its rows and summary figures computed by the program, to a model that runs on your own network and never online, with identifiers (insurance numbers, telephone numbers, e-mail addresses, IBAN) masked. Applies from the next question.",
+    "tabularRowsModeDescription": "When a question concerns a spreadsheet, the AI always receives its structure (column names, types, number of rows); “Structure and sample of rows” also sends a few of its rows and summary figures computed by the program; “Automatic” also sends, for a request to write or to analyse, the rows the program chooses with the filters of your question (a supplier, a month, an amount), always listed under the answer. Everything goes to a model that runs on your own network and never online, with identifiers (insurance numbers, telephone numbers, e-mail addresses, IBAN) masked. Applies from the next question.",
     "tabularRowsMode": {
       "off": "Structure only",
-      "sample": "Structure and sample of rows"
+      "sample": "Structure and sample of rows",
+      "auto": "Structure, sample and rows chosen by the program"
     },
     "healthModuleLabel": "Health module",
     "healthModuleDescription": "Tick the country or countries of your patients: a cross-border worker can have both a French social security number and an AVS number. A module helps read the numbers and vocabulary of its country, and never removes or changes the type of a name. Applied at the next analysis you start.",

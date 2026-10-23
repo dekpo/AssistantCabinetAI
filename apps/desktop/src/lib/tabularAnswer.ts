@@ -210,7 +210,7 @@ function describeFilter(t: Translator, filter: AppliedFilter, locale: string): s
   }
 }
 
-function describeFilters(t: Translator, filters: AppliedFilter[], locale: string): string {
+export function describeFilters(t: Translator, filters: AppliedFilter[], locale: string): string {
   return filters.map((filter) => describeFilter(t, filter, locale)).join(t("tabularAnswer.filterAnd"));
 }
 

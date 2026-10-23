@@ -31,7 +31,7 @@ import { SpeechSettingsBlock } from "./SpeechSettings";
 
 const THEME_CHOICES: ThemeChoice[] = ["light", "dark", "system"];
 const KNOWLEDGE_MODES: KnowledgeMode[] = ["off", "suggest", "auto"];
-const TABULAR_ROWS_MODES: TabularRowsMode[] = ["off", "sample"];
+const TABULAR_ROWS_MODES: TabularRowsMode[] = ["off", "sample", "auto"];
 const DENSITY_CHOICES: ExplorerDensity[] = ["compact", "comfortable"];
 
 /* The same bounds Rust clamps to, so the control offers only what will actually be stored. They

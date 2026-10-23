@@ -127,6 +127,8 @@ describe("the settings panel, drawn", () => {
     expect(sent - targeting).toBeLessThan(2_500);
     expect(html).toContain('<option value="off">Structure seulement</option>');
     expect(html).toContain('<option value="sample" selected="">Structure et échantillon de lignes</option>');
+    // The third value (TABULAR step 10): the rows the program chooses for a request to write or to analyse.
+    expect(html).toContain('<option value="auto">Structure, échantillon et lignes choisies par le programme</option>');
   });
 
   it("puts the two folders among the main settings, whole row each, not in the advanced ones", () => {

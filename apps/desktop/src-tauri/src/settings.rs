@@ -77,16 +77,20 @@ pub enum Theme {
 }
 
 /// What the model is told about the spreadsheets a question concerns (TABULAR step 03b, owner
-/// decision 36 of 22 October 2026). `Off` is the structure alone (the workbook card). `Sample` adds
-/// the controlled sample of rows and the column profile, identifiers masked
-/// (`tabular::sample`). The default is `Sample` while only fictional data is used; it is to be
-/// reviewed before any real document. Step 10 adds `auto` (rows chosen by filters).
+/// decision 36 of 22 October 2026; step 10 adds `Auto`). `Off` is the structure alone (the workbook
+/// card). `Sample` adds the controlled sample of rows and the column profile, identifiers masked
+/// (`tabular::sample`). `Auto` is `Sample` plus, for a writing or analytical request about a workbook,
+/// the rows the engine chose with the filters of the question (`tabular::rows`, owner decision of
+/// 20 October 2026, "level 3"): they replace the sample rows of their sheet and are shown to the user.
+/// The default is `Auto` while only fictional data is used; it is to be reviewed before any real
+/// document (`docs/DECISIONS.md`, "Taken while building TABULAR step 10").
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TabularRowsMode {
     Off,
-    #[default]
     Sample,
+    #[default]
+    Auto,
 }
 
 /// The spreadsheet application the user works in: it chooses the dictionary of function names, the
@@ -376,8 +380,9 @@ pub struct Settings {
     /// gets its "Advanced" group.
     pub knowledge_mode: KnowledgeMode,
     /// What the AI receives from the spreadsheets a question concerns: the structure only, or the
-    /// structure with a sample of rows and the column figures, identifiers masked
-    /// (`TabularRowsMode`). Chosen in the settings dialog.
+    /// structure with a sample of rows and the column figures, identifiers masked, or both and the
+    /// rows the engine chooses for a request to write or to analyse (`TabularRowsMode`). Chosen in
+    /// the settings dialog.
     pub tabular_rows_mode: TabularRowsMode,
     /// The application whose formulas the program checks the model's formulas against
     /// (`SpreadsheetApplication`). `excel` by default; nothing to choose between yet.
@@ -1211,18 +1216,16 @@ mod tests {
     }
 
     #[test]
-    fn the_sample_of_rows_is_on_by_default_and_for_a_file_that_predates_it() {
-        assert_eq!(
-            Settings::default().tabular_rows_mode,
-            TabularRowsMode::Sample
-        );
+    fn the_rows_mode_is_auto_by_default_and_for_a_file_that_predates_it() {
+        assert_eq!(Settings::default().tabular_rows_mode, TabularRowsMode::Auto);
         let old: Settings =
             serde_json::from_str(r#"{"serverUrl":"http://127.0.0.1:8080"}"#).expect("loads");
-        assert_eq!(old.tabular_rows_mode, TabularRowsMode::Sample);
+        assert_eq!(old.tabular_rows_mode, TabularRowsMode::Auto);
 
         for (text, mode) in [
             ("off", TabularRowsMode::Off),
             ("sample", TabularRowsMode::Sample),
+            ("auto", TabularRowsMode::Auto),
         ] {
             let body = format!(r#"{{"tabularRowsMode":"{text}"}}"#);
             let settings: Settings = serde_json::from_str(&body).expect("loads");

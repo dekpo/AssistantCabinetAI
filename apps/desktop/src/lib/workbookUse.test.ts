@@ -15,6 +15,7 @@ function use(extra: Partial<WorkbookUse>): WorkbookUse {
     reason: null,
     rowsSent: null,
     rowsTotal: null,
+    rowsTruncated: false,
     truncated: false,
     count: null,
     candidates: [],

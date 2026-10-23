@@ -259,6 +259,7 @@ describe("the trace line of an explanation", () => {
         reason: null,
         rowsSent: null,
         rowsTotal: null,
+        rowsTruncated: false,
         truncated: false,
         count: null,
         candidates: [],

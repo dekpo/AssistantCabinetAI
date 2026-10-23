@@ -476,6 +476,60 @@ fn classify_with(
     (route, residual, column_name)
 }
 
+/// The words of a writing or analytical request that may name a value of the table (TABULAR step 10):
+/// the question's own words, in the order typed, with none of the pack's vocabulary (operations,
+/// structure, filler), none of the words that ask for something to be written, explained or compared
+/// (`writing_intents`, `advisory_intents`), none of the words that designate a table or a document, and
+/// none of the sheet or column names the question writes. What remains is only a **candidate**:
+/// `tabular_answer::select_rows_for_writer` keeps a word only when it is anchored on a real value of the
+/// workbook, exactly as `detect_filters` does for a calculation.
+pub(crate) fn residual_for_rows(
+    question: &str,
+    inventory: &TabularInventory,
+    allowed_sheets: Option<&[String]>,
+    locale: &str,
+) -> Vec<String> {
+    let Some(pack) = pack_for(locale) else {
+        return Vec::new();
+    };
+    let folded_question = fold_text(question);
+    let sheet_name = find_sheet_name(inventory, allowed_sheets, &folded_question);
+    let columns = columns_for_matching(inventory, allowed_sheets, sheet_name.as_deref());
+    let column_name =
+        find_column_name(&columns, &folded_question).or_else(|| {
+            match named_columns(&columns, question).as_slice() {
+                [only] => Some(only.name.clone()),
+                _ => None,
+            }
+        });
+    let words = residual_words(
+        question,
+        &pack,
+        &sheet_name,
+        &column_name,
+        &Operation::Count {
+            filters: Vec::new(),
+        },
+    );
+    let mut asking: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for list in [
+        &pack.writing_intents,
+        &pack.advisory_intents,
+        &pack.advisory_intents_with_a_name,
+        &pack.distributive,
+        &pack.table_words,
+        &pack.document_references,
+    ] {
+        for phrase in list {
+            asking.extend(name_words(phrase));
+        }
+    }
+    words
+        .into_iter()
+        .filter(|word| !asking.contains(&fold_text(word)))
+        .collect()
+}
+
 /// Every column name an `Operation` actually reads, whether it was found through
 /// `find_column_name`, `named_columns` or `choose_measure` - so a group question's automatically
 /// chosen measure column ("amount", never named in "which agency costs the most") is excluded

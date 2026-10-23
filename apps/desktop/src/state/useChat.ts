@@ -35,6 +35,7 @@ import {
   type FolderAnswer,
   type MixedPartUnavailable,
   type FormulaNote,
+  type RowsEvidence,
   type NumericCorrection,
   type RetrievalDiagnostics,
   type TabularAnswer,
@@ -163,6 +164,9 @@ export interface ChatEntry extends ChatTurn {
   /** The arithmetic the model wrote itself in a mixed answer (`10 + 40 = 50`): said under the
    * answer, which is never edited (`number_check::arithmetic_expressions`). */
   mixedModelArithmetic?: string[];
+  /** The rows of the user's tables the program chose and sent to the model (TABULAR step 10): said
+   * under the answer and listed in its own disclosure, exactly as sent. */
+  mixedRowsSent?: RowsEvidence[];
   /** The problems the program found in the formulas of a mixed answer (`formula_check`): said under
    * the answer, which is never edited. */
   mixedFormulaNotes?: FormulaNote[];
@@ -465,6 +469,7 @@ export function useChat(
                     ...(mixed.modelArithmetic.length > 0
                       ? { mixedModelArithmetic: mixed.modelArithmetic }
                       : {}),
+                    ...(mixed.rowsSent.length > 0 ? { mixedRowsSent: mixed.rowsSent } : {}),
                     ...(mixed.formulaRepaired ? { content: mixed.answer } : {}),
                     ...(mixed.formulaNotes.length > 0 ? { mixedFormulaNotes: mixed.formulaNotes } : {}),
                     ...(mixed.formulasVerified > 0

@@ -185,6 +185,7 @@ async fn run(
         calculation: Default::default(),
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
     mixed_answer::answer(question, pending, document_sources, documents_unavailable, &context, |_| {}, |_| {})
         .await

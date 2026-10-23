@@ -30,7 +30,7 @@ describe("the starting decisions", () => {
 });
 
 describe("the request for Rust", () => {
-  const plan = { dataFile: "donnees.csv", keyValue: "CMD-2026-002" };
+  const plan = { dataFile: "donnees.csv", sheet: "Donnees", keyValue: "CMD-2026-002" };
 
   it("never fills a proposal she has not confirmed: it is sent as 'leave as written'", () => {
     const request = requestOf(plan, {
@@ -46,6 +46,8 @@ describe("the request for Rust", () => {
     ]);
     expect(request.keyValue).toBe("CMD-2026-002");
     expect(request.all).toBe(false);
+    // The sheet the plan was built from travels back, so a workbook of several sheets can be read again.
+    expect(request.sheet).toBe("Donnees");
   });
 
   it("sends a confirmed proposal, or the column she chose instead", () => {

@@ -26,6 +26,12 @@ export function choicesFromTabular(answer: TabularAnswer): Choice[] {
   switch (answer.kind) {
     case "which_workbook":
       return answer.candidates.map((path) => ({ path, query: null }));
+    // One name two files carry is replaced by the file she picks; several different names are only
+    // listed (a button would leave the other names in the question and ask again).
+    case "fill_several_sources":
+      return answer.query === null
+        ? []
+        : answer.candidates.map((path) => ({ path, query: answer.query }));
     case "ambiguous_reference":
       return answer.candidates.map((path) => ({ path, query: answer.query }));
     default:
@@ -43,7 +49,15 @@ export function rewriteQuestion(t: Translator, question: string, choice: Choice)
   if (choice.query !== null && choice.query.length > 0) {
     const at = base.toLowerCase().indexOf(choice.query.toLowerCase());
     if (at >= 0) {
-      return base.slice(0, at) + choice.path + base.slice(at + choice.query.length);
+      // The name may be the stem of what she typed ("ventes" for "ventes.xlsx"): the extension she
+      // wrote after it belongs to the path now written in its place.
+      const end = at + choice.query.length;
+      const extension = /\.[A-Za-z0-9]+$/.exec(choice.path)?.[0] ?? "";
+      const skip =
+        extension !== "" && base.slice(end, end + extension.length).toLowerCase() === extension.toLowerCase()
+          ? extension.length
+          : 0;
+      return base.slice(0, at) + choice.path + base.slice(end + skip);
     }
     return base + t("choices.appendFile", { path: choice.path });
   }

@@ -22,7 +22,7 @@ use assistant_cabinet_ai_lib::analysis_scope::{ScopeEntry, ScopeMode};
 use assistant_cabinet_ai_lib::conversation::ContextBudget;
 use assistant_cabinet_ai_lib::data_folder::{self, DataFolder};
 use assistant_cabinet_ai_lib::extraction::PageOrigin;
-use assistant_cabinet_ai_lib::fill_plan::candidate_templates;
+use assistant_cabinet_ai_lib::fill_plan::{candidate_templates, decide, FillDecision};
 use assistant_cabinet_ai_lib::gateway::GatewayClient;
 use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::inventory::{FileHashCache, WorkFolderInventory};
@@ -189,15 +189,18 @@ impl Folders {
         question: &str,
         locale: &str,
         selection: &ScopeMode,
-    ) -> Option<tabular_answer::FillSource> {
+    ) -> tabular_answer::FillLocation {
         let every_row = has_distributive_word(question, locale);
+        let data = self.open();
+        let named = tabular_answer::named_workbooks(question, &data, selection);
         tabular_answer::locate_fill_source(
             question,
-            &self.open(),
+            &data,
             selection,
             locale,
             &self.index,
             every_row,
+            &named,
         )
         .unwrap()
     }
@@ -361,6 +364,7 @@ async fn mixed_with_rows_mode(
         sample_text: &sample.text,
         calculation: Default::default(),
         formulas: None,
+        folder_facts: "",
     };
     mixed_answer::answer(
         question,
@@ -756,17 +760,19 @@ async fn baseline_case_g_a_column_only_one_ticked_workbook_has_already_chooses_i
     assert_eq!(gateway.calls(), 0);
 }
 
-// --- H: "a letter for each invoice of X" finds no source -----------------------------------------
+// --- H: "a letter for each invoice of X" is filled from X ------------------------------------------
 
 #[tokio::test]
-async fn baseline_case_h_a_letter_for_each_row_of_a_named_workbook_finds_no_source() {
-    // Frozen 20 October 2026. DEFECT, changes in step 08. Two single-sheet workbooks are ticked and
-    // the question names one: because "each" sets `every_row`, both qualify, `locate_fill_source`
-    // finds two and returns `None`. The name is never used to choose. Door 4 then lets the model
-    // write letters from the documents, with `Table results: none.`.
+async fn baseline_case_h_a_letter_for_each_row_of_a_named_workbook_is_filled_from_it() {
+    // Frozen 20 October 2026 as a DEFECT, flipped on purpose by step 08. Two single-sheet workbooks
+    // are ticked and the question names one: because "each" sets `every_row`, both used to qualify,
+    // `locate_fill_source` found two and returned nothing, and door 4 let the model write letters from
+    // the documents. The workbook the question names now wins and is the only one opened.
     let folders = Folders::build();
     let both = folders.ticked(&[FACTURES, AGENCIES]);
     let only_factures = folders.ticked(&[FACTURES]);
+    let inventory = WorkFolderInventory::discover(folders.documents.path(), None).unwrap();
+    let no_documents = WorkFolderInventory::from_records(folders.documents.path(), Vec::new());
     for (question, locale) in [
         ("Write a letter for each invoice of factures.csv", "en-US"),
         (
@@ -777,46 +783,47 @@ async fn baseline_case_h_a_letter_for_each_row_of_a_named_workbook_finds_no_sour
         assert!(has_writing_intent(question, locale), "{question:?}");
         assert!(has_distributive_word(question, locale), "{question:?}");
 
-        assert!(
-            folders.fill_source(question, locale, &both).is_none(),
-            "{question:?}: the named workbook does not break the tie between two candidates"
-        );
+        // Both ticked: the name breaks the tie, with or without the other workbook in the selection.
+        for selection in [&both, &only_factures] {
+            let tabular_answer::FillLocation::Found(source) =
+                folders.fill_source(question, locale, selection)
+            else {
+                panic!("{question:?}: the named workbook is the source");
+            };
+            assert_eq!(source.file, FACTURES, "{question:?}");
+            assert_eq!(source.key, None, "{question:?}");
+            let templates = candidate_templates(&inventory, &source.table.columns);
+            assert_eq!(
+                templates
+                    .iter()
+                    .map(|t| t.relative_path.as_str())
+                    .collect::<Vec<_>>(),
+                vec![TEMPLATE],
+                "{question:?}"
+            );
+        }
 
-        // The control: with the named workbook alone ticked, door 1 does find its source, and the
-        // template of the Documents folder fits its columns.
-        let source = folders
-            .fill_source(question, locale, &only_factures)
-            .unwrap_or_else(|| panic!("{question:?}: one candidate is a source"));
-        assert_eq!(source.file, FACTURES, "{question:?}");
-        assert_eq!(source.key, None, "{question:?}");
-        let inventory = WorkFolderInventory::discover(folders.documents.path(), None).unwrap();
-        let templates = candidate_templates(&inventory, &source.table.columns);
-        assert_eq!(
-            templates
-                .iter()
-                .map(|t| t.relative_path.as_str())
-                .collect::<Vec<_>>(),
-            vec![TEMPLATE],
-            "{question:?}"
-        );
+        // The decision of door 1: a plan from the named workbook, or, with no template that fits, the
+        // sentence that says so - never a letter written by a model.
+        let data = folders.open();
+        let named = tabular_answer::named_workbooks(question, &data, &both);
+        let every_row = has_distributive_word(question, locale);
+        let location = folders.fill_source(question, locale, &both);
+        let FillDecision::Plan(plan) = decide(location, &named, every_row, &inventory).unwrap()
+        else {
+            panic!("{question:?}: a plan is prepared");
+        };
+        assert_eq!(plan.data_file, FACTURES, "{question:?}");
+        assert_eq!(plan.template, TEMPLATE, "{question:?}");
+
+        let location = folders.fill_source(question, locale, &both);
+        let FillDecision::Ask(TabularAnswer::FillNeedsTemplate { file }) =
+            decide(location, &named, every_row, &no_documents).unwrap()
+        else {
+            panic!("{question:?}: with no template, a template is asked for");
+        };
+        assert_eq!(file, FACTURES, "{question:?}");
     }
-
-    // What door 4 then does with it: the table side is not asked about, the model writes.
-    let question = "Write a letter for each invoice of factures.csv";
-    let (fallback, _) = left_to_the_model(folders.for_mixed(question, "en-US", &both));
-    assert!(is_unrecognised_nudge(&fallback), "{fallback:?}");
-    let gateway = start_gateway_replying("Dear supplier, a letter written from the documents.");
-    let pending = folders.for_mixed(question, "en-US", &both);
-    let (result, generated) =
-        mixed(&folders, &both, pending, question, "en-US", &gateway.url).await;
-    assert!(generated);
-    assert_eq!(result.table, None);
-    // The question names factures.csv, so its card reaches the writer: the table side is present as
-    // that card and only the table value is absent (flipped by step 03).
-    assert_eq!(result.table_unavailable, None);
-    let sources = sent_sources(&gateway);
-    assert!(sources.contains("Workbook \"factures.csv\""), "{sources}");
-    assert!(sources.ends_with("Table results: none."));
 }
 
 // --- I (partial): a name that no workbook carries has no table part -------------------------------
@@ -950,7 +957,10 @@ async fn baseline_case_l_a_writing_request_without_a_merge_sign_stays_editorial(
     assert!(has_writing_intent(question, "en-US"));
     assert!(!has_distributive_word(question, "en-US"));
 
-    assert!(folders.fill_source(question, "en-US", &selection).is_none());
+    assert!(matches!(
+        folders.fill_source(question, "en-US", &selection),
+        tabular_answer::FillLocation::NoSource
+    ));
     assert!(folders.data_only(question, "en-US", &selection).is_none());
     let (fallback, _) = left_to_the_model(folders.for_mixed(question, "en-US", &selection));
     assert!(is_unrecognised_nudge(&fallback), "{fallback:?}");
@@ -1269,6 +1279,7 @@ async fn step_03_no_card_and_no_documents_is_still_insufficient_evidence() {
         sample_text: "",
         calculation: Default::default(),
         formulas: None,
+        folder_facts: "",
     };
     let outcome = mixed_answer::answer(
         question,
@@ -1528,6 +1539,7 @@ async fn step_05_a_gateway_that_hangs_up_degrades_to_the_engines_nudge() {
         sample_text: "",
         calculation: Default::default(),
         formulas: None,
+        folder_facts: "",
     };
     let written = mixed_answer::answer(
         question,

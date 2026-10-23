@@ -896,30 +896,34 @@ impl<'a> Replay<'a> {
             let every_row = assistant_cabinet_ai_lib::tabular::question::has_distributive_word(
                 question, LOCALE,
             );
-            if let Some(source) = tabular_answer::locate_fill_source(
+            let named = tabular_answer::named_workbooks(question, &folder, &scope.data_mode);
+            let located = tabular_answer::locate_fill_source(
                 question,
                 &folder,
                 &scope.data_mode,
                 LOCALE,
                 &self.index,
                 every_row,
+                &named,
+            )?;
+            match assistant_cabinet_ai_lib::fill_plan::decide(
+                located,
+                &named,
+                every_row,
+                &resolution.inventory,
             )? {
-                let templates = assistant_cabinet_ai_lib::fill_plan::candidate_templates(
-                    &resolution.inventory,
-                    &source.table.columns,
-                );
-                if !templates.is_empty() {
-                    let plan = assistant_cabinet_ai_lib::fill_plan::build_plan(
-                        templates,
-                        &source.file,
-                        &source.sheet,
-                        &source.table,
-                        source.key,
-                    )?;
+                assistant_cabinet_ai_lib::fill_plan::FillDecision::Plan(plan) => {
                     out.route = "fill_plan".into();
                     out.structured = serde_json::to_value(&plan).ok();
                     return Ok(());
                 }
+                // Asked about, never improvised (TABULAR step 08).
+                assistant_cabinet_ai_lib::fill_plan::FillDecision::Ask(answer) => {
+                    out.route = "fill_ask".into();
+                    out.structured = serde_json::to_value(&answer).ok();
+                    return Ok(());
+                }
+                assistant_cabinet_ai_lib::fill_plan::FillDecision::Editorial => {}
             }
         }
 
@@ -1137,6 +1141,7 @@ impl<'a> Replay<'a> {
             sample_text: "",
             calculation: Default::default(),
             formulas: None,
+            folder_facts: "",
         };
         let started = Instant::now();
         let (result, generated) = mixed_answer::answer(

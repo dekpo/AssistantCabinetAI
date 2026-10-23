@@ -52,6 +52,8 @@ pub enum UseReason {
     NotRelevant,
     /// Its card was built but the model wrote no answer, so it never read it.
     NotSent,
+    /// Named for a letter and not used: it holds several sheets and the question names none of them.
+    SheetToChoose,
 }
 
 impl From<ImpliedReason> for UseReason {
@@ -163,6 +165,8 @@ fn read_file(answer: &TabularAnswer) -> Option<&str> {
         TabularAnswer::Nudge { file, .. }
         | TabularAnswer::WhichMeasure { file, .. }
         | TabularAnswer::WhichColumn { file, .. }
+        | TabularAnswer::FillNeedsTemplate { file }
+        | TabularAnswer::FillNeedsSheet { file, .. }
         | TabularAnswer::Structural { file, .. } => Some(file),
         other => computed_file(other),
     }
@@ -227,6 +231,18 @@ pub fn trace(facts: &SelectionFacts, answered: Answered<'_>) -> Vec<WorkbookUse>
             }
             if let Some(file) = computed_file(answer) {
                 entries.push(WorkbookUse::of(file, WorkbookUseHow::Computed, None));
+            }
+            // A letter asked for and not prepared (TABULAR step 08): the workbook the question named
+            // counts as read, so it is not among the ticked workbooks that were not used; the one that
+            // needs a sheet says so, as a refusal of a named file.
+            match answer {
+                TabularAnswer::FillNeedsSheet { file, .. } => {
+                    entries.push(WorkbookUse::not_used(file, UseReason::SheetToChoose));
+                }
+                TabularAnswer::FillSeveralSources { candidates, .. } => {
+                    accounted.extend(candidates.iter().cloned());
+                }
+                _ => {}
             }
             // The answer is the question "which workbook?": every ticked workbook is a candidate
             // and the card already says so.
@@ -469,6 +485,66 @@ mod tests {
         );
         let json = serde_json::to_value(&trace[0]).expect("serialises");
         assert_eq!(json["how"], "explained");
+    }
+
+    #[test]
+    fn a_letter_that_could_not_be_prepared_counts_the_named_workbooks_as_read() {
+        // TABULAR step 08: the named workbook is not among "N ticked workbooks were not used"; only a
+        // workbook that holds several sheets is a refusal of a named file.
+        let mut facts = facts(&["a.csv", "b.csv", "c.csv"]);
+        facts.named = NamedWorkbooks {
+            exact: vec!["a.csv".to_string()],
+            ..NamedWorkbooks::default()
+        };
+        let sheet = TabularAnswer::FillNeedsSheet {
+            file: "a.csv".to_string(),
+            sheets: Vec::new(),
+        };
+        let trace_sheet = trace(&facts, Answered::Engine(&sheet));
+        assert_eq!(
+            (
+                trace_sheet[0].file.as_str(),
+                trace_sheet[0].how,
+                trace_sheet[0].reason
+            ),
+            (
+                "a.csv",
+                WorkbookUseHow::NotUsed,
+                Some(UseReason::SheetToChoose)
+            )
+        );
+        assert_eq!(
+            trace_sheet[1].count,
+            Some(2),
+            "b.csv and c.csv are the ones left out"
+        );
+        assert_eq!(
+            serde_json::to_value(&trace_sheet[0]).expect("serialises")["reason"],
+            "sheet_to_choose"
+        );
+
+        let template = TabularAnswer::FillNeedsTemplate {
+            file: "a.csv".to_string(),
+        };
+        let trace_template = trace(&facts, Answered::Engine(&template));
+        assert_eq!(
+            trace_template.len(),
+            1,
+            "no line for a.csv itself: {trace_template:?}"
+        );
+        assert_eq!(trace_template[0].count, Some(2));
+
+        let several = TabularAnswer::FillSeveralSources {
+            candidates: vec!["a.csv".to_string(), "b.csv".to_string()],
+            query: None,
+        };
+        let trace_several = trace(&facts, Answered::Engine(&several));
+        assert_eq!(trace_several.len(), 1, "{trace_several:?}");
+        assert_eq!(
+            trace_several[0].count,
+            Some(1),
+            "only c.csv was not a candidate"
+        );
     }
 
     #[test]

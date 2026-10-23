@@ -62,6 +62,7 @@ async fn ask(gateway: &CountingGateway, locale: &str, checked: bool) -> MixedAns
         sample_text: "",
         calculation: Default::default(),
         formulas: if checked { formulas.as_ref() } else { None },
+        folder_facts: "",
     };
     let (result, generated) = mixed_answer::answer(
         QUESTION,

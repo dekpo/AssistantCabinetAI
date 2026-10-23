@@ -186,6 +186,8 @@
     "openSettings": "Réglages",
     "regenerate": "Régénérer",
     "regenerateWithModel": "Demander à l'IA",
+    "explainCalculation": "Expliquer le calcul",
+    "analyseCalculation": "Demander à l'IA",
     "retry": "Réessayer",
     "save": "Enregistrer",
     "send": "Envoyer",
@@ -254,6 +256,10 @@
     "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",
     "modelArithmetic": "L'IA a effectué elle-même un calcul (« {expression} ») : seul le moteur est fiable. Demandez ce total pour l'obtenir.",
     "mixedComputedTitle": "Calculé dans vos données (par le moteur, pas par l'IA) :",
+    "explanationTitle": "Comment ce chiffre a été calculé :",
+    "explanationRunning": "Rédaction de l'explication…",
+    "explanationUnavailable": "L'explication n'a pas pu être rédigée : l'IA est injoignable. Le chiffre affiché reste celui du programme.",
+    "explanationUnverifiedNumber": "Le chiffre « {number} » de l'explication ne figure pas dans la fiche du calcul : ne vous y fiez pas.",
     "mixedTableUnavailable": {
       "not_asked_about": "Aucun tableur n'était nécessaire pour cette question.",
       "no_evidence": "Rien dans vos tables ne répond à cette partie.",
@@ -324,6 +330,7 @@
   },
   "workbookUse": {
     "computed": "{path} : réponse calculée par le programme, sans l'IA.",
+    "explained": "{path} : l'IA a expliqué le calcul à partir de sa fiche, sans recevoir aucune ligne du tableur.",
     "planPrepared": "{path} : le plan de lettres est préparé à partir de ses lignes, sur cet ordinateur.",
     "cardSent": {
       "named": "{path} : cité dans votre question, l'IA en a reçu la structure.",

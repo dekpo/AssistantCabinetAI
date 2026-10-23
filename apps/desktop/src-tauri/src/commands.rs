@@ -14,6 +14,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::analysis_scope::{AnalysisScope, GroundingTier, ScopeMode};
 use crate::analysis_stop::AnalysisStops;
+use crate::calculation_follow_up::{self, CalculationFollowUp, FollowUpKind};
 use crate::cancellation::{until_stopped, Cancellation};
 use crate::conversation::{self, ContextBudget, ModelBudgets};
 use crate::data_folder::{self, DataFolder, DataFolderReport};
@@ -974,6 +975,10 @@ pub struct AskAnswer {
     /// of a question with tables selected; empty for a question on documents alone, where no table
     /// is ticked and none can be used.
     pub workbook_use: Vec<WorkbookUse>,
+    /// the "Explain the calculation" button: the model's explanation of the method behind a figure the program
+    /// computed again, added under the figure on screen (TABULAR step 06). `answer` is then empty and
+    /// the figure of the entry is untouched. `None` on every other path.
+    pub explanation: Option<calculation_follow_up::Explanation>,
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -1003,6 +1008,10 @@ pub async fn ask_with_sources(
     // the previous answer's entities for a short follow-up, and `off` for the widen action. Absent
     // means the automatic behaviour of the knowledge mode in the settings.
     targeting: Option<TargetingRequest>,
+    // the "Explain the calculation" button or "Demander a l'IA" under a computed figure: the figure is computed
+    // again by the program from the original question and the scope it was given under, never taken
+    // from the interface (`calculation_follow_up`, TABULAR step 06).
+    calculation_follow_up: Option<CalculationFollowUp>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let mut stopped = state.cancellation.begin();
@@ -1022,6 +1031,7 @@ pub async fn ask_with_sources(
                 scope: scope.unwrap_or_else(|| AnalysisScope::whole_folder(0)),
                 history: history.unwrap_or_default(),
                 targeting: targeting.unwrap_or_default(),
+                calculation_follow_up,
             },
             &on_event,
             &mut measured,
@@ -1620,6 +1630,7 @@ struct Question {
     scope: AnalysisScope,
     history: Vec<ChatTurn>,
     targeting: TargetingRequest,
+    calculation_follow_up: Option<CalculationFollowUp>,
 }
 
 /// What the knowledge base needs for one question, read once from the settings: the mode, the
@@ -1821,7 +1832,29 @@ async fn sourced_answer(
         scope,
         history,
         targeting: targeting_request,
+        calculation_follow_up,
     } = asked;
+
+    // Under a computed figure: the figure is computed again by the program and explained or analysed,
+    // whatever else the question could be taken for (TABULAR step 06).
+    if let Some(follow_up) = &calculation_follow_up {
+        measured.path = match scope.tier() {
+            GroundingTier::DocumentsAndTables => RetrievalPath::Mixed,
+            _ => RetrievalPath::Tabular,
+        };
+        return calculation_follow_up_tier(
+            app,
+            state,
+            &question,
+            &scope,
+            &history,
+            &targeting_request,
+            follow_up,
+            on_event,
+            measured,
+        )
+        .await;
+    }
 
     // Which tier this question is on, decided from the two selections before anything is read
     // (`docs/SELECTION-AND-MEMORY.md`, the grounding priority chain).
@@ -1837,6 +1870,25 @@ async fn sourced_answer(
             // was ignored here until HAP-1 (BUG-04), which left the button doing nothing.
             measured.path = RetrievalPath::Mixed;
             if skip_deterministic {
+                // "Demander a l'IA" under the engine's refusal of a question about the tables (a nudge): the
+                // mixed tier hands a refusal back at once, with no model call, so the button did nothing.
+                // The model is asked to understand the question as in the tables-only tier, which never
+                // reads the documents (found by the owner's test of TABULAR step 06, part F).
+                if data_side_is_a_nudge(app, state, &question, &scope) {
+                    measured.path = RetrievalPath::Tabular;
+                    return tabular_tier(
+                        app,
+                        state,
+                        &question,
+                        &scope,
+                        true,
+                        &history,
+                        &targeting_request,
+                        on_event,
+                        measured,
+                    )
+                    .await;
+                }
                 return mixed_tier(
                     app,
                     state,
@@ -1846,6 +1898,7 @@ async fn sourced_answer(
                     &targeting_request,
                     on_event,
                     measured,
+                    None,
                 )
                 .await;
             }
@@ -1875,6 +1928,7 @@ async fn sourced_answer(
                         &targeting_request,
                         on_event,
                         measured,
+                        None,
                     )
                     .await
                 }
@@ -2444,6 +2498,15 @@ async fn advisory_tier(
         .lock()
         .map_err(|_| AppError::Internal)?
         .for_alias(&model_alias);
+    // A figure on the table side is the analysis of that figure (TABULAR step 06): it is kept whatever
+    // the model does, and `ANALYSIS_ADDENDUM` joins the instruction.
+    let kept_figure = match &pending {
+        tabular_answer::PendingAnswer::Done(figure @ TabularAnswer::Value { .. }) => {
+            Some(figure.clone())
+        }
+        _ => None,
+    };
+    let sheet_sizes = tabular_answer::sheet_sizes(&folder, &scope.data_mode);
     // The cards and the sample, from what the user ticked and not from the knowledge base's narrowed
     // list: one ticked workbook is implied here, which is right (the engine has no door of its own for
     // an advisory question). Read synchronously, before the first `.await`.
@@ -2480,6 +2543,10 @@ async fn advisory_tier(
         budget,
         cards_text: &card_block.text,
         sample_text: &sample_block.text,
+        calculation: mixed_answer::CalculationSide {
+            sheet_sizes: &sheet_sizes,
+            analysis: kept_figure.is_some(),
+        },
     };
     let targeting_report = targeting_plan.report(false);
     if let Some(report) = &targeting_report {
@@ -2543,6 +2610,40 @@ async fn advisory_tier(
         }
         // Stopped by the user: not an answer to replace.
         Err(AppError::ChatCancelled) => Err(AppError::ChatCancelled),
+        // The analysis of a figure the model could not write: the figure stays, as when the gateway fails
+        // inside the writer (a figure is never replaced by the nudge it was computed instead of).
+        Ok(_) | Err(_) if kept_figure.is_some() => {
+            targeting::note_workbooks(&index, &targeting_plan, None, measured);
+            let table = kept_figure;
+            let workbook_use = workbook_use::trace(
+                &facts,
+                workbook_use::Answered::Mixed {
+                    cards: &card_block.cards,
+                    implied,
+                    table: &table,
+                    model_wrote: false,
+                    samples: &sample_block.uses,
+                },
+            );
+            Ok(AskAnswer {
+                mixed_answer: Some(mixed_answer::MixedAnswer {
+                    answer: String::new(),
+                    table,
+                    table_unavailable: None,
+                    document_sources: Vec::new(),
+                    documents_unavailable: Some(
+                        mixed_answer::MixedPartUnavailable::GatewayUnavailable,
+                    ),
+                    corrections: Vec::new(),
+                    rejected_citations: Vec::new(),
+                    unverified_numbers: Vec::new(),
+                    model_arithmetic: Vec::new(),
+                }),
+                targeting: targeting_report,
+                workbook_use,
+                ..AskAnswer::default()
+            })
+        }
         // The model could not be reached, or wrote nothing: the nudge the engine would have given.
         Ok(_) | Err(_) => {
             let effective_selection = match targeting_plan.applied_workbooks() {
@@ -2571,6 +2672,212 @@ async fn advisory_tier(
             })
         }
     }
+}
+
+/// the "Explain the calculation" button and "Demander a l'IA" under a computed figure (TABULAR step 06, owner decision
+/// 11). The figure is computed again by the program from the original question and the scope it was
+/// given under, without any model call, and compared with the one on screen
+/// (`calculation_follow_up::recompute`): a file that changed or a figure that no longer comes out is
+/// refused with the existing `scope_unavailable`, never explained.
+///
+/// **Explain**: one gateway call, the calculation record only - no retrieval, no embedding, no card, no
+/// sample, no history. The figure of the entry stays; the explanation is added under it. A model that
+/// cannot be reached leaves an `unavailable` explanation and the figure.
+///
+/// **Analyse**: the writer of the mixed tier with the record in its `Table results` block and
+/// `ANALYSIS_ADDENDUM` in its instruction: `advisory_tier` with no document when only tables are
+/// ticked, `mixed_tier` when documents are ticked as well.
+#[allow(clippy::too_many_arguments)]
+async fn calculation_follow_up_tier(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+    history: &[ChatTurn],
+    targeting_request: &TargetingRequest,
+    follow_up: &CalculationFollowUp,
+    on_event: &Channel<ChatStreamEvent>,
+    measured: &mut RetrievalDiagnostics,
+) -> Result<AskAnswer, AppError> {
+    let tier = scope.tier();
+    if matches!(tier, GroundingTier::Documents) {
+        return Err(AppError::ScopeUnavailable);
+    }
+    let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
+        (
+            settings.data_folder.clone(),
+            settings.locale.clone(),
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings.answer_idle_timeout(),
+        )
+    })?;
+    if data_folder.is_none() {
+        return Err(AppError::NoDataFolderSet);
+    }
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let mut stage = StageTimer::start();
+    let index = open_index(app)?;
+    let views = family_views_of(state, &index)?;
+    let folder = views.data.ok_or(AppError::NoDataFolderSet)?;
+    // With documents ticked, the figure may have been read beside their names (the mixed tier).
+    let document_names: Option<Vec<String>> = match tier {
+        GroundingTier::DocumentsAndTables => {
+            let full = views.documents.ok_or(AppError::NoWorkFolderSet)?;
+            Some(
+                scope
+                    .resolve(&full)
+                    .inventory
+                    .indexed_files()
+                    .into_iter()
+                    .map(|file| file.relative_path.clone())
+                    .collect(),
+            )
+        }
+        _ => None,
+    };
+    measured.inventory_ms += stage.lap_ms();
+    measured.selected_workbooks = selected_workbooks(&folder, &scope.data_mode);
+    let figure = calculation_follow_up::recompute(
+        question,
+        &folder,
+        &scope.data_mode,
+        &locale,
+        &index,
+        &follow_up.shown,
+        document_names.as_deref(),
+    )?;
+    measured.routing_ms += stage.lap_ms();
+    measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
+
+    match follow_up.kind {
+        FollowUpKind::Explain => {
+            let sizes = tabular_answer::sheet_sizes(&folder, &scope.data_mode);
+            let Some(record) = tabular_answer::calculation_record(Some(question), &figure, &sizes)
+            else {
+                return Err(AppError::ScopeUnavailable);
+            };
+            let file = follow_up.shown.file.clone();
+            drop(folder);
+            drop(index);
+            let context = calculation_follow_up::ExplainContext {
+                locale: &locale,
+                gateway: &state.gateway,
+                server_url: &server_url,
+                model_alias: &model_alias,
+                idle_timeout,
+            };
+            let started = std::time::Instant::now();
+            let first_token = std::sync::OnceLock::<u64>::new();
+            let explanation =
+                calculation_follow_up::explain(question, &record, &context, |delta| {
+                    first_token.get_or_init(|| elapsed_ms(started.elapsed()));
+                    let _ = on_event.send(ChatStreamEvent::Delta {
+                        text: delta.to_string(),
+                    });
+                })
+                .await?;
+            measured.generation_total_ms = elapsed_ms(started.elapsed());
+            measured.generation_first_token_ms = first_token.get().copied();
+            if !explanation.unavailable {
+                let _ = on_event.send(ChatStreamEvent::Completed {
+                    text: explanation.text.clone(),
+                });
+            }
+            // The line says the model explained the calculation: not written when it could not be.
+            let workbook_use = match explanation.unavailable {
+                true => Vec::new(),
+                false => workbook_use::trace(
+                    &tabular_answer::SelectionFacts::default(),
+                    workbook_use::Answered::Explained(&file),
+                ),
+            };
+            Ok(AskAnswer {
+                explanation: Some(explanation),
+                workbook_use,
+                ..AskAnswer::default()
+            })
+        }
+        FollowUpKind::Analyse => match tier {
+            GroundingTier::DocumentsAndTables => {
+                drop(folder);
+                drop(index);
+                mixed_tier(
+                    app,
+                    state,
+                    question,
+                    scope,
+                    history,
+                    targeting_request,
+                    on_event,
+                    measured,
+                    Some(figure),
+                )
+                .await
+            }
+            _ => {
+                let workbook_files = selected_workbook_files(&folder, &scope.data_mode);
+                let data_side =
+                    match tabular_answer::names_a_workbook(question, &folder, &scope.data_mode) {
+                        true => SideInput::new(&workbook_files).blocked_by(SkipReason::NamedFile),
+                        false => SideInput::new(&workbook_files),
+                    };
+                let setup = TargetingSetup::load(app, state);
+                let targeting_plan = setup.plan(
+                    &index,
+                    targeting_request,
+                    question,
+                    SideInput::new(&[]),
+                    data_side,
+                );
+                advisory_tier(
+                    state,
+                    question,
+                    scope,
+                    history,
+                    index,
+                    folder,
+                    locale,
+                    targeting_plan,
+                    tabular_answer::PendingAnswer::Done(figure),
+                    on_event,
+                    measured,
+                )
+                .await
+            }
+        },
+    }
+}
+
+/// Whether the engine alone answers this question, in a mixed selection, with a nudge (a refusal that
+/// lists what the workbook holds) and no figure: the case where "Demander a l'IA" asks the model to
+/// understand the question. Cheap (inventory and the typed cache); `false` on any failure, which keeps the
+/// mixed tier's own handling.
+fn data_side_is_a_nudge(
+    app: &AppHandle,
+    state: &AppState,
+    question: &str,
+    scope: &AnalysisScope,
+) -> bool {
+    let Ok(locale) = state.read(|settings| settings.locale.clone()) else {
+        return false;
+    };
+    let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
+    let Ok(index) = open_index(app) else {
+        return false;
+    };
+    let Ok(views) = family_views_of(state, &index) else {
+        return false;
+    };
+    let Some(folder) = views.data else {
+        return false;
+    };
+    matches!(
+        tabular_answer::prepare_if_data_only(question, &folder, &scope.data_mode, &locale, &index),
+        Ok(Some(tabular_answer::PendingAnswer::Done(
+            TabularAnswer::Nudge { .. }
+        )))
+    )
 }
 
 /// A "which workbook?" answer gets the knowledge base's order and notes; any other answer is left
@@ -3005,6 +3312,10 @@ async fn mixed_tier(
     targeting_request: &TargetingRequest,
     on_event: &Channel<ChatStreamEvent>,
     measured: &mut RetrievalDiagnostics,
+    // The figure the user is asking to have analysed (TABULAR step 06), already computed again by the
+    // program: it is the table side of the turn instead of what the question would classify as, and
+    // `ANALYSIS_ADDENDUM` joins the instruction. `None` for every ordinary question.
+    known_figure: Option<TabularAnswer>,
 ) -> Result<AskAnswer, AppError> {
     let (
         work_folder,
@@ -3106,14 +3417,18 @@ async fn mixed_tier(
         }
         None => scope.data_mode.clone(),
     };
-    let pending = tabular_answer::prepare_for_mixed(
-        question,
-        &folder,
-        &effective_selection,
-        &locale,
-        &index,
-        &document_paths,
-    )?;
+    let analysis = known_figure.is_some();
+    let pending = match known_figure {
+        Some(figure) => tabular_answer::PendingAnswer::Done(figure),
+        None => tabular_answer::prepare_for_mixed(
+            question,
+            &folder,
+            &effective_selection,
+            &locale,
+            &index,
+            &document_paths,
+        )?,
+    };
     measured.routing_ms += stage.lap_ms();
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
     // Recorded now so that a question whose documents turn out to be unavailable still leaves its
@@ -3241,6 +3556,7 @@ async fn mixed_tier(
         ),
     };
 
+    let sheet_sizes = tabular_answer::sheet_sizes(&folder, &scope.data_mode);
     let context = mixed_answer::MixedContext {
         locale: &locale,
         gateway: &state.gateway,
@@ -3251,6 +3567,10 @@ async fn mixed_tier(
         budget,
         cards_text: &card_block.text,
         sample_text: &sample_block.text,
+        calculation: mixed_answer::CalculationSide {
+            sheet_sizes: &sheet_sizes,
+            analysis,
+        },
     };
 
     // Nothing below touches `index`, `folder` or the document inventory again: everything either

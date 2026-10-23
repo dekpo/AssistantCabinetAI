@@ -1081,9 +1081,51 @@ export interface AskAnswer {
   /** What this answer did with each workbook the question named, implied or the user ticked, and
    * why one did not serve (TABULAR plan 4.3). Machine codes; `lib/workbookUse.ts` writes the lines. */
   workbookUse: WorkbookUse[];
+  /** "Expliquer le calcul": the model's explanation of the method behind the figure on screen. `answer`
+   * is then empty; the figure of the entry stays. Null on every other path. */
+  explanation: CalculationExplanation | null;
 }
 
-export type WorkbookUseHow = "card_sent" | "computed" | "plan_prepared" | "not_used";
+/** The figure on screen, sent back with "Expliquer le calcul" and "Demander a l'IA". The program
+ * computes the figure again and compares: this is never used as a result (TABULAR step 06). */
+export interface ShownCalculation {
+  file: string;
+  value: TabularValue;
+  derivation: TabularDerivation;
+}
+
+export type CalculationFollowUpKind = "explain" | "analyse";
+
+export interface CalculationFollowUp {
+  kind: CalculationFollowUpKind;
+  shown: ShownCalculation;
+}
+
+/** What the model wrote when asked to explain a calculation. */
+export interface CalculationExplanation {
+  text: string;
+  /** The model could not be reached or wrote nothing: the figure stays, the interface says so. */
+  unavailable: boolean;
+  /** Figures of the explanation found in neither the calculation record nor the question. */
+  unverifiedNumbers: string[];
+  /** Explicit arithmetic the model wrote itself, as written. */
+  modelArithmetic: string[];
+}
+
+/** What `askWithSources` takes beyond its positional parameters. New parameters go here, not into
+ * further positions. */
+export interface AskOptions {
+  /** Explain or analyse the figure of an answer; the scope sent is the one that answer was given under. */
+  calculationFollowUp?: CalculationFollowUp;
+}
+
+export type WorkbookUseHow =
+  | "card_sent"
+  | "computed"
+  | "plan_prepared"
+  | "not_used"
+  /** The model explained the method of a figure computed from this workbook (`explained`). */
+  | "explained";
 
 export type WorkbookUseReason =
   | "implied_single"
@@ -1638,6 +1680,8 @@ export function askWithSources(
   /** What the knowledge base did to the search, sent just before the sources so an answer that is
    * stopped still shows it. */
   onTargeting?: (report: TargetingReport) => void,
+  /** Everything newer than the positions above (TABULAR step 06 onwards). */
+  options: AskOptions = {},
 ): Promise<AskAnswer> {
   const channel = new Channel<ChatStreamEvent>();
   channel.onmessage = (message) => {
@@ -1659,6 +1703,7 @@ export function askWithSources(
     scope,
     history,
     targeting,
+    calculationFollowUp: options.calculationFollowUp,
     onEvent: channel,
   });
 }

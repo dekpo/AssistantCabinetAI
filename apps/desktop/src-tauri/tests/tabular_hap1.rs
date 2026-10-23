@@ -442,7 +442,7 @@ async fn a_name_with_no_close_value_is_refused_without_asking_the_model() {
 // --- BUG-18: pressing "Ask AI" when the model cannot do better says so ----------------------
 
 #[tokio::test]
-async fn a_failed_ask_ai_keeps_the_computed_value_and_says_the_model_was_asked() {
+async fn ask_ai_on_a_figure_keeps_the_computed_value_and_does_not_ask_the_model() {
     let folder = Folder::build();
     let question = "Quelle est la somme des montant ?";
     let data = folder.open();
@@ -461,7 +461,9 @@ async fn a_failed_ask_ai_keeps_the_computed_value_and_says_the_model_was_asked()
         panic!("the computed value is kept, got {answer:?}");
     };
     assert_eq!(sum_of(value), 2215.0);
-    assert_eq!(model_attempt.as_ref().map(|attempt| attempt.model_alias.as_str()), Some("cabinet-chat"));
+    // Owner decision 11 (TABULAR step 06): the model is no longer asked to read a figure's question
+    // again, so there is no attempt to report. This test asserted the model alias here until step 06.
+    assert_eq!(model_attempt, &None);
 }
 
 // --- BUG-13: a refusal about a column's content names the column ---------------------------

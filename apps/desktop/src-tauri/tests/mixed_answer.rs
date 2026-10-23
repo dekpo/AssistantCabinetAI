@@ -182,6 +182,7 @@ async fn run(
         budget: ContextBudget::DEFAULT,
         cards_text: "",
         sample_text: "",
+        calculation: Default::default(),
     };
     mixed_answer::answer(question, pending, document_sources, documents_unavailable, &context, |_| {}, |_| {})
         .await

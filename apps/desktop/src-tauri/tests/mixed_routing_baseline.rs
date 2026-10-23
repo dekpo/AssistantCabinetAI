@@ -359,6 +359,7 @@ async fn mixed_with_rows_mode(
         budget: ContextBudget::DEFAULT,
         cards_text: &cards.block.text,
         sample_text: &sample.text,
+        calculation: Default::default(),
     };
     mixed_answer::answer(
         question,
@@ -473,9 +474,19 @@ async fn baseline_case_b_the_figure_sent_to_the_model_names_its_workbook() {
         .split_once("Table results (workbook \"agencies.csv\"):\n")
         .expect("the table block names the workbook")
         .1;
+    // Changed on purpose by step 06: the one-line figure became the calculation record (this context
+    // carries no sheet sizes, so the rows line has no "out of").
     assert_eq!(
         table_block,
-        "Sheet agencies, column amount: sum = 270599.5 (computed over 2400 rows)"
+        [
+            "Calculation record:",
+            "Workbook \"agencies.csv\", sheet \"agencies\" (header on row 1)",
+            "Operation: sum of column \"amount\"",
+            "Rows: 2400 rows kept",
+            "Result: 270599.5",
+        ]
+        .join("
+")
     );
     // Only the named workbook has a card; the other ticked one is neither named nor implied.
     assert!(sources.contains("Workbook \"agencies.csv\""), "{sources}");
@@ -1255,6 +1266,7 @@ async fn step_03_no_card_and_no_documents_is_still_insufficient_evidence() {
         budget: ContextBudget::DEFAULT,
         cards_text: &cards.block.text,
         sample_text: "",
+        calculation: Default::default(),
     };
     let outcome = mixed_answer::answer(
         question,
@@ -1512,6 +1524,7 @@ async fn step_05_a_gateway_that_hangs_up_degrades_to_the_engines_nudge() {
         budget: ContextBudget::DEFAULT,
         cards_text: &cards.block.text,
         sample_text: "",
+        calculation: Default::default(),
     };
     let written = mixed_answer::answer(
         question,

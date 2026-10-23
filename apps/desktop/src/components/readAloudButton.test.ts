@@ -32,6 +32,8 @@ const listProps = {
   onStop: () => {},
   onResend: () => {},
   onRegenerate: () => {},
+  onExplainCalculation: () => {},
+  onAnalyseCalculation: () => {},
   onAnalyse: () => {},
   analysing: false,
   onRetarget: () => {},

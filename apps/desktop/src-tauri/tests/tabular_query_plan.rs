@@ -516,13 +516,19 @@ async fn an_unreachable_gateway_degrades_to_the_ordinary_nudge() {
 // --- "Demander a l'IA" / "Ask AI" on a classified tabular answer -----------------------------
 
 #[tokio::test]
-async fn forcing_the_model_on_a_classified_question_asks_it_and_labels_the_result_interpreted() {
-    // "What is the total montant?" classifies deterministically on its own (no model, no
-    // spinner) - this proves that pressing "Demander a l'IA" on it anyway reaches the model, and
-    // that a successful model answer is labelled `InterpretedByModel`, not `Computed`, exactly as
-    // an automatically escalated gap-G answer already is.
+async fn forcing_the_model_on_a_figure_no_longer_re_reads_the_question() {
+    // Owner decision 11 (TABULAR step 06, 20-21 October 2026): "What is the total montant?" classifies
+    // deterministically and gives a figure. "Demander a l'IA" under a figure is now the analysis of that
+    // figure (`calculation_follow_up`), so the model is no longer asked to read the question again: the
+    // engine's own `Computed` answer comes back and the model is never dialled. Until step 06 this
+    // test asserted the opposite (the model was asked and the result was labelled `InterpretedByModel`).
     let folder = Folder::build();
-    let gateway = start_fake_gateway(|_| sum_montant_plan().to_string());
+    let count = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&count);
+    let gateway = start_fake_gateway(move |_| {
+        counted.fetch_add(1, Ordering::SeqCst);
+        sum_montant_plan().to_string()
+    });
 
     let result = folder
         .ask_forcing_model("What is the total montant?", "factures.csv", &gateway.url, "cabinet-chat")
@@ -539,7 +545,8 @@ async fn forcing_the_model_on_a_classified_question_asks_it_and_labels_the_resul
             unparsed: 0,
         })
     );
-    assert!(matches!(derivation, TabularDerivation::InterpretedByModel { .. }));
+    assert!(matches!(derivation, TabularDerivation::Computed { .. }));
+    assert_eq!(count.load(Ordering::SeqCst), 0, "the model is not asked to read a figure again");
 }
 
 #[tokio::test]

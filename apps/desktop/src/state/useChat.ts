@@ -11,6 +11,17 @@ import {
 import { choicesFromFolder, choicesFromTabular, type Choice } from "../lib/choices";
 import type { FillPlan } from "../lib/fill";
 import { formatFolderAnswer } from "../lib/folderAnswer";
+import {
+  appendExplanation,
+  beginExplanation,
+  followUpOf,
+  settleExplanation,
+  storedCalculationOf,
+  stoppedExplanation,
+  withExplanation,
+  type EntryExplanation,
+  type StoredCalculation,
+} from "../lib/calculationFollowUp";
 import { conversationHistory } from "../lib/history";
 import { formatTabularAnswer, tabularSourceOf, type TabularSource } from "../lib/tabularAnswer";
 import {
@@ -168,6 +179,13 @@ export interface ChatEntry extends ChatTurn {
   targetingChoice?: TargetingChoice;
   /** The timings and counts of this question, for the developer panel. Numbers and codes only. */
   diagnostics?: RetrievalDiagnostics;
+  /** The computed figure this answer carries, with the selection it was given under: what "Expliquer le
+   * calcul" and "Demander a l'IA" ask about, so a selection changed since does not change the figure
+   * they explain (TABULAR step 06). Absent for an answer with no figure. */
+  calculation?: StoredCalculation;
+  /** The explanation of the method behind the figure, added under it (`lib/calculationFollowUp.ts`).
+   * Replaced, never stacked, when the button is pressed again. */
+  explanation?: EntryExplanation;
 }
 
 export interface ChatState {
@@ -192,6 +210,13 @@ export interface ChatState {
    * selection, or narrow to the names she picked. Replaces the answer the way a regenerate does, and
    * the choice is kept if that answer is regenerated. */
   retarget: (answerEntryId: string, choice: TargetingChoice) => Promise<void>;
+  /** "Expliquer le calcul" under a figure: the model explains the method from a record the program
+   * builds, and the explanation is added under the figure. Nothing is truncated and no document is
+   * searched. */
+  explainCalculation: (answerEntryId: string) => Promise<void>;
+  /** "Demander a l'IA" under a figure: the model analyses the figure the program computed again, with
+   * the ticked documents when there are some. Replaces the answer, as a regenerate does. */
+  analyseCalculation: (answerEntryId: string) => Promise<void>;
   /** Close the error banner. A failure that has already happened should not keep taking up the
    * conversation until the next question succeeds. */
   dismissError: () => void;
@@ -237,6 +262,9 @@ export function useChat(
   /** What she asked a stop to leave behind, recorded when she clicked rather than worked out again
    * once the request has ended - by then the phase has moved on. Null means no stop was asked for. */
   const stopRequest = useRef<StopOutcome | null>(null);
+  /** An explanation is being written. Its stop keeps the figure and the answer and never gives a
+   * question back to the composer, which a plain stop before any word would. */
+  const explaining = useRef(false);
 
   /**
    * The turn itself, shared by a fresh question, an edited repost and a regenerate: all three are
@@ -252,6 +280,9 @@ export function useChat(
       text: string,
       skipDeterministic = false,
       choice?: TargetingChoice,
+      /** The analysis of a figure: asked about the figure on screen under the selection that answer was
+       * given under (TABULAR step 06). */
+      analyse?: StoredCalculation,
     ) => {
       if (phase !== "idle" || !hasWorkFolder) {
         return;
@@ -343,6 +374,8 @@ export function useChat(
           current.filter((entry) => entry.id !== questionId && entry.id !== answerId),
         );
       const startedAt = performance.now();
+      /* The selection this answer is given under: the stored one for the analysis of a figure. */
+      const answeredUnder = analyse === undefined ? scope : analyse.scope;
 
       try {
         const result = await askWithSources(
@@ -351,12 +384,13 @@ export function useChat(
           onSources,
           onFolderAnswer,
           skipDeterministic,
-          scope,
+          answeredUnder,
           // What the conversation was before this question - `baseEntries` rather than `entries`,
           // so a repost or a regenerate remembers the conversation it truncated to.
           conversationHistory(baseEntries),
           targetingRequestFor(choice, previousTargeting, text),
           onTargeting,
+          analyse === undefined ? {} : { calculationFollowUp: followUpOf("analyse", analyse) },
         );
         /* Every path below merges into the entry, so what the knowledge base did, how long the
            question took and what was done with each workbook are put on it once, here, whichever
@@ -384,6 +418,7 @@ export function useChat(
              disambiguation) is the whole answer, formatted the same way tier 2's own is. */
           const mixed = result.mixedAnswer;
           const source = mixed.table === null ? null : tabularSourceOf(mixed.table);
+          const calculation = storedCalculationOf(mixed.table, answeredUnder, analyse !== undefined);
           const cards: WorkbookCardUse[] = result.workbookUse
             .filter((use) => use.how === "card_sent")
             .map(({ file, rowsSent, rowsTotal }) => ({ file, rowsSent, rowsTotal }));
@@ -400,6 +435,7 @@ export function useChat(
                       : { durationMs: performance.now() - startedAt, modelAlias }),
                     ...(outdated === undefined ? {} : { scopeOutdated: outdated }),
                     mixed: true as const,
+                    ...(calculation === undefined ? {} : { calculation }),
                     ...(mixed.table === null ? {} : { mixedTable: mixed.table }),
                     ...(source === null ? {} : { mixedTableSource: source }),
                     ...(cards.length === 0 ? {} : { workbookCards: cards }),
@@ -450,6 +486,7 @@ export function useChat(
               ? (tabularAnswer.modelAttempt ?? null)
               : null;
           const retryable = tabularAnswer.kind === "value" || tabularAnswer.kind === "nudge";
+          const calculation = storedCalculationOf(tabularAnswer, answeredUnder);
           setEntries((current) =>
             current.map((entry) =>
               entry.id === answerId
@@ -481,6 +518,7 @@ export function useChat(
                       ? { choices: choicesFromTabular(tabularAnswer) }
                       : {}),
                     ...(retryable ? { tabularRetryable: true as const } : {}),
+                    ...(calculation === undefined ? {} : { calculation }),
                     ...(source === null ? {} : { tabularSource: source }),
                     ...(nudge ? { tabularNudge: true as const } : {}),
                     ...(result.documentsNotNeeded ? { documentsNotNeeded: true as const } : {}),
@@ -635,11 +673,147 @@ export function useChat(
       // byte - it is computed, not written. On those the control means something else: ask the
       // model this time. The interface says so, and it is the same button either way.
       const answer = entries.find((entry) => entry.id === answerEntryId);
+      // The analysis of a figure is asked again as an analysis, of the same figure under the same
+      // selection; it is not turned back into the plain figure.
+      if (answer?.calculation?.analysed === true) {
+        return runTurn(
+          truncated.base,
+          truncated.question,
+          false,
+          answer.targetingChoice,
+          answer.calculation,
+        );
+      }
       const wasDeterministic = answer?.deterministic === true;
       // What she asked of the knowledge base on this answer (a widen, a name) is asked again.
       return runTurn(truncated.base, truncated.question, wasDeterministic, answer?.targetingChoice);
     },
     [runTurn, entries],
+  );
+
+  const analyseCalculation = useCallback(
+    (answerEntryId: string) => {
+      const truncated = truncateForRegenerate(entries, answerEntryId);
+      const answer = entries.find((entry) => entry.id === answerEntryId);
+      if (truncated === null || answer?.calculation === undefined) {
+        return Promise.resolve();
+      }
+      return runTurn(
+        truncated.base,
+        truncated.question,
+        false,
+        answer.targetingChoice,
+        answer.calculation,
+      );
+    },
+    [runTurn, entries],
+  );
+
+  const explainCalculation = useCallback(
+    async (answerEntryId: string) => {
+      if (phase !== "idle" || !hasWorkFolder) {
+        return;
+      }
+      const position = entries.findIndex((entry) => entry.id === answerEntryId);
+      const answer = entries[position];
+      const question = entries[position - 1];
+      if (answer?.calculation === undefined || question?.role !== "user") {
+        return;
+      }
+      const calculation = answer.calculation;
+      const setExplanation = (explanation: EntryExplanation | undefined) =>
+        setEntries((current) =>
+          current.map((entry) =>
+            entry.id === answerEntryId ? withExplanation(entry, explanation) : entry,
+          ),
+        );
+      stopRequest.current = null;
+      explaining.current = true;
+      setError(null);
+      setPhase("thinking");
+      /* Replaces the block of an earlier press: the figure and the answer above it are not touched. */
+      setExplanation(beginExplanation());
+      const onDelta = (delta: string) => {
+        setPhase(phaseAfterFirstText);
+        setEntries((current) =>
+          current.map((entry) =>
+            entry.id === answerEntryId
+              ? withExplanation(entry, appendExplanation(entry.explanation, delta))
+              : entry,
+          ),
+        );
+      };
+      try {
+        const result = await askWithSources(
+          question.content,
+          onDelta,
+          () => {},
+          undefined,
+          false,
+          calculation.scope,
+          [],
+          undefined,
+          undefined,
+          { calculationFollowUp: followUpOf("explain", calculation) },
+        );
+        const explanation = result.explanation;
+        setEntries((current) =>
+          current.map((entry) =>
+            entry.id === answerEntryId
+              ? {
+                  ...withExplanation(
+                    entry,
+                    settleExplanation(
+                      explanation ?? {
+                        text: "",
+                        unavailable: true,
+                        unverifiedNumbers: [],
+                        modelArithmetic: [],
+                      },
+                    ),
+                  ),
+                  workbookUse: [
+                    ...(entry.workbookUse ?? []).filter((use) => use.how !== "explained"),
+                    ...result.workbookUse,
+                  ],
+                }
+              : entry,
+          ),
+        );
+      } catch (raw: unknown) {
+        const failure = normaliseError(raw);
+        if (wasStopped(failure.code)) {
+          // Her own stop: what was written stays, an empty block goes. No banner.
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerEntryId
+                ? withExplanation(entry, stoppedExplanation(entry.explanation))
+                : entry,
+            ),
+          );
+        } else {
+          // The figure is untouched. The block goes (or keeps what was written when the AI went quiet).
+          setError(failure);
+          setEntries((current) =>
+            current.map((entry) =>
+              entry.id === answerEntryId
+                ? withExplanation(
+                    entry,
+                    failure.code === SERVER_TIMEOUT
+                      ? stoppedExplanation(entry.explanation)
+                      : undefined,
+                  )
+                : entry,
+            ),
+          );
+          onFailure?.();
+        }
+      } finally {
+        explaining.current = false;
+        setPhase("idle");
+      }
+    },
+    [phase, entries, hasWorkFolder, onFailure],
   );
 
   const retarget = useCallback(
@@ -656,6 +830,12 @@ export function useChat(
   );
 
   const stop = useCallback((): string | null => {
+    // An explanation under a figure: there is no question to give back, and the figure stays.
+    if (explaining.current && phase !== "idle") {
+      stopRequest.current = "keepPartialAnswer";
+      void cancelChat();
+      return null;
+    }
     const outcome = stopOutcome(phase);
     if (outcome === null) {
       return null;
@@ -687,6 +867,8 @@ export function useChat(
     resend,
     regenerate,
     retarget,
+    explainCalculation,
+    analyseCalculation,
     stop,
     dismissError,
     clear,

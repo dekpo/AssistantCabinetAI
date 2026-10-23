@@ -33,6 +33,9 @@ function lineOf(t: Translator, use: WorkbookUse): WorkbookUseLine {
       return { text: t("workbookUse.computed", { path }), caution: false };
     case "plan_prepared":
       return { text: t("workbookUse.planPrepared", { path }), caution: false };
+    // The model explained the method of a figure: informative, not a caution (TABULAR step 06).
+    case "explained":
+      return { text: t("workbookUse.explained", { path }), caution: false };
     case "card_sent": {
       const base = t(`workbookUse.cardSent.${use.reason ?? "named"}`, { path });
       return use.truncated

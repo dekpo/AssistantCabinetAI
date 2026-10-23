@@ -12,7 +12,9 @@
 //! model writes and the engines compute - so that session does not have to invent the
 //! model-facing text under pressure.
 
-use super::engine::{TabularDerivation, TabularOutcome, TabularValue};
+use super::engine::{
+    AppliedFilter, TabularDerivation, TabularLocator, TabularOutcome, TabularValue,
+};
 
 /// English, like every instruction (`docs/LANGUAGE-AND-LOCALE.md`); short, for the same reason
 /// `NO_DOCUMENTS_INSTRUCTION` is short - small models echo long rule lists back into their
@@ -70,6 +72,171 @@ pub fn format_evidence(outcome: &TabularOutcome) -> Option<String> {
         "Sheet {}{column}: {operation} = {described} (computed over {row_count} row{plural})",
         locator.sheet,
     ))
+}
+
+/// What the program holds about one computed figure, the input of `format_calculation_record`
+/// (TABULAR plan 4.6). Borrowed from the engine's own outcome; `data_rows` is the inventory's count of
+/// data rows of the sheet the figure was read from, when it is known.
+pub struct CalculationRecord<'a> {
+    /// The user's question as written. Left out when the turn already carries it.
+    pub question: Option<&'a str>,
+    /// The workbook as the interface names it (the plain path and, for the other folder, where it
+    /// lies): `tabular::card::file_label`.
+    pub workbook: &'a str,
+    pub data_rows: Option<usize>,
+    pub value: &'a TabularValue,
+    pub locator: &'a TabularLocator,
+    pub derivation: &'a TabularDerivation,
+}
+
+/// The record of a calculation, as text for the model: what was understood from the question, the sheet
+/// and the column, the operation, the rows kept and left out, and the result. **No cell value and no
+/// row** (only the filter values the user wrote or the engine resolved, the same ones the "Understood
+/// as" line shows, and the group labels `format_evidence` already sends); every number in it comes from
+/// the engine. `None` for a list of rows, which never reaches a model.
+pub fn format_calculation_record(record: &CalculationRecord<'_>) -> Option<String> {
+    if matches!(record.value, TabularValue::Rows(_)) {
+        return None;
+    }
+    let (operation, row_count, model_alias) = match record.derivation {
+        TabularDerivation::Computed {
+            operation,
+            row_count,
+        } => (operation, *row_count, None),
+        TabularDerivation::InterpretedByModel {
+            operation,
+            row_count,
+            model_alias,
+            ..
+        } => (operation, *row_count, Some(model_alias.as_str())),
+    };
+    let locator = record.locator;
+    let mut lines = vec!["Calculation record:".to_string()];
+    if let Some(question) = record.question {
+        lines.push(format!("Question: {question}"));
+    }
+    let header = match locator.header_row {
+        Some(row) => format!("header on row {}", row + 1),
+        None => "no header row detected".to_string(),
+    };
+    lines.push(format!(
+        "Workbook {}, sheet \"{}\" ({header})",
+        record.workbook, locator.sheet
+    ));
+    let unit = numeric_of(record.value)
+        .and_then(|aggregate| aggregate.unit.as_deref())
+        .map(|unit| format!(" ({unit})"))
+        .unwrap_or_default();
+    lines.push(format!(
+        "Operation: {}{unit}",
+        describe_operation(operation, locator.column.as_deref())
+    ));
+    if let Some(alias) = model_alias {
+        lines.push(format!(
+            "Reading of the question: proposed by the language model {alias}, then checked and \
+             computed by the program"
+        ));
+    }
+    if !locator.filters.is_empty() {
+        let filters: Vec<String> = locator
+            .filters
+            .iter()
+            .map(describe_applied_filter)
+            .collect();
+        lines.push(format!("Understood as: {}", filters.join("; ")));
+    }
+    let plural = if row_count == 1 { "" } else { "s" };
+    lines.push(match record.data_rows {
+        Some(total) => format!("Rows: {row_count} kept out of {total} data rows"),
+        None => format!("Rows: {row_count} row{plural} kept"),
+    });
+    if let Some(aggregate) = numeric_of(record.value) {
+        if aggregate.unparsed > 0 {
+            let column = locator
+                .column
+                .as_deref()
+                .map(|name| format!(" \"{name}\""))
+                .unwrap_or_default();
+            lines.push(format!(
+                "Left out: {} values in column{column} that could not be read as numbers (counted \
+                 over the whole column)",
+                aggregate.unparsed
+            ));
+        }
+    }
+    lines.push(format!("Result: {}", describe_value(record.value)));
+    Some(lines.join("\n"))
+}
+
+fn numeric_of(value: &TabularValue) -> Option<&super::engine::NumericAggregate> {
+    match value {
+        TabularValue::Sum(aggregate)
+        | TabularValue::Min(aggregate)
+        | TabularValue::Max(aggregate)
+        | TabularValue::Mean(aggregate)
+        | TabularValue::Median(aggregate) => Some(aggregate),
+        _ => None,
+    }
+}
+
+/// The operation in words, from the engine's machine name; a name this function does not know is
+/// written as it is, never dropped.
+fn describe_operation(operation: &str, column: Option<&str>) -> String {
+    let of_column = column
+        .map(|name| format!(" of column \"{name}\""))
+        .unwrap_or_default();
+    match operation {
+        "sum" => format!("sum{of_column}"),
+        "mean" => format!("average{of_column}"),
+        "median" => format!("median{of_column}"),
+        "min" => format!("smallest value{of_column}"),
+        "max" => format!("largest value{of_column}"),
+        "count" => "count of rows".to_string(),
+        "distinct" => format!("distinct values{of_column}"),
+        "largest_group" => format!("group with the largest total{of_column}"),
+        "least_group" => format!("group with the smallest total{of_column}"),
+        "group_sum" => format!("total per group{of_column}"),
+        "top_n" => format!("groups with the largest totals{of_column}"),
+        "groups_beyond" => format!("groups whose total is beyond a threshold{of_column}"),
+        "count_per_group" => "count of rows per group".to_string(),
+        other => format!("{other}{of_column}"),
+    }
+}
+
+fn describe_applied_filter(filter: &AppliedFilter) -> String {
+    match filter {
+        AppliedFilter::Equals { column, value } => format!("{column} = \"{value}\""),
+        AppliedFilter::Contains { column, value } => format!("{column} contains \"{value}\""),
+        AppliedFilter::GreaterThan { column, threshold } => format!("{column} > {threshold}"),
+        AppliedFilter::LessThan { column, threshold } => format!("{column} < {threshold}"),
+        AppliedFilter::Between { column, low, high } => {
+            format!("{column} between {low} and {high}")
+        }
+        AppliedFilter::Weekday { column, weekday } => {
+            format!("{column} falls on a {}", weekday_name(*weekday))
+        }
+        AppliedFilter::Month { column, month } => format!("{column} in month {month}"),
+        AppliedFilter::Year { column, year } => format!("{column} in year {year}"),
+        AppliedFilter::DateRange { column, start, end } => {
+            format!("{column} between {start} and {end}")
+        }
+        AppliedFilter::In { column, values } => {
+            let listed: Vec<String> = values.iter().map(|value| format!("\"{value}\"")).collect();
+            format!("{column} is one of {}", listed.join(", "))
+        }
+    }
+}
+
+fn weekday_name(weekday: u8) -> &'static str {
+    match weekday {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        6 => "Saturday",
+        _ => "Sunday",
+    }
 }
 
 fn describe_value(value: &TabularValue) -> String {
@@ -221,6 +388,168 @@ mod tests {
 
         assert_eq!(format_evidence(&outcome), None);
         assert_eq!(build_context_turn(&outcome), None);
+    }
+
+    fn record_of<'a>(
+        value: &'a TabularValue,
+        locator: &'a TabularLocator,
+        derivation: &'a TabularDerivation,
+    ) -> CalculationRecord<'a> {
+        CalculationRecord {
+            question: Some("What is the total of the orders?"),
+            workbook: "\"orders.xlsx\"",
+            data_rows: Some(124),
+            value,
+            locator,
+            derivation,
+        }
+    }
+
+    fn filtered_sum() -> (TabularValue, TabularLocator, TabularDerivation) {
+        (
+            TabularValue::Sum(NumericAggregate {
+                value: 8412.5,
+                unit: Some("EUR".into()),
+                unparsed: 2,
+            }),
+            TabularLocator {
+                sheet: "Commandes".into(),
+                header_row: Some(0),
+                column: Some("Montant TTC".into()),
+                row_range: Some((3, 90)),
+                filters: vec![
+                    AppliedFilter::Equals {
+                        column: "Statut".into(),
+                        value: "a payer".into(),
+                    },
+                    AppliedFilter::DateRange {
+                        column: "Date".into(),
+                        start: "2026-01-01".into(),
+                        end: "2026-03-31".into(),
+                    },
+                ],
+            },
+            TabularDerivation::Computed {
+                operation: "sum".into(),
+                row_count: 41,
+            },
+        )
+    }
+
+    #[test]
+    fn the_record_states_the_question_the_workbook_the_sheet_and_the_header_row() {
+        let (value, locator, derivation) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(
+            text.starts_with("Calculation record:\nQuestion: What is the total of the orders?\n")
+        );
+        assert!(text.contains("Workbook \"orders.xlsx\", sheet \"Commandes\" (header on row 1)"));
+    }
+
+    #[test]
+    fn the_record_names_the_operation_the_column_and_the_unit() {
+        let (value, locator, derivation) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(text.contains("Operation: sum of column \"Montant TTC\" (EUR)"));
+    }
+
+    #[test]
+    fn the_record_lists_the_filters_the_value_was_computed_under() {
+        let (value, locator, derivation) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(text.contains(
+            "Understood as: Statut = \"a payer\"; Date between 2026-01-01 and 2026-03-31"
+        ));
+    }
+
+    #[test]
+    fn an_unfiltered_value_has_no_understood_as_line() {
+        let (value, mut locator, derivation) = filtered_sum();
+        locator.filters.clear();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(!text.contains("Understood as"));
+    }
+
+    #[test]
+    fn the_record_counts_the_rows_kept_out_of_the_data_rows() {
+        let (value, locator, derivation) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(text.contains("Rows: 41 kept out of 124 data rows"));
+
+        let mut unknown = record_of(&value, &locator, &derivation);
+        unknown.data_rows = None;
+        let text = format_calculation_record(&unknown).unwrap();
+        assert!(text.contains("Rows: 41 rows kept"));
+        assert!(!text.contains("out of"));
+    }
+
+    #[test]
+    fn the_record_says_what_was_left_out_as_unreadable() {
+        let (value, locator, derivation) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(text.contains(
+            "Left out: 2 values in column \"Montant TTC\" that could not be read as numbers"
+        ));
+
+        let clean = TabularValue::Sum(NumericAggregate {
+            value: 8412.5,
+            unit: None,
+            unparsed: 0,
+        });
+        let text = format_calculation_record(&record_of(&clean, &locator, &derivation)).unwrap();
+        assert!(!text.contains("Left out"));
+    }
+
+    #[test]
+    fn the_record_ends_with_the_engines_result() {
+        let (value, locator, derivation) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(text.ends_with("Result: 8412.5"));
+    }
+
+    #[test]
+    fn a_value_computed_from_the_models_plan_says_so_and_names_the_model() {
+        let (value, locator, _) = filtered_sum();
+        let derivation = TabularDerivation::InterpretedByModel {
+            operation: "sum".into(),
+            row_count: 41,
+            model_alias: "cabinet-chat".into(),
+            plan: serde_json::json!({"aggregate": {"op": "sum", "column": "Montant TTC"}}),
+        };
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+
+        assert!(text.contains("proposed by the language model cabinet-chat"));
+        assert!(text.contains("checked and computed by the program"));
+        // The plan itself is the model's JSON: it is not part of the record.
+        assert!(!text.contains("aggregate"));
+    }
+
+    #[test]
+    fn the_record_carries_neither_a_cell_value_nor_a_row() {
+        let (_, locator, derivation) = filtered_sum();
+        let row = TabularValue::Rows(vec![RowValue {
+            row_index: 0,
+            cells: vec![CellText {
+                column: "Fournisseur".into(),
+                text: "Zorglub Industries".into(),
+            }],
+        }]);
+        assert_eq!(
+            format_calculation_record(&record_of(&row, &locator, &derivation)),
+            None
+        );
+
+        // A figure whose column holds a distinctive name in its cells: the record never reads cells.
+        let (value, _, _) = filtered_sum();
+        let text = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+        assert!(!text.contains("Zorglub"));
     }
 
     #[test]

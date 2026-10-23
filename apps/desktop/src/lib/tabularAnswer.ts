@@ -80,6 +80,24 @@ export function formatTabularAnswer(
       return t("tabularAnswer.noMatch", { query: answer.query });
     case "no_usable_table":
       return t("tabularAnswer.noUsableTable");
+    case "fill_needs_template":
+      return t("tabularAnswer.fillNeedsTemplate", { file: displayPathOfKey("data", answer.file) });
+    case "fill_needs_sheet":
+      return [
+        t("tabularAnswer.fillNeedsSheet", { file: displayPathOfKey("data", answer.file) }),
+        "",
+        ...answer.sheets.map((sheet) =>
+          sheet.looksTabular
+            ? `- ${sheet.name}`
+            : `- ${sheet.name} ${t("tabularAnswer.fillSheetNotATable")}`,
+        ),
+      ].join("\n");
+    case "fill_several_sources":
+      return [
+        t("tabularAnswer.fillSeveralSources"),
+        "",
+        ...answer.candidates.map((file) => `- ${displayPathOfKey("data", file)}`),
+      ].join("\n");
   }
 }
 

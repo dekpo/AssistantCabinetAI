@@ -185,6 +185,32 @@ pub enum TabularAnswer {
     NoMatchingFile { query: String },
     /// "Tous" was chosen, and no workbook in the folder is usable.
     NoUsableTable,
+    /// A letter was asked for each row (or for an identifier) of a workbook the question names, and
+    /// no template among the documents fits its columns: nothing is written, and no model improvises
+    /// the letters (TABULAR step 08; step 09 drafts a template).
+    FillNeedsTemplate { file: String },
+    /// The workbook a letter would be filled from holds several sheets and the question names none:
+    /// asked, never picked. A sheet that holds no data table is listed too, marked as such.
+    FillNeedsSheet {
+        file: String,
+        sheets: Vec<FillSheet>,
+    },
+    /// The question names several workbooks for a letter: asked, never picked. `query` is the one
+    /// name, as typed, that two files carry (the interface replaces it by the file she picks);
+    /// `None` when the question names several different files, which no single button can settle.
+    FillSeveralSources {
+        candidates: Vec<String>,
+        query: Option<String>,
+    },
+}
+
+/// A sheet of a workbook, offered when a letter cannot pick the one it is filled from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FillSheet {
+    pub name: String,
+    /// False for a sheet that holds no data table (a note, a calculation sheet).
+    pub looks_tabular: bool,
 }
 
 /// One selected workbook, with the sheets its entry was narrowed to.
@@ -1300,7 +1326,7 @@ pub fn open_single_sheet_workbook(
         }
     }
     let (workbook, inventory, sheet) =
-        open_for_fill(data, record, choice.sheets.as_deref(), locale, index)?;
+        open_for_fill(data, record, choice.sheets.as_deref(), None, locale, index)?;
     Some(OpenedWorkbook {
         workbook,
         inventory,
@@ -1342,7 +1368,7 @@ impl NamedWorkbooks {
     }
 
     /// Whether `file` is one the question names, or one it may mean.
-    fn covers(&self, file: &str) -> bool {
+    pub fn covers(&self, file: &str) -> bool {
         self.exact.iter().any(|named| named == file)
             || self
                 .ambiguous
@@ -2079,6 +2105,7 @@ fn with_model_attempt(answer: TabularAnswer, model_alias: &str, elapsed: Duratio
 }
 
 /// A workbook's single sheet as the text a letter is filled from, with the identifier that chose it.
+#[derive(Debug)]
 pub struct FillSource {
     /// Relative to the data folder.
     pub file: String,
@@ -2110,31 +2137,165 @@ fn fill_table_of(workbook: &Workbook, sheet_inventory: &SheetInventory) -> Optio
     })
 }
 
-/// Opens one analysed workbook for a mail merge: its single reachable sheet as a table. `None` for a
-/// workbook that is not analysed, unreadable, changed since, or has several reachable sheets (a letter
-/// is never filled from a sheet picked for her).
-fn open_for_fill(
+/// Opens one analysed workbook for a mail merge, whole, before a sheet is picked. `None` for a
+/// workbook that is not analysed, unreadable or changed since.
+fn open_workbook_for_fill(
     data: &DataFolder,
     record: &FileRecord,
-    allowed: Option<&[String]>,
     locale: &str,
     index: &IndexStore,
-) -> Option<(Workbook, TabularInventory, String)> {
+) -> Option<(Workbook, TabularInventory)> {
     if record.processing_status != ProcessingStatus::Indexed {
         return None;
     }
     let inventory = data.usable_inventory(&record.relative_path)?;
     let path = data.files().absolute_path(record)?;
-    let (workbook, fresh) =
-        load_workbook_cached(index, &path, &record.relative_path, inventory, locale).ok()?;
-    let sheet = engine::resolve_sheet_inventory(&fresh, None, allowed).ok()?.name.clone();
+    load_workbook_cached(index, &path, &record.relative_path, inventory, locale).ok()
+}
+
+/// Opens one analysed workbook for a mail merge with its sheet: `requested` when the caller names one,
+/// otherwise the single reachable sheet. `None` for a workbook that is not analysed, unreadable,
+/// changed since, or whose sheet is not settled (several reachable sheets and none requested, a
+/// requested sheet that is not there): a letter is never filled from a sheet picked for her.
+fn open_for_fill(
+    data: &DataFolder,
+    record: &FileRecord,
+    allowed: Option<&[String]>,
+    requested: Option<&str>,
+    locale: &str,
+    index: &IndexStore,
+) -> Option<(Workbook, TabularInventory, String)> {
+    let (workbook, fresh) = open_workbook_for_fill(data, record, locale, index)?;
+    let sheet = engine::resolve_sheet_inventory(&fresh, requested, allowed)
+        .ok()?
+        .name
+        .clone();
     Some((workbook, fresh, sheet))
 }
 
-/// The workbook, among the selected ones, that holds the identifier the question names ("order
-/// CMD-2026-002"), as a table to fill a template from. With `every_row`, a question that asked for
-/// every row needs no identifier: the one selected workbook is the source. `None` when no workbook
-/// qualifies; never a guess between two.
+/// The source of a letter on one sheet: its table, and the identifier the question named in it.
+/// `None` when the sheet cannot be read as a table, or when the question names no identifier and did
+/// not ask for every row.
+fn fill_source_of(
+    question: &str,
+    file: &str,
+    workbook: &Workbook,
+    sheet_inventory: &SheetInventory,
+    every_row: bool,
+) -> Option<FillSource> {
+    let table = fill_table_of(workbook, sheet_inventory)?;
+    let sheet_data = workbook
+        .sheets
+        .iter()
+        .find(|candidate| candidate.name == sheet_inventory.name);
+    let hits = sheet_data
+        .map(|data| identifier_hits(question, sheet_inventory, data_rows(sheet_inventory, data)))
+        .unwrap_or_default();
+    let key = hits.into_iter().find_map(|hit| match hit.matches.as_slice() {
+        [(column, value)] => Some((column.clone(), value.clone())),
+        _ => None,
+    });
+    (key.is_some() || every_row).then(|| FillSource {
+        file: file.to_string(),
+        sheet: sheet_inventory.name.clone(),
+        table,
+        key,
+    })
+}
+
+/// Whether the question names an identifier held by a data sheet the selection leaves reachable: the
+/// sign, with a writing intent, that a merge was asked for even though no word says "each".
+fn names_an_identifier(
+    question: &str,
+    workbook: &Workbook,
+    inventory: &TabularInventory,
+    allowed: Option<&[String]>,
+) -> bool {
+    engine::reachable_sheets(inventory, allowed)
+        .into_iter()
+        .filter(|sheet_inventory| sheet_inventory.looks_tabular())
+        .any(|sheet_inventory| {
+            workbook
+                .sheets
+                .iter()
+                .find(|candidate| candidate.name == sheet_inventory.name)
+                .is_some_and(|data| {
+                    !identifier_hits(question, sheet_inventory, data_rows(sheet_inventory, data))
+                        .is_empty()
+                })
+        })
+}
+
+/// A text as the folded words it holds, one space apart.
+fn words_of(text: &str) -> String {
+    fold_text(text)
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The one sheet the question names by its name, whole words, accents and case ignored. The file
+/// name is taken out of the question first: `ventes.xlsx` says nothing about a sheet called `Ventes`.
+/// When two names are written (`Data` and `Data 2`) the longest wins; a tie names none.
+fn sheet_named_in<'a>(
+    question: &str,
+    file: &str,
+    sheets: &[&'a SheetInventory],
+) -> Option<&'a SheetInventory> {
+    let file_name = file.rsplit('/').next().unwrap_or(file);
+    let padded = format!(" {} ", words_of(question));
+    let padded = match words_of(file_name) {
+        name if !name.is_empty() => padded.replace(&format!(" {name} "), "  "),
+        _ => padded,
+    };
+    let mut found: Vec<(&'a SheetInventory, usize)> = sheets
+        .iter()
+        .copied()
+        .filter_map(|sheet| {
+            let name = words_of(&sheet.name);
+            (!name.is_empty() && padded.contains(&format!(" {name} ")))
+                .then_some((sheet, name.len()))
+        })
+        .collect();
+    let longest = found.iter().map(|(_, length)| *length).max()?;
+    found.retain(|(_, length)| *length == longest);
+    match found.as_slice() {
+        [(sheet, _)] => Some(*sheet),
+        _ => None,
+    }
+}
+
+/// Where a letter asked for the rows of a workbook is filled from.
+#[derive(Debug)]
+pub enum FillLocation {
+    /// One workbook, one sheet, and the identifier the question named (or every row).
+    Found(FillSource),
+    /// No workbook qualifies: the question is not a merge request, or names nothing that is one.
+    NoSource,
+    /// The question names several workbooks for a merge: asked, never picked. Index keys.
+    SeveralSources(Vec<String>),
+    /// The workbook the question names holds several sheets and the question names none of them.
+    SheetToChoose {
+        file: String,
+        sheets: Vec<FillSheet>,
+    },
+}
+
+/// The workbook a letter is filled from, as a table.
+///
+/// A workbook the question **names** wins (`named`, from `named_workbooks`, computed from what the
+/// user ticked): it is the only candidate and the only one opened, whatever `every_row` says about
+/// the others. Two named for a merge are asked about, never picked between. A named workbook of
+/// several reachable sheets is asked about too, unless the question names one of its sheets: a
+/// letter is never filled from a sheet picked for her.
+///
+/// A merge request is a writing intent that asks for every row or names an identifier a workbook
+/// holds; a writing intent alone is an editorial request, left to the writer (`NoSource`).
+///
+/// With no workbook named: the one selected workbook that holds the identifier the question names
+/// ("order CMD-2026-002"), or, with `every_row`, the one selected workbook; never a guess between
+/// two (`NoSource`).
 pub fn locate_fill_source(
     question: &str,
     data: &DataFolder,
@@ -2142,55 +2303,144 @@ pub fn locate_fill_source(
     locale: &str,
     index: &IndexStore,
     every_row: bool,
-) -> Result<Option<FillSource>, AppError> {
+    named: &NamedWorkbooks,
+) -> Result<FillLocation, AppError> {
     let chosen = chosen_workbooks(data, selection)?;
-    let mut sources: Vec<FillSource> = Vec::new();
-    for each in &chosen {
-        let Some((workbook, fresh, sheet)) =
-            open_for_fill(data, each.record, each.sheets.as_deref(), locale, index)
-        else {
-            continue;
-        };
-        let Some(sheet_inventory) = fresh.sheets.iter().find(|candidate| candidate.name == sheet) else {
-            continue;
-        };
-        let Some(table) = fill_table_of(&workbook, sheet_inventory) else {
-            continue;
-        };
-        let sheet_data = workbook.sheets.iter().find(|candidate| candidate.name == sheet);
-        let hits = sheet_data
-            .map(|data| identifier_hits(question, sheet_inventory, data_rows(sheet_inventory, data)))
-            .unwrap_or_default();
-        let key = hits.into_iter().find_map(|hit| match hit.matches.as_slice() {
-            [(column, value)] => Some((column.clone(), value.clone())),
-            _ => None,
-        });
-        if key.is_some() || every_row {
-            sources.push(FillSource {
-                file: each.record.relative_path.clone(),
-                sheet,
-                table,
-                key,
-            });
+    let mut named_files: Vec<&Chosen> = Vec::new();
+    // The stem of a file written in full (`Test/factures.xlsx` also reads as the name `factures` that
+    // two files carry) is not a second name: an ambiguous name counts only when none of the files it
+    // may mean is already named exactly.
+    let ambiguous = named
+        .ambiguous
+        .iter()
+        .filter(|(_, candidates)| !candidates.iter().any(|each| named.exact.contains(each)))
+        .flat_map(|(_, candidates)| candidates);
+    for file in named.exact.iter().chain(ambiguous) {
+        if let Some(each) = chosen
+            .iter()
+            .find(|each| &each.record.relative_path == file)
+        {
+            if !named_files
+                .iter()
+                .any(|seen| seen.record.relative_path == each.record.relative_path)
+            {
+                named_files.push(each);
+            }
         }
     }
-    // Exactly one workbook qualifies; with several, nothing is picked for her.
-    Ok(match sources.len() {
-        1 => sources.pop(),
-        _ => None,
-    })
+
+    // A workbook the question names exists but is not ticked: no other workbook takes its place.
+    if named_files.is_empty() && !named.not_selected.is_empty() {
+        return Ok(FillLocation::NoSource);
+    }
+
+    if named_files.is_empty() {
+        let mut sources: Vec<FillSource> = Vec::new();
+        for each in &chosen {
+            let Some((workbook, fresh, sheet)) =
+                open_for_fill(data, each.record, each.sheets.as_deref(), None, locale, index)
+            else {
+                continue;
+            };
+            let Some(sheet_inventory) = fresh.sheets.iter().find(|candidate| candidate.name == sheet)
+            else {
+                continue;
+            };
+            sources.extend(fill_source_of(
+                question,
+                &each.record.relative_path,
+                &workbook,
+                sheet_inventory,
+                every_row,
+            ));
+        }
+        // Exactly one workbook qualifies; with several, nothing is picked for her.
+        return Ok(match sources.len() {
+            1 => sources
+                .pop()
+                .map_or(FillLocation::NoSource, FillLocation::Found),
+            _ => FillLocation::NoSource,
+        });
+    }
+
+    if named_files.len() > 1 {
+        let asks_for_a_merge = every_row
+            || named_files.iter().any(|each| {
+                open_workbook_for_fill(data, each.record, locale, index).is_some_and(
+                    |(workbook, inventory)| {
+                        names_an_identifier(question, &workbook, &inventory, each.sheets.as_deref())
+                    },
+                )
+            });
+        return Ok(match asks_for_a_merge {
+            true => FillLocation::SeveralSources(
+                named_files
+                    .iter()
+                    .map(|each| each.record.relative_path.clone())
+                    .collect(),
+            ),
+            false => FillLocation::NoSource,
+        });
+    }
+
+    let each = named_files[0];
+    let file = each.record.relative_path.as_str();
+    let allowed = each.sheets.as_deref();
+    let Some((workbook, inventory)) = open_workbook_for_fill(data, each.record, locale, index)
+    else {
+        return Ok(FillLocation::NoSource);
+    };
+    let reachable = engine::reachable_sheets(&inventory, allowed);
+    let requested: Option<String> = match reachable.len() {
+        0 => return Ok(FillLocation::NoSource),
+        1 => None,
+        _ => match sheet_named_in(question, file, &reachable) {
+            Some(sheet) if sheet.looks_tabular() => Some(sheet.name.clone()),
+            _ => {
+                let asks_for_a_merge =
+                    every_row || names_an_identifier(question, &workbook, &inventory, allowed);
+                return Ok(match asks_for_a_merge {
+                    true => FillLocation::SheetToChoose {
+                        file: file.to_string(),
+                        sheets: reachable
+                            .iter()
+                            .map(|sheet| FillSheet {
+                                name: sheet.name.clone(),
+                                looks_tabular: sheet.looks_tabular(),
+                            })
+                            .collect(),
+                    },
+                    false => FillLocation::NoSource,
+                });
+            }
+        },
+    };
+    let Ok(sheet_inventory) =
+        engine::resolve_sheet_inventory(&inventory, requested.as_deref(), allowed)
+    else {
+        return Ok(FillLocation::NoSource);
+    };
+    Ok(
+        match fill_source_of(question, file, &workbook, sheet_inventory, every_row) {
+            Some(source) => FillLocation::Found(source),
+            None => FillLocation::NoSource,
+        },
+    )
 }
 
-/// A workbook's single sheet as a table, by its path relative to the data folder (the preview and
-/// the generation re-read it rather than trust what the interface sends back).
+/// A workbook's sheet as a table, by its path relative to the data folder (the preview and the
+/// generation re-read it rather than trust what the interface sends back). `sheet` is the one the
+/// plan was built from; it is looked up in the workbook itself and refused when the workbook has no
+/// such sheet. `None` asks for the single sheet of a workbook that has one.
 pub fn load_fill_table(
     data: &DataFolder,
     file: &str,
+    sheet: Option<&str>,
     locale: &str,
     index: &IndexStore,
 ) -> Option<(String, crate::template_fill::Table)> {
     let record = data.files().find_by_relative_path(file)?;
-    let (workbook, fresh, sheet) = open_for_fill(data, record, None, locale, index)?;
+    let (workbook, fresh, sheet) = open_for_fill(data, record, None, sheet, locale, index)?;
     let sheet_inventory = fresh.sheets.iter().find(|candidate| candidate.name == sheet)?;
     let table = fill_table_of(&workbook, sheet_inventory)?;
     Some((sheet, table))

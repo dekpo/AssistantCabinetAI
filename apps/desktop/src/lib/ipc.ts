@@ -997,7 +997,21 @@ export type TabularAnswer =
   | { kind: "ambiguous_reference"; query: string; candidates: string[] }
   | { kind: "file_not_selected"; query: string }
   | { kind: "no_matching_file"; query: string }
-  | { kind: "no_usable_table" };
+  | { kind: "no_usable_table" }
+  /** A letter for each row of a workbook the question names, and no template fits its columns:
+   * nothing is written and no model improvises letters (TABULAR step 08). */
+  | { kind: "fill_needs_template"; file: string }
+  /** The workbook the letter is filled from has several sheets: asked, never picked. */
+  | { kind: "fill_needs_sheet"; file: string; sheets: FillSheet[] }
+  /** The question names several workbooks for a letter: asked, never picked. */
+  | { kind: "fill_several_sources"; candidates: string[]; query: string | null };
+
+/** One sheet offered when a letter cannot pick one; `looksTabular` is false for a sheet that holds no
+ * data table (a note, a calculation sheet). */
+export interface FillSheet {
+  name: string;
+  looksTabular: boolean;
+}
 
 /** Why the knowledge base points at a workbook of "which workbook?": the entities of the question
  * it holds and the sheets they appear in. Orders and annotates the choice, never makes it. */
@@ -1181,7 +1195,9 @@ export type WorkbookUseReason =
   | "changed_since_analysis"
   | "ambiguous_name"
   | "not_relevant"
-  | "not_sent";
+  | "not_sent"
+  /** Named for a letter and not used: it holds several sheets and she did not say which. */
+  | "sheet_to_choose";
 
 /** One workbook an answer was built from, or one that did not serve. `file` is the index key; for
  * `named_not_selected` and `ambiguous_name` it is the name as the user typed it, and for the aggregate

@@ -12,7 +12,7 @@ use assistant_cabinet_ai_lib::fill_plan::{
 };
 use assistant_cabinet_ai_lib::index_store::IndexStore;
 use assistant_cabinet_ai_lib::inventory::{FileHashCache, WorkFolderInventory};
-use assistant_cabinet_ai_lib::tabular_answer::{self, FillSource};
+use assistant_cabinet_ai_lib::tabular_answer::{self, FillLocation, FillSource};
 use assistant_cabinet_ai_lib::template_fill::docx_text;
 
 fn fixture(name: &str) -> PathBuf {
@@ -57,15 +57,22 @@ impl Folders {
     }
 
     fn source(&self, question: &str, every_row: bool) -> Option<FillSource> {
-        tabular_answer::locate_fill_source(
+        let data = self.data();
+        let named = tabular_answer::named_workbooks(question, &data, &ScopeMode::WholeFolder);
+        match tabular_answer::locate_fill_source(
             question,
-            &self.data(),
+            &data,
             &ScopeMode::WholeFolder,
             "fr-FR",
             &self.index,
             every_row,
+            &named,
         )
         .unwrap()
+        {
+            FillLocation::Found(source) => Some(source),
+            _ => None,
+        }
     }
 }
 
@@ -75,6 +82,7 @@ fn request_from(plan: &assistant_cabinet_ai_lib::fill_plan::FillPlan, all: bool,
     FillRequest {
         template: plan.template.clone(),
         data_file: plan.data_file.clone(),
+        sheet: Some(plan.sheet.clone()),
         key_column: key_column.map(str::to_string).or_else(|| plan.key_column.clone()),
         key_value: plan.key_value.clone(),
         all,

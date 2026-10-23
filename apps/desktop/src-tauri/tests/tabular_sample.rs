@@ -172,6 +172,7 @@ async fn ask(
         sample_text: &sample.text,
         calculation: Default::default(),
         formulas: None,
+        folder_facts: "",
     };
     let (answer, generated) = mixed_answer::answer(
         question,

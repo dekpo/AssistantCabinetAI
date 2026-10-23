@@ -85,6 +85,13 @@ pub const FORMULA_REPAIR_INSTRUCTION: &str =
 pub const ANALYSIS_ADDENDUM: &str =
     "The user asked for an analysis of the table result. Treat the figure as final. Comment on what      it means, relate it to the document excerpts when there are any, point out anything that looks      unusual, and suggest next questions. Never compute a new figure; if one is needed, say which      calculation to ask for.";
 
+/// Added to the instruction only when a document the question names is targeted and its folder
+/// facts are in the turn (TABULAR step 08). English, profession-neutral, one sentence.
+pub const FOLDER_FACTS_INSTRUCTION: &str =
+    "The 'Folder facts' block is authoritative for filesystem facts only, such as which document the \
+     user named; never use it as a substitute for what a document says, and never invent a file, a \
+     name or a path.";
+
 /// The words of the formula sentence of `MIXED_INSTRUCTION` that are true only without a sample, and
 /// what a turn that carries a sample says instead (`build_turn`). Measured on 22 October 2026
 /// (TABULAR step 03b): with rows in the turn, `qwen3:4b-instruct` answered "the data is not visible
@@ -214,6 +221,9 @@ pub struct MixedContext<'a> {
     /// empty when the setting is `off` or there is nothing to send. Its figures are known facts of
     /// the turn for the number checks, as the cards are.
     pub sample_text: &'a str,
+    /// The folder facts of the one document the question names (`work_folder_context`), empty when no
+    /// document is targeted. Known facts of the turn for the number checks, as the cards are.
+    pub folder_facts: &'a str,
     /// What the calculation record and the analysis need beyond the figure (TABULAR step 06).
     pub calculation: CalculationSide<'a>,
     /// What the formulas of the answer are checked against (TABULAR step 07): the dictionaries of the
@@ -341,6 +351,7 @@ pub async fn answer(
         non_empty(context.cards_text),
         non_empty(context.sample_text),
         table_text.as_deref(),
+        non_empty(context.folder_facts),
         context.calculation.analysis,
     );
     let final_turn = format!("{instruction}\n\nQuestion: {question}");
@@ -442,6 +453,7 @@ pub async fn answer(
         &[
             context.cards_text,
             context.sample_text,
+            context.folder_facts,
             table_text.as_deref().unwrap_or_default(),
         ],
     );
@@ -453,6 +465,7 @@ pub async fn answer(
         known.extend(document_sources.iter().map(|item| item.relative_path.as_str()));
         known.push(context.cards_text);
         known.push(context.sample_text);
+        known.push(context.folder_facts);
         known.push(question);
         number_check::unsupported_numbers(&answer_text, &known, 2)
     } else {
@@ -670,7 +683,7 @@ pub(crate) fn build_turn(
     sample: Option<&str>,
     table_block: Option<&str>,
 ) -> String {
-    build_turn_for(document_sources, cards, sample, table_block, false)
+    build_turn_for(document_sources, cards, sample, table_block, None, false)
 }
 
 /// `build_turn`, with `ANALYSIS_ADDENDUM` ended onto the instruction when the user asked for the
@@ -680,6 +693,7 @@ pub(crate) fn build_turn_for(
     cards: Option<&str>,
     sample: Option<&str>,
     table_block: Option<&str>,
+    folder_facts: Option<&str>,
     analysis: bool,
 ) -> String {
     let documents_block = if document_sources.is_empty() {
@@ -702,6 +716,16 @@ pub(crate) fn build_turn_for(
         true => format!(" {ANALYSIS_ADDENDUM}"),
         false => String::new(),
     };
+    // The folder facts of a document the question names sit right after the excerpts, with one
+    // sentence in the instruction; absent, the turn is the turn without them, byte for byte.
+    let facts_sentence = match folder_facts {
+        Some(_) => format!(" {FOLDER_FACTS_INSTRUCTION}"),
+        None => String::new(),
+    };
+    let facts_block = match folder_facts {
+        Some(text) => format!("\n\n{text}"),
+        None => String::new(),
+    };
     match sample {
         Some(sample) => {
             // With rows in the turn the writer does see data, so the formula sentence must not say
@@ -709,13 +733,65 @@ pub(crate) fn build_turn_for(
             let instruction =
                 MIXED_INSTRUCTION.replace(FORMULA_NO_DATA_PHRASE, FORMULA_WITH_SAMPLE_PHRASE);
             format!(
-                "{instruction} {SAMPLE_INSTRUCTION}{addendum}\n\n{documents_block}\n\n{cards_block}\n\n{sample}\n\n{table_block}"
+                "{instruction}{facts_sentence} {SAMPLE_INSTRUCTION}{addendum}\n\n{documents_block}{facts_block}\n\n{cards_block}\n\n{sample}\n\n{table_block}"
             )
         }
         None => format!(
-            "{MIXED_INSTRUCTION}{addendum}\n\n{documents_block}\n\n{cards_block}\n\n{table_block}"
+            "{MIXED_INSTRUCTION}{facts_sentence}{addendum}\n\n{documents_block}{facts_block}\n\n{cards_block}\n\n{table_block}"
         ),
     }
+}
+
+/// What a question says about a document, among the documents of the selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedDocument {
+    /// The question points at a file: exactly, ambiguously or outside the selection. Such a question is
+    /// never narrowed by the knowledge base.
+    pub names_a_document: bool,
+    /// The one selected, readable document the question names exactly: the search is held to it and
+    /// the model is told which file it is (TABULAR step 08, case I). `None` for an ambiguous name, a
+    /// name outside the selection, or a document that cannot be searched.
+    pub targeted: Option<String>,
+}
+
+/// Resolves the document a question names among `inventory` (the selected documents); `readable` are
+/// the paths of those that were read and can be searched.
+pub fn named_document(
+    question: &str,
+    inventory: &crate::inventory::WorkFolderInventory,
+    readable: &[String],
+) -> NamedDocument {
+    let found =
+        crate::file_reference::FileReferenceResolver::new(inventory).resolve_in_question(question);
+    let names_a_document = found.is_some();
+    let targeted = found
+        .filter(|found| found.status == crate::file_reference::ReferenceStatus::Exact)
+        .and_then(|found| found.exact_match)
+        .map(|record| record.relative_path)
+        .filter(|path| readable.contains(path));
+    NamedDocument {
+        names_a_document,
+        targeted,
+    }
+}
+
+/// The `Folder facts` block of a turn that targets one document: the counts of the folder and that one
+/// file (name, kind, readability), never a line of its text (`work_folder_context`, view `targeted`).
+/// Only the context text of tier 1 is wanted here, not its retrieval instruction.
+pub fn folder_facts_block(
+    inventory: &crate::inventory::WorkFolderInventory,
+    relative_path: &str,
+) -> String {
+    format!(
+        "Folder facts:\n{}",
+        crate::work_folder_context::build(
+            inventory,
+            &crate::work_folder_context::ContextView::Targeted {
+                relative_path: relative_path.to_string(),
+            },
+        )
+        .to_prompt_block()
+    )
 }
 
 // --- Entity linking: a retrieved excerpt naming a real table value ----------------------------
@@ -1114,15 +1190,55 @@ mod tests {
     }
 
     #[test]
+    fn the_folder_facts_instruction_stays_neutral_about_who_the_user_is() {
+        let lower = FOLDER_FACTS_INSTRUCTION.to_lowercase();
+        for word in ["patient", "doctor", "practitioner", "practice", "gp"] {
+            assert!(
+                !lower.contains(word),
+                "{word:?} found in FOLDER_FACTS_INSTRUCTION"
+            );
+        }
+        assert!(FOLDER_FACTS_INSTRUCTION.contains("'Folder facts'"));
+    }
+
+    #[test]
+    fn the_folder_facts_of_a_named_document_sit_after_the_excerpts_and_change_nothing_else() {
+        let facts = "Folder facts:\nWORK_FOLDER_CONTEXT\n{\"view\":\"targeted\"}\n";
+        let with = build_turn_for(
+            &[],
+            Some(CARDS),
+            None,
+            Some(FIGURE_BLOCK),
+            Some(facts),
+            false,
+        );
+        let without = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), None, false);
+
+        // One sentence joins the instruction, the block sits between the excerpts and the cards.
+        assert_eq!(
+            with,
+            format!(
+                "{MIXED_INSTRUCTION} {FOLDER_FACTS_INSTRUCTION}\n\nDocument excerpts: none.\n\n{facts}\n\n{CARDS}\n\n{FIGURE_BLOCK}"
+            )
+        );
+        // Absent, the turn is the turn without them, byte for byte (the frozen turns of the baselines).
+        assert_eq!(
+            without,
+            format!("{MIXED_INSTRUCTION}\n\nDocument excerpts: none.\n\n{CARDS}\n\n{FIGURE_BLOCK}")
+        );
+        assert!(!without.contains("Folder facts"));
+    }
+
+    #[test]
     fn the_analysis_turn_adds_the_addendum_to_the_instruction_and_nothing_else() {
-        let ordinary = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), false);
+        let ordinary = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), None, false);
         assert_eq!(
             ordinary,
             build_turn(&[], Some(CARDS), None, Some(FIGURE_BLOCK))
         );
         assert!(!ordinary.contains("asked for an analysis"));
 
-        let analysis = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), true);
+        let analysis = build_turn_for(&[], Some(CARDS), None, Some(FIGURE_BLOCK), None, true);
         assert_eq!(
             analysis,
             format!(

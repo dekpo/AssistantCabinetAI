@@ -66,6 +66,7 @@ describe("one line per workbook", () => {
       "changed_since_analysis",
       "ambiguous_name",
       "not_sent",
+      "sheet_to_choose",
     ];
     const lines = workbookUseLines(
       french,
@@ -78,6 +79,7 @@ describe("one line per workbook", () => {
     expect(lines[0]?.text).toContain("cochez-le");
     expect(lines[1]?.text).toContain("Lancez l'analyse");
     expect(lines[4]?.text).toContain("2025/ventes.csv, 2026/ventes.csv");
+    expect(lines[6]?.text).toContain("plusieurs feuilles");
     const [one, many] = workbookUseLines(french, [
       use({ file: "", how: "not_used", reason: "not_relevant", count: 1 }),
       use({ file: "", how: "not_used", reason: "not_relevant", count: 3 }),

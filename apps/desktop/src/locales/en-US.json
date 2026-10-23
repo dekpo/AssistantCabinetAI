@@ -364,6 +364,7 @@
       "changed_since_analysis": "{path} has changed or is gone since you ticked it: it was not used. Run the analysis again, then tick it again.",
       "ambiguous_name": "“{path}” may mean several spreadsheets ({candidates}): none was used. Write the full name of the one you want.",
       "not_sent": "{path}: the AI wrote no answer, so it did not read its structure.",
+      "sheet_to_choose": "{path} holds several sheets: it was not used to fill the letters. Write the name of the sheet in your question.",
       "not_relevant_one": "{count} ticked spreadsheet was not used for this answer: name it in your question to include it.",
       "not_relevant_many": "{count} ticked spreadsheets were not used for this answer: name the one you want to include."
     },
@@ -944,6 +945,10 @@
     "notSelected": "{query} is in your tables folder but is not selected for this conversation. Tick it in the data list to use it.",
     "noMatch": "No file named {query} is in your tables folder.",
     "noUsableTable": "No spreadsheet in your tables folder holds a usable table. Run the analysis, or add a CSV or XLSX file.",
+    "fillNeedsTemplate": "You asked for a letter for each row of {file}, but no template among your documents fits its columns. Nothing was written: the AI does not invent letters from your documents. Add a template whose fields carry the column names (for example [Name]), tick it in the document list, then ask again.",
+    "fillNeedsSheet": "The spreadsheet {file} holds several sheets, and I do not pick for you the one that fills the letters. Nothing was written. Write the name of the sheet in your question. Sheets:",
+    "fillSheetNotATable": "(holds no data table)",
+    "fillSeveralSources": "Your question names several spreadsheets, and a letter is filled from only one. Nothing was written. Name a single file in your question:",
     "nudgeExampleGroup": "Or: “Which {group} has the highest total {column}?”",
     "largestGroup": "Largest total {column} by {group}: **{leader}**, with **{value}**.",
     "largestGroupTie": "Tie for the largest total {column} by {group}: **{leaders}**, with **{value}** each.",

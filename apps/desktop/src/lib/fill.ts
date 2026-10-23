@@ -49,6 +49,8 @@ export interface FillPlan {
 export interface FillRequest {
   template: string;
   dataFile: string;
+  /** The sheet the plan was built from: checked again by Rust, never trusted. */
+  sheet: string;
   keyColumn: string | null;
   keyValue: string | null;
   all: boolean;
@@ -99,10 +101,11 @@ export interface CardState {
 
 /** The request for Rust. A proposal she has not confirmed is sent as "leave as written": it is never
  * filled on the strength of a default. */
-export function requestOf(plan: Pick<FillPlan, "dataFile" | "keyValue">, state: CardState): FillRequest {
+export function requestOf(plan: Pick<FillPlan, "dataFile" | "sheet" | "keyValue">, state: CardState): FillRequest {
   return {
     template: state.template,
     dataFile: plan.dataFile,
+    sheet: plan.sheet,
     keyColumn: state.keyColumn,
     keyValue: state.all ? null : plan.keyValue,
     all: state.all,

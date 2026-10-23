@@ -2555,6 +2555,7 @@ async fn advisory_tier(
             analysis: kept_figure.is_some(),
         },
         formulas: formula_context.as_ref(),
+        folder_facts: "",
     };
     let targeting_report = targeting_plan.report(false);
     if let Some(report) = &targeting_report {
@@ -3172,6 +3173,9 @@ fn fill_tier(
         .ok_or(AppError::NoDataFolderSet)?;
     measured.inventory_ms += stage.lap_ms();
     let every_row = crate::tabular::question::has_distributive_word(question, &locale);
+    // What the question names decides which workbook a letter is filled from, before anything else
+    // (TABULAR step 08): computed from what the user ticked, once, for the choice and for the trace.
+    let facts = tabular_answer::selection_facts(question, &data, &scope.data_mode);
     let located = tabular_answer::locate_fill_source(
         question,
         &data,
@@ -3179,37 +3183,44 @@ fn fill_tier(
         &locale,
         &index,
         every_row,
+        &facts.named,
     )?;
     measured.routing_ms += stage.lap_ms();
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
-    let Some(source) = located else {
-        return Ok(None);
+    // The templates are looked for among the documents only once a source is found.
+    let documents = match &located {
+        tabular_answer::FillLocation::Found(_) => {
+            let full_inventory = family_views_of(state, &index)?
+                .documents
+                .ok_or(AppError::NoWorkFolderSet)?;
+            scope.resolve(&full_inventory).inventory
+        }
+        _ => crate::inventory::WorkFolderInventory::from_records(
+            std::path::Path::new(""),
+            Vec::new(),
+        ),
     };
-    let full_inventory = family_views_of(state, &index)?
-        .documents
-        .ok_or(AppError::NoWorkFolderSet)?;
-    let resolution = scope.resolve(&full_inventory);
-    let templates = fill_plan::candidate_templates(&resolution.inventory, &source.table.columns);
-    if templates.is_empty() {
-        return Ok(None);
+    match fill_plan::decide(located, &facts.named, every_row, &documents)? {
+        fill_plan::FillDecision::Plan(plan) => {
+            let workbook_use =
+                workbook_use::trace(&facts, workbook_use::Answered::Plan(&plan.data_file));
+            Ok(Some(AskAnswer {
+                fill_plan: Some(plan),
+                workbook_use,
+                ..AskAnswer::default()
+            }))
+        }
+        // The letters the program could not prepare are asked about, never written by a model.
+        fill_plan::FillDecision::Ask(answer) => {
+            let workbook_use = workbook_use::trace(&facts, workbook_use::Answered::Engine(&answer));
+            Ok(Some(AskAnswer {
+                tabular_answer: Some(answer),
+                workbook_use,
+                ..AskAnswer::default()
+            }))
+        }
+        fill_plan::FillDecision::Editorial => Ok(None),
     }
-    let source_file = source.file.clone();
-    let plan = fill_plan::build_plan(
-        templates,
-        &source.file,
-        &source.sheet,
-        &source.table,
-        source.key,
-    )?;
-    let workbook_use = workbook_use::trace(
-        &tabular_answer::selection_facts(question, &data, &scope.data_mode),
-        workbook_use::Answered::Plan(&source_file),
-    );
-    Ok(Some(AskAnswer {
-        fill_plan: Some(plan),
-        workbook_use,
-        ..AskAnswer::default()
-    }))
 }
 
 /// What the preview and the generation both start from: the template and the table, read again from
@@ -3247,8 +3258,14 @@ fn fill_inputs(
     let data = family_views_of(state, &index)?
         .data
         .ok_or(AppError::NoDataFolderSet)?;
-    let (_, table) = tabular_answer::load_fill_table(&data, &request.data_file, &locale, &index)
-        .ok_or(AppError::FillSourceUnavailable)?;
+    let (_, table) = tabular_answer::load_fill_table(
+        &data,
+        &request.data_file,
+        request.sheet.as_deref(),
+        &locale,
+        &index,
+    )
+    .ok_or(AppError::FillSourceUnavailable)?;
     Ok((std::path::PathBuf::from(work_folder), template, table))
 }
 
@@ -3403,9 +3420,19 @@ async fn mixed_tier(
     // and still ties a document's entity to a table row after retrieval.
     let document_files = selected_documents(&resolution.inventory, &document_paths);
     let workbook_files = selected_workbook_files(&folder, &scope.data_mode);
-    let names_a_document = crate::file_reference::FileReferenceResolver::new(&resolution.inventory)
-        .resolve_in_question(question)
-        .is_some();
+    // A selected document the question names exactly is targeted: the search is held to it and the
+    // model is told which file it is (TABULAR step 08, case I). An ambiguous name, or one that points
+    // outside the selection, keeps the search over the whole selection.
+    let named_document =
+        mixed_answer::named_document(question, &resolution.inventory, &document_paths);
+    let names_a_document = named_document.names_a_document;
+    let targeted_document = named_document.targeted;
+    let folder_facts = match &targeted_document {
+        Some(relative_path) => {
+            mixed_answer::folder_facts_block(&resolution.inventory, relative_path)
+        }
+        None => String::new(),
+    };
     let documents_side = match names_a_document {
         true => SideInput::new(&document_files).blocked_by(SkipReason::NamedFile),
         false => SideInput::new(&document_files),
@@ -3500,10 +3527,13 @@ async fn mixed_tier(
                     let searched = targeting::search_documents_within(
                         &index,
                         &targeting_plan,
-                        DocumentPlan::WholeFolder {
-                            narrowed: true,
-                            scoped_paths: &document_paths,
-                            present_paths: &document_paths,
+                        match &targeted_document {
+                            Some(relative_path) => DocumentPlan::OneFile(relative_path.as_str()),
+                            None => DocumentPlan::WholeFolder {
+                                narrowed: true,
+                                scoped_paths: &document_paths,
+                                present_paths: &document_paths,
+                            },
                         },
                         &search_text,
                         &query_embedding,
@@ -3588,6 +3618,7 @@ async fn mixed_tier(
             analysis,
         },
         formulas: formula_context.as_ref(),
+        folder_facts: &folder_facts,
     };
 
     // Nothing below touches `index`, `folder` or the document inventory again: everything either

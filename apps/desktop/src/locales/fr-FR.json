@@ -364,6 +364,7 @@
       "changed_since_analysis": "{path} a changé ou n'existe plus depuis que vous l'avez coché : il n'a pas servi. Relancez l'analyse, puis cochez-le à nouveau.",
       "ambiguous_name": "« {path} » peut désigner plusieurs tableurs ({candidates}) : aucun n'a servi. Écrivez le nom complet de celui que vous voulez.",
       "not_sent": "{path} : l'IA n'a pas rédigé de réponse, elle n'a donc pas lu sa structure.",
+      "sheet_to_choose": "{path} contient plusieurs feuilles : il n'a pas servi à remplir les courriers. Écrivez le nom de la feuille dans votre question.",
       "not_relevant_one": "{count} tableur coché n'a pas servi pour cette réponse : citez-le par son nom pour l'inclure.",
       "not_relevant_many": "{count} tableurs cochés n'ont pas servi pour cette réponse : citez par son nom celui que vous voulez inclure."
     },
@@ -944,6 +945,10 @@
     "notSelected": "{query} se trouve dans votre dossier des tableaux mais n'est pas sélectionné pour cette conversation. Cochez-le dans la liste des données pour l'utiliser.",
     "noMatch": "Aucun fichier nommé {query} ne se trouve dans votre dossier des tableaux.",
     "noUsableTable": "Aucun tableur de votre dossier des tableaux ne contient de tableau exploitable. Lancez l'analyse, ou ajoutez un fichier CSV ou XLSX.",
+    "fillNeedsTemplate": "Vous demandez un courrier pour chaque ligne de {file}, mais aucun modèle de votre dossier des documents ne correspond à ses colonnes. Rien n'a été rédigé : l'IA n'invente pas de courriers à partir de vos documents. Ajoutez un modèle dont les champs portent le nom des colonnes (par exemple [Nom]), cochez-le dans la liste des documents, puis posez la question à nouveau.",
+    "fillNeedsSheet": "Le tableur {file} contient plusieurs feuilles, et je ne choisis pas à votre place celle qui remplit les courriers. Rien n'a été rédigé. Écrivez le nom de la feuille dans votre question. Feuilles :",
+    "fillSheetNotATable": "(ne contient pas de tableau de données)",
+    "fillSeveralSources": "Votre question cite plusieurs tableurs, et un courrier ne se remplit qu'à partir d'un seul. Rien n'a été rédigé. Nommez un seul fichier dans la question :",
     "nudgeExampleGroup": "Ou : « Quel(le) {group} a le plus de {column} ? »",
     "largestGroup": "Plus grand total de {column} par {group} : **{leader}**, avec **{value}**.",
     "largestGroupTie": "Égalité pour le plus grand total de {column} par {group} : **{leaders}**, avec **{value}** chacun.",

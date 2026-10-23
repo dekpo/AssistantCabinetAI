@@ -281,16 +281,19 @@ fn door_one_traces_the_workbook_the_plan_was_prepared_from() {
     let selection = folders.ticked(&[FACTURES]);
     let question = "Ecris une lettre pour chaque facture";
     let folder = folders.open();
-    let source = tabular_answer::locate_fill_source(
+    let named = tabular_answer::named_workbooks(question, &folder, &selection);
+    let tabular_answer::FillLocation::Found(source) = tabular_answer::locate_fill_source(
         question,
         &folder,
         &selection,
         "fr-FR",
         &folders.index,
         true,
+        &named,
     )
-    .unwrap()
-    .expect("the one ticked workbook is the source");
+    .unwrap() else {
+        panic!("the one ticked workbook is the source");
+    };
     let trace = workbook_use::trace(
         &tabular_answer::selection_facts(question, &folder, &selection),
         Answered::Plan(&source.file),

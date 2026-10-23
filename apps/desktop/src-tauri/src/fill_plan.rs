@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::AppError;
 use crate::filename_sanitizer::sanitize_file_name;
 use crate::inventory::WorkFolderInventory;
+use crate::tabular_answer::{FillLocation, NamedWorkbooks, TabularAnswer};
 use crate::template_fill::{
     self, docx_placeholder_names, fill_docx, fill_text, groups, line_columns, placeholder_names,
     propose_mapping, FillContext, MappingEntry, MappingStatus, Table, TemplateKind,
@@ -157,6 +158,10 @@ pub struct RequestMapping {
 pub struct FillRequest {
     pub template: String,
     pub data_file: String,
+    /// The sheet the plan was built from. Looked up in the workbook again, never trusted; `None`
+    /// reads the single sheet of a workbook that has one.
+    #[serde(default)]
+    pub sheet: Option<String>,
     pub key_column: Option<String>,
     pub key_value: Option<String>,
     /// One letter per value of the key column (one per row with no key), instead of the one named.
@@ -298,6 +303,7 @@ pub fn build_plan(
     let request = FillRequest {
         template: chosen.relative_path.clone(),
         data_file: data_file.to_string(),
+        sheet: Some(sheet.to_string()),
         key_column: key_column.clone(),
         key_value: key_value.clone(),
         all: key_value.is_none(),
@@ -329,6 +335,84 @@ pub fn build_plan(
             .collect(),
         preview,
     })
+}
+
+/// What door 1 comes to once the source of a letter is located.
+pub enum FillDecision {
+    /// A plan to approve: the template, the rows, the mapping and a preview.
+    Plan(FillPlan),
+    /// A deterministic answer that asks for what is missing. Nothing is written and no model is asked
+    /// to improvise the letters the program could not prepare (TABULAR step 08).
+    Ask(TabularAnswer),
+    /// Not a merge request the program can serve: the question reaches the writer as an editorial
+    /// request, exactly as before.
+    Editorial,
+}
+
+/// The outcome of door 1 for a located source, in one place so that it is tested without Tauri.
+///
+/// `documents` is the documents the conversation may use (where the templates are), `every_row` says
+/// whether the question asked for every row. A merge request whose workbook is named and for which no
+/// template fits asks for a template; a workbook that is only implied, with no template, stays an
+/// editorial request as before.
+pub fn decide(
+    location: FillLocation,
+    named: &NamedWorkbooks,
+    every_row: bool,
+    documents: &WorkFolderInventory,
+) -> Result<FillDecision, AppError> {
+    match location {
+        FillLocation::Found(source) => {
+            let templates = candidate_templates(documents, &source.table.columns);
+            if templates.is_empty() {
+                return Ok(match named.covers(&source.file) {
+                    true => {
+                        FillDecision::Ask(TabularAnswer::FillNeedsTemplate { file: source.file })
+                    }
+                    false => FillDecision::Editorial,
+                });
+            }
+            let plan = build_plan(
+                templates,
+                &source.file,
+                &source.sheet,
+                &source.table,
+                source.key,
+            )?;
+            Ok(FillDecision::Plan(plan))
+        }
+        FillLocation::SeveralSources(candidates) => {
+            // One ambiguous name and no file written in full: the interface can replace that name by
+            // the file she picks. Several different names are only listed.
+            let query = match (named.exact.is_empty(), named.ambiguous.as_slice()) {
+                (true, [(name, _)]) => Some(name.clone()),
+                _ => None,
+            };
+            Ok(FillDecision::Ask(TabularAnswer::FillSeveralSources {
+                candidates,
+                query,
+            }))
+        }
+        FillLocation::SheetToChoose { file, sheets } => {
+            Ok(FillDecision::Ask(TabularAnswer::FillNeedsSheet {
+                file,
+                sheets,
+            }))
+        }
+        // A merge request for each row of a workbook that exists and is not ticked: the engine's own
+        // sentence says to tick it, rather than a model writing letters from the documents.
+        FillLocation::NoSource
+            if every_row
+                && named.exact.is_empty()
+                && named.ambiguous.is_empty()
+                && !named.not_selected.is_empty() =>
+        {
+            Ok(FillDecision::Ask(TabularAnswer::FileNotSelected {
+                query: named.not_selected[0].clone(),
+            }))
+        }
+        FillLocation::NoSource => Ok(FillDecision::Editorial),
+    }
 }
 
 // ------------------------------------------------------------------------------------- generation
@@ -460,6 +544,7 @@ mod tests {
         FillRequest {
             template: "modele.txt".to_string(),
             data_file: "donnees.csv".to_string(),
+            sheet: None,
             key_column: Some("No_Commande".to_string()),
             key_value: key_value.map(str::to_string),
             all,

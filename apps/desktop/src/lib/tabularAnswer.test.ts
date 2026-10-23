@@ -251,6 +251,40 @@ describe("refusals and choices", () => {
     expect(text).toContain("- achats.csv");
     expect(text).toContain("- ventes.csv");
   });
+
+  it("says what is missing for a letter and what to do, and writes nothing itself", () => {
+    const template = formatTabularAnswer(
+      french,
+      { kind: "fill_needs_template", file: "factures.xlsx" },
+      "fr-FR",
+    );
+    expect(template).toContain("factures.xlsx");
+    expect(template).toContain("Rien n'a été rédigé");
+    expect(template).toContain("cochez-le");
+
+    const sheets = formatTabularAnswer(
+      english,
+      {
+        kind: "fill_needs_sheet",
+        file: "mixte.xlsx",
+        sheets: [
+          { name: "Donnees", looksTabular: true },
+          { name: "Calculs", looksTabular: false },
+        ],
+      },
+      "en-US",
+    );
+    expect(sheets).toContain("- Donnees\n- Calculs");
+    expect(sheets).toContain("- Calculs (holds no data table)");
+
+    const several = formatTabularAnswer(
+      english,
+      { kind: "fill_several_sources", candidates: ["a.csv", "b.csv"], query: null },
+      "en-US",
+    );
+    expect(several).toContain("- a.csv");
+    expect(several).toContain("- b.csv");
+  });
 });
 
 describe("a sorted listing", () => {

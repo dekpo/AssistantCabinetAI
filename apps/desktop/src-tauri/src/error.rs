@@ -188,6 +188,10 @@ pub enum AppError {
     #[error("fill_too_many")]
     FillTooMany { count: usize, limit: usize },
 
+    /// The drafted template of a mail merge is larger than the limit (TABULAR step 09).
+    #[error("fill_draft_too_large")]
+    FillDraftTooLarge { limit: usize },
+
     /// A letter could not be written; the ones already written stay, the template and the data are
     /// untouched.
     #[error("fill_write_failed")]
@@ -375,6 +379,7 @@ impl AppError {
             Self::FillSourceUnavailable => "fill_source_unavailable",
             Self::FillNothingToFill => "fill_nothing_to_fill",
             Self::FillTooMany { .. } => "fill_too_many",
+            Self::FillDraftTooLarge { .. } => "fill_draft_too_large",
             Self::FillWriteFailed => "fill_write_failed",
             Self::KnowledgeUnavailable => "knowledge_unavailable",
             Self::KnowledgeEntityNotFound => "knowledge_entity_not_found",
@@ -469,6 +474,7 @@ impl AppError {
             Self::KnowledgePackInvalid { pack, path } => json!({ "pack": pack, "path": path }),
             Self::FillTemplateUnreadable { path } => json!({ "path": path }),
             Self::FillTooMany { count, limit } => json!({ "count": count, "limit": limit }),
+            Self::FillDraftTooLarge { limit } => json!({ "limit": limit }),
             Self::ExtractionEmpty { path } | Self::ExtractionFailed { path } => {
                 json!({ "path": path })
             }

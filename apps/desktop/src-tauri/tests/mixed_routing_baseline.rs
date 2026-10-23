@@ -817,12 +817,12 @@ async fn baseline_case_h_a_letter_for_each_row_of_a_named_workbook_is_filled_fro
         assert_eq!(plan.template, TEMPLATE, "{question:?}");
 
         let location = folders.fill_source(question, locale, &both);
-        let FillDecision::Ask(TabularAnswer::FillNeedsTemplate { file }) =
+        let FillDecision::NeedsDraft(source) =
             decide(location, &named, every_row, &no_documents).unwrap()
         else {
-            panic!("{question:?}: with no template, a template is asked for");
+            panic!("{question:?}: with no template, a template is drafted");
         };
-        assert_eq!(file, FACTURES, "{question:?}");
+        assert_eq!(source.file, FACTURES, "{question:?}");
     }
 }
 

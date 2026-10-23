@@ -557,7 +557,10 @@ export function useChat(
               entry.id === answerId
                 ? {
                     ...entry,
-                    content: t("fill.intro", { template: plan.template }),
+                    content:
+                      plan.templateOrigin === "drafted"
+                        ? t("fill.introDrafted")
+                        : t("fill.intro", { template: plan.template }),
                     deterministic: true as const,
                     mixed: true as const,
                     fillPlan: plan,

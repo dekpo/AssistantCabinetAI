@@ -67,7 +67,7 @@ pub struct Found {
     pub name: String,
 }
 
-fn is_name_char(ch: char) -> bool {
+pub(crate) fn is_name_char(ch: char) -> bool {
     ch.is_alphanumeric() || matches!(ch, '_' | '-' | '.' | ' ')
 }
 
@@ -150,7 +150,7 @@ pub struct MappingEntry {
 
 /// A name with case, accents and every separator removed, so that `Prix_U`, `prix u` and `PRIX-U`
 /// are one name.
-fn compact(name: &str) -> String {
+pub(crate) fn compact(name: &str) -> String {
     fold_text(name).chars().filter(|ch| ch.is_alphanumeric()).collect()
 }
 

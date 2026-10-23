@@ -23,6 +23,7 @@ pub mod file_key;
 pub mod file_profile;
 pub mod file_record;
 pub mod file_reference;
+pub mod fill_draft;
 pub mod fill_plan;
 pub mod filename_sanitizer;
 pub mod finder;

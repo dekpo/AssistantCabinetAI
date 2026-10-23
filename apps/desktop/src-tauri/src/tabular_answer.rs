@@ -187,8 +187,14 @@ pub enum TabularAnswer {
     NoUsableTable,
     /// A letter was asked for each row (or for an identifier) of a workbook the question names, and
     /// no template among the documents fits its columns: nothing is written, and no model improvises
-    /// the letters (TABULAR step 08; step 09 drafts a template).
-    FillNeedsTemplate { file: String },
+    /// the letters (TABULAR step 08). Since step 09 a template is first drafted from the column
+    /// names; this answer then means the draft failed, and `draft` says why (`unreachable`: the AI
+    /// machine could not be reached; `unusable`: twice, an answer with no placeholder).
+    FillNeedsTemplate {
+        file: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        draft: Option<String>,
+    },
     /// The workbook a letter would be filled from holds several sheets and the question names none:
     /// asked, never picked. A sheet that holds no data table is listed too, marked as such.
     FillNeedsSheet {

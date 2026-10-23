@@ -363,7 +363,16 @@ export function MessageList({
                 </div>
               )}
               {/* A letter was asked for: the plan she approves (`FillPlanCard`). */}
-              {entry.fillPlan === undefined ? null : <FillPlanCard plan={entry.fillPlan} />}
+              {entry.fillPlan === undefined ? null : (
+                <FillPlanCard
+                  plan={entry.fillPlan}
+                  onDraftAgain={
+                    idle && askedAbout?.role === "user"
+                      ? () => onResend(askedAbout.id, askedAbout.content)
+                      : undefined
+                  }
+                />
+              )}
               {/* Every note under the answer, as lines: where it came from, what it rests on, what could
                   not be established (`lib/annotations.ts`, also what "Copy the conversation" copies). */}
               {annotationNotes.notes.map((line, index) => (

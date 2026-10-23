@@ -25,6 +25,7 @@ use crate::file_profile;
 use crate::file_record::{FileRecord, ProcessingStatus};
 use crate::file_reference::FileReferenceResolver;
 use crate::filename_sanitizer;
+use crate::fill_draft;
 use crate::fill_plan;
 use crate::finder::{self, FinderQuery, FinderResult, FinderScope, InventoryFile};
 use crate::folder_questions::{self, FolderAnswer, QuestionRoute};
@@ -1904,8 +1905,14 @@ async fn sourced_answer(
             }
             // A request for a letter, with the template and the rows it needs found: a plan to
             // approve, not an answer (`fill_plan`, lot E). Nothing is written here.
-            if let Some(answer) = fill_tier(app, state, &question, &scope, measured)? {
-                return Ok(answer);
+            match fill_tier(app, state, &question, &scope, measured)? {
+                FillStart::Answer(answer) => return Ok(*answer),
+                // No template fits a workbook the question names: the model drafts one from the
+                // column names alone (TABULAR step 09).
+                FillStart::NeedsDraft(job) => {
+                    return fill_draft_tier(state, &question, *job, measured).await
+                }
+                FillStart::None => {}
             }
             // "How many documents do I have?" is a question about the folder, not a row count of
             // a workbook (KBD-23).
@@ -3144,27 +3151,31 @@ fn mixed_folder_tier(
 /// Documents and tables are both selected and the question asks for something to be written. When a
 /// selected document is a template whose fields name columns of the one workbook the question points at
 /// (an identifier it names, or "each"), the answer is a plan to approve: the template, the rows, the
-/// mapping and a preview. Nothing is written and no model is called; `None` for every other question.
+/// mapping and a preview. Nothing is written and no model is called here; `FillStart::None` for every
+/// other question. A named workbook with no template that fits is handed over as a job to draft one
+/// (`fill_draft_tier`): it is the only part that needs the gateway, so it happens after the index is
+/// let go of.
 fn fill_tier(
     app: &AppHandle,
     state: &AppState,
     question: &str,
     scope: &AnalysisScope,
     measured: &mut RetrievalDiagnostics,
-) -> Result<Option<AskAnswer>, AppError> {
-    let (work_folder, data_folder, locale) = state.read(|settings| {
+) -> Result<FillStart, AppError> {
+    let (work_folder, data_folder, locale, output_folder) = state.read(|settings| {
         (
             settings.work_folder.clone(),
             settings.data_folder.clone(),
             settings.locale.clone(),
+            settings.generated_folder(),
         )
     })?;
     if work_folder.is_none() || data_folder.is_none() {
-        return Ok(None);
+        return Ok(FillStart::None);
     }
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
     if !crate::tabular::question::has_writing_intent(question, &locale) {
-        return Ok(None);
+        return Ok(FillStart::None);
     }
     let mut stage = StageTimer::start();
     let index = open_index(app)?;
@@ -3193,7 +3204,11 @@ fn fill_tier(
             let full_inventory = family_views_of(state, &index)?
                 .documents
                 .ok_or(AppError::NoWorkFolderSet)?;
-            scope.resolve(&full_inventory).inventory
+            // What the program wrote (the letters, a saved model) is not offered as a template.
+            fill_plan::without_output_folder(
+                scope.resolve(&full_inventory).inventory,
+                &output_folder,
+            )
         }
         _ => crate::inventory::WorkFolderInventory::from_records(
             std::path::Path::new(""),
@@ -3204,23 +3219,108 @@ fn fill_tier(
         fill_plan::FillDecision::Plan(plan) => {
             let workbook_use =
                 workbook_use::trace(&facts, workbook_use::Answered::Plan(&plan.data_file));
-            Ok(Some(AskAnswer {
+            Ok(FillStart::Answer(Box::new(AskAnswer {
                 fill_plan: Some(plan),
                 workbook_use,
                 ..AskAnswer::default()
-            }))
+            })))
         }
         // The letters the program could not prepare are asked about, never written by a model.
         fill_plan::FillDecision::Ask(answer) => {
             let workbook_use = workbook_use::trace(&facts, workbook_use::Answered::Engine(&answer));
-            Ok(Some(AskAnswer {
+            Ok(FillStart::Answer(Box::new(AskAnswer {
                 tabular_answer: Some(answer),
                 workbook_use,
                 ..AskAnswer::default()
-            }))
+            })))
         }
-        fill_plan::FillDecision::Editorial => Ok(None),
+        fill_plan::FillDecision::NeedsDraft(source) => {
+            // What the model is told about each column besides its name: its type, from the analysis.
+            let kinds = fill_plan::column_kinds(&data, &source.file, &source.sheet);
+            Ok(FillStart::NeedsDraft(Box::new(DraftJob {
+                source,
+                facts,
+                kinds,
+            })))
+        }
+        fill_plan::FillDecision::Editorial => Ok(FillStart::None),
     }
+}
+
+/// What door 1 comes to before any gateway call.
+enum FillStart {
+    /// Not a merge request the program serves: the question goes on to the other doors.
+    None,
+    /// A plan, or a deterministic answer asking for what is missing.
+    Answer(Box<AskAnswer>),
+    /// A named workbook and no template that fits: the template is drafted from the column names.
+    NeedsDraft(Box<DraftJob>),
+}
+
+/// Owned data only (`IndexStore` is not `Sync`): everything the draft and its plan need.
+struct DraftJob {
+    source: tabular_answer::FillSource,
+    facts: tabular_answer::SelectionFacts,
+    kinds: Vec<Option<String>>,
+}
+
+/// A merge request for a workbook the question names and no template fits: one gateway call drafts
+/// the template from the column names, the kind of each column and the user's own request - no cell
+/// value, no row. The plan is built from what comes back, with the same card as a template file;
+/// nothing is written. When no template can be drafted (the AI machine cannot be reached, or twice an
+/// answer with no placeholder) the answer is `FillNeedsTemplate`, with zero letters: a model never
+/// improvises the letters. The user's own stop ends the call like any other question.
+async fn fill_draft_tier(
+    state: &AppState,
+    question: &str,
+    job: DraftJob,
+    measured: &mut RetrievalDiagnostics,
+) -> Result<AskAnswer, AppError> {
+    let DraftJob {
+        source,
+        facts,
+        kinds,
+    } = job;
+    let (server_url, model_alias, locale, idle_timeout) = state.read(|settings| {
+        (
+            settings.server_url.clone(),
+            settings.model_alias.clone(),
+            settings
+                .locale
+                .clone()
+                .unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string()),
+            settings.answer_idle_timeout(),
+        )
+    })?;
+    let context = fill_draft::DraftContext {
+        locale: &locale,
+        gateway: &state.gateway,
+        server_url: &server_url,
+        model_alias: &model_alias,
+        idle_timeout,
+    };
+    let started = std::time::Instant::now();
+    let decision = fill_plan::draft_decision(&context, &kinds, question, source).await?;
+    measured.generation_total_ms = elapsed_ms(started.elapsed());
+    Ok(match decision {
+        fill_plan::FillDecision::Plan(plan) => AskAnswer {
+            workbook_use: workbook_use::trace(
+                &facts,
+                workbook_use::Answered::Plan(&plan.data_file),
+            ),
+            fill_plan: Some(plan),
+            ..AskAnswer::default()
+        },
+        fill_plan::FillDecision::Ask(answer) => AskAnswer {
+            workbook_use: workbook_use::trace(&facts, workbook_use::Answered::Engine(&answer)),
+            tabular_answer: Some(answer),
+            ..AskAnswer::default()
+        },
+        // `draft_decision` answers with one of the two above.
+        fill_plan::FillDecision::NeedsDraft(_) | fill_plan::FillDecision::Editorial => {
+            return Err(AppError::Internal)
+        }
+    })
 }
 
 /// What the preview and the generation both start from: the template and the table, read again from
@@ -3250,11 +3350,18 @@ fn fill_inputs(
     }
     let locale = locale.unwrap_or_else(|| settings::DEFAULT_LOCALE.to_string());
     let index = open_index(app)?;
-    let inventory = family_views_of(state, &index)?
-        .documents
-        .ok_or(AppError::NoWorkFolderSet)?;
-    let template = fill_plan::read_template(&inventory, &request.template)
-        .ok_or(AppError::FillSourceUnavailable)?;
+    // A drafted template is no file: its text comes back from the card and is checked again (size,
+    // placeholders against the table's real columns when the letter is filled).
+    let template = match &request.draft_text {
+        Some(text) => fill_plan::TemplateFile::drafted(text, &request.data_file)?,
+        None => {
+            let inventory = family_views_of(state, &index)?
+                .documents
+                .ok_or(AppError::NoWorkFolderSet)?;
+            fill_plan::read_template(&inventory, &request.template)
+                .ok_or(AppError::FillSourceUnavailable)?
+        }
+    };
     let data = family_views_of(state, &index)?
         .data
         .ok_or(AppError::NoDataFolderSet)?;

@@ -262,6 +262,21 @@ describe("refusals and choices", () => {
     expect(template).toContain("Rien n'a été rédigé");
     expect(template).toContain("cochez-le");
 
+    // A template was drafted from the column names and could not be: said first, then the same advice.
+    const unreachable = formatTabularAnswer(
+      french,
+      { kind: "fill_needs_template", file: "factures.xlsx", draft: "unreachable" },
+      "fr-FR",
+    );
+    expect(unreachable).toContain("La machine IA n'a pas pu être jointe");
+    expect(unreachable).toContain("Rien n'a été rédigé");
+    const unusable = formatTabularAnswer(
+      french,
+      { kind: "fill_needs_template", file: "factures.xlsx", draft: "unusable" },
+      "fr-FR",
+    );
+    expect(unusable).toContain("aucun champ reconnu");
+
     const sheets = formatTabularAnswer(
       english,
       {

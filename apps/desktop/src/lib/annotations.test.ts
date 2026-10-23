@@ -403,6 +403,21 @@ describe("the lines about the workbooks of an answer", () => {
     ]);
   });
 
+  it("say no document was selected for an answer written from the workbooks alone, and warn of nothing", () => {
+    const written = entry({ mixedDocumentsUnavailable: "not_selected" });
+
+    expect(annotationLines(english, "en-US", written)).toStrictEqual([
+      english("chat.mixedDocumentsUnavailable.not_selected"),
+    ]);
+    expect(cautionLines(english, "en-US", written)).toStrictEqual([]);
+    expect(english("chat.mixedDocumentsUnavailable.not_selected")).toBe(
+      "You selected no document: this answer rests on your spreadsheets only.",
+    );
+    expect(annotationLines(french, "fr-FR", written)).toStrictEqual([
+      french("chat.mixedDocumentsUnavailable.not_selected"),
+    ]);
+  });
+
   it("replace the old sentence once they say what happened to the workbooks", () => {
     const quiet = entry({ mixedTableUnavailable: "not_asked_about" });
 

@@ -510,13 +510,13 @@ async fn baseline_case_c_a_named_workbook_without_an_operation_reaches_the_write
             folders.data_only(question, locale, &selection).is_none(),
             "{question:?}: door 3 has nothing to compute"
         );
-        let (fallback, skip_model) =
-            left_to_the_model(folders.for_mixed(question, locale, &selection));
+        // Since step 05 these are advisory questions: door 4 leaves them no table part at all (an
+        // unrecognised nudge, `Done`) instead of a `TryModel` whose fallback is that nudge.
+        let pending = folders.for_mixed(question, locale, &selection);
         assert!(
-            is_unrecognised_nudge(&fallback),
-            "{question:?}: {fallback:?}"
+            matches!(&pending, PendingAnswer::Done(answer) if is_unrecognised_nudge(answer)),
+            "{question:?}: no table part"
         );
-        assert!(!skip_model, "{question:?}");
 
         let gateway = start_gateway_replying("A summary written from the card.");
         let pending = folders.for_mixed(question, locale, &selection);
@@ -850,9 +850,11 @@ async fn baseline_case_i_a_name_no_workbook_carries_is_left_to_the_documents() {
 
 #[tokio::test]
 async fn baseline_case_k_a_formula_question_is_answered_with_a_yes_or_no() {
-    // Frozen 20 October 2026. DEFECT, changes in step 05 (tables only) and step 07 (formula help):
-    // the words "formula" and "formule" win over every other reading, so "explain the formula of
-    // column total" gets a sentence about whether the sheet holds formulas, and never a writer.
+    // Frozen 20 October 2026. DEFECT, flipped on purpose by step 05 for a question that asks to
+    // explain or to write a formula: the words "formula" and "formule" used to win over every other
+    // reading, so "explain the formula of column total" got a sentence about whether the sheet holds
+    // formulas, and never a writer. Both halves below are the new behaviour; a question that only
+    // asks whether the sheet holds formulas keeps the yes-or-no, which this test still proves.
     let folders = Folders::build();
     let selection = folders.ticked(&[CALCULS, AGENCIES]);
     for (question, locale) in [
@@ -864,6 +866,18 @@ async fn baseline_case_k_a_formula_question_is_answered_with_a_yes_or_no() {
             "Explique la formule de la colonne total de calculs.xlsx",
             "fr-FR",
         ),
+    ] {
+        // Flipped (first half, door 3): an advisory question is left to the writer of door 4.
+        assert!(
+            tabular_answer::advisory_target(question, &folders.open(), &selection, locale, &[])
+                .is_some(),
+            "{question:?}"
+        );
+        assert!(folders.data_only(question, locale, &selection).is_none());
+    }
+    for (question, locale) in [
+        ("Does calculs.xlsx contain formulas?", "en-US"),
+        ("Calculs.xlsx contient-il des formules ?", "fr-FR"),
     ] {
         let gateway = start_counting_gateway();
         let pending = folders
@@ -883,10 +897,16 @@ async fn baseline_case_k_a_formula_question_is_answered_with_a_yes_or_no() {
         assert_eq!(gateway.calls(), 0, "{question:?}");
     }
 
-    // A writing intent steps door 3 aside, but door 4 does not get past the same reading either.
+    // A writing intent steps door 3 aside, and since step 05 door 4 gets past the same reading too:
+    // the table side is the card, and the writer is asked once (it used to return the yes-or-no with
+    // zero gateway calls and an empty answer).
     let question = "Write a formula that adds base and total in calculs.xlsx";
     assert!(folders.data_only(question, "en-US", &selection).is_none());
     let pending = folders.for_mixed(question, "en-US", &selection);
+    assert!(
+        matches!(&pending, PendingAnswer::Done(answer) if is_unrecognised_nudge(answer)),
+        "no table part: the cards carry the table side"
+    );
     let gateway = start_gateway_replying("=B2+C2");
     let (result, generated) = mixed(
         &folders,
@@ -897,23 +917,12 @@ async fn baseline_case_k_a_formula_question_is_answered_with_a_yes_or_no() {
         &gateway.url,
     )
     .await;
-    assert!(
-        matches!(
-            &result.table,
-            Some(TabularAnswer::Structural {
-                answer: StructuralAnswer::HasFormulas { .. },
-                ..
-            })
-        ),
-        "{:?}",
-        result.table
-    );
-    assert!(
-        !generated,
-        "the yes-or-no is returned and the model is never asked"
-    );
-    assert_eq!(result.answer, "");
-    assert_eq!(gateway.calls(), 0);
+    assert!(generated, "the writer is asked");
+    assert_eq!(result.table, None);
+    assert_eq!(result.table_unavailable, None);
+    assert_eq!(result.answer, "=B2+C2");
+    assert!(sent_sources(&gateway).contains("Workbook \"calculs.xlsx\""));
+    assert_eq!(gateway.calls(), 1);
 }
 
 // --- L: a writing request about a named workbook that is not a mail merge ------------------------
@@ -956,15 +965,32 @@ async fn baseline_case_l_a_writing_request_without_a_merge_sign_stays_editorial(
 
 #[tokio::test]
 async fn baseline_case_m_a_tables_only_question_without_an_operation_ends_in_the_nudge() {
-    // Frozen 20 October 2026. Changes in step 05 for advisory questions. The hidden interpreter is
-    // asked once (a wait on a real model) and, when it cannot build a plan, the user gets the nudge
-    // listing columns, stamped with the attempt.
+    // Frozen 20 October 2026. Flipped on purpose by step 05 for advisory questions: "Summarise
+    // factures.csv" no longer reaches the hidden interpreter (the tier never calls `prepare` for it,
+    // the writer answers). A question that is not advisory still behaves as frozen: the hidden
+    // interpreter is asked once (a wait on a real model) and, when it cannot build a plan, the user
+    // gets the nudge listing columns, stamped with the attempt.
     let folders = Folders::build();
     let selection = folders.ticked(&[FACTURES]);
     for (question, locale) in [
         ("Summarise factures.csv", "en-US"),
         ("R\u{e9}sume factures.csv", "fr-FR"),
     ] {
+        assert!(
+            tabular_answer::advisory_target(question, &folders.open(), &selection, locale, &[])
+                .is_some(),
+            "{question:?}: advisory"
+        );
+    }
+    for (question, locale) in [
+        ("Total of the invoices", "en-US"),
+        ("Total des factures", "fr-FR"),
+    ] {
+        assert!(
+            tabular_answer::advisory_target(question, &folders.open(), &selection, locale, &[])
+                .is_none(),
+            "{question:?}: not advisory, the hidden interpreter keeps its turn"
+        );
         let (fallback, skip_model) =
             left_to_the_model(folders.tables_only(question, locale, &selection));
         assert!(
@@ -1279,4 +1305,310 @@ async fn step_03_a_figure_the_card_states_is_not_reported_as_unverified() {
     )
     .await;
     assert_eq!(result.unverified_numbers, vec!["7777".to_string()]);
+}
+
+// --- Step 05: advisory questions in the tables-only tier --------------------------------------------
+//
+// An explanation, a description, a comparison or a formula request is written by the model from the
+// cards (`commands::advisory_tier`); the hidden interpreter is not asked. `advisory_target` is the
+// decision `commands::tabular_tier`, `prepare_if_data_only` and `prepare_for_mixed` all take.
+
+fn is_advisory(folders: &Folders, selection: &ScopeMode, question: &str, locale: &str) -> bool {
+    tabular_answer::advisory_target(question, &folders.open(), selection, locale, &[]).is_some()
+}
+
+#[test]
+fn step_05_advisory_questions_are_told_apart_by_their_words_in_both_locales() {
+    let folders = Folders::build();
+    let one = folders.ticked(&[FACTURES]);
+    for (question, locale) in [
+        ("Describe factures.csv", "en-US"),
+        ("Summarise this spreadsheet", "en-US"),
+        ("What is in factures.csv?", "en-US"),
+        ("What is wrong with this file?", "en-US"),
+        ("Explain the formula of column montant", "en-US"),
+        ("Write a formula for the total per supplier", "en-US"),
+        ("Help me write a vlookup", "en-US"),
+        ("How do I total by supplier using a formula?", "en-US"),
+        ("Comment calculer le total par fournisseur avec une formule ?", "fr-FR"),
+        ("D\u{e9}cris factures.csv", "fr-FR"),
+        ("Que contient factures.csv ?", "fr-FR"),
+        ("Que peux-tu me dire de ce tableur ?", "fr-FR"),
+        ("Qu'est-ce qui ne va pas dans ce fichier ?", "fr-FR"),
+        ("Explique la formule de la colonne montant", "fr-FR"),
+        (
+            "Donne-moi une formule pour le total par fournisseur",
+            "fr-FR",
+        ),
+    ] {
+        assert!(
+            is_advisory(&folders, &one, question, locale),
+            "{question:?} ({locale}) is advisory"
+        );
+    }
+    for (question, locale) in [
+        // A figure, a group, a structural fact: the engine's.
+        ("Total of the invoices", "en-US"),
+        ("How are the amounts distributed by supplier", "en-US"),
+        ("Which columns does factures.csv have", "en-US"),
+        ("How many rows", "en-US"),
+        ("Sum of montant", "en-US"),
+        ("Explain the sum of montant", "en-US"),
+        ("Does the sheet contain formulas", "en-US"),
+        ("Total des factures", "fr-FR"),
+        (
+            "Comment sont r\u{e9}partis les montants par fournisseur",
+            "fr-FR",
+        ),
+        ("Quelles colonnes a factures.csv", "fr-FR"),
+        ("Combien de lignes", "fr-FR"),
+        ("La feuille contient-elle des formules ?", "fr-FR"),
+        // A phrase that needs a name is not advisory without one.
+        ("What is in the second row", "en-US"),
+        ("Que contient la deuxi\u{e8}me ligne", "fr-FR"),
+    ] {
+        assert!(
+            !is_advisory(&folders, &one, question, locale),
+            "{question:?} ({locale}) is not advisory"
+        );
+    }
+}
+
+#[test]
+fn step_05_two_named_workbooks_are_a_cross_file_question_whatever_the_words() {
+    let folders = Folders::build();
+    let two = folders.ticked(&[FACTURES, AGENCIES]);
+    assert!(is_advisory(
+        &folders,
+        &two,
+        "Compare factures.csv and agencies.csv",
+        "en-US"
+    ));
+    assert!(is_advisory(
+        &folders,
+        &two,
+        "factures.csv et agencies.csv",
+        "fr-FR"
+    ));
+    // A table word alone decides it: every ticked workbook is concerned.
+    assert!(is_advisory(&folders, &two, "Explique ce tableur", "fr-FR"));
+    // The engine can answer on one of the two: the column only factures.csv has.
+    assert!(!is_advisory(
+        &folders,
+        &two,
+        "Explain the sum of montant",
+        "en-US"
+    ));
+    // A name that is not ticked keeps the engine's own message.
+    let only_factures = folders.ticked(&[FACTURES]);
+    assert!(!is_advisory(
+        &folders,
+        &only_factures,
+        "Explain commandes.csv",
+        "en-US"
+    ));
+    // No workbook concerns the question: four ticked, no name, no table word.
+    let four = folders.ticked(&[FACTURES, AGENCIES, COMMANDES, CALCULS]);
+    assert!(!is_advisory(
+        &folders,
+        &four,
+        "Describe the supplier",
+        "en-US"
+    ));
+}
+
+#[test]
+fn step_05_an_advisory_question_has_no_table_part_in_doors_3_and_4() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES, CALCULS]);
+    let question = "Explain the formula of column total in calculs.xlsx";
+    assert!(folders.data_only(question, "en-US", &selection).is_none());
+    let pending = folders.for_mixed(question, "en-US", &selection);
+    assert!(
+        matches!(&pending, PendingAnswer::Done(answer) if is_unrecognised_nudge(answer)),
+        "the yes-or-no is gone"
+    );
+    // The same workbooks with a figure the engine can give are left to the engine.
+    let figure = "Sum of montant in factures.csv";
+    assert!(!is_advisory(&folders, &selection, figure, "en-US"));
+    assert!(folders.data_only(figure, "en-US", &selection).is_some());
+}
+
+#[tokio::test]
+async fn step_05_the_writer_is_asked_once_with_the_cards_and_no_document_block() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES]);
+    let question = "Describe factures.csv";
+    let gateway = start_gateway_replying("It holds invoices by supplier.");
+    // Exactly what `commands::advisory_tier` hands the writer: no table part, no document, the reason.
+    let (result, generated) = mixed_from(
+        &folders,
+        &selection,
+        PendingAnswer::Done(tabular_answer::no_table_part()),
+        question,
+        "en-US",
+        &gateway.url,
+        Vec::new(),
+        Some(MixedPartUnavailable::NotSelected),
+    )
+    .await;
+
+    assert!(generated);
+    assert_eq!(
+        gateway.calls(),
+        1,
+        "one call for the answer, none for a plan"
+    );
+    assert_eq!(result.answer, "It holds invoices by supplier.");
+    assert_eq!(result.table, None);
+    assert_eq!(result.table_unavailable, None);
+    assert_eq!(
+        result.documents_unavailable,
+        Some(MixedPartUnavailable::NotSelected)
+    );
+    let sources = sent_sources(&gateway);
+    assert!(sources.contains("Document excerpts: none."), "{sources}");
+    assert!(sources.contains("Workbook \"factures.csv\""), "{sources}");
+    assert!(sources.contains("D  montant"), "{sources}");
+    // Structure only: no cell of the workbook is in the request.
+    assert!(!sources.contains("Alpha"), "{sources}");
+    assert!(!sources.contains("1 000"), "{sources}");
+}
+
+#[tokio::test]
+async fn step_05_a_gateway_that_hangs_up_degrades_to_the_engines_nudge() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES]);
+    let question = "Describe factures.csv";
+    // A server that accepts the connection and hangs up: the model cannot be reached.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("binds a free port");
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let accepted = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = std::sync::Arc::clone(&accepted);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            drop(stream);
+        }
+    });
+
+    let cards = tabular_answer::question_cards(
+        question,
+        &folders.open(),
+        &selection,
+        "en-US",
+        &[],
+        card_budget_chars(&ContextBudget::DEFAULT),
+    );
+    assert_eq!(cards.block.cards.len(), 1);
+    let client = GatewayClient::new().expect("builds a client");
+    let context = MixedContext {
+        locale: "en-US",
+        gateway: &client,
+        server_url: &url,
+        model_alias: "cabinet-chat",
+        idle_timeout: IDLE_TIMEOUT,
+        history: &[],
+        budget: ContextBudget::DEFAULT,
+        cards_text: &cards.block.text,
+        sample_text: "",
+    };
+    let written = mixed_answer::answer(
+        question,
+        PendingAnswer::Done(tabular_answer::no_table_part()),
+        Vec::new(),
+        Some(MixedPartUnavailable::NotSelected),
+        &context,
+        |_| {},
+        |_| {},
+    )
+    .await;
+    assert!(written.is_err(), "the writer cannot be reached");
+
+    // The tier then takes the nudge of the engine, without a second call to the unreachable server.
+    let nudge =
+        tabular_answer::without_the_model(folders.tables_only(question, "en-US", &selection));
+    let TabularAnswer::Nudge {
+        reason: None,
+        available_columns,
+        model_attempt: None,
+        ..
+    } = &nudge
+    else {
+        panic!("expected the plain nudge, got {nudge:?}");
+    };
+    assert!(!available_columns.is_empty(), "the columns are listed");
+    let before = accepted.load(std::sync::atomic::Ordering::SeqCst);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        accepted.load(std::sync::atomic::Ordering::SeqCst),
+        before,
+        "nothing dials the server again"
+    );
+}
+
+#[test]
+fn step_05_the_nudge_a_model_free_run_gives_is_the_fallback_of_the_hidden_interpreter() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES]);
+    // A finished answer is itself.
+    let done = folders.tables_only("How many rows", "en-US", &selection);
+    assert!(matches!(
+        tabular_answer::without_the_model(done),
+        TabularAnswer::Structural { .. }
+    ));
+    // A question left to the model gives its fallback, never a stamped attempt.
+    let left = folders.tables_only("Total of the invoices", "en-US", &selection);
+    assert!(matches!(left, PendingAnswer::TryModel { .. }));
+    let nudge = tabular_answer::without_the_model(left);
+    assert!(
+        matches!(
+            &nudge,
+            TabularAnswer::Nudge {
+                reason: None,
+                model_attempt: None,
+                ..
+            }
+        ),
+        "{nudge:?}"
+    );
+}
+
+#[test]
+fn step_05_an_advisory_question_that_designates_a_document_keeps_its_retrieval() {
+    let folders = Folders::build();
+    let selection = folders.ticked(&[FACTURES]);
+    let documents = vec![DOCUMENT.to_string()];
+    let skips = |question: &str, names_a_document: bool| {
+        tabular_answer::advisory_skips_documents(
+            question,
+            &folders.open(),
+            &selection,
+            "en-US",
+            &[],
+            names_a_document,
+            &documents,
+        )
+    };
+    // About the workbook alone: the excerpts are left out.
+    assert!(skips("Describe factures.csv", false));
+    assert!(skips("What can you tell me about this spreadsheet?", false));
+    // A document is named, by the resolver, by the pack's phrases, by the folder questions, or by a
+    // word of its path: the retrieval stays.
+    assert!(!skips("Describe factures.csv", true));
+    assert!(!skips("Describe factures.csv and this letter", false));
+    assert!(!skips("Describe factures.csv and the documents", false));
+    assert!(!skips("Compare factures.csv with the contrat", false));
+    // A question the engine answers, or no card at all: not advisory, not skipped.
+    assert!(!skips("Total of the invoices", false));
+    let four = folders.ticked(&[FACTURES, AGENCIES, COMMANDES, CALCULS]);
+    assert!(!tabular_answer::advisory_skips_documents(
+        "Describe the supplier",
+        &folders.open(),
+        &four,
+        "en-US",
+        &[],
+        false,
+        &documents,
+    ));
 }

@@ -83,6 +83,16 @@ struct PatternPack {
     /// Words that put every row in scope ("each", "every", "all"): "write a letter for each order".
     #[serde(default)]
     distributive: Vec<String>,
+    /// Whole phrases that ask for an explanation, a description, a comparison or a formula about
+    /// the tables instead of a figure ("explain", "describe", "compare", "vlookup", "formula for"):
+    /// read only by `is_advisory`. Narrow on purpose: a generic word ("how", "help") would capture
+    /// questions the hidden interpreter answers with a computed figure.
+    #[serde(default)]
+    advisory_intents: Vec<String>,
+    /// Phrases too general to mean "describe the table" on their own ("what is in", "que contient"):
+    /// advisory only when the question also names a workbook, which anchors them to a file.
+    #[serde(default)]
+    advisory_intents_with_a_name: Vec<String>,
     /// Session 12's D5 (`docs/DECISIONS.md`): number words one to ten, keyed `"1"` to `"10"`, for
     /// reading a `top_n` question's N without ever guessing a digit from the question's own
     /// vocabulary words. A larger N is always typed as a digit, which `extract_n` reads directly.
@@ -273,6 +283,42 @@ pub fn has_distributive_word(question: &str, locale: &str) -> bool {
     pack.distributive
         .iter()
         .any(|word| question.contains(&spaced_words(word)))
+}
+
+/// True when the question asks the tables to be explained, described, compared or linked, or asks
+/// for a formula, instead of for a figure: the writer answers it from the workbook cards, and the
+/// hidden interpreter (which can only propose a query plan) is not asked.
+///
+/// `named_count` is how many workbooks the question names; two or more is a cross-file question
+/// whatever its words. `route` is the classifier's route on the target: only `NotRecognised` and
+/// `HasFormulas` can be advisory. An operation, a group question and every other structural route
+/// (`SheetNames`, `RowCount`, `ColumnNames`, `IsColumnNumeric`) stay with the engine, and a question
+/// with only the word "formula" and no advisory phrase ("does the sheet contain formulas?") stays
+/// the yes/no structural answer.
+///
+/// Read from the question's own locale pack only, like `has_writing_intent` and the other intent
+/// lists: unlike the classifier, which tries every pack because a workbook's headers may be in any
+/// language, an intent is a verb the user types in the language of the interface.
+pub fn is_advisory(question: &str, locale: &str, named_count: usize, route: &TabularRoute) -> bool {
+    if !matches!(
+        route,
+        TabularRoute::NotRecognised
+            | TabularRoute::Structural(StructuralQuestion::HasFormulas { .. })
+    ) {
+        return false;
+    }
+    let Some(pack) = pack_for(locale) else {
+        return false;
+    };
+    let question = spaced_words(question);
+    let says = |words: &[String]| {
+        words
+            .iter()
+            .any(|word| question.contains(&spaced_words(word)))
+    };
+    named_count >= 2
+        || says(&pack.advisory_intents)
+        || (named_count >= 1 && says(&pack.advisory_intents_with_a_name))
 }
 
 /// Where one question was routed.
@@ -1334,6 +1380,95 @@ mod tests {
         // A word that merely contains one is not one.
         assert!(!mentions_a_table("The portable stable cabling", "en-US"));
         assert!(!mentions_a_table("Mes tablettes de cuisine", "fr-FR"));
+    }
+
+    #[test]
+    fn an_advisory_phrase_counts_only_on_the_two_routes_the_engine_cannot_answer() {
+        let unread = TabularRoute::NotRecognised;
+        let formulas = TabularRoute::Structural(StructuralQuestion::HasFormulas { sheet: None });
+        for (question, locale) in [
+            ("Explain the formula of column Total", "en-US"),
+            ("Write a formula for the total", "en-US"),
+            ("Describe this spreadsheet", "en-US"),
+            ("Explique cette formule", "fr-FR"),
+            ("R\u{e9}sume ce tableur", "fr-FR"),
+            ("Que peux-tu me dire de ce tableur ?", "fr-FR"),
+        ] {
+            assert!(is_advisory(question, locale, 0, &unread), "{question}");
+            assert!(is_advisory(question, locale, 0, &formulas), "{question}");
+            // Any other route is the engine's, whatever the words.
+            for route in [
+                TabularRoute::Structural(StructuralQuestion::SheetNames),
+                TabularRoute::Structural(StructuralQuestion::RowCount { sheet: None }),
+                TabularRoute::Structural(StructuralQuestion::ColumnNames { sheet: None }),
+                TabularRoute::WhichMeasure {
+                    group_by: "agency".to_string(),
+                    candidates: Vec::new(),
+                },
+            ] {
+                assert!(!is_advisory(question, locale, 0, &route), "{question}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_plain_formula_question_and_a_plain_figure_question_are_not_advisory() {
+        let unread = TabularRoute::NotRecognised;
+        let formulas = TabularRoute::Structural(StructuralQuestion::HasFormulas { sheet: None });
+        assert!(!is_advisory(
+            "Does the file hold formulas?",
+            "en-US",
+            0,
+            &formulas
+        ));
+        assert!(!is_advisory(
+            "Formules pr\u{e9}sentes ?",
+            "fr-FR",
+            0,
+            &formulas
+        ));
+        assert!(!is_advisory("Total of the invoices", "en-US", 0, &unread));
+        // "How" and "help" alone are too general: the hidden interpreter answers these today.
+        assert!(!is_advisory(
+            "How are the amounts split by supplier",
+            "en-US",
+            0,
+            &unread
+        ));
+        assert!(!is_advisory(
+            "Aide montants par fournisseur",
+            "fr-FR",
+            0,
+            &unread
+        ));
+        // The words of another locale are not read: an intent is typed in the interface language.
+        assert!(!is_advisory(
+            "Explain this spreadsheet",
+            "fr-FR",
+            0,
+            &unread
+        ));
+    }
+
+    #[test]
+    fn a_general_phrase_is_advisory_only_beside_a_name_and_two_names_always_are() {
+        let unread = TabularRoute::NotRecognised;
+        assert!(!is_advisory("What is in row 12", "en-US", 0, &unread));
+        assert!(is_advisory("What is in invoices.csv", "en-US", 1, &unread));
+        assert!(!is_advisory("Que contient ligne 12", "fr-FR", 0, &unread));
+        assert!(is_advisory(
+            "Que contient factures.csv",
+            "fr-FR",
+            1,
+            &unread
+        ));
+        assert!(is_advisory(
+            "invoices.csv and agencies.csv",
+            "en-US",
+            2,
+            &unread
+        ));
+        assert!(!is_advisory("invoices.csv", "en-US", 1, &unread));
     }
 
     #[test]

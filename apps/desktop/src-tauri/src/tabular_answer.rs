@@ -36,6 +36,7 @@ use crate::file_reference::{fold_text, FileReferenceResolver, ReferenceStatus};
 use crate::gateway::{ChatTurn, GatewayClient};
 use crate::index_store::IndexStore;
 use crate::inventory::WorkFolderInventory;
+use crate::retrieval::Evidence;
 use crate::tabular::engine::{
     self, Comparison, FilterSpec, NotAnswerableReason, Operation, TabularDerivation,
     TabularLocator, TabularOutcome, TabularValue,
@@ -567,6 +568,17 @@ pub fn calculation_record(
     answer: &TabularAnswer,
     sizes: &[SheetSize],
 ) -> Option<String> {
+    calculation_record_listing(question, answer, sizes, None)
+}
+
+/// `calculation_record`, with the count of rows listed beside the figure for the writer when there
+/// were some (TABULAR step 10): `(sent, matching)`.
+pub fn calculation_record_listing(
+    question: Option<&str>,
+    answer: &TabularAnswer,
+    sizes: &[SheetSize],
+    rows_listed: Option<(usize, usize)>,
+) -> Option<String> {
     let TabularAnswer::Value {
         file,
         value,
@@ -589,6 +601,7 @@ pub fn calculation_record(
         value,
         locator,
         derivation,
+        rows_listed,
     })
 }
 
@@ -1719,10 +1732,54 @@ pub fn question_samples(
     budget: &crate::conversation::ContextBudget,
     token: &str,
 ) -> crate::tabular::sample::SampleBlock {
-    use crate::tabular::sample;
+    question_table_data(cards, data, selection, locale, index, budget, token, None).sample
+}
 
+/// What a question asks of the engine beyond the sample: the rows the program may choose for a writer
+/// (TABULAR step 10). The question as written, and the excerpts retrieved for it, from which an entity
+/// can be linked to a row.
+#[derive(Clone, Copy)]
+pub struct RowsAsk<'a> {
+    pub question: &'a str,
+    pub excerpts: &'a [Evidence],
+}
+
+/// The table data a writer is given for one question: the sample and profile of every workbook that
+/// got a card, and, when rows were asked for, the rows the engine chose by explicit filters. The rows
+/// of a sheet the engine chose replace the sample rows of that sheet (its profile stays), so a row is
+/// never sent twice. One cache read per workbook serves both; one token holds the markers of both.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TableData {
+    pub sample: crate::tabular::sample::SampleBlock,
+    pub rows: crate::tabular::rows::RowsBlock,
+}
+
+/// A workbook of the cards, read once, with the question as the engine reads it (the workbook's own
+/// name taken out: the year in `ventes-2025.xlsx` is not a filter).
+pub struct RowsSource {
+    pub file: String,
+    pub workbook: Workbook,
+    pub inventory: TabularInventory,
+    pub sheets: Option<Vec<String>>,
+    /// The question without the reference to this workbook, when the user wrote one.
+    pub reader_question: String,
+    /// The question names this workbook (and not only implies it).
+    pub named: bool,
+}
+
+/// The workbooks that got a card, read through the typed cache.
+fn open_card_workbooks(
+    question: Option<&str>,
+    cards: &crate::tabular::card::CardBlock,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+) -> Vec<RowsSource> {
     let choices = selected_workbook_choices(data, selection);
-    let mut opened: Vec<(String, Workbook, TabularInventory, Option<Vec<String>>)> = Vec::new();
+    let named = question.map(|question| named_workbooks(question, data, selection));
+    let mut opened = Vec::new();
+    let mut written_in_full: Vec<bool> = Vec::new();
     for card in &cards.cards {
         let Some(inventory) = data.usable_inventory(&card.file) else {
             continue;
@@ -1747,18 +1804,84 @@ pub fn question_samples(
             .iter()
             .find(|choice| choice.relative_path == card.file)
             .and_then(|choice| choice.sheets.clone());
-        opened.push((card.file.clone(), workbook, fresh, sheets));
-    }
-    let mut requests: Vec<sample::SampleRequest<'_>> = Vec::new();
-    for (file, workbook, inventory, sheets) in &opened {
-        requests.push(sample::SampleRequest {
-            file,
-            inventory,
+        let reader_question = match (question, &named) {
+            (Some(question), Some(named)) if named.exact.contains(&card.file) => {
+                without_the_workbook_reference(question, record)
+            }
+            (Some(question), _) => question.to_string(),
+            _ => String::new(),
+        };
+        opened.push(RowsSource {
+            file: card.file.clone(),
             workbook,
-            sheets: sheets.as_deref(),
+            inventory: fresh,
+            sheets,
+            reader_question,
+            named: named
+                .as_ref()
+                .is_some_and(|named| named.exact.contains(&card.file)),
         });
+        written_in_full.push(question.is_some_and(|question| {
+            let folded = fold_text(question);
+            let plain = crate::file_key::plain_path(&card.file);
+            let name = plain.rsplit('/').next().unwrap_or(plain);
+            [plain, name]
+                .iter()
+                .any(|spelling| spelling.contains('.') && folded.contains(&fold_text(spelling)))
+        }));
     }
-    sample::build_sample(
+    // A one-word name can also be the stem of a file ("factures" and `factures.csv`): when the question
+    // writes a workbook out in full (its path or its file name with the extension), those are the
+    // workbooks it names for the rows, whatever else the shorter words resolved to.
+    if written_in_full.iter().any(|written| *written) {
+        for (each, written) in opened.iter_mut().zip(&written_in_full) {
+            each.named = *written;
+        }
+    }
+    opened
+}
+
+/// `question_samples`, and the rows the engine chooses for a writer when `rows` is asked for.
+#[allow(clippy::too_many_arguments)]
+pub fn question_table_data(
+    cards: &crate::tabular::card::CardBlock,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    budget: &crate::conversation::ContextBudget,
+    token: &str,
+    rows: Option<RowsAsk<'_>>,
+) -> TableData {
+    use crate::tabular::{rows as rows_mod, sample};
+
+    let opened = open_card_workbooks(
+        rows.map(|ask| ask.question),
+        cards,
+        data,
+        selection,
+        locale,
+        index,
+    );
+    let chosen = match rows {
+        Some(ask) => select_rows_for_writer(&opened, locale, ask.excerpts, budget, token),
+        None => rows_mod::RowsBlock::default(),
+    };
+    let requests: Vec<sample::SampleRequest<'_>> = opened
+        .iter()
+        .map(|each| sample::SampleRequest {
+            file: &each.file,
+            inventory: &each.inventory,
+            workbook: &each.workbook,
+            sheets: each.sheets.as_deref(),
+            rows_chosen_in: chosen
+                .items
+                .iter()
+                .find(|item| item.file == each.file)
+                .map(|item| item.sheet.as_str()),
+        })
+        .collect();
+    let sample_block = sample::build_sample(
         &requests,
         &sample::SampleOptions {
             locale,
@@ -1767,7 +1890,166 @@ pub fn question_samples(
             token,
             masker: sample::Masker::shipped(),
         },
+    );
+    TableData {
+        sample: sample_block,
+        rows: chosen,
+    }
+}
+
+/// Whether the engine may choose rows for the writer on this question: it asks for something to be
+/// written (`has_writing_intent`) or for an explanation, a description or a comparison of the tables
+/// (`advisory_target`). A calculation never does: the engine's figure is enough, and no row is sent
+/// for it (TABULAR step 10).
+pub fn wants_rows_for_writer(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+) -> bool {
+    question::has_writing_intent(question, locale)
+        || advisory_target(question, data, selection, locale, entity_candidates).is_some()
+}
+
+/// The one sheet rows can be chosen from: the only reachable sheet that looks like a table and has a
+/// name of its own, or the one the question writes the name of. Never a guess between two.
+fn sheet_for_rows<'a>(
+    question: &str,
+    inventory: &'a TabularInventory,
+    allowed: Option<&[String]>,
+) -> Option<&'a SheetInventory> {
+    let sheets: Vec<&SheetInventory> = engine::reachable_sheets(inventory, allowed)
+        .into_iter()
+        .filter(|sheet| sheet.looks_tabular() && inventory.sheets_named(&sheet.name).len() == 1)
+        .collect();
+    match sheets.as_slice() {
+        [only] => Some(*only),
+        many => {
+            let folded = fold_text(question);
+            let named: Vec<&&SheetInventory> = many
+                .iter()
+                .filter(|sheet| {
+                    let name = fold_text(&sheet.name);
+                    !name.trim().is_empty() && folded.contains(&name)
+                })
+                .collect();
+            match named.as_slice() {
+                [only] => Some(**only),
+                _ => None,
+            }
+        }
+    }
+}
+
+/// The rows of one workbook the question designates, as the writer is sent them, or `None`.
+///
+/// Selection is by **explicit filters only**, tried in this order, the first that finds one deciding:
+/// an identifier the question writes whole or a value it writes (a supplier, a month, a year, an
+/// amount over a number: `detect_filters`, the reading a calculation uses), then a value the retrieved
+/// excerpts name (`mixed_answer::entity_link`). With none, "every row" when the question says so
+/// (`has_distributive_word`) and they all fit. The model never chooses a row. A word that matches two
+/// columns is asked about, never picked: no rows are sent then.
+fn rows_of_workbook(
+    source: &RowsSource,
+    locale: &str,
+    excerpts: &[Evidence],
+    share_chars: usize,
+) -> Option<crate::tabular::rows::RowsEvidence> {
+    use crate::tabular::rows;
+
+    let allowed = source.sheets.as_deref();
+    let question = source.reader_question.as_str();
+    let sheet = sheet_for_rows(question, &source.inventory, allowed)?;
+    let sheet_data = source
+        .workbook
+        .sheets
+        .iter()
+        .find(|data| data.name == sheet.name)?;
+    let residual = question::residual_for_rows(question, &source.inventory, allowed, locale);
+    let mut filters = match detect_filters(
+        question,
+        &residual,
+        &source.inventory,
+        &source.workbook,
+        Some(&sheet.name),
+        allowed,
+        None,
+        None,
+        locale,
+        &std::collections::HashSet::new(),
+    ) {
+        FilterDetection::Filters(filters) => filters,
+        FilterDetection::WhichColumn { .. } => return None,
+        FilterDetection::ValueNotFound { .. } | FilterDetection::None => Vec::new(),
+    };
+    if filters.is_empty() {
+        if let crate::mixed_answer::EntityLink::Filter(filter) =
+            crate::mixed_answer::entity_link(excerpts, sheet, sheet_data)
+        {
+            filters.push(filter);
+        }
+    }
+    let every_row = filters.is_empty();
+    if every_row && !question::has_distributive_word(question, locale) {
+        return None;
+    }
+    let (sheet, matching) = engine::matching_row_indices(
+        &source.workbook,
+        &source.inventory,
+        Some(&sheet.name),
+        allowed,
+        &filters,
+        locale,
     )
+    .ok()?;
+    let evidence = rows::build_rows(
+        &rows::RowsRequest {
+            file: &source.file,
+            inventory: &source.inventory,
+            workbook: &source.workbook,
+            sheet,
+            filters: &filters,
+            matching: &matching,
+        },
+        &rows::RowsOptions {
+            locale,
+            share_chars,
+            masker: crate::tabular::sample::Masker::shipped(),
+        },
+    )?;
+    // "Every row" is sent only when it all fits: a partial view of a table nobody filtered is the
+    // sample's job, not a selection.
+    (!(every_row && evidence.truncated)).then_some(evidence)
+}
+
+/// The rows the engine chooses for a writer across the workbooks that got a card (TABULAR step 10, plan
+/// 4.5): each workbook's rows by explicit filters, within an equal part of `rows_budget_chars` (the
+/// model's room, never a fixed count), as one block between the markers `token` carries. Empty when no
+/// workbook has a selection.
+pub fn select_rows_for_writer(
+    sources: &[RowsSource],
+    locale: &str,
+    excerpts: &[Evidence],
+    budget: &crate::conversation::ContextBudget,
+    token: &str,
+) -> crate::tabular::rows::RowsBlock {
+    if sources.is_empty() {
+        return crate::tabular::rows::RowsBlock::default();
+    }
+    // A workbook the question names wins (as everywhere in the series): the rows of a workbook that is
+    // only implied by a column name are not sent beside it.
+    let any_named = sources.iter().any(|source| source.named);
+    let sources: Vec<&RowsSource> = sources
+        .iter()
+        .filter(|source| source.named || !any_named)
+        .collect();
+    let share = crate::tabular::rows::rows_budget_chars(budget) / sources.len();
+    let items: Vec<crate::tabular::rows::RowsEvidence> = sources
+        .iter()
+        .filter_map(|source| rows_of_workbook(source, locale, excerpts, share))
+        .collect();
+    crate::tabular::rows::assemble(items, token)
 }
 
 /// Whether a name the selected workbooks do not carry is still a workbook of the folder.

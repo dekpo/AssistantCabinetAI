@@ -341,7 +341,7 @@ async fn mixed_with_rows_mode(
     );
     let sample = match rows_mode {
         TabularRowsMode::Off => SampleBlock::default(),
-        TabularRowsMode::Sample => tabular_answer::question_samples(
+        TabularRowsMode::Sample | TabularRowsMode::Auto => tabular_answer::question_samples(
             &cards.block,
             &folders.open(),
             selection,
@@ -365,6 +365,7 @@ async fn mixed_with_rows_mode(
         calculation: Default::default(),
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
     mixed_answer::answer(
         question,
@@ -1280,6 +1281,7 @@ async fn step_03_no_card_and_no_documents_is_still_insufficient_evidence() {
         calculation: Default::default(),
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
     let outcome = mixed_answer::answer(
         question,
@@ -1540,6 +1542,7 @@ async fn step_05_a_gateway_that_hangs_up_degrades_to_the_engines_nudge() {
         calculation: Default::default(),
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
     let written = mixed_answer::answer(
         question,

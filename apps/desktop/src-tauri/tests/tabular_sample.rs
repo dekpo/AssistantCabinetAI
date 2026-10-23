@@ -148,7 +148,7 @@ async fn ask(
     );
     let sample = match rows_mode {
         TabularRowsMode::Off => Default::default(),
-        TabularRowsMode::Sample => tabular_answer::question_samples(
+        TabularRowsMode::Sample | TabularRowsMode::Auto => tabular_answer::question_samples(
             &cards.block,
             &folder,
             &selection,
@@ -173,6 +173,7 @@ async fn ask(
         calculation: Default::default(),
         formulas: None,
         folder_facts: "",
+        rows: None,
     };
     let (answer, generated) = mixed_answer::answer(
         question,
@@ -235,6 +236,7 @@ fn every_figure_of_the_profile_is_the_engines_own_answer() {
                 inventory: &inventory,
                 workbook: &workbook,
                 sheets: None,
+                rows_chosen_in: None,
             }],
             &SampleOptions {
                 locale: LOCALE,
@@ -298,6 +300,7 @@ fn every_figure_of_the_profile_is_the_engines_own_answer() {
             inventory: &inventory,
             workbook: &workbook,
             sheets: None,
+            rows_chosen_in: None,
         }],
         &SampleOptions {
             locale: LOCALE,

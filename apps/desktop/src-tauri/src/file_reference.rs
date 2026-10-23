@@ -406,7 +406,42 @@ impl<'a> FileReferenceResolver<'a> {
                 resolution,
             });
         }
+        // A bare word that is a word of a name the question writes out in full (a path, a file name with
+        // its extension, a whole name) is that name's word, not a second reference: « factures » in « les
+        // factures de Test/factures-fournisseurs-2026.xlsx » is not `factures.csv` (found on her real
+        // index, TABULAR step 10). A stem word that is not part of a written name still names its file
+        // beside it (« compare montants with Mes ventes.xlsx »).
+        let question_words: Vec<String> = fold_words(question)
+            .split('-')
+            .filter(|word| !word.is_empty())
+            .map(str::to_string)
+            .collect();
+        let mut written_words: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for hit in hits.iter().chain(kept_names.iter()) {
+            for word in question_words.iter().take(hit.end).skip(hit.start) {
+                written_words.insert(word.as_str());
+            }
+        }
         for (offset, token) in word_spans(question) {
+            let folded_token = fold_words(token);
+            let token_words: Vec<&str> = folded_token
+                .split('-')
+                .filter(|word| !word.is_empty())
+                .collect();
+            if !token_words.is_empty()
+                && token_words.iter().all(|word| written_words.contains(word))
+            {
+                // Only when the word lies outside the written name itself (inside it, the name's own hit
+                // already stands for it).
+                let position = word_start(offset);
+                let inside = hits
+                    .iter()
+                    .chain(kept_names.iter())
+                    .any(|hit| position >= hit.start && position < hit.end);
+                if !inside {
+                    continue;
+                }
+            }
             let matches = self.case_insensitive_stems(token);
             let resolution = match matches.len() {
                 0 => continue,

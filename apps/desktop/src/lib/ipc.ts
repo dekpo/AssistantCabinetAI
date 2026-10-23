@@ -20,7 +20,7 @@ export type KnowledgeMode = "off" | "suggest" | "auto";
  * What the AI receives from the spreadsheets a question concerns: `off` is their structure alone
  * (the workbook card); `sample` adds a sample of rows and the column figures, identifiers masked.
  */
-export type TabularRowsMode = "off" | "sample";
+export type TabularRowsMode = "off" | "sample" | "auto";
 
 /** The spreadsheet application whose formulas the program checks the model's formulas against
  * (`SpreadsheetApplication`). One value today. */
@@ -1090,6 +1090,9 @@ export interface MixedAnswer {
   /** The explicit arithmetic the model wrote itself (`10 + 40 = 50`), as written: said under the
    * answer, which is never edited. Only the engine's figures are reliable. */
   modelArithmetic: string[];
+  /** The rows of the user's tables the program chose and sent to the model with the question,
+   * exactly as sent (TABULAR step 10). Empty when no row was sent. */
+  rowsSent: RowsEvidence[];
   /** The problems found in the formulas the model wrote; the answer is never edited. */
   formulaNotes: FormulaNote[];
   /** How many formulas had nothing the program could find wrong. */
@@ -1100,6 +1103,50 @@ export interface MixedAnswer {
   /** What was wrong in the first answer, when it was corrected (each problem with the formula as
    * first written). */
   formulaRepairedFrom: FormulaNote[];
+}
+
+/** One column of the rows sent. */
+export interface RowsColumn {
+  letter: string;
+  name: string;
+}
+
+/** One row sent: its number in the spreadsheet and its cells as they were written into the request
+ * (cleaned, identifiers masked, long text cut). */
+export interface RowsRow {
+  number: number;
+  cells: string[];
+}
+
+/** A total the engine computed over the rows sent, and over those alone. */
+export interface RowsTotal {
+  letter: string;
+  name: string;
+  sum: number;
+  count: number;
+  unit: string | null;
+}
+
+/** The rows the program chose from one sheet of one workbook for the model (TABULAR step 10, owner
+ * decision of 20 October 2026): by the explicit filters the question wrote, never by the model. */
+export interface RowsEvidence {
+  /** The index key. */
+  file: string;
+  sheet: string;
+  /** The filters that chose the rows, as data; the interface writes the sentence. */
+  filters: AppliedFilter[];
+  columns: RowsColumn[];
+  /** Columns of the sheet that did not fit the width of a row and were not sent. */
+  hiddenColumns: number;
+  rows: RowsRow[];
+  /** Rows the filters matched. */
+  totalMatching: number;
+  /** Rows written. */
+  shown: number;
+  /** Fewer rows were sent than matched: a labelled sample and the profile of all of them. */
+  truncated: boolean;
+  dataRows: number;
+  totalsOverShown: RowsTotal[];
 }
 
 export interface AskAnswer {
@@ -1211,6 +1258,8 @@ export interface WorkbookUse {
    * they come from. Null when only the structure was sent. */
   rowsSent: number | null;
   rowsTotal: number | null;
+  /** The rows the program chose were fewer than the rows it matched (TABULAR step 10). */
+  rowsTruncated: boolean;
   /** The card was shrunk to fit the model's room: columns or flags were left out. */
   truncated: boolean;
   count: number | null;

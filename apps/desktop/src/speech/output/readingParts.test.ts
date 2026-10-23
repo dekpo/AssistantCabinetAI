@@ -129,6 +129,7 @@ describe("what is read of an answer", () => {
       reason: null,
       rowsSent: null,
       rowsTotal: null,
+      rowsTruncated: false,
       truncated: false,
       count: null,
       candidates: [],

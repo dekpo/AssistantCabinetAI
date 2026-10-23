@@ -199,7 +199,7 @@ fn is_bare_number(text: &str) -> bool {
 /// Whitespace and control characters collapse to single spaces. The angle brackets a marker is made
 /// of become single angle quotation marks, and the bar that separates the cells of a row a slash,
 /// so a cell can neither close the markers nor split its row.
-fn neutralise(text: &str) -> String {
+pub(crate) fn neutralise(text: &str) -> String {
     text.chars()
         .map(|ch| match ch {
             '<' => '\u{2039}',
@@ -210,7 +210,7 @@ fn neutralise(text: &str) -> String {
         .collect()
 }
 
-fn collapse(text: &str) -> String {
+pub(crate) fn collapse(text: &str) -> String {
     text.chars()
         .map(|ch| if ch.is_control() { ' ' } else { ch })
         .collect::<String>()
@@ -229,7 +229,7 @@ fn cut(text: String, max_chars: usize) -> String {
 
 /// What the program writes of a text it did not make: collapsed, masked, neutralised, cut. Masking
 /// comes before cutting, so a cut can never leave half an identifier.
-fn clean_text(masker: &Masker, raw: &str) -> (String, bool) {
+pub(crate) fn clean_text(masker: &Masker, raw: &str) -> (String, bool) {
     let (masked, was_masked) = masker.mask(&collapse(raw));
     (cut(neutralise(&masked), MAX_CELL_CHARS), was_masked)
 }
@@ -263,7 +263,7 @@ pub fn figure_text(value: f64) -> String {
 /// number loses its floating-point noise and takes the decimal mark of the interface language; a
 /// typed date, which the file stores without a form, is written `YYYY-MM-DD`, the one form that
 /// cannot be read day-first or month-first; a formula shows the value it last stored.
-fn cell_raw(cell: &CellValue, decimal: char) -> String {
+pub(crate) fn cell_raw(cell: &CellValue, decimal: char) -> String {
     match cell {
         CellValue::Empty => String::new(),
         CellValue::Text(text) => text.clone(),
@@ -290,6 +290,9 @@ pub struct SampleRequest<'a> {
     pub inventory: &'a TabularInventory,
     pub workbook: &'a Workbook,
     pub sheets: Option<&'a [String]>,
+    /// A sheet whose rows the engine chose for the question (`tabular::rows`): its sample rows are
+    /// left out, since the chosen rows stand for them, and its profile stays.
+    pub rows_chosen_in: Option<&'a str>,
 }
 
 /// How a request is sampled.
@@ -314,6 +317,9 @@ pub struct WorkbookSampleUse {
     pub rows_sent: usize,
     /// Data rows of those sheets.
     pub rows_total: usize,
+    /// The rows the engine chose for the question were fewer than the rows it matched, so a labelled
+    /// sample and the profile of all of them were sent (`tabular::rows`).
+    pub rows_truncated: bool,
 }
 
 /// The sample and the profile of a question, as one block between markers.
@@ -332,6 +338,8 @@ struct Unit<'a> {
     workbook: &'a Workbook,
     sheet: &'a SheetInventory,
     rows: &'a [Vec<CellValue>],
+    /// The rows of this sheet were chosen by the engine and are sent as such: no sample rows.
+    rows_chosen: bool,
 }
 
 struct Rendered {
@@ -358,13 +366,19 @@ pub fn build_sample(requests: &[SampleRequest<'_>], options: &SampleOptions<'_>)
     } else {
         let needs: Vec<usize> = units
             .iter()
-            .map(|unit| estimated_size(unit, options, decimal))
+            .map(|unit| match unit.rows_chosen {
+                true => 0,
+                false => estimated_size(unit, options, decimal),
+            })
             .collect();
         let shares = share_out(&needs, options.sample_budget_chars);
         units
             .iter()
             .zip(&shares)
-            .map(|(unit, share)| render_rows(unit, *share, options, decimal))
+            .map(|(unit, share)| match unit.rows_chosen {
+                true => None,
+                false => render_rows(unit, *share, options, decimal),
+            })
             .collect()
     };
 
@@ -425,6 +439,7 @@ pub fn build_sample(requests: &[SampleRequest<'_>], options: &SampleOptions<'_>)
                 file: unit.file.to_string(),
                 rows_sent: sent,
                 rows_total: unit.rows.len(),
+                rows_truncated: false,
             }),
         }
     }
@@ -481,6 +496,7 @@ fn units_of<'a>(requests: &[SampleRequest<'a>]) -> Vec<Unit<'a>> {
                 workbook: request.workbook,
                 sheet,
                 rows: inventory::data_rows(sheet, data),
+                rows_chosen: request.rows_chosen_in == Some(sheet.name.as_str()),
             });
         }
     }
@@ -619,7 +635,7 @@ fn estimated_size(unit: &Unit<'_>, options: &SampleOptions<'_>, decimal: char) -
 /// The indices of the rows of a sample of `count` rows out of `total`: the first half, then rows
 /// spread evenly through the rest, the last row included. Strictly increasing, the same for the same
 /// input.
-fn sampled_indices(total: usize, count: usize) -> Vec<usize> {
+pub(crate) fn sampled_indices(total: usize, count: usize) -> Vec<usize> {
     if count >= total {
         return (0..total).collect();
     }
@@ -1063,6 +1079,7 @@ mod tests {
                 inventory,
                 workbook,
                 sheets: None,
+                rows_chosen_in: None,
             }],
             options,
         )
@@ -1100,7 +1117,8 @@ mod tests {
             vec![WorkbookSampleUse {
                 file: "t.csv".into(),
                 rows_sent: 9,
-                rows_total: 9
+                rows_total: 9,
+                rows_truncated: false
             }]
         );
     }
@@ -1454,7 +1472,8 @@ mod tests {
             vec![WorkbookSampleUse {
                 file: "t.csv".into(),
                 rows_sent: 0,
-                rows_total: 300
+                rows_total: 300,
+                rows_truncated: false
             }]
         );
     }
@@ -1480,12 +1499,14 @@ mod tests {
                     inventory: &big_inventory,
                     workbook: &big_workbook,
                     sheets: None,
+                    rows_chosen_in: None,
                 },
                 SampleRequest {
                     file: "small.csv",
                     inventory: &small_inventory,
                     workbook: &small_workbook,
                     sheets: None,
+                    rows_chosen_in: None,
                 },
             ],
             &options(1_600, 1_000),
@@ -1524,12 +1545,14 @@ mod tests {
             inventory: &wide_inventory,
             workbook: &wide_workbook,
             sheets: None,
+            rows_chosen_in: None,
         };
         let small = SampleRequest {
             file: "small.csv",
             inventory: &small_inventory,
             workbook: &small_workbook,
             sheets: None,
+            rows_chosen_in: None,
         };
         let figures = |text: &str| text.matches(" numbers, min ").count();
 

@@ -55,7 +55,7 @@ pub enum AppliedFilter {
     In { column: String, values: Vec<String> },
 }
 
-fn describe_filter(filter: &FilterSpec) -> AppliedFilter {
+pub(crate) fn describe_filter(filter: &FilterSpec) -> AppliedFilter {
     let column = filter.column.clone();
     match &filter.comparison {
         Comparison::Equals(value) => AppliedFilter::Equals { column, value: value.clone() },
@@ -424,6 +424,49 @@ pub enum Operation {
     /// same "row outside the workbook's range" refusal every other row-touching operation needs,
     /// exercised on its own.
     RowAt { index: usize },
+}
+
+/// The data-row indices of one sheet that every one of `filters` matches (AND only; no filter matches
+/// every row), in row order, with the sheet that was resolved. The rows the writer is sent when the
+/// engine chooses them (TABULAR step 10): the same matching `execute` uses for every operation, so the
+/// rows sent are the rows a count, a sum or a filter question would have used.
+pub(crate) fn matching_row_indices<'a>(
+    workbook: &'a Workbook,
+    inventory: &'a TabularInventory,
+    sheet_name: Option<&str>,
+    allowed_sheets: Option<&[String]>,
+    filters: &[FilterSpec],
+    locale: &str,
+) -> Result<(&'a SheetInventory, Vec<usize>), NotAnswerableReason> {
+    let (sheet_inventory, sheet_data) =
+        resolve_sheet(inventory, workbook, sheet_name, allowed_sheets)?;
+    let rows = data_rows(sheet_inventory, sheet_data);
+    let matched = matching_rows(rows, &sheet_inventory.columns, filters, locale)?;
+    Ok((sheet_inventory, matched))
+}
+
+/// The sum of a numeric column over the data rows at `indices`, and how many of those cells were read
+/// as numbers: the arithmetic of `Operation::Sum` (the column is resolved over the whole column, so a
+/// separator reads as it does everywhere else), restricted to the rows that were sent. `None` for a
+/// column that is not numeric, holds a formula, or has no readable number among those rows.
+pub(crate) fn numeric_total_over(
+    rows: &[Vec<CellValue>],
+    column: &ColumnInventory,
+    indices: &[usize],
+    locale: &str,
+) -> Option<(f64, usize)> {
+    if column.inferred_type != ColumnType::Numeric || column.has_formulas {
+        return None;
+    }
+    let resolved = inventory::resolve_numeric_column(rows, column.index, locale);
+    let values: Vec<f64> = indices
+        .iter()
+        .filter_map(|&index| resolved.values.get(index).copied().flatten())
+        .collect();
+    if values.is_empty() {
+        return None;
+    }
+    Some((values.iter().sum(), values.len()))
 }
 
 /// Run one operation against one sheet of `workbook`, restricted to `allowed_sheets` when the

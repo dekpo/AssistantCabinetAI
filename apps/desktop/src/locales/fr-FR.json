@@ -251,6 +251,16 @@
     "sourceItemCardRows": "{path} (structure et {rows} sur {total}, identifiants masqués)",
     "rowOne": "ligne",
     "rowMany": "lignes",
+    "rowsSent": "{path} : {rows} sur {total} transmises à l'IA.",
+    "rowsSentSample": "{path} : {rows} sur {total} transmises à l'IA (un échantillon des lignes trouvées, avec les chiffres de toutes les lignes trouvées).",
+    "rowsSentToggle": "Lignes transmises à l'IA",
+    "rowsSentSummary": "Lignes transmises à l'IA : {heading}",
+    "rowsSentSheet": "{path}, feuille « {sheet} »",
+    "rowsSentFilters": "Filtres : {filters}",
+    "rowsSentRow": "Ligne",
+    "rowsSentHiddenColumns": "Colonnes non transmises : {count}",
+    "rowsSentTotals": "Totaux calculés par le programme sur ces lignes : {totals}",
+    "rowsSentTotal": "{column} : {sum}",
     "deterministicData": "Réponse calculée depuis votre dossier des tableaux, sans l'IA.",
     "documentsNotNeeded": "Réponse établie depuis vos tableaux ; les documents sélectionnés n'étaient pas nécessaires.",
     "unverifiedNumber": "Le chiffre « {number} » ne figure dans aucun des extraits utilisés ni dans votre question : vérifiez-le dans vos documents.",
@@ -611,10 +621,11 @@
       "auto": "Automatique"
     },
     "tabularRowsModeLabel": "Données envoyées à l'IA depuis vos tableurs",
-    "tabularRowsModeDescription": "Quand une question concerne un tableur, l'IA reçoit toujours sa structure (noms des colonnes, types, nombre de lignes) ; « Structure et échantillon de lignes » y ajoute quelques lignes et des chiffres de synthèse calculés par le programme, envoyés à un modèle qui tourne sur votre propre réseau et jamais en ligne, avec les identifiants (numéros d'assurance, téléphones, adresses e-mail, IBAN) masqués. Pris en compte dès la question suivante.",
+    "tabularRowsModeDescription": "Quand une question concerne un tableur, l'IA reçoit toujours sa structure (noms des colonnes, types, nombre de lignes) ; « Structure et échantillon de lignes » y ajoute quelques lignes et des chiffres de synthèse calculés par le programme ; « Automatique » y ajoute, pour une demande de rédaction ou d'analyse, les lignes que le programme choisit avec les filtres de votre question (un fournisseur, un mois, un montant), toujours affichées sous la réponse. Tout est envoyé à un modèle qui tourne sur votre propre réseau et jamais en ligne, avec les identifiants (numéros d'assurance, téléphones, adresses e-mail, IBAN) masqués. Pris en compte dès la question suivante.",
     "tabularRowsMode": {
       "off": "Structure seulement",
-      "sample": "Structure et échantillon de lignes"
+      "sample": "Structure et échantillon de lignes",
+      "auto": "Structure, échantillon et lignes choisies par le programme"
     },
     "healthModuleLabel": "Module santé",
     "healthModuleDescription": "Cochez le ou les pays de vos patients : un frontalier peut avoir un numéro de sécurité sociale français et un numéro AVS. Un module aide à mieux lire les numéros et le vocabulaire de son pays, sans jamais retirer ni changer le type d'un nom. Pris en compte à la prochaine analyse que vous lancez.",

@@ -94,6 +94,9 @@ pub struct WorkbookUse {
     /// `off`, or the workbook has no data table to sample) and for a computed figure.
     pub rows_sent: Option<usize>,
     pub rows_total: Option<usize>,
+    /// The rows the engine chose were fewer than the rows it matched: a labelled sample of them and
+    /// the profile of all of them were sent (TABULAR step 10).
+    pub rows_truncated: bool,
     /// The card was shrunk to fit the room of the model (columns or flags left out).
     pub truncated: bool,
     /// How many ticked workbooks the aggregate entry (`not_relevant`) stands for.
@@ -110,6 +113,7 @@ impl WorkbookUse {
             reason,
             rows_sent: None,
             rows_total: None,
+            rows_truncated: false,
             truncated: false,
             count: None,
             candidates: Vec::new(),
@@ -206,6 +210,7 @@ pub fn trace(facts: &SelectionFacts, answered: Answered<'_>) -> Vec<WorkbookUse>
                     );
                     entry.rows_sent = sample.map(|each| each.rows_sent);
                     entry.rows_total = sample.map(|each| each.rows_total);
+                    entry.rows_truncated = sample.is_some_and(|each| each.rows_truncated);
                     entry.truncated = card.truncated;
                     entries.push(entry);
                 } else {
@@ -386,6 +391,7 @@ mod tests {
             file: "named.xlsx".to_string(),
             rows_sent: 12,
             rows_total: 480,
+            rows_truncated: true,
         }];
         let trace = trace(
             &facts(&["named.xlsx", "other.xlsx"]),
@@ -399,6 +405,8 @@ mod tests {
             (trace[1].rows_sent, trace[1].rows_total, trace[1].truncated),
             (None, None, false)
         );
+        // Rows the engine chose that were fewer than it matched (TABULAR step 10) are said beside the count.
+        assert!(trace[0].rows_truncated && !trace[1].rows_truncated);
     }
 
     #[test]

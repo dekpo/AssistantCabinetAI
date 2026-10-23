@@ -5,6 +5,7 @@ import { rewriteQuestion } from "../lib/choices";
 import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
 import { annotationParts, answerForCopy, sourceItems } from "../lib/annotations";
+import { rowsSentFilters, rowsSentHeading, rowsSentTotals } from "../lib/rowsSent";
 import { buttonsFor } from "../lib/calculationFollowUp";
 import { formatTabularAnswer } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
@@ -324,6 +325,48 @@ export function MessageList({
                   </ul>
                 </details>
               )}
+              {/* The rows of her tables that the program chose and sent to the AI, exactly as sent: a
+                  disclosure per workbook, never hidden content (TABULAR step 10). */}
+              {(entry.mixedRowsSent ?? []).map((item, index) => (
+                <details className="message__sources message__rows" key={`rows-${index}`}>
+                  <summary className="disclosure">
+                    {t("chat.rowsSentSummary", { heading: rowsSentHeading(t, item) })}
+                  </summary>
+                  {rowsSentFilters(t, locale, item) === null ? null : (
+                    <p className="message__timing">{rowsSentFilters(t, locale, item)}</p>
+                  )}
+                  <table className="message__rows-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">{t("chat.rowsSentRow")}</th>
+                        {item.columns.map((column) => (
+                          <th scope="col" key={column.letter}>
+                            {column.letter} {column.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {item.rows.map((row) => (
+                        <tr key={row.number}>
+                          <th scope="row">{row.number}</th>
+                          {row.cells.map((cell, cellIndex) => (
+                            <td key={`${row.number}-${cellIndex}`}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {item.hiddenColumns === 0 ? null : (
+                    <p className="message__timing">
+                      {t("chat.rowsSentHiddenColumns", { count: String(item.hiddenColumns) })}
+                    </p>
+                  )}
+                  {rowsSentTotals(t, locale, item) === null ? null : (
+                    <p className="message__timing">{rowsSentTotals(t, locale, item)}</p>
+                  )}
+                </details>
+              ))}
               {/* The figure the engine computed, shown beside the model's prose, always (HAP-1,
                   BUG-16): the prose may be wrong or terse, and the reader must have the number to check
                   it against, with the filters it was computed under. Not repeated when the table's

@@ -2017,6 +2017,26 @@ body {
   font-size: 0.85em;
 }
 
+/* The rows of her tables sent to the AI, exactly as written into the request (TABULAR step 10): a small
+   table that scrolls sideways on its own rather than widening the conversation. */
+.message__rows {
+  overflow-x: auto;
+}
+
+.message__rows-table {
+  margin: 6px 0 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.message__rows-table th,
+.message__rows-table td {
+  padding: 2px 8px;
+  border: 1px solid var(--border, #d0d0d0);
+  text-align: left;
+  white-space: nowrap;
+}
+
 .message__sources-list {
   margin: 4px 0 0;
   padding: 0;

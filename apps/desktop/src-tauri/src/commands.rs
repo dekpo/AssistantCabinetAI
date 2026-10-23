@@ -2529,18 +2529,30 @@ async fn advisory_tier(
     );
     let card_block = &cards.block;
     let implied = &cards.implied;
-    let sample_block = match rows_mode {
-        settings::TabularRowsMode::Off => crate::tabular::sample::SampleBlock::default(),
-        settings::TabularRowsMode::Sample => tabular_answer::question_samples(
-            card_block,
-            &folder,
-            &scope.data_mode,
-            &locale,
-            &index,
-            &budget,
-            &crate::tabular::sample::fresh_token(),
-        ),
+    // `auto` adds the rows the engine chooses with the filters of the question (TABULAR step 10); never
+    // for the analysis of a figure, which is final.
+    let ask_rows = rows_mode == settings::TabularRowsMode::Auto && kept_figure.is_none();
+    let table_data = match rows_mode {
+        settings::TabularRowsMode::Off => tabular_answer::TableData::default(),
+        settings::TabularRowsMode::Sample | settings::TabularRowsMode::Auto => {
+            tabular_answer::question_table_data(
+                card_block,
+                &folder,
+                &scope.data_mode,
+                &locale,
+                &index,
+                &budget,
+                &crate::tabular::sample::fresh_token(),
+                ask_rows.then_some(tabular_answer::RowsAsk {
+                    question,
+                    excerpts: &[],
+                }),
+            )
+        }
     };
+    let sample_block = &table_data.sample;
+    let rows_block = &table_data.rows;
+    let trace_uses = crate::tabular::rows::with_chosen_rows(&sample_block.uses, rows_block);
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
     let formula_context = crate::tabular::formula_check::FormulaContext::new(
         application.as_str(),
@@ -2563,6 +2575,7 @@ async fn advisory_tier(
         },
         formulas: formula_context.as_ref(),
         folder_facts: "",
+        rows: (!rows_block.is_empty()).then_some(rows_block),
     };
     let targeting_report = targeting_plan.report(false);
     if let Some(report) = &targeting_report {
@@ -2614,7 +2627,7 @@ async fn advisory_tier(
                     implied,
                     table: &result.table,
                     model_wrote: generated && !result.answer.is_empty(),
-                    samples: &sample_block.uses,
+                    samples: &trace_uses,
                 },
             );
             Ok(AskAnswer {
@@ -2638,7 +2651,7 @@ async fn advisory_tier(
                     implied,
                     table: &table,
                     model_wrote: false,
-                    samples: &sample_block.uses,
+                    samples: &trace_uses,
                 },
             );
             Ok(AskAnswer {
@@ -3691,18 +3704,44 @@ async fn mixed_tier(
     // The sample of rows and the column profile of the workbooks that got a card, when the setting
     // allows it: read through the cache the answer path uses, synchronously, before the first
     // `.await` below. With the setting `off` nothing is read and the turn is the turn without it.
-    let sample_block = match rows_mode {
-        settings::TabularRowsMode::Off => crate::tabular::sample::SampleBlock::default(),
-        settings::TabularRowsMode::Sample => tabular_answer::question_samples(
-            card_block,
+    // `auto` adds the rows the engine chooses with the filters of the question or of the excerpts, for a
+    // request to write or to analyse (TABULAR step 10); never for the analysis of a figure, never for a
+    // calculation. The excerpts are capped as the writer will cap them, so the entity linked is one it
+    // is sent.
+    let ask_rows = rows_mode == settings::TabularRowsMode::Auto
+        && !analysis
+        && tabular_answer::wants_rows_for_writer(
+            question,
             &folder,
             &scope.data_mode,
             &locale,
-            &index,
-            &budget,
-            &crate::tabular::sample::fresh_token(),
-        ),
+            &implied_by_entity_candidates(&targeting_plan),
+        );
+    let linked_excerpts = mixed_answer::cap_document_share(
+        &document_sources,
+        budget.scaled_over_baseline(mixed_answer::MIXED_DOCUMENT_SHARE_CHARS),
+    );
+    let table_data = match rows_mode {
+        settings::TabularRowsMode::Off => tabular_answer::TableData::default(),
+        settings::TabularRowsMode::Sample | settings::TabularRowsMode::Auto => {
+            tabular_answer::question_table_data(
+                card_block,
+                &folder,
+                &scope.data_mode,
+                &locale,
+                &index,
+                &budget,
+                &crate::tabular::sample::fresh_token(),
+                ask_rows.then_some(tabular_answer::RowsAsk {
+                    question,
+                    excerpts: &linked_excerpts,
+                }),
+            )
+        }
     };
+    let sample_block = &table_data.sample;
+    let rows_block = &table_data.rows;
+    let trace_uses = crate::tabular::rows::with_chosen_rows(&sample_block.uses, rows_block);
 
     let sheet_sizes = tabular_answer::sheet_sizes(&folder, &scope.data_mode);
     let formula_context = crate::tabular::formula_check::FormulaContext::new(
@@ -3726,6 +3765,7 @@ async fn mixed_tier(
         },
         formulas: formula_context.as_ref(),
         folder_facts: &folder_facts,
+        rows: (!rows_block.is_empty()).then_some(rows_block),
     };
 
     // Nothing below touches `index`, `folder` or the document inventory again: everything either
@@ -3784,7 +3824,7 @@ async fn mixed_tier(
             implied,
             table: &result.table,
             model_wrote: generated && !result.answer.is_empty(),
-            samples: &sample_block.uses,
+            samples: &trace_uses,
         },
     );
 

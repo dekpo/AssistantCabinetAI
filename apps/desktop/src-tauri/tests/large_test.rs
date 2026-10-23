@@ -1149,6 +1149,7 @@ impl<'a> Replay<'a> {
             calculation: Default::default(),
             formulas: None,
             folder_facts: "",
+            rows: None,
         };
         let started = Instant::now();
         let (result, generated) = mixed_answer::answer(

@@ -7,6 +7,7 @@ import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
 import { displayPathOfKey } from "./indexKey";
 import { counted } from "./plural";
+import { rowsSentCopy, rowsSentLine } from "./rowsSent";
 import { groupSources, type SourceGroup } from "./sourceGroups";
 import { formatTabularAnswer, tabularSourceLine, workbookCardSourceLine } from "./tabularAnswer";
 import { targetingNoteText } from "./targeting";
@@ -167,6 +168,11 @@ function noteLines(
   for (const number of entry.unverifiedNumbers ?? []) {
     lines.push(t("chat.unverifiedNumber", { number }));
   }
+  // The rows of the user's tables that the program chose and sent to the AI (TABULAR step 10): said
+  // under the answer and, being data that left for a model, read aloud with the cautions.
+  for (const item of entry.mixedRowsSent ?? []) {
+    lines.push(rowsSentLine(t, item));
+  }
   // A sum, a product or a difference the model worked out itself: the answer stays as written, and
   // the reader is told that only the engine's figures are reliable (read aloud, like the others).
   for (const expression of entry.mixedModelArithmetic ?? []) {
@@ -288,6 +294,11 @@ export function answerForCopy(
   const sources = includeSources ? sourceLines(t, entry) : [];
   if (sources.length > 0) {
     parts.push(sources.join("\n"));
+  }
+  // The rows themselves are copied only with the sources, like every list of what the answer rests on.
+  const rows = includeSources ? rowsSentCopy(t, locale, entry.mixedRowsSent ?? []) : [];
+  if (rows.length > 0) {
+    parts.push(rows.join("\n"));
   }
   return parts.join("\n\n");
 }

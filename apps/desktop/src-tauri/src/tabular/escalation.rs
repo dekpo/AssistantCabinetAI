@@ -87,6 +87,10 @@ pub struct CalculationRecord<'a> {
     pub value: &'a TabularValue,
     pub locator: &'a TabularLocator,
     pub derivation: &'a TabularDerivation,
+    /// How many rows were listed for the writer beside the figure, and how many matched
+    /// (TABULAR step 10): `(sent, matching)`. `None` when no row was sent, which is every
+    /// explanation of a calculation. The rows themselves are never part of the record.
+    pub rows_listed: Option<(usize, usize)>,
 }
 
 /// The record of a calculation, as text for the model: what was understood from the question, the sheet
@@ -150,6 +154,11 @@ pub fn format_calculation_record(record: &CalculationRecord<'_>) -> Option<Strin
         Some(total) => format!("Rows: {row_count} kept out of {total} data rows"),
         None => format!("Rows: {row_count} row{plural} kept"),
     });
+    if let Some((sent, matching)) = record.rows_listed {
+        lines.push(format!(
+            "Rows listed for the writer: {sent} of {matching} matching rows (the 'Table rows' block)"
+        ));
+    }
     if let Some(aggregate) = numeric_of(record.value) {
         if aggregate.unparsed > 0 {
             let column = locator
@@ -203,7 +212,7 @@ fn describe_operation(operation: &str, column: Option<&str>) -> String {
     }
 }
 
-fn describe_applied_filter(filter: &AppliedFilter) -> String {
+pub(crate) fn describe_applied_filter(filter: &AppliedFilter) -> String {
     match filter {
         AppliedFilter::Equals { column, value } => format!("{column} = \"{value}\""),
         AppliedFilter::Contains { column, value } => format!("{column} contains \"{value}\""),
@@ -402,7 +411,28 @@ mod tests {
             value,
             locator,
             derivation,
+            rows_listed: None,
         }
+    }
+
+    #[test]
+    fn the_record_says_how_many_rows_were_listed_for_the_writer_and_never_which() {
+        let (value, locator, derivation) = filtered_sum();
+        let without = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+        assert!(!without.contains("Rows listed"), "{without}");
+
+        let mut listing = record_of(&value, &locator, &derivation);
+        listing.rows_listed = Some((5, 12));
+        let text = format_calculation_record(&listing).unwrap();
+        assert!(
+            text.contains(
+                "Rows listed for the writer: 5 of 12 matching rows (the 'Table rows' block)"
+            ),
+            "{text}"
+        );
+        // The line sits with the rows, before the result, and adds no other number.
+        assert!(text.find("Rows listed").unwrap() < text.find("Result:").unwrap());
+        assert_eq!(text.lines().count(), without.lines().count() + 1);
     }
 
     fn filtered_sum() -> (TabularValue, TabularLocator, TabularDerivation) {

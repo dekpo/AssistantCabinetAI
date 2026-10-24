@@ -37,6 +37,7 @@ use crate::gateway::{ChatTurn, GatewayClient};
 use crate::index_store::IndexStore;
 use crate::inventory::WorkFolderInventory;
 use crate::retrieval::Evidence;
+use crate::tabular::carry_over::{self, CarryDrop, CarryReport, FollowUpReading, TableCarryOver};
 use crate::tabular::engine::{
     self, Comparison, FilterSpec, NotAnswerableReason, Operation, TabularDerivation,
     TabularLocator, TabularOutcome, TabularValue,
@@ -161,6 +162,12 @@ pub enum TabularAnswer {
         value: String,
         candidates: Vec<String>,
     },
+    /// A short follow-up ("and the total?") fits several columns of the workbook it continues: asked,
+    /// never picked (TABULAR step 11).
+    WhichFollowUpColumn {
+        file: String,
+        candidates: Vec<String>,
+    },
     /// Analysed, and nothing in it looks like a table (red on the listing). The same honesty an
     /// unreadable scan gets.
     WorkbookUnreadable { file: String },
@@ -276,7 +283,45 @@ pub fn prepare(
     index: &IndexStore,
     force_model: bool,
 ) -> Result<PendingAnswer, AppError> {
-    answer_sync(question, data, selection, locale, index, force_model, None)
+    answer_sync(
+        question,
+        data,
+        selection,
+        locale,
+        index,
+        force_model,
+        None,
+        None,
+        &mut CarryReport::default(),
+    )
+}
+
+/// `prepare`, continuing the previous table answer when the question is a short follow-up on it
+/// ("and for March?"). `carry` is untrusted (it comes back from the interface): it is checked against
+/// the real selection and inventory, and the report says what it supplied, or why it was dropped.
+/// The signature of `prepare` is used by many callers and tests and stays as it is (TABULAR step 11).
+pub fn prepare_with_carry_over(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    force_model: bool,
+    carry: Option<&TableCarryOver>,
+) -> Result<(PendingAnswer, CarryReport), AppError> {
+    let mut report = CarryReport::default();
+    let pending = answer_sync(
+        question,
+        data,
+        selection,
+        locale,
+        index,
+        force_model,
+        None,
+        carry,
+        &mut report,
+    )?;
+    Ok((pending, report))
 }
 
 /// `prepare` for the mixed tier (documents and tables both selected). Same classification, plus
@@ -297,19 +342,52 @@ pub fn prepare_for_mixed(
     index: &IndexStore,
     document_names: &[String],
 ) -> Result<PendingAnswer, AppError> {
+    prepare_for_mixed_with_carry_over(
+        question,
+        data,
+        selection,
+        locale,
+        index,
+        document_names,
+        None,
+    )
+    .map(|(pending, _)| pending)
+}
+
+/// `prepare_for_mixed`, continuing the previous table answer (see `prepare_with_carry_over`).
+pub fn prepare_for_mixed_with_carry_over(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    document_names: &[String],
+    carry: Option<&TableCarryOver>,
+) -> Result<(PendingAnswer, CarryReport), AppError> {
+    let mut report = CarryReport::default();
     // An advisory question (explain, describe, compare, a formula) has no table part either: the cards of
     // the workbooks it concerns carry the table side. Without this the yes/no answer to "formula" would
     // survive here (`advisory_target`, TABULAR step 05).
     if advisory_target(question, data, selection, locale, &[]).is_some() {
-        return Ok(PendingAnswer::Done(no_table_part()));
+        return Ok((PendingAnswer::Done(no_table_part()), report));
     }
-    let pending = answer_sync(question, data, selection, locale, index, false, Some(document_names))?;
+    let pending = answer_sync(
+        question,
+        data,
+        selection,
+        locale,
+        index,
+        false,
+        Some(document_names),
+        carry,
+        &mut report,
+    )?;
     // With several workbooks selected, a question that is not about a table has no table part: the
     // documents answer it. The choice of a workbook is never the whole mixed answer for it (KBD-21).
     if matches!(pending, PendingAnswer::Done(TabularAnswer::WhichWorkbook { .. }))
         && !asks_about_a_table(question, data, selection, locale)
     {
-        return Ok(PendingAnswer::Done(no_table_part()));
+        return Ok((PendingAnswer::Done(no_table_part()), report));
     }
     // A name that no workbook carries has no table part either: the documents answer it. It is never the
     // whole mixed answer, which would drop the document the user ticked (a letter named in the question).
@@ -317,9 +395,9 @@ pub fn prepare_for_mixed(
         pending,
         PendingAnswer::Done(TabularAnswer::NoMatchingFile { .. })
     ) {
-        return Ok(PendingAnswer::Done(no_table_part()));
+        return Ok((PendingAnswer::Done(no_table_part()), report));
     }
-    Ok(pending)
+    Ok((pending, report))
 }
 
 /// The result `prepare_for_mixed` leaves for a question with no table part: an unrecognised nudge.
@@ -374,16 +452,32 @@ pub fn prepare_if_data_only(
     locale: &str,
     index: &IndexStore,
 ) -> Result<Option<PendingAnswer>, AppError> {
+    prepare_if_data_only_with_carry_over(question, data, selection, locale, index, None)
+        .map(|(pending, _)| pending)
+}
+
+/// `prepare_if_data_only`, continuing the previous table answer (see `prepare_with_carry_over`). The
+/// report is meaningful even when the question is left to the mixed tier (`None`): a carry-over that
+/// no longer holds is said either way.
+pub fn prepare_if_data_only_with_carry_over(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    carry: Option<&TableCarryOver>,
+) -> Result<(Option<PendingAnswer>, CarryReport), AppError> {
+    let none = || Ok((None, CarryReport::default()));
     // A question that points at a document ("... mentioned in this letter") is not about the data
     // alone: the table cannot say which supplier the letter names, so the whole table's figure
     // would be presented as the answer. The mixed tier reads the document first (HAP-1, Q24).
     if crate::tabular::question::refers_to_a_document(question, locale) {
-        return Ok(None);
+        return none();
     }
     // A request to write something is not a data-only question either: the table feeds it and the
     // model writes it, so it belongs to the tier that reads both (owner decision of 4 October 2026).
     if crate::tabular::question::has_writing_intent(question, locale) {
-        return Ok(None);
+        return none();
     }
     // A question about "the documents" or "the files" is about the documents: the table engine would
     // read "how many documents" as "how many rows". A workbook named in the question wins, since it
@@ -391,27 +485,29 @@ pub fn prepare_if_data_only(
     if crate::folder_questions::names_the_documents(question, locale)
         && !names_a_workbook(question, data, selection)
     {
-        return Ok(None);
+        return none();
     }
     // An explanation, a description, a comparison or a formula is for the writer, not for the engine:
     // the mixed tier answers it from the cards, without reading the documents (TABULAR step 05).
     if advisory_target(question, data, selection, locale, &[]).is_some() {
-        return Ok(None);
+        return none();
     }
-    match prepare(question, data, selection, locale, index, false)? {
+    let (pending, report) =
+        prepare_with_carry_over(question, data, selection, locale, index, false, carry)?;
+    match pending {
         // "Which workbook?" is asked only of a question that points at a table: an operation or a
         // column. A plain question about a person or a subject has no table intent at all, and
         // the choice of a workbook would block the documents behind it (KBD-21).
         PendingAnswer::Done(TabularAnswer::WhichWorkbook { .. })
             if !points_at_a_table(question, data, selection, locale) =>
         {
-            Ok(None)
+            Ok((None, report))
         }
         // A file named in the question that no workbook of the selection or of the folder carries may be a
         // document: the table engine cannot tell, the tier that reads both can.
-        PendingAnswer::Done(TabularAnswer::NoMatchingFile { .. }) => Ok(None),
-        done @ PendingAnswer::Done(_) => Ok(Some(done)),
-        PendingAnswer::TryModel { .. } => Ok(None),
+        PendingAnswer::Done(TabularAnswer::NoMatchingFile { .. }) => Ok((None, report)),
+        done @ PendingAnswer::Done(_) => Ok((Some(done), report)),
+        PendingAnswer::TryModel { .. } => Ok((None, report)),
     }
 }
 
@@ -579,6 +675,18 @@ pub fn calculation_record_listing(
     sizes: &[SheetSize],
     rows_listed: Option<(usize, usize)>,
 ) -> Option<String> {
+    calculation_record_inheriting(question, answer, sizes, rows_listed, None)
+}
+
+/// `calculation_record_listing`, stating which parts of the reading a follow-up question took from the
+/// previous one (TABULAR step 11).
+pub fn calculation_record_inheriting(
+    question: Option<&str>,
+    answer: &TabularAnswer,
+    sizes: &[SheetSize],
+    rows_listed: Option<(usize, usize)>,
+    carried: Option<&carry_over::CarriedParts>,
+) -> Option<String> {
     let TabularAnswer::Value {
         file,
         value,
@@ -602,6 +710,7 @@ pub fn calculation_record_listing(
         locator,
         derivation,
         rows_listed,
+        carried,
     })
 }
 
@@ -741,7 +850,114 @@ pub enum PendingAnswer {
     },
 }
 
+/// A short follow-up read against the previous table answer's state (TABULAR step 11).
+enum FollowUpPlan<'c, 'a> {
+    /// Run this operation on the carried workbook.
+    Run(FollowUp<'c, 'a>),
+    /// Two readings fit: the answer is a question.
+    Ask(TabularAnswer),
+}
+
+struct FollowUp<'c, 'a> {
+    target: &'c Chosen<'a>,
+    carried: TableCarryOver,
+    /// The question without its opening phrase: what the rest of the pipeline reads.
+    rest: String,
+    /// The operation to run, under the previous question's filters.
+    operation: Operation,
+    /// The new question only supplies filter values (the operation is the previous one).
+    values_only: bool,
+    /// The one column the new question names, when it names exactly one.
+    named_column: Option<String>,
+    /// The previous question's filters, merged with those the new question supplies.
+    previous: Vec<FilterSpec>,
+}
+
+/// Whether `question` is a short follow-up on `carried`, and what it comes to. `None` leaves the
+/// question to the ordinary path: it does not open like a follow-up, it names a workbook, it has an
+/// operation of its own, it points at another file, or it is long. Cheap tests first; nothing is read
+/// from a workbook. A follow-up whose state no longer holds (workbook unticked, sheet or column gone)
+/// is `None` too, and the report says so (`carry_over_dropped` in the usage trace).
+fn plan_follow_up<'c, 'a>(
+    question: &str,
+    carried: &TableCarryOver,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    chosen: &'c [Chosen<'a>],
+    locale: &str,
+    report: &mut CarryReport,
+) -> Option<FollowUpPlan<'c, 'a>> {
+    if !question::opens_like_a_follow_up(question, locale)
+        || names_a_workbook(question, data, selection)
+    {
+        return None;
+    }
+    let mut drop = |why: CarryDrop| {
+        report.dropped = Some((carried.workbook.clone(), why));
+        None
+    };
+    let Some(target) = chosen
+        .iter()
+        .find(|each| each.record.relative_path == carried.workbook)
+    else {
+        return drop(CarryDrop::WorkbookNotSelected);
+    };
+    if target.record.processing_status != ProcessingStatus::Indexed {
+        return drop(CarryDrop::WorkbookNotAnalysed);
+    }
+    let Some(inventory) = data.usable_inventory(&carried.workbook) else {
+        return drop(CarryDrop::WorkbookNotAnalysed);
+    };
+    let allowed = target.sheets.as_deref();
+    if let Err(why) = carried.validate(inventory, allowed) {
+        return drop(why);
+    }
+    let cues = question::follow_up_cues(
+        question,
+        inventory,
+        allowed,
+        carried.sheet.as_deref(),
+        locale,
+    )?;
+    let sheet =
+        engine::resolve_sheet_inventory(inventory, carried.sheet.as_deref(), allowed).ok()?;
+    let short = question.split_whitespace().count() <= crate::conversation::FOLLOW_UP_MAX_WORDS;
+    match carry_over::read(carried, &cues, sheet, short) {
+        FollowUpReading::Alone => None,
+        FollowUpReading::Ask { candidates } => {
+            Some(FollowUpPlan::Ask(TabularAnswer::WhichFollowUpColumn {
+                file: carried.workbook.clone(),
+                candidates,
+            }))
+        }
+        FollowUpReading::Read {
+            operation,
+            values_only,
+        } => {
+            // A follow-up that only supplies values needs a word that can be one.
+            if values_only
+                && question::residual_for_rows(&cues.rest, inventory, allowed, locale).is_empty()
+            {
+                return None;
+            }
+            Some(FollowUpPlan::Run(FollowUp {
+                target,
+                carried: carried.clone(),
+                named_column: match cues.columns.as_slice() {
+                    [only] => Some(only.name.clone()),
+                    _ => None,
+                },
+                rest: cues.rest,
+                operation,
+                values_only,
+                previous: carried.specs().unwrap_or_default(),
+            }))
+        }
+    }
+}
+
 /// Every deterministic branch, synchronously - the only place in this function `index` is read.
+#[allow(clippy::too_many_arguments)]
 fn answer_sync(
     question: &str,
     data: &DataFolder,
@@ -751,6 +967,9 @@ fn answer_sync(
     force_model: bool,
     // `Some` for the mixed tier: the names of the selected documents (see `prepare_for_mixed`).
     link_documents: Option<&[String]>,
+    // The previous table answer's state, untrusted (TABULAR step 11), and what was learned about it.
+    carry: Option<&TableCarryOver>,
+    report: &mut CarryReport,
 ) -> Result<PendingAnswer, AppError> {
     let document_words: std::collections::HashSet<String> = link_documents
         .unwrap_or_default()
@@ -767,15 +986,33 @@ fn answer_sync(
         return Ok(PendingAnswer::Done(TabularAnswer::NoUsableTable));
     }
 
-    let (target, named_by_reference) = match pick_target(question, data, &chosen) {
-        Ok(target) => target,
-        Err(answer) => return Ok(PendingAnswer::Done(answer)),
+    // A short follow-up continues the workbook of the previous answer: it is read before the target is
+    // picked, so the choice of a workbook is not asked again (TABULAR step 11).
+    let follow_up = match carry {
+        Some(carried) => {
+            plan_follow_up(question, carried, data, selection, &chosen, locale, report)
+        }
+        None => None,
+    };
+    let run = match follow_up {
+        Some(FollowUpPlan::Ask(answer)) => return Ok(PendingAnswer::Done(answer)),
+        Some(FollowUpPlan::Run(run)) => Some(run),
+        None => None,
+    };
+    let (target, named_by_reference) = match &run {
+        Some(run) => (run.target, false),
+        None => match pick_target(question, data, &chosen) {
+            Ok(target) => target,
+            Err(answer) => return Ok(PendingAnswer::Done(answer)),
+        },
     };
     // The workbook she named is a reference, not words of the question: the year and the month in
     // `ventes-2025.xlsx`, or the `patients` of `patients-suisse.csv`, are not filters or columns
     // (defect KBD-04). Everything below reads the question without the reference.
     let reader_question = if named_by_reference {
         without_the_workbook_reference(question, target.record)
+    } else if let Some(run) = &run {
+        run.rest.clone()
     } else {
         question.to_string()
     };
@@ -793,8 +1030,19 @@ fn answer_sync(
     };
     let allowed = target.sheets.as_deref();
 
-    let (route, residual, named_column) =
-        question::classify_traced(question, inventory, allowed, locale);
+    let (route, residual, named_column) = match &run {
+        // The reading of a follow-up replaces the classification: the operation comes from the previous
+        // answer and the new question's own words, the leftover words are the candidate filter values.
+        Some(run) => (
+            TabularRoute::Operation {
+                sheet: run.carried.sheet.clone(),
+                operation: run.operation.clone(),
+            },
+            question::residual_for_rows(question, inventory, allowed, locale),
+            run.named_column.clone(),
+        ),
+        None => question::classify_traced(question, inventory, allowed, locale),
+    };
     match route {
         TabularRoute::Structural(structural_question) => {
             Ok(PendingAnswer::Done(match structural::answer(inventory, allowed, &structural_question) {
@@ -839,6 +1087,8 @@ fn answer_sync(
             // `tabular::engine` actually runs under, rather than only naming what was seen
             // (`docs/DECISIONS.md`).
             let mut filtered_by_the_question = false;
+            // The filters the new question wrote itself: not inherited, even when the previous one had them too.
+            let mut supplied_filters: Vec<engine::AppliedFilter> = Vec::new();
             // The column a weekday, month, year or period filter was aimed at: named when the engine
             // refuses it because the file does not settle that column's dates (KBD-22).
             let mut calendar_filter_column: Option<String> = None;
@@ -855,6 +1105,12 @@ fn answer_sync(
                 &document_words,
             ) {
                 FilterDetection::Filters(filters) => {
+                    // The previous question's filters stay, except what the new ones replace.
+                    supplied_filters = filters.iter().map(engine::describe_filter).collect();
+                    let filters = match &run {
+                        Some(run) => carry_over::merge_filters(run.previous.clone(), filters),
+                        None => filters,
+                    };
                     filtered_by_the_question = true;
                     calendar_filter_column = filters
                         .iter()
@@ -908,7 +1164,7 @@ fn answer_sync(
                     // Gap G: a residual word that looked like an attempted filter but matched no
                     // real data is exactly the case D6 (`docs/DECISIONS.md`) names - try the model
                     // next, and only fall back to this nudge when it cannot help either.
-                    let skip_model = close.is_empty() && !threshold;
+                    let skip_model = (close.is_empty() && !threshold) || run.is_some();
                     let fallback = nudge(
                         file.clone(),
                         &fresh,
@@ -928,6 +1184,22 @@ fn answer_sync(
                         fallback,
                         skip_model,
                     });
+                }
+                // A follow-up that only supplies values and finds none reads as nothing: the figure of the
+                // previous question is never repeated under a new question.
+                FilterDetection::None if run.as_ref().is_some_and(|run| run.values_only) => {
+                    let value = residual.first().cloned();
+                    return Ok(PendingAnswer::Done(nudge(
+                        file,
+                        &fresh,
+                        allowed,
+                        Some(NotAnswerableReason::ValueNotFound),
+                        Vec::new(),
+                        Vec::new(),
+                        None,
+                        value,
+                        Vec::new(),
+                    )));
                 }
                 FilterDetection::None => operation,
             };
@@ -974,6 +1246,17 @@ fn answer_sync(
                     )
                 }
             };
+            // The state this figure leaves for a follow-up, and what the follow-up took from the previous one.
+            if let TabularAnswer::Value { locator, .. } = &computed {
+                report.next = TableCarryOver::from_operation(&file, &locator.sheet, &operation);
+                if let (Some(run), Some(next)) = (&run, &report.next) {
+                    let mut parts = carry_over::inherited_parts(&run.carried, next);
+                    parts
+                        .filters
+                        .retain(|filter| !supplied_filters.contains(filter));
+                    report.inherited = Some(parts);
+                }
+            }
             // A question that points at a document and whose own words filter nothing: its computed
             // value covers the whole table. Handed back unfinished so the mixed tier can tie the
             // document's entity to a row first (`prepare_for_mixed`).
@@ -1551,6 +1834,9 @@ pub enum ImpliedReason {
     ImpliedByColumn,
     /// The knowledge base found what the question names in this workbook.
     ImpliedByEntity,
+    /// A short follow-up continued the previous table answer, which was about this workbook
+    /// (TABULAR step 11).
+    CarriedOver,
 }
 
 impl ImpliedReason {
@@ -1560,6 +1846,7 @@ impl ImpliedReason {
             Self::ImpliedByWord => "implied_by_word",
             Self::ImpliedByColumn => "implied_by_column",
             Self::ImpliedByEntity => "implied_by_entity",
+            Self::CarriedOver => "carried_over",
         }
     }
 }
@@ -1607,6 +1894,20 @@ pub fn implied_workbooks(
     locale: &str,
     entity_candidates: &[String],
 ) -> Vec<ImpliedWorkbook> {
+    implied_workbooks_carrying(question, data, selection, locale, entity_candidates, None)
+}
+
+/// `implied_workbooks`, with the workbook a short follow-up continued (`carried`, by index key): it is
+/// the one the question is about although it does not name it, so it is implied before any other rule is
+/// tried (TABULAR step 11). `None` for every question that stood alone.
+pub fn implied_workbooks_carrying(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+    carried: Option<&str>,
+) -> Vec<ImpliedWorkbook> {
     let Ok(chosen) = chosen_workbooks(data, selection) else {
         return Vec::new();
     };
@@ -1628,6 +1929,10 @@ pub fn implied_workbooks(
             .collect()
     };
 
+    // 0. The workbook of the previous table answer, which a follow-up continues.
+    if let Some(file) = carried.filter(|file| usable.contains(file)) {
+        return implied(vec![file], ImpliedReason::CarriedOver);
+    }
     // 1. Exactly one ticked.
     if chosen.len() == 1 {
         return implied(usable, ImpliedReason::ImpliedSingle);
@@ -1686,8 +1991,36 @@ pub fn question_cards(
     entity_candidates: &[String],
     budget_chars: usize,
 ) -> QuestionCards {
+    question_cards_carrying(
+        question,
+        data,
+        selection,
+        locale,
+        entity_candidates,
+        budget_chars,
+        None,
+    )
+}
+
+/// `question_cards`, treating the workbook a short follow-up continued as implied (`implied_workbooks_carrying`).
+pub fn question_cards_carrying(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    entity_candidates: &[String],
+    budget_chars: usize,
+    carried: Option<&str>,
+) -> QuestionCards {
     let named = named_workbooks(question, data, selection);
-    let mut implied = implied_workbooks(question, data, selection, locale, entity_candidates);
+    let mut implied = implied_workbooks_carrying(
+        question,
+        data,
+        selection,
+        locale,
+        entity_candidates,
+        carried,
+    );
     // The room of the cards holds so many workbooks at the very least; a named one is never dropped,
     // an implied one beyond the room is left out (the order is the order ticked).
     let room = (budget_chars / MIN_CARD_CHARS).max(1);

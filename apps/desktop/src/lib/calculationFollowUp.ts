@@ -3,6 +3,7 @@ import type {
   CalculationFollowUp,
   CombinedScope,
   ShownCalculation,
+  TableCarryOver,
   TabularAnswer,
 } from "./ipc";
 import type { Translator } from "../i18n/translate";
@@ -22,6 +23,10 @@ export interface StoredCalculation {
   scope: CombinedScope | undefined;
   /** This answer is already the analysis of the figure: "Regenerer" asks for the analysis again. */
   analysed?: true;
+  /** The state the question of this answer was asked with, kept only when it was applied (a follow-up
+   * such as "et pour mars ?"): the short question gives no figure without it, so the explanation and
+   * the analysis send it back (TABULAR step 11). */
+  tableCarryOver?: TableCarryOver;
 }
 
 /** The explanation block under a figure. */
@@ -38,6 +43,7 @@ export function storedCalculationOf(
   answer: TabularAnswer | null | undefined,
   scope: CombinedScope | undefined,
   analysed = false,
+  tableCarryOver?: TableCarryOver,
 ): StoredCalculation | undefined {
   if (answer === null || answer === undefined || answer.kind !== "value") {
     return undefined;
@@ -46,6 +52,7 @@ export function storedCalculationOf(
     shown: { file: answer.file, value: answer.value, derivation: answer.derivation },
     scope,
     ...(analysed ? { analysed: true as const } : {}),
+    ...(tableCarryOver === undefined ? {} : { tableCarryOver }),
   };
 }
 
@@ -54,7 +61,11 @@ export function followUpOf(
   kind: CalculationFollowUp["kind"],
   calculation: StoredCalculation,
 ): CalculationFollowUp {
-  return { kind, shown: calculation.shown };
+  return {
+    kind,
+    shown: calculation.shown,
+    ...(calculation.tableCarryOver === undefined ? {} : { tableCarryOver: calculation.tableCarryOver }),
+  };
 }
 
 /** A new explanation block: empty and running. Pressing the button again starts from this, so the

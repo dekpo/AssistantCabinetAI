@@ -83,6 +83,18 @@ struct PatternPack {
     /// Words that put every row in scope ("each", "every", "all"): "write a letter for each order".
     #[serde(default)]
     distributive: Vec<String>,
+    /// Phrases that open a short follow-up on the previous table answer ("and for", "same", "now"):
+    /// read only by `follow_up_cues` (TABULAR step 11), at the very start of the question.
+    #[serde(default)]
+    follow_up_markers: Vec<String>,
+    /// Verbs that open a follow-up asking the same selection sorted ("sort", "trie"): read only by
+    /// `follow_up_cues`, at the very start of the question.
+    #[serde(default)]
+    follow_up_sort_markers: Vec<String>,
+    /// Phrases that point at another file ("the other file"): a question with one never inherits the
+    /// previous answer's workbook.
+    #[serde(default)]
+    follow_up_other_workbook: Vec<String>,
     /// Whole phrases that ask for an explanation, a description, a comparison or a formula about
     /// the tables instead of a figure ("explain", "describe", "compare", "vlookup", "formula for"):
     /// read only by `is_advisory`. Narrow on purpose: a generic word ("how", "help") would capture
@@ -283,6 +295,173 @@ pub fn has_distributive_word(question: &str, locale: &str) -> bool {
     pack.distributive
         .iter()
         .any(|word| question.contains(&spaced_words(word)))
+}
+
+/// The operation a follow-up's own words ask for, read from the pack (TABULAR step 11). Only the
+/// words: whether the question also gives what the operation needs is for `tabular::carry_over`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WordOperation {
+    Count,
+    Distinct,
+    Sum,
+    Mean,
+    Median,
+    Min,
+    Max,
+    Sort,
+}
+
+/// A column a follow-up names, with what the carry-over needs to know about it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NamedColumn {
+    pub name: String,
+    /// A numeric column that holds amounts or counts (a year is not).
+    pub numeric: bool,
+    /// A column rows can be grouped by.
+    pub group: bool,
+}
+
+/// What a short question says when it opens like a follow-up ("and for March?", "same for Beta",
+/// "sort them by date"), read from the locale's own pack (TABULAR step 11). Words only: nothing
+/// here decides what the question means.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FollowUpCues {
+    /// The question without its opening phrase, as typed ("pour mars ?" for "Et pour mars ?").
+    pub rest: String,
+    /// The opening phrase is a sort verb.
+    pub sort: bool,
+    /// The question points at another file: it never inherits the previous workbook.
+    pub other_workbook: bool,
+    pub operation_word: Option<WordOperation>,
+    /// A grouping word ("par", "per", "each").
+    pub per: bool,
+    pub descending: bool,
+    /// The columns of the sheet that `rest` names, in the order the sheet holds them.
+    pub columns: Vec<NamedColumn>,
+}
+
+/// How many leading words of `question` a follow-up marker covers, and whether it is a sort verb.
+/// The longest marker wins ("et pour" before "et"). `None` when the question does not open like a
+/// follow-up. Compared as whole words, accents and punctuation ignored.
+fn leading_follow_up_marker(question: &str, pack: &PatternPack) -> Option<(usize, bool)> {
+    let spaced = spaced_words(question);
+    let mut best: Option<(usize, bool)> = None;
+    for (list, sort) in [
+        (&pack.follow_up_markers, false),
+        (&pack.follow_up_sort_markers, true),
+    ] {
+        for marker in list {
+            if !spaced.starts_with(&spaced_words(marker)) {
+                continue;
+            }
+            let words = name_words(marker).len();
+            if words > 0 && best.is_none_or(|(longest, _)| words > longest) {
+                best = Some((words, sort));
+            }
+        }
+    }
+    best
+}
+
+/// Whether the question opens with a follow-up phrase of the locale's pack. Cheap: no workbook is
+/// needed, so a caller can tell a plain question from a follow-up before it reads anything.
+pub(crate) fn opens_like_a_follow_up(question: &str, locale: &str) -> bool {
+    pack_for(locale).is_some_and(|pack| leading_follow_up_marker(question, &pack).is_some())
+}
+
+/// `text` without its first `count` words (a word is a run of letters and digits), the rest kept
+/// exactly as typed: a date written `09/03/2026` stays one piece of text.
+fn without_leading_words(text: &str, count: usize) -> &str {
+    let mut seen = 0;
+    let mut in_word = false;
+    for (offset, ch) in text.char_indices() {
+        let alphanumeric = ch.is_alphanumeric();
+        if in_word && !alphanumeric {
+            seen += 1;
+            if seen == count {
+                return text[offset..].trim();
+            }
+        }
+        in_word = alphanumeric;
+    }
+    if in_word && seen + 1 == count {
+        return "";
+    }
+    text
+}
+
+/// The cues of a question that opens like a follow-up, against the sheet it would continue on
+/// (`sheet_name`, or the only reachable one). `None` when it does not open like one.
+pub(crate) fn follow_up_cues(
+    question: &str,
+    inventory: &TabularInventory,
+    allowed_sheets: Option<&[String]>,
+    sheet_name: Option<&str>,
+    locale: &str,
+) -> Option<FollowUpCues> {
+    let pack = pack_for(locale)?;
+    let (skipped, sort) = leading_follow_up_marker(question, &pack)?;
+    let rest = without_leading_words(question, skipped).to_string();
+    let spaced = spaced_words(question);
+    let other_workbook = pack
+        .follow_up_other_workbook
+        .iter()
+        .any(|phrase| spaced.contains(&spaced_words(phrase)));
+
+    let columns = columns_for_matching(inventory, allowed_sheets, sheet_name);
+    let mut named: Vec<&ColumnInventory> = named_columns(&columns, &rest);
+    if named.is_empty() {
+        if let Some(only) = find_column_name(&columns, &fold_text(&rest)) {
+            named.extend(columns.iter().copied().filter(|column| column.name == only));
+        }
+    }
+    named.sort_by_key(|column| column.index);
+
+    // A word that is part of a named column's own name is not an operation word ("duree_min").
+    let name_parts: std::collections::HashSet<String> = named
+        .iter()
+        .flat_map(|column| name_words(&column.name))
+        .collect();
+    let tokens: Vec<String> = tokenise(&rest)
+        .into_iter()
+        .filter(|token| !name_parts.contains(&fold_text(token)))
+        .collect();
+    let has = |words: &[String]| tokens.iter().any(|token| contains(words, token));
+    let operation_word = if has(&pack.operations.sum) {
+        Some(WordOperation::Sum)
+    } else if has(&pack.operations.mean) {
+        Some(WordOperation::Mean)
+    } else if has(&pack.operations.median) {
+        Some(WordOperation::Median)
+    } else if has(&pack.operations.min) {
+        Some(WordOperation::Min)
+    } else if has(&pack.operations.max) {
+        Some(WordOperation::Max)
+    } else if has(&pack.operations.distinct) || has(&pack.operations.list) {
+        Some(WordOperation::Distinct)
+    } else if has(&pack.operations.sort) {
+        Some(WordOperation::Sort)
+    } else if has(&pack.operations.count) {
+        Some(WordOperation::Count)
+    } else {
+        None
+    };
+    Some(FollowUpCues {
+        rest,
+        sort,
+        other_workbook,
+        operation_word,
+        per: has(&pack.groups.per),
+        descending: has(&pack.descending),
+        columns: named
+            .into_iter()
+            .map(|column| NamedColumn {
+                name: column.name.clone(),
+                numeric: is_numeric_value(column) && !column.year_like,
+                group: is_group_column(column),
+            })
+            .collect(),
+    })
 }
 
 /// True when the question asks the tables to be explained, described, compared or linked, or asks
@@ -1904,6 +2083,43 @@ mod tests {
                     filters: Vec::new(),
                 }
             }
+        );
+    }
+
+    #[test]
+    fn a_question_opens_like_a_follow_up_only_with_a_marker_at_its_start() {
+        for (question, locale) in [
+            ("Et pour mars ?", "fr-FR"),
+            ("Meme chose pour Beta", "fr-FR"),
+            ("M\u{ea}me chose pour Beta", "fr-FR"),
+            ("Trie par date", "fr-FR"),
+            ("And for March?", "en-US"),
+            ("What about Beta?", "en-US"),
+            ("Sort them by date", "en-US"),
+        ] {
+            assert!(opens_like_a_follow_up(question, locale), "{question}");
+        }
+        for (question, locale) in [
+            ("Total pour mars ?", "fr-FR"),
+            ("Etude annuelle", "fr-FR"),
+            ("Total for March and April", "en-US"),
+            ("Android sales", "en-US"),
+        ] {
+            assert!(!opens_like_a_follow_up(question, locale), "{question}");
+        }
+    }
+
+    #[test]
+    fn the_opening_phrase_is_removed_and_the_rest_is_kept_as_typed() {
+        assert_eq!(without_leading_words("Et pour mars ?", 2), "mars ?");
+        assert_eq!(without_leading_words("Aussi", 1), "");
+        assert_eq!(
+            without_leading_words("Et pour 09/03/2026 ?", 2),
+            "09/03/2026 ?"
+        );
+        assert_eq!(
+            without_leading_words("Trie-moi par date", 1),
+            "-moi par date"
         );
     }
 }

@@ -18,6 +18,7 @@ import {
   type AskAnswer,
   type ChatStreamEvent,
   type CombinedScope,
+  type TableCarryOver,
   type TargetingReport,
 } from "./ipc";
 
@@ -103,6 +104,30 @@ describe("asking a question", () => {
 
     const sent = vi.mocked(invoke).mock.calls[0]?.[1] as { targeting?: unknown };
     expect(sent.targeting).toBeUndefined();
+  });
+
+  it("sends the state of the last table answer in the options, and nothing for an ordinary question", async () => {
+    const carried: TableCarryOver = {
+      workbook: "factures.csv",
+      sheet: "factures",
+      column: "montant",
+      operation: "sum",
+      filters: [],
+      groupBy: null,
+      topN: null,
+      descending: false,
+    };
+    streams();
+    await askWithSources("Et pour mars ?", () => {}, () => {}, undefined, false, scope, [], undefined, undefined, {
+      tableCarryOver: carried,
+    });
+    streams();
+    await askWithSources("Bonjour", () => {}, () => {});
+
+    const withState = vi.mocked(invoke).mock.calls[0]?.[1] as { tableCarryOver?: unknown };
+    const without = vi.mocked(invoke).mock.calls[1]?.[1] as { tableCarryOver?: unknown };
+    expect(withState.tableCarryOver).toStrictEqual(carried);
+    expect(without.tableCarryOver).toBeUndefined();
   });
 
   it("hands the targeting event over before the sources, so a stopped answer still has it", async () => {

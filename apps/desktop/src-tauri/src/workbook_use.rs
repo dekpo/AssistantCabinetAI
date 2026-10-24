@@ -8,6 +8,7 @@
 use serde::Serialize;
 
 use crate::tabular::card::WorkbookCard;
+use crate::tabular::carry_over::CarryReport;
 use crate::tabular::sample::WorkbookSampleUse;
 use crate::tabular::structural::StructuralAnswer;
 use crate::tabular_answer::{
@@ -54,6 +55,12 @@ pub enum UseReason {
     NotSent,
     /// Named for a letter and not used: it holds several sheets and the question names none of them.
     SheetToChoose,
+    /// The question did not name it: it is the workbook of the previous table answer, which a short
+    /// follow-up continues (TABULAR step 11).
+    CarriedOver,
+    /// A follow-up relied on the previous answer's workbook, sheet or column and it no longer holds
+    /// (unticked, changed, gone): the follow-up was read as a question of its own.
+    CarryOverDropped,
 }
 
 impl From<ImpliedReason> for UseReason {
@@ -63,6 +70,7 @@ impl From<ImpliedReason> for UseReason {
             ImpliedReason::ImpliedByWord => Self::ImpliedByWord,
             ImpliedReason::ImpliedByColumn => Self::ImpliedByColumn,
             ImpliedReason::ImpliedByEntity => Self::ImpliedByEntity,
+            ImpliedReason::CarriedOver => Self::CarriedOver,
         }
     }
 }
@@ -125,6 +133,24 @@ impl WorkbookUse {
     }
 }
 
+/// Writes the carry-over into the trace of an answer (TABULAR step 11): the workbook a follow-up
+/// continued is marked as carried over, and a follow-up whose state no longer held says so. Written
+/// beside the lines `trace` already built; nothing else of the trace changes.
+pub fn note_carry_over(uses: &mut Vec<WorkbookUse>, report: &CarryReport) {
+    if let (Some(_), Some(next)) = (&report.inherited, &report.next) {
+        if let Some(entry) = uses.iter_mut().find(|entry| {
+            entry.file == next.workbook
+                && entry.how == WorkbookUseHow::Computed
+                && entry.reason.is_none()
+        }) {
+            entry.reason = Some(UseReason::CarriedOver);
+        }
+    }
+    if let Some((file, _)) = &report.dropped {
+        uses.push(WorkbookUse::not_used(file, UseReason::CarryOverDropped));
+    }
+}
+
 /// What the door that built the answer did, as the trace needs it.
 pub enum Answered<'a> {
     /// The mixed tier (door 4). `cards` are the cards in the turn and `implied` says why each unnamed
@@ -169,6 +195,7 @@ fn read_file(answer: &TabularAnswer) -> Option<&str> {
         TabularAnswer::Nudge { file, .. }
         | TabularAnswer::WhichMeasure { file, .. }
         | TabularAnswer::WhichColumn { file, .. }
+        | TabularAnswer::WhichFollowUpColumn { file, .. }
         | TabularAnswer::FillNeedsTemplate { file, .. }
         | TabularAnswer::FillNeedsSheet { file, .. }
         | TabularAnswer::Structural { file, .. } => Some(file),
@@ -684,5 +711,44 @@ mod tests {
             serde_json::to_value(WorkbookUse::not_used("", UseReason::NotRelevant)).expect("ok");
         assert_eq!(aggregate["how"], "not_used");
         assert_eq!(aggregate["reason"], "not_relevant");
+    }
+
+    #[test]
+    fn a_carried_workbook_is_marked_and_a_dropped_state_is_said() {
+        use crate::tabular::carry_over::{CarriedParts, CarryDrop, OperationKind, TableCarryOver};
+
+        let mut uses = vec![WorkbookUse::of(
+            "factures.csv",
+            WorkbookUseHow::Computed,
+            None,
+        )];
+        let next = TableCarryOver {
+            workbook: "factures.csv".into(),
+            sheet: None,
+            column: None,
+            operation: OperationKind::Count,
+            filters: Vec::new(),
+            group_by: None,
+            top_n: None,
+            descending: false,
+        };
+        let applied = CarryReport {
+            next: Some(next),
+            inherited: Some(CarriedParts::default()),
+            dropped: None,
+        };
+        note_carry_over(&mut uses, &applied);
+        assert_eq!(uses[0].reason, Some(UseReason::CarriedOver));
+
+        let mut uses = Vec::new();
+        let dropped = CarryReport {
+            dropped: Some(("factures.csv".into(), CarryDrop::WorkbookNotSelected)),
+            ..CarryReport::default()
+        };
+        note_carry_over(&mut uses, &dropped);
+        assert_eq!(uses.len(), 1);
+        assert_eq!(uses[0].how, WorkbookUseHow::NotUsed);
+        assert_eq!(uses[0].reason, Some(UseReason::CarryOverDropped));
+        assert_eq!(uses[0].file, "factures.csv");
     }
 }

@@ -155,3 +155,35 @@ fn both_packs_carry_the_advisory_lists() {
         }
     }
 }
+
+#[test]
+fn both_packs_carry_the_follow_up_lists() {
+    for (tag, body) in PACKS {
+        let pack = parse(body);
+        for list in [
+            "follow_up_markers",
+            "follow_up_sort_markers",
+            "follow_up_other_workbook",
+        ] {
+            let words = pack[list]
+                .as_array()
+                .unwrap_or_else(|| panic!("{tag}: no {list}"));
+            assert!(!words.is_empty(), "{tag}: {list} is empty");
+        }
+        // The shortest connective is the weakest word of the pack: it opens a follow-up only at the very
+        // start of a question, and the sort verbs are a list of their own.
+        let connectives: Vec<&str> = pack["follow_up_markers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|word| word.as_str())
+            .collect();
+        for verb in pack["follow_up_sort_markers"].as_array().unwrap() {
+            let verb = verb.as_str().unwrap();
+            assert!(
+                !connectives.contains(&verb),
+                "{tag}: {verb:?} is in both follow-up lists"
+            );
+        }
+    }
+}

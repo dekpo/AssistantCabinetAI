@@ -2,6 +2,7 @@ import type { Translator } from "../i18n/translate";
 import type { ChatEntry } from "../state/useChat";
 import type { FormulaNote } from "./ipc";
 import { explanationBlock } from "./calculationFollowUp";
+import { carriedOverLine } from "./carryOver";
 import { coverageLine } from "./coverage";
 import { formatDuration } from "./duration";
 import { localiseInternalNames } from "./displayNames";
@@ -111,6 +112,10 @@ function noteLines(
   // Documents and tables were both selected, and the question was only about the data.
   if (!cautionOnly && entry.documentsNotNeeded === true) {
     lines.push(t("chat.documentsNotNeeded"));
+  }
+  // A follow-up: what the previous question supplied (the answer's own "Understood as" is the whole reading).
+  if (!cautionOnly && entry.carriedOver !== undefined) {
+    lines.push(carriedOverLine(t, locale, entry.carriedOver));
   }
   // The mixed tier's own partial-refusal lines: which side could not be established.
   // "No spreadsheet was needed" is said only when the trace under the answer says nothing about any

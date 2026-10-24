@@ -407,10 +407,10 @@ impl<'a> FileReferenceResolver<'a> {
             });
         }
         // A bare word that is a word of a name the question writes out in full (a path, a file name with
-        // its extension, a whole name) is that name's word, not a second reference: « factures » in « les
-        // factures de Test/factures-fournisseurs-2026.xlsx » is not `factures.csv` (found on her real
+        // its extension, a whole name) is that name's word, not a second reference: the word factures in
+        // a question about Test/factures-fournisseurs-2026.xlsx is not `factures.csv` (found on her real
         // index, TABULAR step 10). A stem word that is not part of a written name still names its file
-        // beside it (« compare montants with Mes ventes.xlsx »).
+        // beside it ("compare montants with Mes ventes.xlsx").
         let question_words: Vec<String> = fold_words(question)
             .split('-')
             .filter(|word| !word.is_empty())

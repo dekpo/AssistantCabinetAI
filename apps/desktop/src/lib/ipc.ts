@@ -297,6 +297,9 @@ export interface FileRecord {
   extractionMethod: ExtractionMethod;
   indexed: boolean;
   indexMetadata: IndexMetadata | null;
+  /** How a spreadsheet is read, when the user should know: hidden rows, a filter, merged cells, a total
+   * row, several tables, hidden sheets (machine codes). Absent or empty for the rest. */
+  layoutCaveats?: string[];
 }
 
 export interface FolderNode {
@@ -867,7 +870,13 @@ export interface TableCarryOver {
   groupBy: string | null;
   topN: number | null;
   descending: boolean;
+  /** The rows the figure left out because the spreadsheet hides or filters them out; absent when it
+   * counted them. A short follow-up continues the same reading. */
+  rowPolicy?: RowPolicy;
 }
+
+/** What a figure does with the rows a spreadsheet hides or filters out (TABULAR step 13). */
+export type RowPolicy = "include" | "exclude";
 
 /** What a follow-up took from the previous question, for the line under the answer to mark. */
 export interface CarriedParts {
@@ -1276,6 +1285,8 @@ export interface AskOptions {
   calculationFollowUp?: CalculationFollowUp;
   /** The state the last table answer of the conversation left: a short follow-up continues it. */
   tableCarryOver?: TableCarryOver;
+  /** What a figure does with the rows a spreadsheet hides or filters out; left out, the rows are counted. */
+  rowPolicy?: RowPolicy;
 }
 
 export type WorkbookUseHow =
@@ -1324,6 +1335,27 @@ export interface WorkbookUse {
   count: number | null;
   /** The index keys an ambiguous name may mean. */
   candidates: string[];
+  /** What the layout of the sheet did to this answer (hidden rows, merged cells, a total row left
+   * out). Null when the sheet is plain. */
+  layout?: LayoutNote | null;
+}
+
+/** What the layout rules did to the sheet an answer was computed from, as counts (TABULAR step 13). */
+export interface LayoutNote {
+  sheet: string | null;
+  /** Data rows hidden by hand, and rows an active filter hides (one or the other, never both). */
+  hiddenRows: number;
+  filteredRows: number;
+  /** These rows were left out of this answer (otherwise they are in it). */
+  rowsLeftOut: boolean;
+  totalRows: number;
+  mergedFilled: number;
+  blankRows: number;
+  noteRows: number;
+  tables: number;
+  hiddenSheets: number;
+  /** The workbook was analysed before the layout was read. */
+  unread?: boolean;
 }
 
 /** A workbook whose structure was given to the model, and the rows of it that were (null: none). */
@@ -1872,6 +1904,7 @@ export function askWithSources(
     targeting,
     calculationFollowUp: options.calculationFollowUp,
     tableCarryOver: options.tableCarryOver,
+    rowPolicy: options.rowPolicy,
     onEvent: channel,
   });
 }

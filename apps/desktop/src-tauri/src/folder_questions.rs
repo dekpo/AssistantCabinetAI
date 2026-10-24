@@ -828,6 +828,7 @@ mod tests {
             },
             indexed: readability == Readability::Readable,
             index_metadata: None,
+            layout_caveats: Vec::new(),
         }
     }
 

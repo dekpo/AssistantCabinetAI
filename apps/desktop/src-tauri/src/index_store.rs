@@ -2713,10 +2713,14 @@ mod tests {
                     unit: None,
                     unparsed_count: 0,
                     ambiguous_date: false,
+                    error_count: 0,
                 }],
                 has_formulas: false,
                 formula_cells: 0,
+                layout: None,
             }],
+            facts: Default::default(),
+            layout_version: 0,
         }
     }
 

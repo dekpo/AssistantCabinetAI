@@ -10,6 +10,7 @@ import {
   buttonsFor,
   explanationBlock,
   followUpOf,
+  rowPolicyButton,
   settleExplanation,
   storedCalculationOf,
   stoppedExplanation,
@@ -269,5 +270,52 @@ describe("the trace line of an explanation", () => {
     expect(lines[0]?.caution).toBe(false);
     expect(lines[0]?.text).toContain("commandes.xlsx");
     expect(lines[0]?.text).toContain("sans recevoir aucune ligne");
+  });
+});
+
+describe("the one click on hidden rows (TABULAR step 13)", () => {
+  const figure = { shown: { file: "a.xlsx" } } as unknown as StoredCalculation;
+  const layout = (rowsLeftOut: boolean) => ({
+    file: "a.xlsx",
+    how: "computed" as const,
+    reason: null,
+    rowsSent: null,
+    rowsTotal: null,
+    rowsTruncated: false,
+    truncated: false,
+    count: null,
+    candidates: [],
+    layout: {
+      sheet: "Data",
+      hiddenRows: 1,
+      filteredRows: 0,
+      rowsLeftOut,
+      totalRows: 0,
+      mergedFilled: 0,
+      blankRows: 0,
+      noteRows: 0,
+      tables: 1,
+      hiddenSheets: 0,
+    },
+  });
+
+  it("offers the other reading under a figure that counted the hidden rows", () => {
+    expect(rowPolicyButton({ calculation: figure, workbookUse: [layout(false)] })).toStrictEqual({
+      label: "actions.recomputeWithoutHidden",
+      policy: "exclude",
+    });
+  });
+
+  it("offers to count them again under a figure that left them out", () => {
+    expect(rowPolicyButton({ calculation: figure, workbookUse: [layout(true)] })).toStrictEqual({
+      label: "actions.recomputeWithHidden",
+      policy: "include",
+    });
+  });
+
+  it("offers nothing without a figure or without hidden rows", () => {
+    expect(rowPolicyButton({ workbookUse: [layout(false)] })).toBeNull();
+    expect(rowPolicyButton({ calculation: figure, workbookUse: [] })).toBeNull();
+    expect(rowPolicyButton({ calculation: figure })).toBeNull();
   });
 });

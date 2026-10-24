@@ -1,6 +1,6 @@
 import type { Translator } from "../i18n/translate";
 import { displayPathOfKey } from "./indexKey";
-import type { WorkbookUse } from "./ipc";
+import type { LayoutNote, WorkbookUse } from "./ipc";
 
 /**
  * The line under an answer for each workbook it used, or did not use (TABULAR plan 4.3): what was
@@ -22,7 +22,45 @@ export interface WorkbookUseLine {
 export const FOLD_AFTER = 3;
 
 export function workbookUseLines(t: Translator, uses: readonly WorkbookUse[]): WorkbookUseLine[] {
-  return uses.map((use) => lineOf(t, use));
+  return uses.flatMap((use) => [lineOf(t, use), ...layoutLines(t, use.layout ?? null)]);
+}
+
+/**
+ * What the layout of the sheet did to a figure (TABULAR step 13): rows the spreadsheet hides or filters
+ * out and whether they were counted, a total row left out, merged cells filled down, hidden sheets. A
+ * line that tells the reader a figure may differ from what the screen shows is a caution; the others
+ * are informative.
+ */
+function layoutLines(t: Translator, layout: LayoutNote | null): WorkbookUseLine[] {
+  if (layout === null) {
+    return [];
+  }
+  const counted = (key: string, count: number, caution: boolean): WorkbookUseLine[] =>
+    count > 0
+      ? [{ text: t(`workbookUse.layout.${key}_${count === 1 ? "one" : "many"}`, { count: String(count) }), caution }]
+      : [];
+  const left = layout.rowsLeftOut ? "LeftOut" : "Included";
+  return [
+    ...counted(`hidden${left}`, layout.hiddenRows, true),
+    ...counted(`filtered${left}`, layout.filteredRows, true),
+    ...counted("totalLeftOut", layout.totalRows, true),
+    ...counted("mergedFilled", layout.mergedFilled, false),
+    ...counted("blankRows", layout.blankRows, false),
+    ...counted("noteRows", layout.noteRows, false),
+    ...counted("hiddenSheets", layout.hiddenSheets, false),
+    ...(layout.unread === true ? [{ text: t("workbookUse.layout.unread"), caution: true }] : []),
+  ];
+}
+
+/** The rows a spreadsheet hides or filters out that this answer counted or left out, or none. */
+export function hiddenRowsOf(uses: readonly WorkbookUse[] | undefined): { count: number; leftOut: boolean } | null {
+  for (const use of uses ?? []) {
+    const layout = use.layout ?? null;
+    if (use.how === "computed" && layout !== null && layout.hiddenRows + layout.filteredRows > 0) {
+      return { count: layout.hiddenRows + layout.filteredRows, leftOut: layout.rowsLeftOut };
+    }
+  }
+  return null;
 }
 
 function lineOf(t: Translator, use: WorkbookUse): WorkbookUseLine {

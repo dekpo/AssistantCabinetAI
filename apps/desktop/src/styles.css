@@ -3925,3 +3925,16 @@ body {
 .repair__text {
   color: var(--text-quiet);
 }
+
+.explorer-row__caveat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--text-quiet);
+}
+
+.caveat-glyph {
+  width: 12px;
+  height: 12px;
+}

@@ -823,6 +823,7 @@ mod tests {
                 ocr_engine: None,
                 ocr_engine_version: None,
             }),
+            layout_caveats: Vec::new(),
         }
     }
 

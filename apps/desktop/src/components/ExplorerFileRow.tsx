@@ -1,7 +1,7 @@
 import { useTranslation } from "../i18n/I18nProvider";
 import type { ExplorerEntry } from "../lib/explorerModel";
 import { rowClickTicks } from "../lib/explorerSelection";
-import { StateGlyph } from "./ExplorerGlyphs";
+import { CaveatGlyph, StateGlyph } from "./ExplorerGlyphs";
 
 /**
  * One file of the explorer: a checkbox, the state glyph, the stem with an ellipsis and the extension
@@ -44,6 +44,7 @@ export function ExplorerFileRow({
   const { t } = useTranslation();
   const stateText = t(`explorer.state.${entry.state}`);
   const stateLabel = stateText;
+  const caveats = entry.record.layoutCaveats ?? [];
   const tag = entry.native
     ? null
     : entry.root === "documents"
@@ -97,6 +98,16 @@ export function ExplorerFileRow({
         {reason === undefined ? null : (
           <span className="explorer-row__reason" title={reason.title}>
             {reason.text}
+          </span>
+        )}
+        {caveats.length === 0 ? null : (
+          <span
+            className="explorer-row__caveat"
+            role="img"
+            aria-label={t("explorer.caveatLabel")}
+            title={[t("explorer.caveatLabel"), ...caveats.map((code) => t(`explorer.caveat.${code}`))].join("\n")}
+          >
+            <CaveatGlyph />
           </span>
         )}
         {tag === null ? null : (

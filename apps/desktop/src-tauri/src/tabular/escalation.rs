@@ -16,6 +16,7 @@ use super::carry_over::CarriedParts;
 use super::engine::{
     AppliedFilter, TabularDerivation, TabularLocator, TabularOutcome, TabularValue,
 };
+use super::layout::SheetLayout;
 
 /// English, like every instruction (`docs/LANGUAGE-AND-LOCALE.md`); short, for the same reason
 /// `NO_DOCUMENTS_INSTRUCTION` is short - small models echo long rule lists back into their
@@ -95,6 +96,74 @@ pub struct CalculationRecord<'a> {
     /// What a follow-up question took from the previous one (TABULAR step 11), so that the record states
     /// which parts of the reading were not in the question as typed. `None` for any other figure.
     pub carried: Option<&'a CarriedParts>,
+    /// What the layout rules did to the sheet the figure was read from (`tabular::layout`), and
+    /// whether the rows a spreadsheet hides or filters out were left out of this figure.
+    pub layout: Option<&'a SheetLayout>,
+    pub rows_left_out: bool,
+}
+
+/// An operation that lists rows (a filter, a sort, a lookup by position) never shows the rows a
+/// spreadsheet hides: they are acted on, not summed.
+pub(crate) fn lists_rows(derivation: &TabularDerivation) -> bool {
+    matches!(
+        derivation,
+        TabularDerivation::Computed { operation, .. }
+            if matches!(operation.as_str(), "filter" | "sort" | "row_at")
+    )
+}
+
+/// The lines that say what the layout of the sheet did to a figure: rows the spreadsheet hides or
+/// filters out and whether they were counted, a total row left out, merged cells filled down, blank
+/// and note rows. Counts and row numbers as the spreadsheet numbers them; never a value.
+fn describe_layout(layout: &SheetLayout, rows_left_out: bool) -> Vec<String> {
+    let mut lines = Vec::new();
+    if layout.hidden_rows > 0 {
+        let numbers: Vec<String> = layout
+            .hidden_row_numbers
+            .iter()
+            .map(u32::to_string)
+            .collect();
+        let what = if layout.filter_active {
+            "hidden by an active filter"
+        } else {
+            "hidden in the file"
+        };
+        lines.push(format!(
+            "Rows {what}: {} (source rows {}), {}",
+            layout.hidden_rows,
+            numbers.join(", "),
+            if rows_left_out {
+                "left out of this result"
+            } else {
+                "included in this result"
+            }
+        ));
+    }
+    if layout.total_rows > 0 {
+        let numbers: Vec<String> = layout
+            .total_row_numbers
+            .iter()
+            .map(u32::to_string)
+            .collect();
+        lines.push(format!(
+            "Total rows left out: {} (source rows {})",
+            layout.total_rows,
+            numbers.join(", ")
+        ));
+    }
+    if layout.merged_filled > 0 {
+        lines.push(format!(
+            "Merged cells filled down with their value: {}",
+            layout.merged_filled
+        ));
+    }
+    if layout.blank_rows_ignored > 0 || layout.note_rows_left_out > 0 {
+        lines.push(format!(
+            "Blank rows ignored: {}; note rows around the table left out: {}",
+            layout.blank_rows_ignored, layout.note_rows_left_out
+        ));
+    }
+    lines
 }
 
 /// The record of a calculation, as text for the model: what was understood from the question, the sheet
@@ -123,9 +192,13 @@ pub fn format_calculation_record(record: &CalculationRecord<'_>) -> Option<Strin
     if let Some(question) = record.question {
         lines.push(format!("Question: {question}"));
     }
-    let header = match locator.header_row {
-        Some(row) => format!("header on row {}", row + 1),
-        None => "no header row detected".to_string(),
+    let header = match (
+        record.layout.and_then(|layout| layout.header_source_row),
+        locator.header_row,
+    ) {
+        (Some(row), _) => format!("header on row {row}"),
+        (None, Some(row)) => format!("header on row {}", row + 1),
+        (None, None) => "no header row detected".to_string(),
     };
     lines.push(format!(
         "Workbook {}, sheet \"{}\" ({header})",
@@ -164,6 +237,9 @@ pub fn format_calculation_record(record: &CalculationRecord<'_>) -> Option<Strin
         Some(total) => format!("Rows: {row_count} kept out of {total} data rows"),
         None => format!("Rows: {row_count} row{plural} kept"),
     });
+    if let Some(layout) = record.layout {
+        lines.extend(describe_layout(layout, record.rows_left_out));
+    }
     if let Some((sent, matching)) = record.rows_listed {
         lines.push(format!(
             "Rows listed for the writer: {sent} of {matching} matching rows (the 'Table rows' block)"
@@ -442,6 +518,8 @@ mod tests {
             derivation,
             rows_listed: None,
             carried: None,
+            layout: None,
+            rows_left_out: false,
         }
     }
 
@@ -664,5 +742,94 @@ mod tests {
             !without.contains("Inherited"),
             "an ordinary figure states nothing inherited"
         );
+    }
+    #[test]
+    fn the_record_says_what_the_layout_did_to_the_rows_and_whether_they_were_counted() {
+        use crate::tabular::layout::SheetLayout;
+        let (value, locator, derivation) = filtered_sum();
+        let layout = SheetLayout {
+            raw_sheet: "Commandes".into(),
+            hidden_rows: 2,
+            hidden_row_numbers: vec![4, 9],
+            total_rows: 1,
+            total_row_numbers: vec![50],
+            merged_filled: 3,
+            blank_rows_ignored: 1,
+            note_rows_left_out: 2,
+            header_source_row: Some(3),
+            ..SheetLayout::default()
+        };
+        let mut record = record_of(&value, &locator, &derivation);
+        record.layout = Some(&layout);
+        let counted = format_calculation_record(&record).unwrap();
+        assert!(counted.contains("header on row 3"), "{counted}");
+        assert!(
+            counted
+                .contains("Rows hidden in the file: 2 (source rows 4, 9), included in this result"),
+            "{counted}"
+        );
+        assert!(
+            counted.contains("Total rows left out: 1 (source rows 50)"),
+            "{counted}"
+        );
+        assert!(
+            counted.contains("Merged cells filled down with their value: 3"),
+            "{counted}"
+        );
+        assert!(
+            counted.contains("Blank rows ignored: 1; note rows around the table left out: 2"),
+            "{counted}"
+        );
+
+        record.rows_left_out = true;
+        let left_out = format_calculation_record(&record).unwrap();
+        assert!(left_out.contains("left out of this result"), "{left_out}");
+
+        let filtered = SheetLayout {
+            filter_active: true,
+            ..layout.clone()
+        };
+        record.layout = Some(&filtered);
+        let by_filter = format_calculation_record(&record).unwrap();
+        assert!(
+            by_filter.contains("Rows hidden by an active filter: 2"),
+            "{by_filter}"
+        );
+    }
+
+    #[test]
+    fn a_plain_sheet_adds_no_layout_line_to_the_record() {
+        use crate::tabular::layout::SheetLayout;
+        let (value, locator, derivation) = filtered_sum();
+        let plain = SheetLayout::default();
+        let mut record = record_of(&value, &locator, &derivation);
+        record.layout = Some(&plain);
+        let text = format_calculation_record(&record).unwrap();
+        let without = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+        assert_eq!(text, without);
+    }
+
+    #[test]
+    fn the_layout_lines_stay_neutral_about_who_the_user_is() {
+        use crate::tabular::layout::SheetLayout;
+        let (value, locator, derivation) = filtered_sum();
+        let layout = SheetLayout {
+            hidden_rows: 1,
+            hidden_row_numbers: vec![4],
+            total_rows: 1,
+            total_row_numbers: vec![9],
+            merged_filled: 1,
+            blank_rows_ignored: 1,
+            ..SheetLayout::default()
+        };
+        let mut record = record_of(&value, &locator, &derivation);
+        record.layout = Some(&layout);
+        let text = format_calculation_record(&record).unwrap().to_lowercase();
+        for word in ["practice", "patient", "doctor", "lawyer", "client"] {
+            assert!(
+                !text.contains(word),
+                "the layout lines name a profession: {word}"
+            );
+        }
     }
 }

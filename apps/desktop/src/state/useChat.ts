@@ -45,6 +45,7 @@ import {
   type TargetingReport,
   type WorkbookCardUse,
   type WorkbookUse,
+  type RowPolicy,
 } from "../lib/ipc";
 import { targetingRequestFor, type TargetingChoice } from "../lib/targeting";
 import { truncateForRegenerate, truncateForResend } from "../lib/turns";
@@ -242,6 +243,9 @@ export interface ChatState {
   /** "Demander a l'IA" under a figure: the model analyses the figure the program computed again, with
    * the ticked documents when there are some. Replaces the answer, as a regenerate does. */
   analyseCalculation: (answerEntryId: string) => Promise<void>;
+  /** The figure asked again with the other reading of the rows a spreadsheet hides or filters out:
+   * a new answer under the first, which stays (TABULAR step 13). */
+  askWithRowPolicy: (answerEntryId: string, rowPolicy: RowPolicy) => Promise<void>;
   /** A follow-up answer, asked again as a question of its own: nothing is taken from the previous
    * question. Replaces the answer, as a regenerate does. */
   askWithoutCarryOver: (answerEntryId: string) => Promise<void>;
@@ -313,6 +317,8 @@ export function useChat(
       analyse?: StoredCalculation,
       /** The question stands alone: the state of the previous table answer is not sent. */
       withoutCarryOver = false,
+      /** What a figure does with the rows a spreadsheet hides or filters out, when she chose it. */
+      rowPolicy?: RowPolicy,
     ) => {
       if (phase !== "idle" || !hasWorkFolder) {
         return;
@@ -424,11 +430,14 @@ export function useChat(
           conversationHistory(baseEntries),
           targetingRequestFor(choice, previousTargeting, text),
           onTargeting,
-          analyse === undefined
-            ? previousCarry === undefined
-              ? {}
-              : { tableCarryOver: previousCarry }
-            : { calculationFollowUp: followUpOf("analyse", analyse) },
+          {
+            ...(analyse === undefined
+              ? previousCarry === undefined
+                ? {}
+                : { tableCarryOver: previousCarry }
+              : { calculationFollowUp: followUpOf("analyse", analyse) }),
+            ...(rowPolicy === undefined ? {} : { rowPolicy }),
+          },
         );
         /* The state a figure was asked with is kept on its entry only when it was applied: the short
            question gives no figure without it, so "Expliquer le calcul" sends it back. */
@@ -775,6 +784,29 @@ export function useChat(
     [runTurn, entries],
   );
 
+  /* The same question asked again with the other reading of the hidden and filtered rows: a new turn
+     under the figure, which stays on screen (TABULAR step 13). */
+  const askWithRowPolicy = useCallback(
+    (answerEntryId: string, rowPolicy: RowPolicy) => {
+      const position = entries.findIndex((entry) => entry.id === answerEntryId);
+      const answer = entries[position];
+      const question = entries[position - 1];
+      if (answer === undefined || question?.role !== "user") {
+        return Promise.resolve();
+      }
+      return runTurn(
+        entries,
+        question.content,
+        false,
+        answer.targetingChoice,
+        undefined,
+        false,
+        rowPolicy,
+      );
+    },
+    [runTurn, entries],
+  );
+
   const analyseCalculation = useCallback(
     (answerEntryId: string) => {
       const truncated = truncateForRegenerate(entries, answerEntryId);
@@ -953,6 +985,7 @@ export function useChat(
     retarget,
     explainCalculation,
     analyseCalculation,
+    askWithRowPolicy,
     askWithoutCarryOver,
     stop,
     dismissError,

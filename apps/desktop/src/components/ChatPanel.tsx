@@ -84,6 +84,7 @@ export function ChatPanel({
     retarget,
     explainCalculation,
     analyseCalculation,
+    askWithRowPolicy,
     askWithoutCarryOver,
     stop,
     dismissError,
@@ -194,6 +195,7 @@ export function ChatPanel({
         onRegenerate={(answerEntryId) => void regenerate(answerEntryId)}
         onExplainCalculation={(answerEntryId) => void explainCalculation(answerEntryId)}
         onAnalyseCalculation={(answerEntryId) => void analyseCalculation(answerEntryId)}
+        onAskWithRowPolicy={(answerEntryId, rowPolicy) => void askWithRowPolicy(answerEntryId, rowPolicy)}
         onAskAlone={(answerEntryId) => void askWithoutCarryOver(answerEntryId)}
         onRetarget={(answerEntryId, choice) => void retarget(answerEntryId, choice)}
         showDiagnostics={showDiagnostics}

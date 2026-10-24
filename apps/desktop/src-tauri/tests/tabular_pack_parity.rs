@@ -187,3 +187,28 @@ fn both_packs_carry_the_follow_up_lists() {
         }
     }
 }
+
+#[test]
+fn both_packs_carry_the_layout_lists() {
+    // TABULAR step 13: the words that mark a total row at the foot of a table and the cells that
+    // stand for "no value" (a dash, n/a). A pack without them would read a total as data.
+    for (tag, body) in PACKS {
+        let pack = parse(body);
+        for list in ["total_words", "empty_markers"] {
+            let words = pack[list]
+                .as_array()
+                .unwrap_or_else(|| panic!("{tag}: no {list}"));
+            assert!(!words.is_empty(), "{tag}: {list} is empty");
+        }
+        let totals: Vec<&str> = pack["total_words"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|word| word.as_str())
+            .collect();
+        assert!(
+            totals.contains(&"total"),
+            "{tag}: the plain word is missing"
+        );
+    }
+}

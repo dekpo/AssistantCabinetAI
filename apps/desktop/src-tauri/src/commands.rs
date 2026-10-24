@@ -61,6 +61,7 @@ use crate::settings::{self, Settings};
 use crate::speech::repair;
 use crate::tabular::card::card_budget_chars;
 use crate::tabular::carry_over::{CarriedParts, CarryReport, TableCarryOver};
+use crate::tabular::layout::RowPolicy;
 use crate::tabular_answer::{self, TabularAnswer, WorkbookChoice};
 use crate::viewer_source;
 use crate::work_folder::{
@@ -94,6 +95,10 @@ pub struct AppState {
     /// The last few screens of question suggestions (`knowledge::suggest::SuggestionCache`): in
     /// memory only, keyed by the selection and the state of the base, never written anywhere.
     suggestions: SuggestionCache,
+    /// What a figure does with the rows a spreadsheet hides or filters out, for the question being
+    /// answered (`tabular::layout::RowPolicy`). Set when a question starts and put back to the
+    /// default when it ends; `family_views_of` hands it to the Data folder every tier reads.
+    row_policy: Mutex<RowPolicy>,
 }
 
 struct CachedVocabulary {
@@ -114,6 +119,7 @@ impl AppState {
             model_budgets: Mutex::new(ModelBudgets::default()),
             vocabulary: Mutex::new(None),
             suggestions: SuggestionCache::default(),
+            row_policy: Mutex::new(RowPolicy::default()),
         })
     }
 
@@ -1044,8 +1050,16 @@ pub async fn ask_with_sources(
     // The state the last table answer of this conversation left (TABULAR step 11): untrusted, checked
     // against the real selection and inventory before it is used.
     table_carry_over: Option<TableCarryOver>,
+    // What a figure does with the rows a spreadsheet hides or filters out (TABULAR step 13): the
+    // user's choice on an answer, otherwise the one a short follow-up inherits from the figure it
+    // continues, otherwise the rows are counted and said.
+    row_policy: Option<RowPolicy>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
+    let policy = resolve_row_policy(row_policy, table_carry_over.as_ref(), &question);
+    if let Ok(mut current) = state.row_policy.lock() {
+        *current = policy;
+    }
     let mut stopped = state.cancellation.begin();
     // Cleared first: a workbook load recorded on this thread by something else must not be
     // counted as this question's.
@@ -1077,10 +1091,57 @@ pub async fn ask_with_sources(
         log_retrieval_timing(&app, state.inner(), &measured);
         record_knowledge_row(&app, &measured);
     }
-    result.map(|mut answer| {
+    let result = result.map(|mut answer| {
         answer.diagnostics = Some(measured);
+        note_layout_of(&app, state.inner(), &mut answer);
+        // A reading that left rows out is part of the state a short follow-up continues.
+        if policy == RowPolicy::Exclude {
+            if let Some(carry) = answer.table_carry_over.as_mut() {
+                carry.row_policy = Some(RowPolicy::Exclude);
+            }
+        }
         answer
-    })
+    });
+    if let Ok(mut current) = state.row_policy.lock() {
+        *current = RowPolicy::default();
+    }
+    result
+}
+
+/// What a figure does with the rows a spreadsheet hides or filters out: the choice made on an
+/// answer, otherwise the reading the previous figure was given when this question is short enough to
+/// be a follow-up of it, otherwise the rows are counted and said.
+fn resolve_row_policy(
+    requested: Option<RowPolicy>,
+    carry: Option<&TableCarryOver>,
+    question: &str,
+) -> RowPolicy {
+    requested
+        .or_else(|| {
+            let short = question.split_whitespace().count() <= conversation::FOLLOW_UP_MAX_WORDS;
+            carry.filter(|_| short).and_then(|carry| carry.row_policy)
+        })
+        .unwrap_or_default()
+}
+
+/// What the layout of the sheets did to an answer, written into its trace (`workbook_use::note_layout`).
+/// A failure to read the folders only means the lines are missing, never that the answer fails.
+fn note_layout_of(app: &AppHandle, state: &AppState, answer: &mut AskAnswer) {
+    let Ok(index) = open_index(app) else {
+        return;
+    };
+    let Ok(views) = family_views_of(state, &index) else {
+        return;
+    };
+    let Some(data) = views.data.as_ref() else {
+        return;
+    };
+    let figure = match (&answer.tabular_answer, &answer.mixed_answer) {
+        (Some(figure), _) => Some(figure),
+        (None, Some(mixed)) => mixed.table.as_ref(),
+        _ => None,
+    };
+    workbook_use::note_layout(&mut answer.workbook_use, data, figure);
 }
 
 /// One row of numbers and codes in `kb_diagnostics` for a question that went through the knowledge
@@ -1119,13 +1180,21 @@ pub fn knowledge_diagnostics(
 fn family_views_of(state: &AppState, index: &IndexStore) -> Result<FamilyViews, AppError> {
     let (work_folder, data_folder) =
         state.read(|settings| (settings.work_folder.clone(), settings.data_folder.clone()))?;
-    family_view::family_views(
+    let mut views = family_view::family_views(
         work_folder.as_deref().map(Path::new),
         data_folder.as_deref().map(Path::new),
         Some(index),
         &state.file_hashes,
         &state.data_file_hashes,
-    )
+    )?;
+    // Every tier of the question being answered reads the tables under the same policy.
+    let policy = state
+        .row_policy
+        .lock()
+        .map(|policy| *policy)
+        .unwrap_or_default();
+    views.data = views.data.take().map(|data| data.with_row_policy(policy));
+    Ok(views)
 }
 
 /// The names of the current selection that begin with `prefix`, for the composer's `@` picker
@@ -4133,5 +4202,42 @@ mod answer_shape_tests {
         assert_eq!(json["diagnostics"]["chunksSelected"], 4);
         assert_eq!(json["diagnostics"]["totalMs"], 2_300);
         assert!(serde_json::to_value(bare_answer()).unwrap()["diagnostics"].is_null());
+    }
+    #[test]
+    fn a_short_question_inherits_the_reading_of_the_figure_it_follows() {
+        use crate::tabular::engine::Operation;
+        let mut carry = TableCarryOver::from_operation(
+            "a.xlsx",
+            "Data",
+            &Operation::Count {
+                filters: Vec::new(),
+            },
+        )
+        .unwrap();
+        carry.row_policy = Some(RowPolicy::Exclude);
+
+        // The choice made on an answer wins.
+        assert_eq!(
+            resolve_row_policy(Some(RowPolicy::Include), Some(&carry), "and for March?"),
+            RowPolicy::Include
+        );
+        // A short question after a figure that left the rows out leaves them out too.
+        assert_eq!(
+            resolve_row_policy(None, Some(&carry), "and for March?"),
+            RowPolicy::Exclude
+        );
+        // A long question stands alone, and so does a question with nothing before it.
+        assert_eq!(
+            resolve_row_policy(
+                None,
+                Some(&carry),
+                "what is the total of all the invoices of the second quarter for every supplier"
+            ),
+            RowPolicy::Include
+        );
+        assert_eq!(
+            resolve_row_policy(None, None, "and for March?"),
+            RowPolicy::Include
+        );
     }
 }

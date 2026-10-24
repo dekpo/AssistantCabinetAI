@@ -324,14 +324,57 @@ impl Cell {
 /// way `tabular::xlsx_adapter`'s own tests do, plus a `styles.xml` whose second cell format is the
 /// built-in date format 14, so a `Cell::Date` is a genuine Excel date cell.
 pub fn write_xlsx(path: &Path, sheets: &[(String, Vec<Vec<Cell>>)]) {
+    let laid_out: Vec<LaidOutSheet> = sheets
+        .iter()
+        .map(|(name, rows)| LaidOutSheet::plain(name, rows.clone()))
+        .collect();
+    write_laid_out_xlsx(path, &laid_out);
+}
+
+/// A sheet with the layout a spreadsheet application adds to its cells (TABULAR step 13): rows and
+/// columns it hides, merged cells, an autofilter, an Excel Table, a sheet state. Rows and columns
+/// are numbered from 1, as the application numbers them.
+#[derive(Clone, Default)]
+pub struct LaidOutSheet {
+    pub name: String,
+    /// `visible`, `hidden` or `veryHidden`.
+    pub state: String,
+    pub rows: Vec<Vec<Cell>>,
+    pub hidden_rows: Vec<usize>,
+    pub hidden_cols: Vec<usize>,
+    /// `B2:B3`
+    pub merges: Vec<String>,
+    /// An autofilter over this range, with an active criterion on its first column when `true`.
+    pub filter: Option<(String, bool)>,
+    /// An Excel Table: its name, its range (header included) and whether it ends with a totals row.
+    pub table: Option<(String, String, bool)>,
+}
+
+impl LaidOutSheet {
+    pub fn plain(name: &str, rows: Vec<Vec<Cell>>) -> Self {
+        Self {
+            name: name.to_string(),
+            state: "visible".to_string(),
+            rows,
+            ..Self::default()
+        }
+    }
+}
+
+pub fn write_laid_out_xlsx(path: &Path, sheets: &[LaidOutSheet]) {
     let file = std::fs::File::create(path).unwrap();
     let mut zip = zip::ZipWriter::new(file);
     let options: zip::write::FileOptions<()> =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
-    let overrides: String = (1..=sheets.len())
+    let mut overrides: String = (1..=sheets.len())
         .map(|n| format!(r#"<Override PartName="/xl/worksheets/sheet{n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"#))
         .collect();
+    for (index, sheet) in sheets.iter().enumerate() {
+        if sheet.table.is_some() {
+            overrides.push_str(&format!(r#"<Override PartName="/xl/tables/table{}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>"#, index + 1));
+        }
+    }
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -363,9 +406,15 @@ pub fn write_xlsx(path: &Path, sheets: &[(String, Vec<Vec<Cell>>)]) {
     let sheet_entries: String = sheets
         .iter()
         .enumerate()
-        .map(|(index, (name, _))| {
+        .map(|(index, sheet)| {
             let n = index + 1;
-            format!(r#"<sheet name="{name}" sheetId="{n}" r:id="rId{n}"/>"#)
+            let name = &sheet.name;
+            let state = if sheet.state.is_empty() || sheet.state == "visible" {
+                String::new()
+            } else {
+                format!(r#" state="{}""#, sheet.state)
+            };
+            format!(r#"<sheet name="{name}" sheetId="{n}"{state} r:id="rId{n}"/>"#)
         })
         .collect();
     zip.start_file("xl/workbook.xml", options).unwrap();
@@ -384,9 +433,9 @@ pub fn write_xlsx(path: &Path, sheets: &[(String, Vec<Vec<Cell>>)]) {
 <cellXfs count="2"><xf numFmtId="0" xfId="0"/><xf numFmtId="14" xfId="0" applyNumberFormat="1"/></cellXfs>
 </styleSheet>"#).unwrap();
 
-    for (index, (_, rows)) in sheets.iter().enumerate() {
+    for (index, sheet) in sheets.iter().enumerate() {
         let mut sheet_rows = String::new();
-        for (row_index, row) in rows.iter().enumerate() {
+        for (row_index, row) in sheet.rows.iter().enumerate() {
             let row_number = row_index + 1;
             let mut cells = String::new();
             for (col_index, cell) in row.iter().enumerate() {
@@ -404,12 +453,70 @@ pub fn write_xlsx(path: &Path, sheets: &[(String, Vec<Vec<Cell>>)]) {
                     }
                 });
             }
-            sheet_rows.push_str(&format!(r#"<row r="{row_number}">{cells}</row>"#));
+            let hidden = if sheet.hidden_rows.contains(&row_number) {
+                r#" hidden="1""#
+            } else {
+                ""
+            };
+            sheet_rows.push_str(&format!(r#"<row r="{row_number}"{hidden}>{cells}</row>"#));
         }
+        let cols: String = if sheet.hidden_cols.is_empty() {
+            String::new()
+        } else {
+            let each: String = sheet
+                .hidden_cols
+                .iter()
+                .map(|col| format!(r#"<col min="{col}" max="{col}" width="9" hidden="1"/>"#))
+                .collect();
+            format!("<cols>{each}</cols>")
+        };
+        let filter = match &sheet.filter {
+            Some((range, true)) => format!(
+                r#"<autoFilter ref="{range}"><filterColumn colId="0"><filters><filter val="x"/></filters></filterColumn></autoFilter>"#
+            ),
+            Some((range, false)) => format!(r#"<autoFilter ref="{range}"/>"#),
+            None => String::new(),
+        };
+        let merges = if sheet.merges.is_empty() {
+            String::new()
+        } else {
+            let each: String = sheet
+                .merges
+                .iter()
+                .map(|range| format!(r#"<mergeCell ref="{range}"/>"#))
+                .collect();
+            format!(
+                r#"<mergeCells count="{}">{each}</mergeCells>"#,
+                sheet.merges.len()
+            )
+        };
+        let table_parts = if sheet.table.is_some() {
+            r#"<tableParts count="1"><tablePart r:id="rId1"/></tableParts>"#
+        } else {
+            ""
+        };
         zip.start_file(format!("xl/worksheets/sheet{}.xml", index + 1), options)
             .unwrap();
         zip.write_all(format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>"#).as_bytes()).unwrap();
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">{cols}<sheetData>{sheet_rows}</sheetData>{filter}{merges}{table_parts}</worksheet>"#).as_bytes()).unwrap();
+        if let Some((name, range, totals)) = &sheet.table {
+            zip.start_file(
+                format!("xl/worksheets/_rels/sheet{}.xml.rels", index + 1),
+                options,
+            )
+            .unwrap();
+            zip.write_all(format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table{}.xml"/></Relationships>"#, index + 1).as_bytes()).unwrap();
+            let totals = if *totals {
+                r#" totalsRowCount="1""#
+            } else {
+                ""
+            };
+            zip.start_file(format!("xl/tables/table{}.xml", index + 1), options)
+                .unwrap();
+            zip.write_all(format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="{}" name="{name}" displayName="{name}" ref="{range}"{totals}/>"#, index + 1).as_bytes()).unwrap();
+        }
     }
 
     zip.finish().unwrap();

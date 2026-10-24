@@ -199,6 +199,11 @@ pub struct FileRecord {
     pub extraction_method: ExtractionMethod,
     pub indexed: bool,
     pub index_metadata: Option<IndexMetadata>,
+    /// What the user should know about how a spreadsheet is read, as machine codes (hidden rows, a
+    /// filter, merged cells, a total row, several tables, hidden sheets; see
+    /// `TabularInventory::caveats`). Empty for a document and for a plain spreadsheet. The explorer
+    /// shows a marker, not a state: the file stays green.
+    pub layout_caveats: Vec<String>,
 }
 
 impl FileRecord {

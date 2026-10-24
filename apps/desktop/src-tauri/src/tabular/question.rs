@@ -1362,7 +1362,7 @@ fn find_sheet_name(
     allowed_sheets: Option<&[String]>,
     folded_question: &str,
 ) -> Option<String> {
-    let mut matches: Vec<&str> = super::engine::reachable_sheets(inventory, allowed_sheets)
+    let mut matches: Vec<&str> = super::engine::nameable_sheets(inventory, allowed_sheets)
         .into_iter()
         .filter(|sheet| folded_question.contains(&fold_text(&sheet.name)))
         .map(|sheet| sheet.name.as_str())
@@ -1384,7 +1384,7 @@ fn columns_for_matching<'a>(
 ) -> Vec<&'a ColumnInventory> {
     let reachable = super::engine::reachable_sheets(inventory, allowed_sheets);
     let sheet = match sheet_name {
-        Some(name) => reachable
+        Some(name) => super::engine::nameable_sheets(inventory, allowed_sheets)
             .into_iter()
             .find(|sheet| fold_text(&sheet.name) == fold_text(name)),
         None if reachable.len() == 1 => Some(reachable[0]),

@@ -164,6 +164,13 @@ Sizes: S under half a day, M about a day, L two days or more; tests included.
 
 **Human test outline (written in full in French at the end of Phase B).** Files built for the occasion by a test helper into a scratch folder **outside** the repository and outside her test folders (for example `C:\Users\elise\AssistantCabinetAI-test-real-world`), chosen as the Data Folder through the existing picker; one backup at the start and one restore at the end (her `settings.json` only). Parts: (1) a clean list, nothing new appears; (2) a list with two hidden rows and a filter: the same question gives the stated total and the line, the click gives the other total; (3) a merged-category journal and a labelled total row; (4) a sheet with two tables: the question asks which; (5) a workbook with a hidden sheet; (6) the previous wave's regression script, unchanged. Counts come from her real analysed index copy, run through the real path before the script is written.
 
+## 11b. Corrections made while building (24 October 2026)
+
+* Accounting negatives `(15,00)` were already read as numbers (`number_shape`); experiment D failed only because of `n/a` and `-`. Only the placeholders needed work.
+* A table of a sheet that holds several is built as **a sheet of its own** (`<sheet> <range>` or `<sheet> (<Excel Table>)`), so the existing `AmbiguousSheetName` is the "which table?" question; no `AmbiguousRegion` or `region_to_choose` exists.
+* Side-by-side tables separated by a blank column are **not** split without an Excel Table: 46 of her files have an empty column inside a table, and splitting would ask a needless question.
+* A visible sheet that is not a table (`Notes`) no longer makes a question without a sheet name ambiguous when exactly one sheet is a table.
+
 ## 12. Prompts to correct after the go
 
 Read for this note: `SESSION-TABULAR-14-column-glossary.md` and `-15-formula-columns-and-totals.md` are the two that depend on this step (plan section 5, "Depends on"), and 15's boundary with this note changes if Q2 is answered "yes". They are corrected after the owner's answers, with the other prompts that name `looks_tabular`, `SheetInventory` or `engine::data_rows` (steps 15, 17, 18, 19, 22 to 24), not before: the corrections depend on Q1 to Q4.

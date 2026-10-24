@@ -523,12 +523,6 @@ fn share_out(needs: &[usize], total: usize) -> Vec<usize> {
 // The rows
 // ---------------------------------------------------------------------------------------------
 
-/// The spreadsheet number of the first data row: the card's own rule, `header on row H`, data from
-/// the next one (`card::sheet_block`). Without a header the data starts on row 1.
-fn first_row_number(sheet: &SheetInventory) -> usize {
-    sheet.header_row.map_or(1, |header| header + 2)
-}
-
 fn cell_of(
     row: &[CellValue],
     column: &ColumnInventory,
@@ -606,7 +600,7 @@ fn row_line(
         .collect();
     format!(
         "  Row {}: {}",
-        first_row_number(unit.sheet) + index,
+        unit.sheet.data_row_number(index),
         cells.join(" | ")
     )
 }

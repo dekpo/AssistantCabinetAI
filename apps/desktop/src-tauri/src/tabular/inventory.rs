@@ -11,7 +11,8 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
-use super::{CellValue, SheetData, Workbook};
+use super::layout::{self, FactsBySheet, RowPolicy, SheetLayout, SheetState};
+use super::{CellValue, SheetData, SourceRows, Workbook};
 
 /// A header candidate must be within the first rows of the sheet, and have at least one row of
 /// data beneath it.
@@ -81,6 +82,10 @@ pub struct ColumnInventory {
     /// column is `Categorical`, never guessed as `Date` (`docs/DECISIONS.md`, D3).
     #[serde(default)]
     pub ambiguous_date: bool,
+    /// Cells of this column that hold a spreadsheet error value (`#DIV/0!`, `#N/A`): counted
+    /// beside the column, never folded into a figure.
+    #[serde(default)]
+    pub error_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -102,6 +107,11 @@ pub struct SheetInventory {
     /// existed; the next Analyse pass rebuilds every workbook, so the default never outlives it.
     #[serde(default)]
     pub formula_cells: usize,
+    /// What the layout rules did to this sheet (`tabular::layout`): hidden and filtered rows,
+    /// merged cells filled, notes and total rows left out, the table's range when the raw sheet
+    /// holds several. `None` for an inventory analysed before the layout was read.
+    #[serde(default)]
+    pub layout: Option<SheetLayout>,
 }
 
 /// "Does this sheet look like a real data table", in numbers borrowed from LocalGridMind's
@@ -131,6 +141,13 @@ pub struct TabularInventory {
     pub relative_path: String,
     pub format: TabularFormat,
     pub sheets: Vec<SheetInventory>,
+    /// The layout facts the file gave, by the raw sheet's name: what is needed to prepare the raw
+    /// cached grid again, under any row policy, without reading the file.
+    #[serde(default)]
+    pub facts: FactsBySheet,
+    /// `layout::LAYOUT_VERSION` when the layout was read; `0` for an inventory analysed before.
+    #[serde(default)]
+    pub layout_version: u32,
 }
 
 impl TabularInventory {
@@ -158,7 +175,62 @@ impl TabularInventory {
             relative_path: relative_path.to_string(),
             format,
             sheets,
+            facts: FactsBySheet::new(),
+            layout_version: 0,
         }
+    }
+
+    /// The sheets the engine reads, from the raw grid and the layout facts, under a row policy
+    /// (`tabular::layout`): the inventory, the workbook it describes (rows removed or filled the
+    /// way the inventory counts them) and the file row of every row. The one way production code
+    /// turns a raw workbook into something to ask questions of; [`Self::build`] is the typing
+    /// alone. With no fact to apply and an ordinary sheet this is `build` of the same cells.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_view(
+        relative_path: &str,
+        workbook_id: &str,
+        format: TabularFormat,
+        raw: &Workbook,
+        source_rows: Option<&SourceRows>,
+        facts: &FactsBySheet,
+        policy: RowPolicy,
+        locale: &str,
+    ) -> (Self, Workbook, SourceRows) {
+        let mut sheets = Vec::new();
+        let mut data = Vec::new();
+        let mut numbers = SourceRows::new();
+        for raw_sheet in &raw.sheets {
+            let sheet_facts = facts.get(&raw_sheet.name).cloned().unwrap_or_default();
+            let given = source_rows
+                .and_then(|map| map.get(&raw_sheet.name))
+                .map(Vec::as_slice);
+            for prepared in layout::prepare_sheet(raw_sheet, given, &sheet_facts, policy) {
+                let mut inventory = build_sheet(&prepared.data, locale);
+                let mut layout = prepared.layout;
+                let data_start = inventory.header_row.map_or(0, |header| header + 1);
+                if let Some(numbers) = prepared.source_rows.get(data_start..) {
+                    if !numbers.windows(2).all(|pair| pair[1] == pair[0] + 1) {
+                        layout.row_numbers = Some(numbers.to_vec());
+                    }
+                }
+                inventory.layout = Some(layout);
+                numbers.insert(prepared.data.name.clone(), prepared.source_rows);
+                data.push(prepared.data);
+                sheets.push(inventory);
+            }
+        }
+        (
+            Self {
+                workbook_id: workbook_id.to_string(),
+                relative_path: relative_path.to_string(),
+                format,
+                sheets,
+                facts: facts.clone(),
+                layout_version: layout::LAYOUT_VERSION,
+            },
+            Workbook { sheets: data },
+            numbers,
+        )
     }
 
     /// Every sheet carrying this name. A well-formed XLSX file cannot hold two sheets with the
@@ -166,6 +238,55 @@ impl TabularInventory {
     /// collision is returned in full rather than one entry silently winning - the same
     /// ambiguity-is-a-result rule `WorkFolderInventory::find_by_id` follows for a duplicate file
     /// identity.
+    /// What a reader of this workbook should know about how it is read, as machine codes in a
+    /// stable order: rows the spreadsheet hides or filters out, merged cells filled, a total row
+    /// left out, several tables on a sheet, hidden sheets, notes around a table. `extension` is the
+    /// file's own (`xls` cannot be checked for hidden rows). A workbook analysed before the layout
+    /// was read says so, so that a new Analyse is asked for by hand.
+    pub fn caveats(&self, extension: &str) -> Vec<&'static str> {
+        let mut found: Vec<&'static str> = Vec::new();
+        let mut push = |code: &'static str| {
+            if !found.contains(&code) {
+                found.push(code);
+            }
+        };
+        if self.layout_version < layout::LAYOUT_VERSION && self.format != TabularFormat::Csv {
+            push("layout_unread");
+        }
+        for sheet in &self.sheets {
+            let Some(layout) = sheet.layout.as_ref() else {
+                continue;
+            };
+            if layout.state != SheetState::Visible {
+                push("hidden_sheets");
+                continue;
+            }
+            if layout.hidden_rows > 0 {
+                push(if layout.filter_active {
+                    "filtered_rows"
+                } else {
+                    "hidden_rows"
+                });
+            }
+            if layout.total_rows > 0 {
+                push("total_rows");
+            }
+            if layout.merged_filled > 0 {
+                push("merged_cells");
+            }
+            if layout.tables_on_sheet > 1 {
+                push("several_tables");
+            }
+            if layout.note_rows_left_out > 0 {
+                push("note_rows");
+            }
+        }
+        if extension == "xls" {
+            push("xls");
+        }
+        found
+    }
+
     pub fn sheets_named(&self, name: &str) -> Vec<&SheetInventory> {
         self.sheets
             .iter()
@@ -187,17 +308,47 @@ impl TabularInventory {
 }
 
 impl SheetInventory {
+    /// The file does not hide this sheet. An inventory analysed before the layout was read says
+    /// nothing about it, which reads as visible.
+    /// The row of the file a data row came from, counted as the spreadsheet counts: the layout's own
+    /// numbers when rows were taken out of the grid, otherwise the rows after the header one after
+    /// the other.
+    pub fn data_row_number(&self, index: usize) -> usize {
+        let layout = self.layout.as_ref();
+        if let Some(number) = layout
+            .and_then(|layout| layout.row_numbers.as_ref())
+            .and_then(|numbers| numbers.get(index))
+        {
+            return *number as usize;
+        }
+        let first = layout
+            .and_then(|layout| layout.header_source_row)
+            .map(|header| header as usize + 1)
+            .or(self.header_row.map(|header| header + 2))
+            .unwrap_or(1);
+        first + index
+    }
+
+    pub fn is_visible(&self) -> bool {
+        self.layout
+            .as_ref()
+            .is_none_or(|layout| layout.state == SheetState::Visible)
+    }
+
     /// Enough rows and columns to be a grid rather than a note, and few enough formulas that its
     /// values are mostly stored rather than computed by the file.
     pub fn looks_tabular(&self) -> bool {
-        self.row_count >= USABLE_MIN_ROWS
+        // A sheet the file hides is not one the user is asking about; a header with no row below
+        // it is an empty table, which can be asked "how many" about.
+        self.is_visible()
+            && (self.row_count >= USABLE_MIN_ROWS || self.header_row.is_some())
             && self.column_count >= USABLE_MIN_COLUMNS
             && (self.formula_cells as f64) <= USABLE_MAX_FORMULA_RATIO * self.row_count as f64
     }
 }
 
 fn build_sheet(sheet: &SheetData, locale: &str) -> SheetInventory {
-    let header_row = detect_header_row(&sheet.rows);
+    let header_row = detect_header_row(&sheet.rows).or_else(|| lone_header_row(&sheet.rows));
     let data_rows: &[Vec<CellValue>] = match header_row {
         Some(index) => &sheet.rows[index + 1..],
         None => &sheet.rows[..],
@@ -222,7 +373,30 @@ fn build_sheet(sheet: &SheetData, locale: &str) -> SheetInventory {
         columns,
         has_formulas,
         formula_cells,
+        layout: None,
     }
+}
+
+/// A sheet of one row that reads as a header (two or more distinct labels, all text): a table
+/// with no data yet, not one data row.
+fn lone_header_row(rows: &[Vec<CellValue>]) -> Option<usize> {
+    let [row] = rows else {
+        return None;
+    };
+    let labels: Vec<String> = row
+        .iter()
+        .filter_map(cell_text)
+        .map(|text| text.trim().to_lowercase())
+        .filter(|text| !text.is_empty())
+        .collect();
+    let all_text = row
+        .iter()
+        .all(|cell| matches!(classify_cell(cell), CellClass::Other | CellClass::Empty));
+    let distinct = labels
+        .iter()
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    (all_text && labels.len() >= 2 && distinct == labels.len()).then_some(0)
 }
 
 fn build_column(
@@ -244,6 +418,7 @@ fn build_column(
     let mut date_like = 0usize;
     let mut date_settled = false;
     let mut other = 0usize;
+    let mut error_count = 0usize;
 
     for row in data_rows {
         let Some(cell) = row.get(index) else {
@@ -251,6 +426,9 @@ fn build_column(
         };
         if matches!(cell, CellValue::Formula { .. }) {
             has_formulas = true;
+        }
+        if is_error_cell(cell) {
+            error_count += 1;
         }
         match classify_cell(cell) {
             CellClass::Empty => {}
@@ -306,6 +484,18 @@ fn build_column(
             0
         },
         ambiguous_date,
+        error_count,
+    }
+}
+
+/// A cell that holds a spreadsheet error value, written as the application writes it.
+pub(crate) fn is_error_cell(cell: &CellValue) -> bool {
+    match cell {
+        CellValue::Text(text) => super::xlsx_adapter::is_error_literal(text.trim()),
+        CellValue::Formula { cached_value, .. } => {
+            cached_value.as_deref().is_some_and(is_error_cell)
+        }
+        _ => false,
     }
 }
 
@@ -315,7 +505,7 @@ fn build_column(
 /// above the real header scores low on every count and a genuine header wins even when it is not
 /// the first textual row. A row with a single filled cell is never a header outright, and a
 /// candidate still needs at least one row of data beneath it to be a header *of*.
-fn detect_header_row(rows: &[Vec<CellValue>]) -> Option<usize> {
+pub(crate) fn detect_header_row(rows: &[Vec<CellValue>]) -> Option<usize> {
     if rows.len() < 2 {
         return None;
     }
@@ -380,7 +570,7 @@ fn detect_header_row(rows: &[Vec<CellValue>]) -> Option<usize> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CellClass {
+pub(crate) enum CellClass {
     Empty,
     Numeric,
     /// `settled`: whether some evidence in this cell alone rules out the other day/month reading
@@ -392,7 +582,7 @@ enum CellClass {
     Other,
 }
 
-fn classify_cell(cell: &CellValue) -> CellClass {
+pub(crate) fn classify_cell(cell: &CellValue) -> CellClass {
     match cell {
         CellValue::Empty => CellClass::Empty,
         CellValue::Number(_) => CellClass::Numeric,
@@ -1054,8 +1244,19 @@ mod tests {
     }
 
     #[test]
-    fn a_single_row_sheet_has_no_header_because_it_has_no_data_beneath_one() {
+    fn a_single_row_of_labels_is_a_header_with_no_data_beneath_it() {
+        // TABULAR step 13: an export with a header and no rows yet is an empty table, not one row
+        // of data called `column_1`, `column_2`.
         let sheet = build_one(vec![text_row(&["nom", "age"])]);
+
+        assert_eq!(sheet.header_row, Some(0));
+        assert_eq!(sheet.row_count, 0);
+        assert_eq!(sheet.columns[0].name, "nom");
+    }
+
+    #[test]
+    fn a_single_row_that_is_not_all_labels_stays_data() {
+        let sheet = build_one(vec![text_row(&["nom", "nom"])]);
 
         assert_eq!(sheet.header_row, None);
         assert_eq!(sheet.row_count, 1);

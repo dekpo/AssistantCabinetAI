@@ -72,6 +72,8 @@
   "follow_up_other_workbook": ["autre fichier", "autre classeur", "autre tableur", "autre feuille", "autre onglet"],
   "writing_intents": ["rédige", "rédiger", "rédigez", "écris", "écrire", "écrivez", "génère", "générer", "générez", "compose", "composer", "composez", "prépare", "préparer", "préparez", "produis", "produire", "brouillon"],
   "document_references": ["cette lettre", "la lettre", "ce courrier", "le courrier", "ce devis", "le devis", "ce document", "le document", "ce pdf", "ce mail", "cet email", "cet e-mail", "ce contrat", "ce rapport", "cette note", "mentionne dans", "mentionnee dans", "mentionnes dans", "mentionnees dans", "cité dans", "cite dans"],
+  "total_words": ["total", "totaux", "sous-total", "sous total", "total general", "total général", "somme"],
+  "empty_markers": ["n/a", "nc", "n.c.", "nd", "n.d.", "neant", "néant", "sans objet", "s.o.", "-", "--", "---", "–", "—", "?"],
   "table_words": ["tableur", "tableurs", "tableau", "tableaux", "feuille de calcul", "feuilles de calcul", "feuille", "feuilles", "onglet", "onglets", "colonne", "colonnes", "ligne", "lignes", "cellule", "cellules", "formule", "formules", "classeur", "classeurs", "excel", "csv", "xlsx", "ods", "fichier de données"],
   "between": ["entre"],
   "numbers": {

@@ -287,6 +287,7 @@ mod tests {
             extraction_method: crate::file_record::ExtractionMethod::None,
             indexed: false,
             index_metadata: None,
+            layout_caveats: Vec::new(),
         }
     }
 

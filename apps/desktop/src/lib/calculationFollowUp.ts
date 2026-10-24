@@ -7,6 +7,7 @@ import type {
   TabularAnswer,
 } from "./ipc";
 import type { Translator } from "../i18n/translate";
+import { hiddenRowsOf } from "./workbookUse";
 import type { ChatEntry } from "../state/useChat";
 
 /**
@@ -128,6 +129,24 @@ export function explanationBlock(t: Translator, entry: ChatEntry): string | null
     return null;
   }
   return [t("chat.explanationTitle"), "", body].join("\n");
+}
+
+/**
+ * The button that asks a figure again with the other reading of the rows a spreadsheet hides or
+ * filters out (TABULAR step 13): "without the hidden rows" under a figure that counted them, "with
+ * them" under one that did not. `null` when the answer carries no figure or the sheet hides nothing.
+ */
+export function rowPolicyButton(
+  entry: Pick<ChatEntry, "workbookUse" | "calculation" | "mixedTable">,
+): { label: "actions.recomputeWithoutHidden" | "actions.recomputeWithHidden"; policy: "include" | "exclude" } | null {
+  const figure = entry.calculation !== undefined || entry.mixedTable?.kind === "value";
+  const hidden = hiddenRowsOf(entry.workbookUse);
+  if (!figure || hidden === null) {
+    return null;
+  }
+  return hidden.leftOut
+    ? { label: "actions.recomputeWithHidden", policy: "include" }
+    : { label: "actions.recomputeWithoutHidden", policy: "exclude" };
 }
 
 /** The buttons under an answer: which of the two new actions, and the label of the one that asks again. */

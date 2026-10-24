@@ -28,6 +28,17 @@ export function StateGlyph({ state, label }: { state: ExplorerState; label: stri
   );
 }
 
+/** A small mark on a spreadsheet that is read with a caveat: a circle with an exclamation mark. */
+export function CaveatGlyph() {
+  return (
+    <svg className="caveat-glyph" viewBox="0 0 12 12" aria-hidden="true">
+      <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M6 3 V6.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="6" cy="8.6" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+
 /** The folder of a family, in the family's colour: lines of text for documents, a grid for tables.
  * Two different looks, so the two sections are told apart without reading. */
 export function FamilyFolderGlyph({ family }: { family: Family }) {

@@ -53,7 +53,7 @@ matched, only the already-filtered, already-computed result if one was found. Nu
 citation checking, after the model writes, read the model's own reply and the evidence already sent -
 nothing new leaves the workstation for either check.
 
-**The controlled data sample (TABULAR step 03b, 22 October 2026, owner decisions 36 to 39; the setting `tabular_rows_mode`, `off` or `sample`, default `sample` while only fictional data is used, to be reviewed before any real document).**
+**The controlled data sample (TABULAR step 03b, 22 October 2026, owner decisions 36 to 39; the setting `tabular_rows_mode`; since step 10 it has three values, `off`, `sample` and `auto`, default `auto` while only fictional data is used, to be reviewed before any real document).**
 The paragraph above describes the setting `off`, which is still exactly what the turn holds. With `sample`, a question that concerns a workbook (one it names, or the one it
 obviously concerns, which already got a card) sends the gateway, beside the card, a **sample of that workbook's rows** and a **column profile**: the whole table when it fits the share of the model's
 window, otherwise its first rows and rows spread evenly through it (never random, never chosen by the model, the last row always included), each row with its spreadsheet row number, cells cleaned
@@ -66,6 +66,17 @@ identifiers masked ». **The DPIA line:** the sample of cells of the named or im
 which on the pilot deployment is Ollama on her own machine and today a tower on the local network over clear text (gate 1 of "Production gates" applies). Known limits, not hidden: masking is
 by pattern, so a number written in an unusual way or an identifier hidden in free text can pass (the pilot's check is the sample visible in the answer and the setting « Structure seulement »); a name
 in a cell is sent; the row numbers follow the card's rule and can differ from the file's by the blank lines a CSV reader drops.
+
+**Rows chosen by the engine, the drafted template and the follow-up state (TABULAR steps 09 to 11, 23-24 October 2026; consolidated in `docs/DECISIONS.md`, "Settled by the TABULAR series, wave 1", rows W-5, W-6 and W-10).**
+With `auto`, a request to **write or to analyse** about a workbook sends the gateway, beside the card, the sample and the profile of step 03b, **the rows that an explicit filter of the question designates**
+(a supplier, a month, a year, an amount above a number, an identifier, a value that a retrieved excerpt names), each with its spreadsheet row number, and the engine's totals over those rows; when they do not
+all fit the share of the model's window, a labelled sample of them and the engine's profile of all of them. The program chooses the rows by the engine's own matching, never the model; identifiers are masked and
+cells are untrusted text between markers, as for the sample; the rows are listed under the answer (one line per workbook, a disclosure of exactly the cells sent). **The DPIA line:** the cell values of the
+rows selected by the user's own filters reach the gateway, which on the pilot deployment is Ollama on her own machine or on the practice's network, never online (gate 1 of "Production gates" applies); nothing is
+stored by the server. The paths where **no row is ever sent** are unchanged: a computed figure answered by the engine alone, the hidden interpreter (the schema alone), the mail-merge doors, **including the
+template drafted by the model, which receives the file name, the sheet and the column names and kinds, never a value**, and « Expliquer le calcul » (a calculation record with no row). The state that carries a
+short follow-up (« et pour mars ? ») is a few names and filter values held by the interface and validated by the program on every question; it holds no cell value beyond the filter values already shown in
+« Compris comme », and the server stores nothing of it.
 
 **The knowledge base: a directory of names in the local index (KB programme, lot 1,
 `docs/SESSION-KB-00-master.md`).** The `kb_*` tables live in the same `index.sqlite3` as the chunks, on

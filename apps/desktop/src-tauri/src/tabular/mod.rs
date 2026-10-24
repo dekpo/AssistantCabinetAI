@@ -14,6 +14,7 @@
 //! This module reads files only. It never sends anything to the gateway or the network.
 
 pub mod card;
+pub mod carry_over;
 pub mod csv_adapter;
 pub mod engine;
 pub mod escalation;

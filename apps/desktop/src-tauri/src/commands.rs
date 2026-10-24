@@ -60,6 +60,7 @@ use crate::reveal;
 use crate::settings::{self, Settings};
 use crate::speech::repair;
 use crate::tabular::card::card_budget_chars;
+use crate::tabular::carry_over::{CarriedParts, CarryReport, TableCarryOver};
 use crate::tabular_answer::{self, TabularAnswer, WorkbookChoice};
 use crate::viewer_source;
 use crate::work_folder::{
@@ -980,6 +981,33 @@ pub struct AskAnswer {
     /// computed again, added under the figure on screen (TABULAR step 06). `answer` is then empty and
     /// the figure of the entry is untouched. `None` on every other path.
     pub explanation: Option<calculation_follow_up::Explanation>,
+    /// The state a table answer leaves for a short follow-up ("and for March?"): names and filter
+    /// values only. The interface keeps it on the entry and sends the last one back with the next
+    /// question, where it is untrusted (TABULAR step 11). `None` unless the answer is a figure the
+    /// engine computed from an operation that can be continued.
+    pub table_carry_over: Option<TableCarryOver>,
+    /// What this answer took from the previous question (a follow-up): the "Understood as" line marks it.
+    pub carried_over: Option<CarriedParts>,
+}
+
+impl AskAnswer {
+    /// Records what the carry-over came to for this answer (TABULAR step 11): the state it leaves and what it
+    /// inherited, only when the answer carries the figure it describes, and the trace line either way.
+    fn with_carry_over(mut self, report: CarryReport) -> Self {
+        let figure = match (&self.tabular_answer, &self.mixed_answer) {
+            (Some(answer), _) => Some(answer),
+            (None, Some(mixed)) => mixed.table.as_ref(),
+            _ => None,
+        };
+        if let (Some(TabularAnswer::Value { file, .. }), Some(next)) = (figure, &report.next) {
+            if *file == next.workbook {
+                self.table_carry_over = report.next.clone();
+                self.carried_over = report.inherited.clone();
+            }
+        }
+        workbook_use::note_carry_over(&mut self.workbook_use, &report);
+        self
+    }
 }
 
 /// Every question, with or without documents. Retrieval, then a sourced chat answer, refusing
@@ -1013,6 +1041,9 @@ pub async fn ask_with_sources(
     // again by the program from the original question and the scope it was given under, never taken
     // from the interface (`calculation_follow_up`, TABULAR step 06).
     calculation_follow_up: Option<CalculationFollowUp>,
+    // The state the last table answer of this conversation left (TABULAR step 11): untrusted, checked
+    // against the real selection and inventory before it is used.
+    table_carry_over: Option<TableCarryOver>,
     on_event: Channel<ChatStreamEvent>,
 ) -> Result<AskAnswer, AppError> {
     let mut stopped = state.cancellation.begin();
@@ -1033,6 +1064,7 @@ pub async fn ask_with_sources(
                 history: history.unwrap_or_default(),
                 targeting: targeting.unwrap_or_default(),
                 calculation_follow_up,
+                table_carry_over,
             },
             &on_event,
             &mut measured,
@@ -1632,6 +1664,7 @@ struct Question {
     history: Vec<ChatTurn>,
     targeting: TargetingRequest,
     calculation_follow_up: Option<CalculationFollowUp>,
+    table_carry_over: Option<TableCarryOver>,
 }
 
 /// What the knowledge base needs for one question, read once from the settings: the mode, the
@@ -1834,7 +1867,9 @@ async fn sourced_answer(
         history,
         targeting: targeting_request,
         calculation_follow_up,
+        table_carry_over,
     } = asked;
+    let carry = table_carry_over.as_ref();
 
     // Under a computed figure: the figure is computed again by the program and explained or analysed,
     // whatever else the question could be taken for (TABULAR step 06).
@@ -1875,7 +1910,7 @@ async fn sourced_answer(
                 // mixed tier hands a refusal back at once, with no model call, so the button did nothing.
                 // The model is asked to understand the question as in the tables-only tier, which never
                 // reads the documents (found by the owner's test of TABULAR step 06, part F).
-                if data_side_is_a_nudge(app, state, &question, &scope) {
+                if data_side_is_a_nudge(app, state, &question, &scope, carry) {
                     measured.path = RetrievalPath::Tabular;
                     return tabular_tier(
                         app,
@@ -1885,6 +1920,7 @@ async fn sourced_answer(
                         true,
                         &history,
                         &targeting_request,
+                        carry,
                         on_event,
                         measured,
                     )
@@ -1900,6 +1936,7 @@ async fn sourced_answer(
                     on_event,
                     measured,
                     None,
+                    carry,
                 )
                 .await;
             }
@@ -1921,8 +1958,16 @@ async fn sourced_answer(
             {
                 return Ok(answer);
             }
-            match mixed_data_only_tier(app, state, &question, &scope, &targeting_request, measured)
-                .await?
+            match mixed_data_only_tier(
+                app,
+                state,
+                &question,
+                &scope,
+                &targeting_request,
+                carry,
+                measured,
+            )
+            .await?
             {
                 Some(answer) => return Ok(answer),
                 None => {
@@ -1936,6 +1981,7 @@ async fn sourced_answer(
                         on_event,
                         measured,
                         None,
+                        carry,
                     )
                     .await
                 }
@@ -1951,6 +1997,7 @@ async fn sourced_answer(
                 skip_deterministic,
                 &history,
                 &targeting_request,
+                carry,
                 on_event,
                 measured,
             )
@@ -2353,6 +2400,8 @@ async fn tabular_tier(
     skip_deterministic: bool,
     history: &[ChatTurn],
     targeting_request: &TargetingRequest,
+    // The state the last table answer left: a short follow-up continues it (TABULAR step 11).
+    carry: Option<&TableCarryOver>,
     on_event: &Channel<ChatStreamEvent>,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<AskAnswer, AppError> {
@@ -2431,13 +2480,20 @@ async fn tabular_tier(
         )
         .await;
     }
-    let pending = tabular_answer::prepare(
+    let (pending, carry_report) = tabular_answer::prepare_with_carry_over(
         question,
         &folder,
-        &effective_selection,
+        selection_for_follow_up(
+            carry,
+            question,
+            locale,
+            &scope.data_mode,
+            &effective_selection,
+        ),
         locale,
         &index,
         skip_deterministic,
+        carry,
     )?;
     let pending = decorate_pending(pending, &targeting_plan);
     measured.routing_ms += stage.lap_ms();
@@ -2461,7 +2517,26 @@ async fn tabular_tier(
         targeting: targeting_plan.report(false),
         workbook_use,
         ..AskAnswer::default()
-    })
+    }
+    .with_carry_over(carry_report))
+}
+
+/// The selection a follow-up is read against: what the user ticked. The knowledge base may have narrowed
+/// the list of workbooks to those a name points at, and the workbook of the previous answer must stay
+/// reachable for a question that opens like a follow-up ("and for Beta?"). Any other question keeps the
+/// narrowed list.
+fn selection_for_follow_up<'s>(
+    carry: Option<&TableCarryOver>,
+    question: &str,
+    locale: &str,
+    ticked: &'s ScopeMode,
+    narrowed: &'s ScopeMode,
+) -> &'s ScopeMode {
+    if carry.is_some() && crate::tabular::question::opens_like_a_follow_up(question, locale) {
+        ticked
+    } else {
+        narrowed
+    }
 }
 
 /// The writer of the tables-only tier (TABULAR step 05): an advisory question (`tabular_answer::
@@ -2768,7 +2843,7 @@ async fn calculation_follow_up_tier(
     };
     measured.inventory_ms += stage.lap_ms();
     measured.selected_workbooks = selected_workbooks(&folder, &scope.data_mode);
-    let figure = calculation_follow_up::recompute(
+    let (figure, figure_carry) = calculation_follow_up::recompute_with_carry_over(
         question,
         &folder,
         &scope.data_mode,
@@ -2776,6 +2851,7 @@ async fn calculation_follow_up_tier(
         &index,
         &follow_up.shown,
         document_names.as_deref(),
+        follow_up.table_carry_over.as_ref(),
     )?;
     measured.routing_ms += stage.lap_ms();
     measured.absorb_workbook_loads(diagnostics::take_workbook_loads());
@@ -2783,8 +2859,13 @@ async fn calculation_follow_up_tier(
     match follow_up.kind {
         FollowUpKind::Explain => {
             let sizes = tabular_answer::sheet_sizes(&folder, &scope.data_mode);
-            let Some(record) = tabular_answer::calculation_record(Some(question), &figure, &sizes)
-            else {
+            let Some(record) = tabular_answer::calculation_record_inheriting(
+                Some(question),
+                &figure,
+                &sizes,
+                None,
+                figure_carry.inherited.as_ref(),
+            ) else {
                 return Err(AppError::ScopeUnavailable);
             };
             let file = follow_up.shown.file.clone();
@@ -2842,6 +2923,7 @@ async fn calculation_follow_up_tier(
                     on_event,
                     measured,
                     Some(figure),
+                    None,
                 )
                 .await
             }
@@ -2888,6 +2970,7 @@ fn data_side_is_a_nudge(
     state: &AppState,
     question: &str,
     scope: &AnalysisScope,
+    carry: Option<&TableCarryOver>,
 ) -> bool {
     let Ok(locale) = state.read(|settings| settings.locale.clone()) else {
         return false;
@@ -2903,10 +2986,20 @@ fn data_side_is_a_nudge(
         return false;
     };
     matches!(
-        tabular_answer::prepare_if_data_only(question, &folder, &scope.data_mode, &locale, &index),
-        Ok(Some(tabular_answer::PendingAnswer::Done(
-            TabularAnswer::Nudge { .. }
-        )))
+        tabular_answer::prepare_if_data_only_with_carry_over(
+            question,
+            &folder,
+            &scope.data_mode,
+            &locale,
+            &index,
+            carry,
+        ),
+        Ok((
+            Some(tabular_answer::PendingAnswer::Done(
+                TabularAnswer::Nudge { .. }
+            )),
+            _
+        ))
     )
 }
 
@@ -2937,6 +3030,7 @@ async fn mixed_data_only_tier(
     question: &str,
     scope: &AnalysisScope,
     targeting_request: &TargetingRequest,
+    carry: Option<&TableCarryOver>,
     measured: &mut RetrievalDiagnostics,
 ) -> Result<Option<AskAnswer>, AppError> {
     let (data_folder, locale, server_url, model_alias, idle_timeout) = state.read(|settings| {
@@ -2979,12 +3073,19 @@ async fn mixed_data_only_tier(
         }
         None => scope.data_mode.clone(),
     };
-    let prepared = tabular_answer::prepare_if_data_only(
+    let (prepared, carry_report) = tabular_answer::prepare_if_data_only_with_carry_over(
         question,
         &folder,
-        &effective_selection,
+        selection_for_follow_up(
+            carry,
+            question,
+            locale,
+            &scope.data_mode,
+            &effective_selection,
+        ),
         locale,
         &index,
+        carry,
     )?;
     // Counted even when the question turns out not to be data-only: the workbooks were read
     // either way, and the mixed tier that follows reads them from the cache this just filled.
@@ -3008,13 +3109,16 @@ async fn mixed_data_only_tier(
         &tabular_answer::selection_facts(question, &folder, &scope.data_mode),
         workbook_use::Answered::Engine(&answer),
     );
-    Ok(Some(AskAnswer {
-        tabular_answer: Some(answer),
-        documents_not_needed: true,
-        targeting: targeting_plan.report(false),
-        workbook_use,
-        ..AskAnswer::default()
-    }))
+    Ok(Some(
+        AskAnswer {
+            tabular_answer: Some(answer),
+            documents_not_needed: true,
+            targeting: targeting_plan.report(false),
+            workbook_use,
+            ..AskAnswer::default()
+        }
+        .with_carry_over(carry_report),
+    ))
 }
 
 /// What a set sentence needs besides the finder: the identifiers the packs read in what the user typed (in
@@ -3462,6 +3566,8 @@ async fn mixed_tier(
     // program: it is the table side of the turn instead of what the question would classify as, and
     // `ANALYSIS_ADDENDUM` joins the instruction. `None` for every ordinary question.
     known_figure: Option<TabularAnswer>,
+    // The state the last table answer left: a short follow-up continues it (TABULAR step 11).
+    carry: Option<&TableCarryOver>,
 ) -> Result<AskAnswer, AppError> {
     let (
         work_folder,
@@ -3576,15 +3682,25 @@ async fn mixed_tier(
         None => scope.data_mode.clone(),
     };
     let analysis = known_figure.is_some();
-    let pending = match known_figure {
-        Some(figure) => tabular_answer::PendingAnswer::Done(figure),
-        None => tabular_answer::prepare_for_mixed(
+    let (pending, carry_report) = match known_figure {
+        Some(figure) => (
+            tabular_answer::PendingAnswer::Done(figure),
+            CarryReport::default(),
+        ),
+        None => tabular_answer::prepare_for_mixed_with_carry_over(
             question,
             &folder,
-            &effective_selection,
+            selection_for_follow_up(
+                carry,
+                question,
+                &locale,
+                &scope.data_mode,
+                &effective_selection,
+            ),
             &locale,
             &index,
             &document_paths,
+            carry,
         )?,
     };
     measured.routing_ms += stage.lap_ms();
@@ -3690,13 +3806,20 @@ async fn mixed_tier(
     // value), computed from what the user ticked and not from the knowledge base's narrowed list
     // (`tabular_answer::question_cards`). Doors 1 to 3 have returned before this function, so
     // `implied_single` needs no filtering here.
-    let cards = tabular_answer::question_cards(
+    // The workbook a short follow-up continued is the one the question is about, although it does not name it.
+    let continued = carry_report
+        .inherited
+        .as_ref()
+        .and(carry_report.next.as_ref())
+        .map(|next| next.workbook.as_str());
+    let cards = tabular_answer::question_cards_carrying(
         question,
         &folder,
         &scope.data_mode,
         &locale,
         &implied_by_entity_candidates(&targeting_plan),
         card_budget_chars(&budget),
+        continued,
     );
     let card_block = &cards.block;
     let implied = &cards.implied;
@@ -3834,7 +3957,8 @@ async fn mixed_tier(
         targeting: targeting_report,
         workbook_use,
         ..AskAnswer::default()
-    })
+    }
+    .with_carry_over(carry_report))
 }
 
 /// Sidecar discovery: look next to the executable, a few ancestors up (so `tauri dev` can see

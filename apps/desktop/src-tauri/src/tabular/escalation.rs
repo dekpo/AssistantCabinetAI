@@ -12,6 +12,7 @@
 //! model writes and the engines compute - so that session does not have to invent the
 //! model-facing text under pressure.
 
+use super::carry_over::CarriedParts;
 use super::engine::{
     AppliedFilter, TabularDerivation, TabularLocator, TabularOutcome, TabularValue,
 };
@@ -91,6 +92,9 @@ pub struct CalculationRecord<'a> {
     /// (TABULAR step 10): `(sent, matching)`. `None` when no row was sent, which is every
     /// explanation of a calculation. The rows themselves are never part of the record.
     pub rows_listed: Option<(usize, usize)>,
+    /// What a follow-up question took from the previous one (TABULAR step 11), so that the record states
+    /// which parts of the reading were not in the question as typed. `None` for any other figure.
+    pub carried: Option<&'a CarriedParts>,
 }
 
 /// The record of a calculation, as text for the model: what was understood from the question, the sheet
@@ -149,6 +153,12 @@ pub fn format_calculation_record(record: &CalculationRecord<'_>) -> Option<Strin
             .collect();
         lines.push(format!("Understood as: {}", filters.join("; ")));
     }
+    if let Some(carried) = record.carried {
+        lines.push(format!(
+            "Inherited from the previous question, not written in this one: {}",
+            describe_carried(carried).join("; ")
+        ));
+    }
     let plural = if row_count == 1 { "" } else { "s" };
     lines.push(match record.data_rows {
         Some(total) => format!("Rows: {row_count} kept out of {total} data rows"),
@@ -175,6 +185,25 @@ pub fn format_calculation_record(record: &CalculationRecord<'_>) -> Option<Strin
     }
     lines.push(format!("Result: {}", describe_value(record.value)));
     Some(lines.join("\n"))
+}
+
+/// The parts of a reading a follow-up took from the previous question, in words for the record.
+fn describe_carried(carried: &CarriedParts) -> Vec<String> {
+    let mut parts = vec!["the workbook".to_string()];
+    if carried.sheet {
+        parts.push("the sheet".to_string());
+    }
+    if let Some(column) = &carried.column {
+        parts.push(format!("column \"{column}\""));
+    }
+    if carried.operation.is_some() {
+        parts.push("the operation".to_string());
+    }
+    if let Some(group) = &carried.group_by {
+        parts.push(format!("grouping by \"{group}\""));
+    }
+    parts.extend(carried.filters.iter().map(describe_applied_filter));
+    parts
 }
 
 fn numeric_of(value: &TabularValue) -> Option<&super::engine::NumericAggregate> {
@@ -412,6 +441,7 @@ mod tests {
             locator,
             derivation,
             rows_listed: None,
+            carried: None,
         }
     }
 
@@ -602,5 +632,37 @@ mod tests {
         let evidence = format_evidence(&outcome).unwrap();
         assert!(evidence.contains("1 row"));
         assert!(!evidence.contains("1 rows"));
+    }
+
+    #[test]
+    fn the_record_states_what_a_follow_up_took_from_the_previous_question() {
+        let (value, locator, derivation) = filtered_sum();
+        let carried = CarriedParts {
+            workbook: true,
+            sheet: true,
+            column: Some("Montant TTC".into()),
+            operation: Some(super::super::carry_over::OperationKind::Sum),
+            group_by: None,
+            filters: vec![AppliedFilter::Equals {
+                column: "Statut".into(),
+                value: "a payer".into(),
+            }],
+        };
+        let mut record = record_of(&value, &locator, &derivation);
+        record.carried = Some(&carried);
+        let text = format_calculation_record(&record).unwrap();
+
+        assert!(
+            text.contains(
+                "Inherited from the previous question, not written in this one: the workbook; \
+                 the sheet; column \"Montant TTC\"; the operation; Statut = \"a payer\""
+            ),
+            "{text}"
+        );
+        let without = format_calculation_record(&record_of(&value, &locator, &derivation)).unwrap();
+        assert!(
+            !without.contains("Inherited"),
+            "an ordinary figure states nothing inherited"
+        );
     }
 }

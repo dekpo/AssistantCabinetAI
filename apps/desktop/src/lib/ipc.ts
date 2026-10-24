@@ -836,6 +836,49 @@ export type AppliedFilter =
   | { kind: "date_range"; column: string; start: string; end: string }
   | { kind: "in"; column: string; values: string[] };
 
+/** The machine name of the operation a table answer ran (TABULAR step 11). */
+export type CarryOperation =
+  | "count"
+  | "distinct"
+  | "sum"
+  | "min"
+  | "max"
+  | "mean"
+  | "median"
+  | "group_sum"
+  | "largest_group"
+  | "least_group"
+  | "top_groups"
+  | "count_per_group"
+  | "largest_row"
+  | "filter"
+  | "sort";
+
+/** What a table answer leaves for a short follow-up ("and for March?"): names and filter values
+ * only, no cell value. Kept on the entry of the answer and sent back with the next question, where
+ * Rust distrusts it (checked against the real selection and inventory; anything that does not hold
+ * is dropped). Cleared with the conversation (TABULAR step 11). */
+export interface TableCarryOver {
+  workbook: string;
+  sheet: string | null;
+  column: string | null;
+  operation: CarryOperation;
+  filters: AppliedFilter[];
+  groupBy: string | null;
+  topN: number | null;
+  descending: boolean;
+}
+
+/** What a follow-up took from the previous question, for the line under the answer to mark. */
+export interface CarriedParts {
+  workbook: boolean;
+  sheet: boolean;
+  column: string | null;
+  operation: CarryOperation | null;
+  groupBy: string | null;
+  filters: AppliedFilter[];
+}
+
 /** Where inside a workbook a value came from: the tabular sibling of `Evidence.pageNumber`. */
 export interface TabularLocator {
   sheet: string;
@@ -991,6 +1034,8 @@ export type TabularAnswer =
   | { kind: "which_measure"; file: string; groupColumn: string; candidates: string[] }
   /** A residual word named real data in more than one reachable column: asked, never picked. */
   | { kind: "which_column"; file: string; value: string; candidates: string[] }
+  /** A short follow-up fits several columns of the workbook it continues: asked, never picked. */
+  | { kind: "which_follow_up_column"; file: string; candidates: string[] }
   | { kind: "workbook_unreadable"; file: string }
   | { kind: "workbook_not_analysed"; file: string }
   | { kind: "which_workbook"; candidates: string[]; hints?: WorkbookHint[] }
@@ -1188,6 +1233,11 @@ export interface AskAnswer {
   /** "Expliquer le calcul": the model's explanation of the method behind the figure on screen. `answer`
    * is then empty; the figure of the entry stays. Null on every other path. */
   explanation: CalculationExplanation | null;
+  /** The state this table answer leaves for a short follow-up. Null unless the answer is a figure the
+   * engine computed from an operation that can be continued. */
+  tableCarryOver: TableCarryOver | null;
+  /** What this answer took from the previous question (a follow-up). Null for a question that stood alone. */
+  carriedOver: CarriedParts | null;
 }
 
 /** The figure on screen, sent back with "Expliquer le calcul" and "Demander a l'IA". The program
@@ -1203,6 +1253,9 @@ export type CalculationFollowUpKind = "explain" | "analyse";
 export interface CalculationFollowUp {
   kind: CalculationFollowUpKind;
   shown: ShownCalculation;
+  /** The state the question of a follow-up answer was asked with: such a figure does not come out of
+   * its short question alone (TABULAR step 11). */
+  tableCarryOver?: TableCarryOver;
 }
 
 /** What the model wrote when asked to explain a calculation. */
@@ -1221,6 +1274,8 @@ export interface CalculationExplanation {
 export interface AskOptions {
   /** Explain or analyse the figure of an answer; the scope sent is the one that answer was given under. */
   calculationFollowUp?: CalculationFollowUp;
+  /** The state the last table answer of the conversation left: a short follow-up continues it. */
+  tableCarryOver?: TableCarryOver;
 }
 
 export type WorkbookUseHow =
@@ -1243,6 +1298,10 @@ export type WorkbookUseReason =
   | "ambiguous_name"
   | "not_relevant"
   | "not_sent"
+  /** The workbook of the previous table answer, which a short follow-up continued. */
+  | "carried_over"
+  /** A follow-up relied on the previous answer's workbook, sheet or column and it no longer holds. */
+  | "carry_over_dropped"
   /** Named for a letter and not used: it holds several sheets and she did not say which. */
   | "sheet_to_choose";
 
@@ -1812,6 +1871,7 @@ export function askWithSources(
     history,
     targeting,
     calculationFollowUp: options.calculationFollowUp,
+    tableCarryOver: options.tableCarryOver,
     onEvent: channel,
   });
 }

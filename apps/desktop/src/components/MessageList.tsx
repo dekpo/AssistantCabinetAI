@@ -37,6 +37,7 @@ export function MessageList({
   onRegenerate,
   onExplainCalculation,
   onAnalyseCalculation,
+  onAskAlone,
   onAnalyse,
   analysing,
   onRetarget,
@@ -56,6 +57,8 @@ export function MessageList({
   onExplainCalculation: (answerEntryId: string) => void;
   /** "Demander a l'IA" under a computed figure: the analysis replaces the answer, the figure stays. */
   onAnalyseCalculation: (answerEntryId: string) => void;
+  /** A follow-up answer, asked again as a question of its own, with nothing of the previous question. */
+  onAskAlone?: (answerEntryId: string) => void;
   /** Analyse the folder, then ask this question again. Offered under the one answer that says the
    * documents have not been read yet, because that is the only thing that answer needs. */
   onAnalyse: (answerEntryId: string) => void;
@@ -425,6 +428,19 @@ export function MessageList({
               ))}
               {/* What was done with each workbook the question named or she ticked, last among the notes. */}
               <WorkbookUseNotes lines={annotationNotes.workbook} />
+              {/* A follow-up took part of its reading from the previous question: the line above says
+                  which, this button asks the question again as a question of its own. */}
+              {idle && onAskAlone !== undefined && entry.carriedOver !== undefined && askedAbout?.role === "user" ? (
+                <p className="message__actions">
+                  <button
+                    type="button"
+                    className="button button--compact"
+                    onClick={() => onAskAlone(entry.id)}
+                  >
+                    {t("actions.askWithoutPrevious")}
+                  </button>
+                </p>
+              ) : null}
               {/* What the knowledge base did to the search, and the names it asks about. Under the
                   other notes, above the buttons that re-ask the question. */}
               <TargetingNote

@@ -30,7 +30,12 @@ function lineOf(t: Translator, use: WorkbookUse): WorkbookUseLine {
   const path = displayPathOfKey("data", use.file);
   switch (use.how) {
     case "computed":
-      return { text: t("workbookUse.computed", { path }), caution: false };
+      return {
+        text: t(use.reason === "carried_over" ? "workbookUse.computedCarried" : "workbookUse.computed", {
+          path,
+        }),
+        caution: false,
+      };
     case "plan_prepared":
       return { text: t("workbookUse.planPrepared", { path }), caution: false };
     // The model explained the method of a figure: informative, not a caution (TABULAR step 06).

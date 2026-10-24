@@ -187,6 +187,7 @@
     "regenerate": "Régénérer",
     "regenerateWithModel": "Demander à l'IA",
     "explainCalculation": "Expliquer le calcul",
+    "askWithoutPrevious": "Poser sans reprendre la question précédente",
     "analyseCalculation": "Demander à l'IA",
     "retry": "Réessayer",
     "save": "Enregistrer",
@@ -357,6 +358,7 @@
   },
   "workbookUse": {
     "computed": "{path} : réponse calculée par le programme, sans l'IA.",
+    "computedCarried": "{path} : réponse calculée par le programme, sans l'IA, à partir de la question précédente.",
     "explained": "{path} : l'IA a expliqué le calcul à partir de sa fiche, sans recevoir aucune ligne du tableur.",
     "planPrepared": "{path} : le plan de lettres est préparé à partir de ses lignes, sur cet ordinateur.",
     "cardSent": {
@@ -364,7 +366,8 @@
       "implied_single": "{path} : seul tableur coché, l'IA en a reçu la structure.",
       "implied_by_word": "{path} : votre question parle d'un tableur, l'IA en a reçu la structure.",
       "implied_by_column": "{path} : votre question cite l'une de ses colonnes, l'IA en a reçu la structure.",
-      "implied_by_entity": "{path} : il contient ce que votre question cite, l'IA en a reçu la structure."
+      "implied_by_entity": "{path} : il contient ce que votre question cite, l'IA en a reçu la structure.",
+      "carried_over": "{path} : le fichier de la question précédente, l'IA en a reçu la structure."
     },
     "cardTruncated": " Il est trop large : une partie de ses colonnes n'a pas été transmise.",
     "notUsed": {
@@ -374,6 +377,7 @@
       "changed_since_analysis": "{path} a changé ou n'existe plus depuis que vous l'avez coché : il n'a pas servi. Relancez l'analyse, puis cochez-le à nouveau.",
       "ambiguous_name": "« {path} » peut désigner plusieurs tableurs ({candidates}) : aucun n'a servi. Écrivez le nom complet de celui que vous voulez.",
       "not_sent": "{path} : l'IA n'a pas rédigé de réponse, elle n'a donc pas lu sa structure.",
+      "carry_over_dropped": "La question précédente portait sur {path}, qui n'est plus utilisable ici (décoché, modifié, feuille ou colonne disparue) : votre question est lue seule.",
       "sheet_to_choose": "{path} contient plusieurs feuilles : il n'a pas servi à remplir les courriers. Écrivez le nom de la feuille dans votre question.",
       "not_relevant_one": "{count} tableur coché n'a pas servi pour cette réponse : citez-le par son nom pour l'inclure.",
       "not_relevant_many": "{count} tableurs cochés n'ont pas servi pour cette réponse : citez par son nom celui que vous voulez inclure."
@@ -990,6 +994,29 @@
     "unparsedNote": "{count}.",
     "whichColumn": "« {value} » existe dans plusieurs colonnes possibles : {columns}. Précisez laquelle, par exemple {first}.",
     "understoodAs": "Compris comme : {filters}.",
+    "whichFollowUpColumn": "Plusieurs colonnes de {file} peuvent servir ici : {columns}. Nommez celle que vous voulez, par exemple « Et le total de {first} ? »",
+    "carriedOver": "Repris de la question précédente : {parts}.",
+    "carriedWorkbook": "le fichier",
+    "carriedColumn": "la colonne « {column} »",
+    "carriedGroupBy": "le regroupement par « {column} »",
+    "carriedSeparator": " ; ",
+    "carriedOperation": {
+      "count": "le nombre de lignes",
+      "distinct": "les valeurs distinctes",
+      "sum": "la somme",
+      "min": "le minimum",
+      "max": "le maximum",
+      "mean": "la moyenne",
+      "median": "la médiane",
+      "group_sum": "le total par groupe",
+      "largest_group": "le groupe au plus grand total",
+      "least_group": "le groupe au plus petit total",
+      "top_groups": "les groupes aux plus grands totaux",
+      "count_per_group": "le nombre de lignes par groupe",
+      "largest_row": "la ligne la plus grande",
+      "filter": "la liste des lignes",
+      "sort": "le tri"
+    },
     "noRowMatched": "Aucune ligne ne correspond à ces critères. Vérifiez la ligne « Compris comme » ci-dessus : si elle ne reflète pas votre question, reformulez-la.",
     "interpretedRephrase": "La question elle-même a été comprise par le modèle avant que le moteur ne calcule cette valeur. Si ce n'est pas ce que vous vouliez dire, reformulez votre question.",
     "filterEquals": "{column} = {value}",

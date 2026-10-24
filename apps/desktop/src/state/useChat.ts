@@ -22,6 +22,7 @@ import {
   type EntryExplanation,
   type StoredCalculation,
 } from "../lib/calculationFollowUp";
+import { carryOverOf } from "../lib/carryOver";
 import { conversationHistory } from "../lib/history";
 import { formatTabularAnswer, tabularSourceOf, type TabularSource } from "../lib/tabularAnswer";
 import {
@@ -31,6 +32,7 @@ import {
   type ChatTurn,
   type Evidence,
   type EvidenceCoverage,
+  type CarriedParts,
   type CombinedScope,
   type FolderAnswer,
   type MixedPartUnavailable,
@@ -39,6 +41,7 @@ import {
   type NumericCorrection,
   type RetrievalDiagnostics,
   type TabularAnswer,
+  type TableCarryOver,
   type TargetingReport,
   type WorkbookCardUse,
   type WorkbookUse,
@@ -200,6 +203,14 @@ export interface ChatEntry extends ChatTurn {
   /** The explanation of the method behind the figure, added under it (`lib/calculationFollowUp.ts`).
    * Replaced, never stacked, when the button is pressed again. */
   explanation?: EntryExplanation;
+  /** The state this table answer leaves for a short follow-up ("et pour mars ?"): names and filter
+   * values only. The next question is asked with the last one of the conversation, read off the
+   * entries just before it (`lib/carryOver.ts`), so a regenerate or an edit reads the state as it was
+   * at that point. Absent for an answer that is not a figure the engine computed. */
+  tableCarryOver?: TableCarryOver;
+  /** What this answer took from the previous question, when it was a follow-up: the line under the
+   * answer marks it and offers to ask the question again without it. */
+  carriedOver?: CarriedParts;
 }
 
 export interface ChatState {
@@ -231,6 +242,9 @@ export interface ChatState {
   /** "Demander a l'IA" under a figure: the model analyses the figure the program computed again, with
    * the ticked documents when there are some. Replaces the answer, as a regenerate does. */
   analyseCalculation: (answerEntryId: string) => Promise<void>;
+  /** A follow-up answer, asked again as a question of its own: nothing is taken from the previous
+   * question. Replaces the answer, as a regenerate does. */
+  askWithoutCarryOver: (answerEntryId: string) => Promise<void>;
   /** Close the error banner. A failure that has already happened should not keep taking up the
    * conversation until the next question succeeds. */
   dismissError: () => void;
@@ -297,6 +311,8 @@ export function useChat(
       /** The analysis of a figure: asked about the figure on screen under the selection that answer was
        * given under (TABULAR step 06). */
       analyse?: StoredCalculation,
+      /** The question stands alone: the state of the previous table answer is not sent. */
+      withoutCarryOver = false,
     ) => {
       if (phase !== "idle" || !hasWorkFolder) {
         return;
@@ -326,6 +342,10 @@ export function useChat(
       const previousTargeting = [...baseEntries]
         .reverse()
         .find((entry) => entry.role === "assistant")?.targeting;
+      /* The same holds for a follow-up on a table ("et pour mars ?"): the state the previous table
+         answer left rides along, read off `baseEntries` so that a regenerate or an edit uses it as it
+         was at that point. Rust checks it again against the real selection (TABULAR step 11). */
+      const previousCarry = withoutCarryOver ? undefined : carryOverOf(baseEntries);
 
       const onDelta = (delta: string) => {
         setPhase(phaseAfterFirstText);
@@ -404,12 +424,29 @@ export function useChat(
           conversationHistory(baseEntries),
           targetingRequestFor(choice, previousTargeting, text),
           onTargeting,
-          analyse === undefined ? {} : { calculationFollowUp: followUpOf("analyse", analyse) },
+          analyse === undefined
+            ? previousCarry === undefined
+              ? {}
+              : { tableCarryOver: previousCarry }
+            : { calculationFollowUp: followUpOf("analyse", analyse) },
         );
+        /* The state a figure was asked with is kept on its entry only when it was applied: the short
+           question gives no figure without it, so "Expliquer le calcul" sends it back. */
+        const askedWith =
+          analyse !== undefined
+            ? analyse.tableCarryOver
+            : result.carriedOver === null
+              ? undefined
+              : previousCarry;
         /* Every path below merges into the entry, so what the knowledge base did, how long the
            question took and what was done with each workbook are put on it once, here, whichever
            path answered. */
-        if (result.targeting !== null || result.diagnostics !== null || result.workbookUse.length > 0) {
+        if (
+          result.targeting !== null ||
+          result.diagnostics !== null ||
+          result.workbookUse.length > 0 ||
+          result.tableCarryOver !== null
+        ) {
           setEntries((current) =>
             current.map((entry) =>
               entry.id === answerId
@@ -418,6 +455,8 @@ export function useChat(
                     ...(result.targeting === null ? {} : { targeting: result.targeting }),
                     ...(result.diagnostics === null ? {} : { diagnostics: result.diagnostics }),
                     ...(result.workbookUse.length === 0 ? {} : { workbookUse: result.workbookUse }),
+                    ...(result.tableCarryOver === null ? {} : { tableCarryOver: result.tableCarryOver }),
+                    ...(result.carriedOver === null ? {} : { carriedOver: result.carriedOver }),
                   }
                 : entry,
             ),
@@ -432,7 +471,12 @@ export function useChat(
              disambiguation) is the whole answer, formatted the same way tier 2's own is. */
           const mixed = result.mixedAnswer;
           const source = mixed.table === null ? null : tabularSourceOf(mixed.table);
-          const calculation = storedCalculationOf(mixed.table, answeredUnder, analyse !== undefined);
+          const calculation = storedCalculationOf(
+            mixed.table,
+            answeredUnder,
+            analyse !== undefined,
+            askedWith,
+          );
           const cards: WorkbookCardUse[] = result.workbookUse
             .filter((use) => use.how === "card_sent")
             .map(({ file, rowsSent, rowsTotal }) => ({ file, rowsSent, rowsTotal }));
@@ -510,7 +554,7 @@ export function useChat(
               ? (tabularAnswer.modelAttempt ?? null)
               : null;
           const retryable = tabularAnswer.kind === "value" || tabularAnswer.kind === "nudge";
-          const calculation = storedCalculationOf(tabularAnswer, answeredUnder);
+          const calculation = storedCalculationOf(tabularAnswer, answeredUnder, false, askedWith);
           setEntries((current) =>
             current.map((entry) =>
               entry.id === answerId
@@ -718,6 +762,19 @@ export function useChat(
     [runTurn, entries],
   );
 
+  const askWithoutCarryOver = useCallback(
+    (answerEntryId: string) => {
+      const truncated = truncateForRegenerate(entries, answerEntryId);
+      const answer = entries.find((entry) => entry.id === answerEntryId);
+      if (truncated === null || answer === undefined) {
+        return Promise.resolve();
+      }
+      // The question as she typed it, with nothing of the previous one: the way a first question is asked.
+      return runTurn(truncated.base, truncated.question, false, answer.targetingChoice, undefined, true);
+    },
+    [runTurn, entries],
+  );
+
   const analyseCalculation = useCallback(
     (answerEntryId: string) => {
       const truncated = truncateForRegenerate(entries, answerEntryId);
@@ -896,6 +953,7 @@ export function useChat(
     retarget,
     explainCalculation,
     analyseCalculation,
+    askWithoutCarryOver,
     stop,
     dismissError,
     clear,

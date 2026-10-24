@@ -54,6 +54,12 @@ export function formatTabularAnswer(
         columns: answer.candidates.join(", "),
         first: answer.candidates[0] ?? "",
       });
+    case "which_follow_up_column":
+      return t("tabularAnswer.whichFollowUpColumn", {
+        file: answer.file,
+        columns: answer.candidates.join(", "),
+        first: answer.candidates[0] ?? "",
+      });
     case "which_column":
       return t("tabularAnswer.whichColumn", {
         value: answer.value,

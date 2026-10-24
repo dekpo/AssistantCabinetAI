@@ -28,6 +28,7 @@ use crate::gateway::{ChatTurn, GatewayClient, GROUNDED_TEMPERATURE};
 use crate::index_store::IndexStore;
 use crate::knowledge::targeting;
 use crate::number_check;
+use crate::tabular::carry_over::{CarryReport, TableCarryOver};
 use crate::tabular::engine::{TabularDerivation, TabularValue};
 use crate::tabular_answer::{self, PendingAnswer, TabularAnswer};
 
@@ -65,6 +66,11 @@ pub struct ShownCalculation {
 pub struct CalculationFollowUp {
     pub kind: FollowUpKind,
     pub shown: ShownCalculation,
+    /// The state the previous table answer had left when this figure was asked for: a figure that was
+    /// a follow-up ("and for March?") does not come out of its short question alone (TABULAR step 11).
+    /// Untrusted, like the rest: it is checked again exactly as at the first answer.
+    #[serde(default)]
+    pub table_carry_over: Option<TableCarryOver>,
 }
 
 /// The figure the program computes again for `question` under `selection` (what the answer was given
@@ -83,35 +89,66 @@ pub fn recompute(
     shown: &ShownCalculation,
     document_names: Option<&[String]>,
 ) -> Result<TabularAnswer, AppError> {
+    recompute_with_carry_over(
+        question,
+        data,
+        selection,
+        locale,
+        index,
+        shown,
+        document_names,
+        None,
+    )
+    .map(|(figure, _)| figure)
+}
+
+/// `recompute`, applying the carry-over the question was asked with, exactly as the tier that first
+/// answered it did (TABULAR step 11).
+#[allow(clippy::too_many_arguments)]
+pub fn recompute_with_carry_over(
+    question: &str,
+    data: &DataFolder,
+    selection: &ScopeMode,
+    locale: &str,
+    index: &IndexStore,
+    shown: &ShownCalculation,
+    document_names: Option<&[String]>,
+    carry: Option<&TableCarryOver>,
+) -> Result<(TabularAnswer, CarryReport), AppError> {
     let narrowed =
         targeting::narrowed_data_selection(data, selection, std::slice::from_ref(&shown.file));
-    let mut candidates: Vec<TabularAnswer> = Vec::new();
+    let mut candidates: Vec<(TabularAnswer, CarryReport)> = Vec::new();
     match &shown.derivation {
         TabularDerivation::Computed { .. } => {
-            candidates.push(settled(tabular_answer::prepare(
-                question, data, &narrowed, locale, index, false,
-            )?));
+            let (pending, report) = tabular_answer::prepare_with_carry_over(
+                question, data, &narrowed, locale, index, false, carry,
+            )?;
+            candidates.push((settled(pending), report));
             if let Some(names) = document_names {
-                candidates.push(settled(tabular_answer::prepare_for_mixed(
-                    question, data, &narrowed, locale, index, names,
-                )?));
+                let (pending, report) = tabular_answer::prepare_for_mixed_with_carry_over(
+                    question, data, &narrowed, locale, index, names, carry,
+                )?;
+                candidates.push((settled(pending), report));
             }
         }
         TabularDerivation::InterpretedByModel {
             plan, model_alias, ..
-        } => candidates.push(tabular_answer::replay_model_plan(
-            question,
-            data,
-            &narrowed,
-            locale,
-            index,
-            plan,
-            model_alias,
-        )?),
+        } => candidates.push((
+            tabular_answer::replay_model_plan(
+                question,
+                data,
+                &narrowed,
+                locale,
+                index,
+                plan,
+                model_alias,
+            )?,
+            CarryReport::default(),
+        )),
     }
     candidates
         .into_iter()
-        .find(|each| is_the_figure_shown(each, shown))
+        .find(|(each, _)| is_the_figure_shown(each, shown))
         .ok_or(AppError::ScopeUnavailable)
 }
 

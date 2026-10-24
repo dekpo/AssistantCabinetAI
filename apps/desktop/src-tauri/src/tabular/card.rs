@@ -120,9 +120,11 @@ fn shape_of(file: &str, inventory: &TabularInventory, sheets: Option<&[String]>)
                 .map(|column| column.index + 1)
                 .max()
                 .unwrap_or(0);
-            let mut columns = vec![String::new(); width];
+            // The grid starts at the first used cell, not always at column A.
+            let origin = origin_of(sheet);
+            let mut columns = vec![String::new(); origin + width];
             for column in &sheet.columns {
-                columns[column.index] = column.name.clone();
+                columns[origin + column.index] = column.name.clone();
             }
             SheetShape {
                 name: sheet.name.clone(),
@@ -237,15 +239,24 @@ fn sheet_block(sheet: &SheetInventory, format: TabularFormat, lean: bool) -> She
     let counted = count_text(sheet.row_count, "data row", "data rows");
     // The rows are named by their spreadsheet numbers, so a figure the model derives from them
     // ("rows 2 to 10") is a figure the card states, and the header is plainly not a data row.
-    let (rows, header) = match sheet.header_row {
-        Some(index) => {
-            let first = index + 2;
+    let layout = sheet.layout.as_ref();
+    // The header's row as the spreadsheet numbers it: the layout knows it when rows above the table
+    // or between its parts were moved out of the grid.
+    let header_number = layout
+        .and_then(|layout| layout.header_source_row)
+        .map(|row| row as usize)
+        .or(sheet.header_row.map(|index| index + 1));
+    let contiguous = layout.is_none_or(|layout| layout.row_numbers.is_none());
+    let (rows, header) = match header_number {
+        Some(number) => {
+            let first = number + 1;
             let located = match sheet.row_count {
                 0 => counted,
                 1 => format!("{counted}, on row {first}"),
-                many => format!("{counted}, on rows {first} to {}", first + many - 1),
+                many if contiguous => format!("{counted}, on rows {first} to {}", first + many - 1),
+                _ => format!("{counted}, from row {first}"),
             };
-            (located, format!("header on row {}, not counted", index + 1))
+            (located, format!("header on row {number}, not counted"))
         }
         None => (
             counted,
@@ -277,7 +288,7 @@ fn sheet_block(sheet: &SheetInventory, format: TabularFormat, lean: bool) -> She
             let padding = " ".repeat(pad.saturating_sub(name.chars().count()));
             format!(
                 "    {}  {}{}  {}",
-                column_letter(column.index),
+                column_letter(origin_of(sheet) + column.index),
                 name,
                 padding,
                 column_description(column, lean)
@@ -285,8 +296,70 @@ fn sheet_block(sheet: &SheetInventory, format: TabularFormat, lean: bool) -> She
         })
         .collect();
     SheetBlock {
-        head: format!("  {label}: {rows}; {header}"),
+        head: format!("  {label}: {rows}; {header}{}", layout_facts(sheet)),
         columns,
+    }
+}
+
+/// The column the grid's first column is (0 = A): a table that starts in column C is lettered C.
+fn origin_of(sheet: &SheetInventory) -> usize {
+    sheet
+        .layout
+        .as_ref()
+        .map_or(0, |layout| layout.origin_col as usize)
+}
+
+/// What the layout rules did to the sheet, in a few words for the model: rows the file hides, a total
+/// row left out, merged cells filled, notes around the table, the table's range. Empty for a plain
+/// sheet. Counts and positions, never a value.
+fn layout_facts(sheet: &SheetInventory) -> String {
+    let Some(layout) = sheet.layout.as_ref() else {
+        return String::new();
+    };
+    let mut facts: Vec<String> = Vec::new();
+    if layout.hidden_rows > 0 {
+        let how = if layout.filter_active {
+            "hidden by an active filter"
+        } else {
+            "hidden in the file"
+        };
+        let noun = if layout.hidden_rows == 1 {
+            "row"
+        } else {
+            "rows"
+        };
+        facts.push(format!("{} {noun} {how}", layout.hidden_rows));
+    }
+    if layout.total_rows > 0 {
+        let noun = if layout.total_rows == 1 {
+            "total row"
+        } else {
+            "total rows"
+        };
+        facts.push(format!(
+            "{} {noun} at the foot, not counted",
+            layout.total_rows
+        ));
+    }
+    if layout.merged_filled > 0 {
+        facts.push(format!("{} merged cells filled down", layout.merged_filled));
+    }
+    if layout.note_rows_left_out > 0 {
+        facts.push(format!(
+            "{} note rows around the table left out",
+            layout.note_rows_left_out
+        ));
+    }
+    if let Some(name) = &layout.excel_table {
+        facts.push(format!("Excel Table \"{}\"", clean(name, MAX_NAME_CHARS)));
+    }
+    if let Some(range) = &layout.range {
+        facts.push(format!("range {range}"));
+    }
+    if facts.is_empty() {
+        String::new()
+    } else {
+        format!("; {}", facts.join(", "))
     }
 }
 
@@ -512,6 +585,7 @@ mod tests {
             unit: None,
             unparsed_count: 0,
             ambiguous_date: false,
+            error_count: 0,
         }
     }
 
@@ -529,6 +603,7 @@ mod tests {
             columns,
             has_formulas: false,
             formula_cells: 0,
+            layout: None,
         }
     }
 
@@ -538,6 +613,8 @@ mod tests {
             relative_path: "ignored.xlsx".to_string(),
             format,
             sheets,
+            facts: Default::default(),
+            layout_version: 0,
         }
     }
 
@@ -621,6 +698,57 @@ mod tests {
             \x20   D  Statut       text\n\
             \x20   E  Total        numeric, formulas";
         assert_eq!(card.text, expected);
+    }
+
+    #[test]
+    fn the_card_states_the_layout_and_letters_columns_from_the_first_used_one() {
+        use crate::tabular::layout::SheetLayout;
+        let mut book = inventory(
+            TabularFormat::Xlsx,
+            vec![sheet(
+                "Journal",
+                Some(0),
+                40,
+                vec![
+                    column(0, "Date", ColumnType::Date),
+                    column(1, "Montant", ColumnType::Numeric),
+                ],
+            )],
+        );
+        book.sheets[0].layout = Some(SheetLayout {
+            raw_sheet: "Journal".into(),
+            // The grid starts in column C, the header is on row 3 of the file, two rows are hidden
+            // by a filter, one total row and two blank rows were left out of the grid.
+            origin_col: 2,
+            header_source_row: Some(3),
+            hidden_rows: 2,
+            filter_active: true,
+            total_rows: 1,
+            blank_rows_ignored: 2,
+            merged_filled: 1,
+            row_numbers: Some(
+                (4..44)
+                    .collect::<Vec<u32>>()
+                    .into_iter()
+                    .map(|n| n + u32::from(n > 20))
+                    .collect(),
+            ),
+            ..SheetLayout::default()
+        });
+        let text = build_card(&book, &options("j.xlsx", 10_000)).text;
+        assert!(text.contains("header on row 3, not counted"), "{text}");
+        // Blank rows were taken out of the grid: no range is claimed, only where the rows start.
+        assert!(text.contains("40 data rows, from row 4"), "{text}");
+        assert!(text.contains("2 rows hidden by an active filter"), "{text}");
+        assert!(
+            text.contains("1 total row at the foot, not counted"),
+            "{text}"
+        );
+        assert!(text.contains("1 merged cells filled down"), "{text}");
+        assert!(text.contains("    C  Date"), "{text}");
+        assert!(text.contains("    D  Montant"), "{text}");
+        let shape = build_card(&book, &options("j.xlsx", 10_000)).shape;
+        assert_eq!(shape.sheets[0].columns, vec!["", "", "Date", "Montant"]);
     }
 
     #[test]

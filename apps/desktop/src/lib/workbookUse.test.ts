@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { CATALOGUES, REFERENCE_LOCALE } from "../i18n/catalogues";
 import { createTranslator, type Catalogue } from "../i18n/translate";
-import type { WorkbookUse, WorkbookUseReason } from "./ipc";
-import { foldedLines, workbookUseLines } from "./workbookUse";
+import type { LayoutNote, WorkbookUse, WorkbookUseReason } from "./ipc";
+import { foldedLines, hiddenRowsOf, workbookUseLines } from "./workbookUse";
 
 const reference = CATALOGUES[REFERENCE_LOCALE] as Catalogue;
 const english = createTranslator(reference, reference);
@@ -103,5 +103,84 @@ describe("folding long lists", () => {
 
   it("folds the informative lines of a longer list and keeps the cautions in view", () => {
     expect(foldedLines([info, info, warn, info])).toStrictEqual({ shown: [warn], folded: [info, info, info] });
+  });
+});
+
+function note(extra: Partial<LayoutNote>): LayoutNote {
+  return {
+    sheet: "Journal",
+    hiddenRows: 0,
+    filteredRows: 0,
+    rowsLeftOut: false,
+    totalRows: 0,
+    mergedFilled: 0,
+    blankRows: 0,
+    noteRows: 0,
+    tables: 1,
+    hiddenSheets: 0,
+    ...extra,
+  };
+}
+
+describe("what the layout of the sheet did to a figure", () => {
+  it("says hidden rows were counted, and cautions about it", () => {
+    const lines = workbookUseLines(english, [
+      use({ how: "computed", layout: note({ hiddenRows: 2 }) }),
+    ]);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[1]?.text).toBe("2 rows hidden in the file are counted in this result.");
+    expect(lines[1]?.caution).toBe(true);
+  });
+
+  it("says they were left out when the answer left them out", () => {
+    const lines = workbookUseLines(french, [
+      use({ how: "computed", layout: note({ filteredRows: 1, rowsLeftOut: true }) }),
+    ]);
+
+    expect(lines[1]?.text).toBe("1 ligne écartée par un filtre du fichier n'est pas utilisée.");
+  });
+
+  it("states a total row, merged cells, notes and hidden sheets without a caution", () => {
+    const lines = workbookUseLines(english, [
+      use({
+        how: "computed",
+        layout: note({ totalRows: 1, mergedFilled: 2, noteRows: 1, hiddenSheets: 1 }),
+      }),
+    ]);
+
+    expect(lines.slice(1).map((line) => line.text)).toStrictEqual([
+      "1 total row at the foot of the table is not counted.",
+      "2 merged cells were copied onto the rows they cover.",
+      "1 note row around the table is not read.",
+      "1 hidden sheet of the workbook is not read: name it to use it.",
+    ]);
+    expect(lines.slice(1).map((line) => line.caution)).toStrictEqual([true, false, false, false]);
+  });
+
+  it("adds nothing for a plain sheet", () => {
+    expect(workbookUseLines(english, [use({ how: "computed", layout: null })])).toHaveLength(1);
+    expect(workbookUseLines(english, [use({ how: "computed" })])).toHaveLength(1);
+  });
+
+  it("asks for a new analysis when the workbook was read by an older version", () => {
+    const lines = workbookUseLines(english, [
+      use({ how: "computed", layout: note({ unread: true }) }),
+    ]);
+
+    expect(lines[1]?.text).toContain("analysed by an older version");
+    expect(lines[1]?.caution).toBe(true);
+  });
+
+  it("finds the hidden rows of the figure for the one click, and none otherwise", () => {
+    expect(hiddenRowsOf([use({ how: "computed", layout: note({ hiddenRows: 2 }) })])).toStrictEqual({
+      count: 2,
+      leftOut: false,
+    });
+    expect(
+      hiddenRowsOf([use({ how: "computed", layout: note({ filteredRows: 3, rowsLeftOut: true }) })]),
+    ).toStrictEqual({ count: 3, leftOut: true });
+    expect(hiddenRowsOf([use({ how: "computed", layout: note({ totalRows: 1 }) })])).toBeNull();
+    expect(hiddenRowsOf(undefined)).toBeNull();
   });
 });

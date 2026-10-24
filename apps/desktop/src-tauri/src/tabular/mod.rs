@@ -20,8 +20,10 @@ pub mod engine;
 pub mod escalation;
 pub mod formula_check;
 pub mod inventory;
-pub mod question;
+pub mod layout;
+pub mod layout_read;
 pub mod query_plan;
+pub mod question;
 pub mod rows;
 pub mod sample;
 pub mod structural;
@@ -48,7 +50,15 @@ pub enum TabularError {
     /// (`docs/SESSION-DATA-04-TABULAR-Engine.md` section 5).
     #[error("workbook_changed")]
     WorkbookChanged,
+    /// An `.xlsx` that is not a zip but an encrypted container: the file asks for a password to
+    /// open (TABULAR step 13). Told apart from a broken file so the interface can say so.
+    #[error("password_protected")]
+    PasswordProtected,
 }
+
+/// The first bytes of a Compound File, the container an Office file is encrypted into. A plain
+/// `.xlsx` is a zip and never starts this way.
+const COMPOUND_FILE_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
 /// One cell, exactly as the adapter read it. A formula's cached value and its expression are
 /// kept apart from each other and from a plain value, because a formula's cached result is a
@@ -142,13 +152,19 @@ pub fn build_inventory_with_workbook(
         .map(|(inventory, workbook, _)| (inventory, workbook))
 }
 
-/// [`build_inventory_with_workbook`], and for each sheet the row of the file every row came from
-/// ([`SourceRows`]). One read of the file.
-pub fn build_inventory_with_source_rows(
-    path: &Path,
-    relative_path: &str,
-    locale: &str,
-) -> Result<(inventory::TabularInventory, Workbook, SourceRows), TabularError> {
+/// A workbook as the adapter read it, before any layout rule: the raw grid (what the typed cell
+/// cache stores), the file row of each grid row, and the layout facts of every sheet.
+pub struct RawWorkbook {
+    pub workbook_id: String,
+    pub format: inventory::TabularFormat,
+    pub workbook: Workbook,
+    pub source_rows: SourceRows,
+    pub facts: layout::FactsBySheet,
+}
+
+/// Reads a file through the adapter its extension selects: one read of the bytes (for the
+/// identity) and one pass of the adapter.
+fn read_raw(path: &Path) -> Result<RawWorkbook, TabularError> {
     let bytes = std::fs::read(path).map_err(|_| TabularError::ReadFailed)?;
     let workbook_id = hash_bytes(&bytes);
     let extension = path
@@ -156,30 +172,104 @@ pub fn build_inventory_with_source_rows(
         .map(|ext| ext.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    let (format, workbook, source_rows) = match extension.as_str() {
+    if matches!(extension.as_str(), "xlsx" | "xlsm") && bytes.starts_with(&COMPOUND_FILE_SIGNATURE)
+    {
+        return Err(TabularError::PasswordProtected);
+    }
+    let (format, workbook, source_rows, facts) = match extension.as_str() {
         "csv" => {
             let (workbook, rows) = csv_adapter::CsvDataSource.open_with_source_rows(path)?;
-            (inventory::TabularFormat::Csv, workbook, rows)
+            (
+                inventory::TabularFormat::Csv,
+                workbook,
+                rows,
+                layout::FactsBySheet::new(),
+            )
         }
         "xls" | "xlsx" | "xlsm" | "ods" => {
-            let (workbook, rows) = xlsx_adapter::XlsxDataSource.open_with_source_rows(path)?;
+            let (workbook, rows, facts) = xlsx_adapter::XlsxDataSource.open_with_facts(path)?;
             let format = if extension == "ods" {
                 inventory::TabularFormat::Ods
             } else {
                 inventory::TabularFormat::Xlsx
             };
-            (format, workbook, rows)
+            (format, workbook, rows, facts)
         }
         _ => return Err(TabularError::UnsupportedExtension),
     };
+    Ok(RawWorkbook {
+        workbook_id,
+        format,
+        workbook,
+        source_rows,
+        facts,
+    })
+}
 
-    let inventory =
-        inventory::TabularInventory::build(relative_path, &workbook_id, format, &workbook, locale);
+/// [`build_inventory_with_workbook`], and for each sheet the row of the file every row came from
+/// ([`SourceRows`]). One read of the file. The workbook is the one the inventory describes: the
+/// layout rules applied (`layout`), hidden and filtered rows kept.
+pub fn build_inventory_with_source_rows(
+    path: &Path,
+    relative_path: &str,
+    locale: &str,
+) -> Result<(inventory::TabularInventory, Workbook, SourceRows), TabularError> {
+    let raw = read_raw(path)?;
+    let (inventory, workbook, source_rows) = inventory::TabularInventory::build_view(
+        relative_path,
+        &raw.workbook_id,
+        raw.format,
+        &raw.workbook,
+        Some(&raw.source_rows),
+        &raw.facts,
+        layout::RowPolicy::Include,
+        locale,
+    );
     Ok((inventory, workbook, source_rows))
 }
 
+/// The sheets the engine reads, from a raw workbook and the layout facts, under a row policy: the
+/// workbook, the inventory that describes it and the file row of each row. Pure, no file read;
+/// what a question runs on whether the raw grid came from the cache or from the file.
+#[allow(clippy::too_many_arguments)]
+pub fn view_of(
+    raw: &Workbook,
+    relative_path: &str,
+    workbook_id: &str,
+    format: inventory::TabularFormat,
+    facts: &layout::FactsBySheet,
+    source_rows: Option<&SourceRows>,
+    policy: layout::RowPolicy,
+    locale: &str,
+) -> (Workbook, inventory::TabularInventory, SourceRows) {
+    let (inventory, workbook, numbers) = inventory::TabularInventory::build_view(
+        relative_path,
+        workbook_id,
+        format,
+        raw,
+        source_rows,
+        facts,
+        policy,
+        locale,
+    );
+    (workbook, inventory, numbers)
+}
+
 /// Re-read a workbook and confirm it still hashes to `expected_workbook_id` before handing back
-/// fresh cells and a fresh inventory to run an operation against.
+/// the raw grid and its layout facts: what the typed cell cache stores and what a view is made of.
+pub fn load_current_raw(
+    path: &Path,
+    expected_workbook_id: &str,
+) -> Result<RawWorkbook, TabularError> {
+    let raw = read_raw(path)?;
+    if raw.workbook_id != expected_workbook_id {
+        return Err(TabularError::WorkbookChanged);
+    }
+    Ok(raw)
+}
+
+/// Re-read a workbook and confirm it still hashes to `expected_workbook_id` before handing back
+/// fresh cells and a fresh inventory to run an operation against (hidden and filtered rows kept).
 ///
 /// This is what `AnalysisScope::resolve`'s `changed`/`missing` reporting does for a *selected*
 /// workbook, applied at the moment the engine actually reads one: a workbook can change between
@@ -193,19 +283,17 @@ pub fn load_current(
     expected_workbook_id: &str,
     locale: &str,
 ) -> Result<(Workbook, inventory::TabularInventory), TabularError> {
-    let inventory = build_inventory(path, relative_path, locale)?;
-    if inventory.workbook_id != expected_workbook_id {
-        return Err(TabularError::WorkbookChanged);
-    }
-    let extension = path
-        .extension()
-        .map(|ext| ext.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    let workbook = match extension.as_str() {
-        "csv" => csv_adapter::CsvDataSource.open(path)?,
-        "xls" | "xlsx" | "xlsm" | "ods" => xlsx_adapter::XlsxDataSource.open(path)?,
-        _ => return Err(TabularError::UnsupportedExtension),
-    };
+    let raw = load_current_raw(path, expected_workbook_id)?;
+    let (workbook, inventory, _) = view_of(
+        &raw.workbook,
+        relative_path,
+        &raw.workbook_id,
+        raw.format,
+        &raw.facts,
+        Some(&raw.source_rows),
+        layout::RowPolicy::Include,
+        locale,
+    );
     Ok((workbook, inventory))
 }
 
@@ -219,6 +307,26 @@ mod tests {
     fn the_same_bytes_hash_to_the_same_identity() {
         assert_eq!(hash_bytes(b"a,b\n1,2\n"), hash_bytes(b"a,b\n1,2\n"));
         assert_ne!(hash_bytes(b"a,b\n1,2\n"), hash_bytes(b"a,b\n1,3\n"));
+    }
+
+    #[test]
+    fn an_encrypted_xlsx_is_told_apart_from_a_broken_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let encrypted = dir.path().join("secret.xlsx");
+        let mut bytes = COMPOUND_FILE_SIGNATURE.to_vec();
+        bytes.extend_from_slice(&[0u8; 64]);
+        std::fs::write(&encrypted, &bytes).unwrap();
+        let broken = dir.path().join("broken.xlsx");
+        std::fs::write(&broken, b"not a workbook").unwrap();
+
+        assert_eq!(
+            build_inventory(&encrypted, "secret.xlsx", TEST_LOCALE).unwrap_err(),
+            TabularError::PasswordProtected
+        );
+        assert_eq!(
+            build_inventory(&broken, "broken.xlsx", TEST_LOCALE).unwrap_err(),
+            TabularError::ReadFailed
+        );
     }
 
     #[test]
@@ -367,6 +475,7 @@ mod tests {
                 extraction_method: crate::file_record::ExtractionMethod::None,
                 indexed: false,
                 index_metadata: None,
+                layout_caveats: Vec::new(),
             }
         }
 

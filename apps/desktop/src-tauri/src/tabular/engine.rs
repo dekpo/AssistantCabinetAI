@@ -528,14 +528,25 @@ pub fn execute(
             if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
-            let values: BTreeSet<String> = matched
+            let mut spellings: std::collections::BTreeMap<
+                String,
+                std::collections::BTreeMap<String, usize>,
+            > = std::collections::BTreeMap::new();
+            for text in matched
                 .iter()
                 .filter_map(|&index| rows[index].get(col.index))
                 .map(text_value)
                 .filter(|text| !text.trim().is_empty())
-                .collect();
+            {
+                *spellings
+                    .entry(label_key(&text))
+                    .or_default()
+                    .entry(tidy_label(&text))
+                    .or_insert(0) += 1;
+            }
+            let values: Vec<String> = spellings.values().map(commonest_spelling).collect();
             TabularOutcome::Value {
-                value: TabularValue::Distinct(values.into_iter().collect()),
+                value: TabularValue::Distinct(values),
                 locator: locator(
                     sheet_inventory,
                     Some(&col.name),
@@ -831,24 +842,31 @@ pub fn execute(
             if matched.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
-            let mut counts: std::collections::BTreeMap<String, usize> =
-                std::collections::BTreeMap::new();
+            let mut counts: std::collections::BTreeMap<
+                String,
+                (std::collections::BTreeMap<String, usize>, usize),
+            > = std::collections::BTreeMap::new();
             for &index in &matched {
                 let Some(cell) = rows[index].get(group_col.index) else {
                     continue;
                 };
-                let key = text_value(cell);
-                if key.trim().is_empty() {
+                let label = text_value(cell);
+                if label.trim().is_empty() {
                     continue;
                 }
-                *counts.entry(key).or_insert(0) += 1;
+                let entry = counts.entry(label_key(&label)).or_default();
+                *entry.0.entry(tidy_label(&label)).or_insert(0) += 1;
+                entry.1 += 1;
             }
             if counts.is_empty() {
                 return fail(NotAnswerableReason::EmptySheet);
             }
             let mut group_counts: Vec<GroupCount> = counts
-                .into_iter()
-                .map(|(group, count)| GroupCount { group, count })
+                .into_values()
+                .map(|(spellings, count)| GroupCount {
+                    group: commonest_spelling(&spellings),
+                    count,
+                })
                 .collect();
             // Stable: equal counts keep the alphabetical order the map gave them.
             group_counts.sort_by(|a, b| b.count.cmp(&a.count));
@@ -1060,6 +1078,31 @@ pub(crate) fn reachable_sheets<'a>(
                 .filter(|sheet| folded.contains(&fold_text(&sheet.name)))
                 .collect()
         }
+        // A sheet the file hides is not offered and not chosen by default; a workbook whose every
+        // sheet is hidden offers them all (there is nothing else to read in it).
+        _ => {
+            let visible: Vec<&SheetInventory> = inventory
+                .sheets
+                .iter()
+                .filter(|sheet| sheet.is_visible())
+                .collect();
+            if visible.is_empty() {
+                inventory.sheets.iter().collect()
+            } else {
+                visible
+            }
+        }
+    }
+}
+
+/// The sheets a question may name: the ones its scope reaches, and, with no scope, every sheet of
+/// the workbook, a hidden one included (a hidden sheet is reached by naming it, and only so).
+pub(crate) fn nameable_sheets<'a>(
+    inventory: &'a TabularInventory,
+    allowed_sheets: Option<&[String]>,
+) -> Vec<&'a SheetInventory> {
+    match allowed_sheets {
+        Some(allowed) if !allowed.is_empty() => reachable_sheets(inventory, allowed_sheets),
         _ => inventory.sheets.iter().collect(),
     }
 }
@@ -1077,8 +1120,14 @@ pub(crate) fn resolve_sheet_inventory<'a>(
         None => reachable,
         Some(name) => {
             let folded = fold_text(name);
-            reachable
-                .into_iter()
+            // A hidden sheet is reached by naming it, and only by naming it.
+            let pool: Vec<&SheetInventory> =
+                if allowed_sheets.is_none_or(|allowed| allowed.is_empty()) {
+                    inventory.sheets.iter().collect()
+                } else {
+                    reachable
+                };
+            pool.into_iter()
                 .filter(|sheet| fold_text(&sheet.name) == folded)
                 .collect()
         }
@@ -1098,13 +1147,35 @@ pub(crate) fn resolve_sheet_inventory<'a>(
     }
 }
 
+/// The sheet a figure is computed from. With no sheet named, the sheets that are not tables (a
+/// "Notes" sheet of three lines) do not make the question ambiguous when exactly one sheet is a
+/// table. A mail merge does not use this: a letter is never filled from a sheet picked for her.
+fn resolve_figure_sheet<'a>(
+    inventory: &'a TabularInventory,
+    requested: Option<&str>,
+    allowed_sheets: Option<&[String]>,
+) -> Result<&'a SheetInventory, NotAnswerableReason> {
+    if requested.is_none() {
+        let tables: Vec<&SheetInventory> = reachable_sheets(inventory, allowed_sheets)
+            .into_iter()
+            .filter(|sheet| sheet.looks_tabular())
+            .collect();
+        if let [only] = tables.as_slice() {
+            if inventory.sheets_named(&only.name).len() == 1 {
+                return Ok(only);
+            }
+        }
+    }
+    resolve_sheet_inventory(inventory, requested, allowed_sheets)
+}
+
 fn resolve_sheet<'a>(
     inventory: &'a TabularInventory,
     workbook: &'a Workbook,
     requested: Option<&str>,
     allowed_sheets: Option<&[String]>,
 ) -> Result<(&'a SheetInventory, &'a super::SheetData), NotAnswerableReason> {
-    let sheet_inventory = resolve_sheet_inventory(inventory, requested, allowed_sheets)?;
+    let sheet_inventory = resolve_figure_sheet(inventory, requested, allowed_sheets)?;
     let data = workbook
         .sheets
         .iter()
@@ -1285,7 +1356,10 @@ fn group_sums_for(
     locale: &str,
 ) -> Vec<GroupSum> {
     let resolved = inventory::resolve_numeric_column(rows, sum_col.index, locale);
-    let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+    let mut totals: std::collections::BTreeMap<
+        String,
+        (std::collections::BTreeMap<String, usize>, f64),
+    > = std::collections::BTreeMap::new();
     for &index in matched {
         let Some(amount) = resolved.values[index] else {
             continue;
@@ -1293,16 +1367,41 @@ fn group_sums_for(
         let Some(group_cell) = rows[index].get(group_col.index) else {
             continue;
         };
-        let key = text_value(group_cell);
-        if key.trim().is_empty() {
+        let label = text_value(group_cell);
+        if label.trim().is_empty() {
             continue;
         }
-        *totals.entry(key).or_insert(0.0) += amount;
+        let entry = totals.entry(label_key(&label)).or_default();
+        *entry.0.entry(tidy_label(&label)).or_insert(0) += 1;
+        entry.1 += amount;
     }
     totals
-        .into_iter()
-        .map(|(group, sum)| GroupSum { group, sum })
+        .into_values()
+        .map(|(spellings, sum)| GroupSum {
+            group: commonest_spelling(&spellings),
+            sum,
+        })
         .collect()
+}
+
+/// A group label as a spreadsheet pivot reads it: spaces at the ends and doubled spaces do not
+/// make a new group, and neither does the case (`Frais`, ` Frais` and `frais` are one group). The
+/// accents stay: two spellings that differ by an accent are two words. The label shown is the
+/// commonest spelling.
+fn tidy_label(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn label_key(text: &str) -> String {
+    tidy_label(text).to_lowercase()
+}
+
+fn commonest_spelling(spellings: &std::collections::BTreeMap<String, usize>) -> String {
+    spellings
+        .iter()
+        .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
+        .map(|(spelling, _)| spelling.clone())
+        .unwrap_or_default()
 }
 
 fn row_cells(columns: &[ColumnInventory], row: &[CellValue]) -> Vec<CellText> {

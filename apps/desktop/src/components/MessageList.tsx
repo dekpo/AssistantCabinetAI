@@ -6,7 +6,7 @@ import { FillPlanCard } from "./FillPlanCard";
 import { localiseInternalNames } from "../lib/displayNames";
 import { annotationParts, answerForCopy, sourceItems } from "../lib/annotations";
 import { rowsSentFilters, rowsSentHeading, rowsSentTotals } from "../lib/rowsSent";
-import { buttonsFor } from "../lib/calculationFollowUp";
+import { buttonsFor, rowPolicyButton } from "../lib/calculationFollowUp";
 import { formatTabularAnswer } from "../lib/tabularAnswer";
 import type { GenerationPhase } from "../lib/generation";
 import {
@@ -37,6 +37,7 @@ export function MessageList({
   onRegenerate,
   onExplainCalculation,
   onAnalyseCalculation,
+  onAskWithRowPolicy,
   onAskAlone,
   onAnalyse,
   analysing,
@@ -57,6 +58,9 @@ export function MessageList({
   onExplainCalculation: (answerEntryId: string) => void;
   /** "Demander a l'IA" under a computed figure: the analysis replaces the answer, the figure stays. */
   onAnalyseCalculation: (answerEntryId: string) => void;
+  /** The figure asked again with the other reading of the rows a spreadsheet hides or filters out:
+   * a new answer under the first, which stays. */
+  onAskWithRowPolicy?: (answerEntryId: string, rowPolicy: "include" | "exclude") => void;
   /** A follow-up answer, asked again as a question of its own, with nothing of the previous question. */
   onAskAlone?: (answerEntryId: string) => void;
   /** Analyse the folder, then ask this question again. Offered under the one answer that says the
@@ -271,6 +275,7 @@ export function MessageList({
           const askedAbout = entries[entries.indexOf(entry) - 1];
           const annotationNotes = annotationParts(t, locale, entry);
           const buttons = buttonsFor(entry);
+          const rowPolicy = rowPolicyButton(entry);
           return (
             <article key={entry.id} className="message message--assistant">
               <p className="message__author">{t("chat.authorAssistant")}</p>
@@ -537,6 +542,15 @@ export function MessageList({
                       {t("actions.analyseCalculation")}
                     </button>
                   ) : null}
+                  {rowPolicy === null || onAskWithRowPolicy === undefined ? null : (
+                    <button
+                      type="button"
+                      className="button button--compact"
+                      onClick={() => onAskWithRowPolicy(entry.id, rowPolicy.policy)}
+                    >
+                      {t(rowPolicy.label)}
+                    </button>
+                  )}
                   {buttons.regenerate === null ? null : (
                     <button
                       type="button"

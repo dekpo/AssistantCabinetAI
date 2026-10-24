@@ -70,6 +70,11 @@ pub struct TableCarryOver {
     /// The order of a sort.
     #[serde(default)]
     pub descending: bool,
+    /// The rows the figure left out because the spreadsheet hides or filters them out
+    /// (`tabular::layout::RowPolicy::Exclude`); `None` when it counted them. A short follow-up
+    /// continues the same reading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_policy: Option<crate::tabular::layout::RowPolicy>,
 }
 
 /// Why a carry-over the client sent was not used. Machine codes; the interface writes the line.
@@ -132,6 +137,7 @@ impl TableCarryOver {
             group_by: group_by.map(str::to_string),
             top_n: None,
             descending: false,
+            row_policy: None,
         };
         Some(match operation {
             Operation::Count { filters } => made(OperationKind::Count, None, None, filters),
@@ -867,6 +873,7 @@ mod tests {
             group_by: None,
             top_n: None,
             descending: false,
+            row_policy: None,
         };
         assert!(carried.specs().is_none());
     }

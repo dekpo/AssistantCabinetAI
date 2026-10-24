@@ -253,6 +253,11 @@ impl WorkFolderInventory {
                     record.indexed = false;
                     record.index_metadata = None;
                     if let Some(inventory) = inventory {
+                        record.layout_caveats = inventory
+                            .caveats(&record.extension)
+                            .into_iter()
+                            .map(str::to_string)
+                            .collect();
                         usable.insert(file.relative_path.clone(), inventory);
                     }
                     record
@@ -642,6 +647,7 @@ fn record_for(
             ocr_engine: row.ocr_engine.clone(),
             ocr_engine_version: row.ocr_engine_version.clone(),
         }),
+        layout_caveats: Vec::new(),
     }
 }
 

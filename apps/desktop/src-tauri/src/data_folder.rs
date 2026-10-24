@@ -27,7 +27,7 @@ use crate::file_key::Root;
 use crate::file_profile::build::Domain;
 use crate::file_record::{FileRecord, ProcessingStatus, Readability};
 use crate::index_store::IndexStore;
-use crate::indexing::{IndexProgress, IndexSummary};
+use crate::indexing::{FailedFile, IndexProgress, IndexSummary};
 use crate::inventory::{FileHashCache, WorkFolderInventory};
 use crate::knowledge::backfill;
 use crate::knowledge::diagnostics::{
@@ -36,6 +36,7 @@ use crate::knowledge::diagnostics::{
 use crate::knowledge::ingest::KnowledgeContext;
 use crate::tabular;
 use crate::tabular::inventory::{TabularFormat, TabularInventory};
+use crate::tabular::layout::RowPolicy;
 
 /// The three counts the Data folder shows, in the same order and with the same meaning as the
 /// Documents folder's: files, analysed (green), unreadable (red).
@@ -69,6 +70,9 @@ pub struct DataFolder {
     /// The cached inventory of every **green** workbook, by relative path. Only a green one is
     /// ever answered from, so only a green one is kept.
     usable: BTreeMap<String, TabularInventory>,
+    /// What a figure does with the rows a spreadsheet hides or filters out (`tabular::layout`).
+    /// Rows acted on or sent never use it: they always leave those rows out.
+    row_policy: RowPolicy,
 }
 
 impl DataFolder {
@@ -94,7 +98,11 @@ impl DataFolder {
     ) -> Result<Self, AppError> {
         let (files, usable) =
             WorkFolderInventory::discover_in(Root::Data, root, documents, index, cache)?;
-        Ok(Self { files, usable })
+        Ok(Self {
+            files,
+            usable,
+            row_policy: RowPolicy::default(),
+        })
     }
 
     /// Built from parts that were already joined: the tabular family across both folders
@@ -103,7 +111,22 @@ impl DataFolder {
         files: WorkFolderInventory,
         usable: BTreeMap<String, TabularInventory>,
     ) -> Self {
-        Self { files, usable }
+        Self {
+            files,
+            usable,
+            row_policy: RowPolicy::default(),
+        }
+    }
+
+    /// This folder, read under another policy for the hidden and filtered rows of a figure.
+    pub fn with_row_policy(mut self, policy: RowPolicy) -> Self {
+        self.row_policy = policy;
+        self
+    }
+
+    /// What a figure does with hidden and filtered rows.
+    pub fn row_policy(&self) -> RowPolicy {
+        self.row_policy
     }
 
     /// The files, with their tabular state. A `WorkFolderInventory` so the file-reference
@@ -232,6 +255,8 @@ pub fn analyse_cancellable(
 
     let mut usable = 0;
     let mut unusable = Vec::new();
+    // A file that asks for a password to open is named with that reason, not as a broken file.
+    let mut failed: Vec<FailedFile> = Vec::new();
     let mut was_cancelled = false;
     let mut read_files = 0;
     for (position, file) in workbooks.iter().enumerate() {
@@ -275,7 +300,7 @@ pub fn analyse_cancellable(
             // The adapters report a file they cannot open as `ReadFailed` or `ParseFailed` alike
             // (`calamine` does not tell a locked file from a fake `.xlsx`), so the difference is
             // decided here, from whether the bytes themselves can be read.
-            Err(_) => match std::fs::read(path) {
+            Err(error) => match std::fs::read(path) {
                 // Read, but not a workbook: remembered as analysed with no sheet at all, so it
                 // shows red - the same outcome as a document extraction that failed - instead of
                 // staying "not analysed yet" for ever.
@@ -288,6 +313,8 @@ pub fn analyse_cancellable(
                                     relative_path: file.relative_path.clone(),
                                     format: format_of(&file.extension),
                                     sheets: Vec::new(),
+                                    facts: Default::default(),
+                                    layout_version: 0,
                                 },
                                 None,
                             )
@@ -297,6 +324,13 @@ pub fn analyse_cancellable(
                     workbook_timing.write_ms = write_ms;
                     timings.write_ms += write_ms;
                     unusable.push(file.relative_path.clone());
+                    if error == tabular::TabularError::PasswordProtected {
+                        failed.push(FailedFile {
+                            path: file.relative_path.clone(),
+                            code: "password_protected".to_string(),
+                            data: serde_json::json!({}),
+                        });
+                    }
                 }
                 // Could not even be read: a file still being written, or locked. Nothing is
                 // stored, so it stays "not analysed yet" and the next pass tries again.
@@ -393,7 +427,7 @@ pub fn analyse_cancellable(
         removed_files,
         renamed_files: Vec::new(),
         rename_failed_files: Vec::new(),
-        failed_files: Vec::new(),
+        failed_files: failed,
         unavailable_capabilities: Vec::new(),
         // Every workbook format that is listed here is read (CSV, XLSX, ODS); only the documents
         // pass reports its unread formats.

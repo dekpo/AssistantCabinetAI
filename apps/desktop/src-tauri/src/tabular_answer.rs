@@ -639,6 +639,10 @@ pub struct SheetSize {
     pub file: String,
     pub sheet: String,
     pub data_rows: usize,
+    /// What the layout rules did to the sheet, and the policy the figure was computed under
+    /// (TABULAR step 13): the record states both.
+    pub layout: Option<crate::tabular::layout::SheetLayout>,
+    pub policy: crate::tabular::layout::RowPolicy,
 }
 
 /// The data rows of every reachable sheet of the usable workbooks a selection keeps. Inventory only:
@@ -657,6 +661,8 @@ pub fn sheet_sizes(data: &DataFolder, selection: &ScopeMode) -> Vec<SheetSize> {
                 file: each.record.relative_path.clone(),
                 sheet: sheet.name.clone(),
                 data_rows: sheet.row_count,
+                layout: sheet.layout.clone(),
+                policy: data.row_policy(),
             });
         }
     }
@@ -704,10 +710,12 @@ pub fn calculation_record_inheriting(
     else {
         return None;
     };
-    let data_rows = sizes
+    let size = sizes
         .iter()
-        .find(|size| size.file == *file && size.sheet == locator.sheet)
-        .map(|size| size.data_rows);
+        .find(|size| size.file == *file && size.sheet == locator.sheet);
+    let data_rows = size.map(|size| size.data_rows);
+    let rows_left_out = escalation::lists_rows(derivation)
+        || size.is_some_and(|size| size.policy == crate::tabular::layout::RowPolicy::Exclude);
     let workbook = crate::tabular::card::file_label(file);
     escalation::format_calculation_record(&CalculationRecord {
         question,
@@ -718,6 +726,8 @@ pub fn calculation_record_inheriting(
         derivation,
         rows_listed,
         carried,
+        layout: size.and_then(|size| size.layout.as_ref()),
+        rows_left_out,
     })
 }
 
@@ -754,11 +764,12 @@ pub fn replay_model_plan(
         .files()
         .absolute_path(target.record)
         .ok_or(AppError::ScopeUnavailable)?;
-    let (workbook, fresh) = match load_workbook_cached(index, &path, &file, inventory, locale) {
-        Ok(pair) => pair,
-        Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
-        Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
-    };
+    let (workbook, fresh) =
+        match load_workbook_cached(index, &path, &file, inventory, locale, data.row_policy()) {
+            Ok(pair) => pair,
+            Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
+            Err(_) => return Ok(TabularAnswer::WorkbookUnreadable { file }),
+        };
     let Ok(plan) = serde_json::from_value::<query_plan::QueryPlan>(plan.clone()) else {
         return Ok(no_table_part());
     };
@@ -1067,7 +1078,10 @@ fn answer_sync(
                     None,
                     Vec::new(),
                 ),
-                answer => TabularAnswer::Structural { file, answer },
+                answer => TabularAnswer::Structural {
+                    file,
+                    answer: row_count_under_policy(answer, inventory, data.row_policy()),
+                },
             }))
         }
         TabularRoute::Operation { sheet, operation } => {
@@ -1081,14 +1095,22 @@ fn answer_sync(
                 .files()
                 .absolute_path(target.record)
                 .ok_or(AppError::ScopeUnavailable)?;
-            let (workbook, fresh) =
-                match load_workbook_cached(index, &path, &file, inventory, locale) {
-                    Ok(pair) => pair,
-                    Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
-                    Err(_) => {
-                        return Ok(PendingAnswer::Done(TabularAnswer::WorkbookUnreadable { file }))
-                    }
-                };
+            let (workbook, fresh) = match load_workbook_cached(
+                index,
+                &path,
+                &file,
+                inventory,
+                locale,
+                policy_for(&operation, data),
+            ) {
+                Ok(pair) => pair,
+                Err(TabularError::WorkbookChanged) => return Err(AppError::ScopeUnavailable),
+                Err(_) => {
+                    return Ok(PendingAnswer::Done(TabularAnswer::WorkbookUnreadable {
+                        file,
+                    }))
+                }
+            };
 
             // Session 11: a residual word anchored on real data becomes the filters
             // `tabular::engine` actually runs under, rather than only naming what was seen
@@ -1334,7 +1356,7 @@ fn answer_sync(
             let Some(path) = data.files().absolute_path(target.record) else {
                 return Ok(PendingAnswer::Done(fallback));
             };
-            match load_workbook_cached(index, &path, &file, inventory, locale) {
+            match load_workbook_cached(index, &path, &file, inventory, locale, data.row_policy()) {
                 Ok((workbook, fresh)) => {
                     // A question with no operation that names a value found in the data ("order
                     // CMD-2026-002") is a lookup of the rows that hold it: shown as they are, never
@@ -1358,8 +1380,11 @@ fn answer_sync(
                             close,
                         )));
                     }
+                    // Several tables on one sheet and none of them named: which one is hers to say,
+                    // never the model's to pick.
+                    let skip_model = several_tables_none_named(question, &file, &fresh, allowed);
                     Ok(PendingAnswer::TryModel {
-                        skip_model: false,
+                        skip_model,
                         file,
                         workbook,
                         inventory: fresh,
@@ -1493,6 +1518,64 @@ fn apply_plan(
     }
 }
 
+/// The row count of a sheet follows the same policy as a figure: with the hidden and filtered rows
+/// left out, they are not counted (the count is read from the inventory, which keeps them).
+fn row_count_under_policy(
+    answer: StructuralAnswer,
+    inventory: &TabularInventory,
+    policy: crate::tabular::layout::RowPolicy,
+) -> StructuralAnswer {
+    match answer {
+        StructuralAnswer::RowCount { sheet, rows }
+            if policy == crate::tabular::layout::RowPolicy::Exclude =>
+        {
+            let hidden = inventory
+                .sheets
+                .iter()
+                .find(|each| each.name == sheet)
+                .and_then(|each| each.layout.as_ref())
+                .map_or(0, |layout| layout.hidden_rows);
+            StructuralAnswer::RowCount {
+                sheet,
+                rows: rows.saturating_sub(hidden),
+            }
+        }
+        other => other,
+    }
+}
+
+/// A sheet of the file holds several tables (each one a sheet of its own here) and the question
+/// names none of them: the user is asked which, the model is not.
+fn several_tables_none_named(
+    question: &str,
+    file: &str,
+    inventory: &TabularInventory,
+    allowed: Option<&[String]>,
+) -> bool {
+    let tables: Vec<&SheetInventory> = engine::reachable_sheets(inventory, allowed)
+        .into_iter()
+        .filter(|sheet| {
+            sheet.looks_tabular()
+                && sheet
+                    .layout
+                    .as_ref()
+                    .is_some_and(|layout| layout.tables_on_sheet > 1)
+        })
+        .collect();
+    tables.len() > 1 && sheet_named_in(question, file, &tables).is_none()
+}
+
+/// A figure follows the folder's policy for hidden and filtered rows; an operation that lists rows
+/// (a filter, a sort, a lookup by position) never shows the rows the user cannot see.
+fn policy_for(operation: &Operation, data: &DataFolder) -> crate::tabular::layout::RowPolicy {
+    match operation {
+        Operation::Filter { .. } | Operation::Sort { .. } | Operation::RowAt { .. } => {
+            crate::tabular::layout::RowPolicy::Exclude
+        }
+        _ => data.row_policy(),
+    }
+}
+
 /// `tabular::load_current`, with the typed workbook cache tried first
 /// (`docs/SESSION-DATA-13-Column-Cache.md`). `inventory.workbook_id` is the identity the scope
 /// already pinned - `DataFolder::discover` derived it through `FileHashCache`'s own fast check
@@ -1515,26 +1598,40 @@ fn load_workbook_cached(
     relative_path: &str,
     inventory: &TabularInventory,
     locale: &str,
+    policy: crate::tabular::layout::RowPolicy,
 ) -> Result<(Workbook, TabularInventory), TabularError> {
     // Timed and reported to the question's diagnostics (`knowledge::diagnostics`): how long a
     // workbook takes to come back, and whether the cache was what brought it back.
     let started = std::time::Instant::now();
-    if let Ok(Some(workbook)) = index.tabular_workbook_by_hash(&inventory.workbook_id) {
-        let fresh = TabularInventory::build(
+    if let Ok(Some(raw)) = index.tabular_workbook_by_hash(&inventory.workbook_id) {
+        // The cache holds the raw grid; the layout facts come from the inventory that pinned it.
+        let (workbook, fresh, _) = tabular::view_of(
+            &raw,
             relative_path,
             &inventory.workbook_id,
             inventory.format,
-            &workbook,
+            &inventory.facts,
+            None,
+            policy,
             locale,
         );
         crate::knowledge::diagnostics::record_workbook_load(started.elapsed(), true);
         return Ok((workbook, fresh));
     }
-    let (workbook, fresh) =
-        tabular::load_current(path, relative_path, &inventory.workbook_id, locale)?;
+    let raw = tabular::load_current_raw(path, &inventory.workbook_id)?;
     // Best-effort: a question is still answered from `workbook` even when the write fails (a
     // locked or full disk), exactly as a cache miss already would have been.
-    let _ = index.put_tabular_workbook(&fresh.workbook_id, &workbook);
+    let _ = index.put_tabular_workbook(&raw.workbook_id, &raw.workbook);
+    let (workbook, fresh, _) = tabular::view_of(
+        &raw.workbook,
+        relative_path,
+        &raw.workbook_id,
+        raw.format,
+        &raw.facts,
+        Some(&raw.source_rows),
+        policy,
+        locale,
+    );
     crate::knowledge::diagnostics::record_workbook_load(started.elapsed(), false);
     Ok((workbook, fresh))
 }
@@ -2135,9 +2232,14 @@ fn open_card_workbooks(
         let Some(path) = data.files().absolute_path(record) else {
             continue;
         };
-        let Ok((workbook, fresh)) =
-            load_workbook_cached(index, &path, &card.file, inventory, locale)
-        else {
+        let Ok((workbook, fresh)) = load_workbook_cached(
+            index,
+            &path,
+            &card.file,
+            inventory,
+            locale,
+            crate::tabular::layout::RowPolicy::Exclude,
+        ) else {
             continue;
         };
         let sheets = choices
@@ -2778,7 +2880,15 @@ fn open_workbook_for_fill(
     }
     let inventory = data.usable_inventory(&record.relative_path)?;
     let path = data.files().absolute_path(record)?;
-    load_workbook_cached(index, &path, &record.relative_path, inventory, locale).ok()
+    load_workbook_cached(
+        index,
+        &path,
+        &record.relative_path,
+        inventory,
+        locale,
+        crate::tabular::layout::RowPolicy::Exclude,
+    )
+    .ok()
 }
 
 /// Opens one analysed workbook for a mail merge with its sheet: `requested` when the caller names one,

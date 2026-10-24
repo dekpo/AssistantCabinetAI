@@ -7,8 +7,10 @@
 
 use serde::Serialize;
 
+use crate::data_folder::DataFolder;
 use crate::tabular::card::WorkbookCard;
 use crate::tabular::carry_over::CarryReport;
+use crate::tabular::layout::{RowPolicy, SheetLayout};
 use crate::tabular::sample::WorkbookSampleUse;
 use crate::tabular::structural::StructuralAnswer;
 use crate::tabular_answer::{
@@ -111,6 +113,141 @@ pub struct WorkbookUse {
     pub count: Option<usize>,
     /// The index keys an ambiguous name may mean.
     pub candidates: Vec<String>,
+    /// What the layout of the sheet did to this answer: rows the spreadsheet hides, merged cells,
+    /// a total row left out (`tabular::layout`). `None` when the sheet is plain.
+    pub layout: Option<LayoutNote>,
+}
+
+/// What the layout rules did to the sheet an answer was computed from, as counts. The interface
+/// writes the lines (`src/lib/workbookUse.ts`); nothing here is a value of the file.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutNote {
+    pub sheet: Option<String>,
+    /// Data rows hidden by hand, and rows hidden by an active filter (one or the other, never both).
+    pub hidden_rows: usize,
+    pub filtered_rows: usize,
+    /// These rows were left out of this answer (otherwise they are in it).
+    pub rows_left_out: bool,
+    pub total_rows: usize,
+    pub merged_filled: usize,
+    pub blank_rows: usize,
+    pub note_rows: usize,
+    /// Tables the raw sheet holds, when more than one.
+    pub tables: usize,
+    /// Sheets of the workbook the file hides, which no question reads unless it names them.
+    pub hidden_sheets: usize,
+    /// The workbook was analysed before the layout was read: hidden rows and totals are not known.
+    pub unread: bool,
+}
+
+impl LayoutNote {
+    fn is_empty(&self) -> bool {
+        self.hidden_rows == 0
+            && self.filtered_rows == 0
+            && self.total_rows == 0
+            && self.merged_filled == 0
+            && self.blank_rows == 0
+            && self.note_rows == 0
+            && self.tables <= 1
+            && self.hidden_sheets == 0
+            && !self.unread
+    }
+
+    fn add(&mut self, layout: &SheetLayout) {
+        if layout.filter_active {
+            self.filtered_rows += layout.hidden_rows;
+        } else {
+            self.hidden_rows += layout.hidden_rows;
+        }
+        self.total_rows += layout.total_rows;
+        self.merged_filled += layout.merged_filled;
+        self.blank_rows += layout.blank_rows_ignored;
+        self.note_rows += layout.note_rows_left_out;
+        self.tables = self.tables.max(layout.tables_on_sheet);
+    }
+}
+
+/// The sheets the file hides that the answer did not read: the sheet it was computed from is not
+/// one of them, even when it is hidden (the question named it).
+pub fn hidden_sheets_unread(
+    inventory: &crate::tabular::inventory::TabularInventory,
+    used: Option<&str>,
+) -> usize {
+    inventory
+        .sheets
+        .iter()
+        .filter(|sheet| !sheet.is_visible() && Some(sheet.name.as_str()) != used)
+        .count()
+}
+
+/// Writes the layout of the sheets an answer used into its trace: for the workbook a figure was
+/// computed from, the sheet it was read from; for a workbook whose rows were sent to the model, its
+/// sheets. Counts only. A plain sheet adds nothing.
+pub fn note_layout(uses: &mut [WorkbookUse], data: &DataFolder, figure: Option<&TabularAnswer>) {
+    let figure_use = match figure {
+        Some(TabularAnswer::Value {
+            file,
+            locator,
+            derivation,
+            ..
+        }) => Some((
+            file.as_str(),
+            locator.sheet.as_str(),
+            crate::tabular::escalation::lists_rows(derivation),
+        )),
+        // The row count of a sheet is a figure about its rows too.
+        Some(TabularAnswer::Structural {
+            file,
+            answer: StructuralAnswer::RowCount { sheet, .. },
+        }) => Some((file.as_str(), sheet.as_str(), false)),
+        _ => None,
+    };
+    for entry in uses.iter_mut() {
+        let Some(inventory) = data.usable_inventory(&entry.file) else {
+            continue;
+        };
+        let mut note = LayoutNote::default();
+        match entry.how {
+            WorkbookUseHow::Computed => {
+                let Some((file, sheet, listing)) = figure_use else {
+                    continue;
+                };
+                if file != entry.file {
+                    continue;
+                }
+                let Some(layout) = inventory
+                    .sheets
+                    .iter()
+                    .find(|candidate| candidate.name == sheet)
+                    .and_then(|candidate| candidate.layout.as_ref())
+                else {
+                    continue;
+                };
+                note.sheet = Some(sheet.to_string());
+                note.add(layout);
+                note.rows_left_out = listing || data.row_policy() == RowPolicy::Exclude;
+            }
+            WorkbookUseHow::CardSent if entry.rows_sent.is_some() => {
+                for layout in inventory
+                    .sheets
+                    .iter()
+                    .filter(|sheet| sheet.looks_tabular())
+                    .filter_map(|sheet| sheet.layout.as_ref())
+                {
+                    note.add(layout);
+                }
+                note.rows_left_out = true;
+            }
+            _ => continue,
+        }
+        note.hidden_sheets = hidden_sheets_unread(inventory, note.sheet.as_deref());
+        note.unread = inventory.layout_version < crate::tabular::layout::LAYOUT_VERSION
+            && inventory.format != crate::tabular::inventory::TabularFormat::Csv;
+        if !note.is_empty() {
+            entry.layout = Some(note);
+        }
+    }
 }
 
 impl WorkbookUse {
@@ -125,6 +262,7 @@ impl WorkbookUse {
             truncated: false,
             count: None,
             candidates: Vec::new(),
+            layout: None,
         }
     }
 
@@ -731,6 +869,7 @@ mod tests {
             group_by: None,
             top_n: None,
             descending: false,
+            row_policy: None,
         };
         let applied = CarryReport {
             next: Some(next),

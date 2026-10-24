@@ -8,8 +8,9 @@
 
 use std::path::Path;
 
-use calamine::{open_workbook_auto, Data, DataType, Range, Reader};
+use calamine::{open_workbook_auto, Data, DataType, Range, Reader, SheetVisible};
 
+use super::layout::{FactsBySheet, SheetFacts, SheetState};
 use super::{CellValue, SheetData, SourceRows, TabularDataSource, TabularError, Workbook};
 
 pub struct XlsxDataSource;
@@ -29,11 +30,37 @@ impl XlsxDataSource {
         &self,
         path: &Path,
     ) -> Result<(Workbook, SourceRows), TabularError> {
+        self.open_with_facts(path)
+            .map(|(workbook, source_rows, _)| (workbook, source_rows))
+    }
+
+    /// [`Self::open_with_source_rows`], and the layout facts of every sheet: its state, where its
+    /// grid starts, and, for `.xlsx` and `.ods`, the hidden rows and columns, the active
+    /// autofilter, the merged cells and the Excel Tables (`layout_read`). `.xls` gives the state
+    /// and the origin only: the library exposes nothing more for that format.
+    pub fn open_with_facts(
+        &self,
+        path: &Path,
+    ) -> Result<(Workbook, SourceRows, FactsBySheet), TabularError> {
         let mut workbook = open_workbook_auto(path).map_err(|_| TabularError::ReadFailed)?;
         let sheet_names = workbook.sheet_names().to_owned();
+        let states: std::collections::BTreeMap<String, SheetState> = workbook
+            .sheets_metadata()
+            .iter()
+            .map(|sheet| {
+                let state = match sheet.visible {
+                    SheetVisible::Visible => SheetState::Visible,
+                    SheetVisible::Hidden => SheetState::Hidden,
+                    SheetVisible::VeryHidden => SheetState::VeryHidden,
+                };
+                (sheet.name.clone(), state)
+            })
+            .collect();
+        let mut read = super::layout_read::read_facts(path).unwrap_or_default();
 
         let mut sheets = Vec::with_capacity(sheet_names.len());
         let mut source_rows = SourceRows::new();
+        let mut facts = FactsBySheet::new();
         for name in sheet_names {
             let range = workbook
                 .worksheet_range(&name)
@@ -45,6 +72,13 @@ impl XlsxDataSource {
             let value_start = range.start();
             let formula_start = formulas.as_ref().and_then(Range::start);
             let first_row = value_start.map(|(row, _)| row).unwrap_or(0);
+            let mut sheet_facts: SheetFacts = read.remove(&name).unwrap_or_default();
+            if let Some(state) = states.get(&name) {
+                sheet_facts.state = *state;
+            }
+            sheet_facts.origin_row = first_row;
+            sheet_facts.origin_col = value_start.map(|(_, col)| col).unwrap_or(0);
+            facts.insert(name.clone(), sheet_facts);
 
             let mut rows = Vec::with_capacity(range.height());
             for (row_index, row) in range.rows().enumerate() {
@@ -73,7 +107,7 @@ impl XlsxDataSource {
             sheets.push(SheetData { name, rows });
         }
 
-        Ok((Workbook { sheets }, source_rows))
+        Ok((Workbook { sheets }, source_rows, facts))
     }
 }
 
@@ -105,6 +139,29 @@ fn formula_expression_at<'a>(
         .filter(|text| !text.is_empty())
 }
 
+/// The text a spreadsheet application writes for an error value, not a debug rendering of it.
+fn error_literal(error: &calamine::CellErrorType) -> &'static str {
+    use calamine::CellErrorType::*;
+    match error {
+        Div0 => "#DIV/0!",
+        NA => "#N/A",
+        Name => "#NAME?",
+        Null => "#NULL!",
+        Num => "#NUM!",
+        Ref => "#REF!",
+        Value => "#VALUE!",
+        GettingData => "#GETTING_DATA",
+    }
+}
+
+/// Whether a text is one of the error literals [`error_literal`] writes.
+pub fn is_error_literal(text: &str) -> bool {
+    matches!(
+        text,
+        "#DIV/0!" | "#N/A" | "#NAME?" | "#NULL!" | "#NUM!" | "#REF!" | "#VALUE!" | "#GETTING_DATA"
+    )
+}
+
 fn convert_cell(data: &Data, formula: Option<&String>) -> CellValue {
     // A real calendar date, read once by calamine's own `dates` feature (chrono) rather than
     // kept as the raw serial number the file stores or re-parsed from its ISO text a second time
@@ -128,7 +185,7 @@ fn convert_cell(data: &Data, formula: Option<&String>) -> CellValue {
             Data::Int(number) => CellValue::Number(*number as f64),
             Data::Bool(value) => CellValue::Text(value.to_string()),
             Data::DurationIso(text) => CellValue::Text(text.clone()),
-            Data::Error(error) => CellValue::Text(format!("#ERROR:{error:?}")),
+            Data::Error(error) => CellValue::Text(error_literal(error).to_string()),
             Data::DateTime(_) | Data::DateTimeIso(_) => {
                 unreachable!("handled by the is_datetime()/is_datetime_iso() branch above")
             }

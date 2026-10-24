@@ -1369,6 +1369,8 @@ mod tests {
             file: "commandes.xlsx".to_string(),
             sheet: "Commandes".to_string(),
             data_rows: 124,
+            layout: None,
+            policy: Default::default(),
         }];
         let block = table_evidence_text(&answer, &sizes).expect("a block");
         assert!(block

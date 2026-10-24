@@ -216,11 +216,6 @@ fn clean_filter(masker: &Masker, filter: AppliedFilter) -> AppliedFilter {
     }
 }
 
-/// The spreadsheet number of the first data row (`sample`'s own rule).
-fn first_row_number(sheet: &SheetInventory) -> usize {
-    sheet.header_row.map_or(1, |header| header + 2)
-}
-
 fn cell_text(
     masker: &Masker,
     row: &[CellValue],
@@ -279,7 +274,7 @@ fn row_line(
         .iter()
         .map(|column| cell_text(masker, &data[index], column, decimal))
         .collect();
-    let number = first_row_number(sheet) + index;
+    let number = sheet.data_row_number(index);
     let line = format!("  Row {number}: {}", cells.join(" | "));
     (RowsRow { number, cells }, line)
 }

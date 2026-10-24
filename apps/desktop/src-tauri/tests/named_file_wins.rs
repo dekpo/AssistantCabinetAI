@@ -467,3 +467,18 @@ fn an_ambiguous_name_or_one_outside_the_selection_keeps_the_whole_selection() {
     assert!(unread.names_a_document);
     assert_eq!(unread.targeted, None);
 }
+
+#[test]
+fn a_workbook_written_in_full_is_advisory_even_when_a_same_named_one_is_ticked() {
+    // S12-1 (found by the wave-1 regression walk): with `factures.csv` and `archive/factures.csv` both
+    // ticked, a description of `archive/factures.csv` is a question about that one file. The bare name
+    // `factures.csv` that the path also reads as is not a second, ambiguous name.
+    let folders = Folders::build();
+    let both = folders.ticked(&[(FACTURES, &[]), (ARCHIVE, &[])]);
+    let advisory = |question: &str| {
+        tabular_answer::advisory_target(question, &folders.open(), &both, LOCALE, &[])
+    };
+
+    let target = advisory("Describe archive/factures.csv").expect("the file written in full wins");
+    assert_eq!(target.files, vec![ARCHIVE.to_string()]);
+}

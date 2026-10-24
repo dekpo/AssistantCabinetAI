@@ -340,12 +340,23 @@ router did not already answer. The engines compute and cite; the model only writ
   Neither case reaches a cell value or a row through the model: the match is made in Rust, against the
   workbook's real data, the same way `detect_filters` already anchors a residual question word.
 - **The tabular engine does the arithmetic**, deterministically, and hands the model a small finished result
-  (`tabular::escalation::format_evidence`, the exact function tier 2 keeps unsent for this session), never
-  raw rows: small models are poor at arithmetic and cannot hold a table.
-- **Two labelled blocks** reach the model, "Document excerpts" and "Table results", each capped to its own
-  share of the budget (`mixed_answer::MIXED_DOCUMENT_SHARE_CHARS`), under `MIXED_INSTRUCTION`, which forbids
-  computing and forbids using one block in place of the other - the same rule that already keeps excerpts
-  apart from folder facts.
+  (`tabular::escalation::format_evidence`, the exact function tier 2 keeps unsent for this session): small models
+  are poor at arithmetic and cannot hold a table. **Updated by the TABULAR series:** the table block may also be
+  the calculation record (step 06), and the writer may be given a labelled sample, the engine's column profile and
+  the rows a filter of the question designates (below); the figures in all of them are still the engine's.
+- **The blocks of the turn, as built** (`mixed_answer::build_turn_for`, each capped to its own share of the
+  model's room, under `MIXED_INSTRUCTION`, which forbids computing and forbids using one block in place of the
+  other - the same rule that already keeps excerpts apart from folder facts). In order: `Document excerpts`;
+  `Folder facts` (only when the question names one selected document, which is then searched with
+  `DocumentPlan::OneFile`: `mixed_answer::named_document`, `folder_facts_block`, step 08); `Workbook cards`
+  (structure only, no data value, for every workbook the question names or implies: `tabular::card`,
+  `CARD_SHARE_CHARS`, steps 02 and 03); the sample and column profile (`tabular::sample`, step 03b); the rows
+  chosen by the engine (`tabular::rows`, `TABLE_ROWS_SHARE_CHARS`, step 10); `Table results (workbook "<path>")`.
+  **The last three exist only when the setting `tabular_rows_mode` and the question allow them:** the sample and
+  profile with `sample` or `auto`; the rows with `auto`, for a writing or advisory request, never for the
+  analysis of a figure, and only if door 1 did not take the question. An absent block reads `<name>: none.` or is
+  left out and the turn is then the earlier turn byte for byte. A cell is untrusted text: the sample and the rows
+  sit between `<<DATA-token>>` markers drawn per request, and identifiers are masked.
 - **Numeric verification and citation checking, after generation.** Every number the model wrote is checked
   against the table's own value, or against an excerpt's text verbatim; a mismatch is appended as a
   correction, the model's draft kept exactly as written. Every bracketed citation is checked against the
@@ -358,6 +369,22 @@ router did not already answer. The engines compute and cite; the model only writ
   with **no gateway call at all** when the document side has nothing to add, the same "deterministic
   answer, zero gateway calls" guarantee tier 2 already keeps.
 - The engines never call each other, so neither can interfere with the other.
+
+### The TABULAR series on top of this (wave 1, steps 01 to 11, closed 24 October 2026)
+
+Detail and names of the merged code: `docs/DECISIONS.md`, "Settled by the TABULAR series, wave 1"; the doors and the turn: `docs/ARCHITECTURE.md`, "The mixed tier".
+
+- **The named file wins.** A workbook the question names is read before anything else decides, in every door: it gets a card, a merge request is filled from it and from no other
+  (`tabular_answer::locate_fill_source`), a letter the program cannot prepare is asked about and never written by a model, and a document named exactly is targeted like in tier 1. A file the
+  question names, a ticked workbook that cannot be used and a workbook continued from the previous answer **always leave a line under the answer** (the usage trace, `workbook_use::trace`).
+- **A workbook that is ticked but not named** is *implied* when exactly one is ticked, or the question says "the spreadsheet", or it names a column, or the knowledge base found an entity in it;
+  with several ticked and no sign none is implied and the line says how many were not used. No count cap: the model's room decides how many cards fit.
+- **Memory of a table conversation is two small things, never the model's context.** For documents, the history the writer keeps follows the model's window (`history_beside_sources`). For tables,
+  a short follow-up (« et pour mars ? ») is read from a state of a few names and filter values (`tabular::carry_over::TableCarryOver`) that the interface holds and the program **distrusts and
+  validates** before using; a writing or advisory request never inherits, a figure the hidden interpreter read leaves no state, and the line « Repris de la question précédente » says what was
+  inherited. The knowledge base's own memory isolation (I3, below) is unchanged: the table state changes no row of it.
+- **Two buttons under a computed figure** (« Expliquer le calcul », « Demander à l'IA ») start from a figure the program recomputes itself; the second is the analysis, which crosses it with the ticked documents.
+- **A formula the model writes is checked, never edited** (`tabular::formula_check`).
 
 ## Targeting inside the selection (KB lot 6)
 

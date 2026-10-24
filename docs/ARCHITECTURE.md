@@ -337,43 +337,66 @@ whether any answer is correct.
 
 ### The mixed tier: the engines compute, the model only writes
 
-Documents and tables both selected (`GroundingTier::DocumentsAndTables`) is still routed in two steps
-(`docs/SESSION-DATA-15-Mixed-Routing.md`, `docs/SESSION-DATA-16-Mixed-Tier.md`). A question that is
-clearly and only about the data is answered by the tabular engine alone, before anything else is read —
-unchanged since session 15. Everything else reaches `mixed_answer::answer`, a Tauri-free module
-`commands::mixed_tier` calls into with an already-classified `tabular_answer::PendingAnswer` and whatever
-retrieval already found, for the same `IndexStore`-is-not-`Sync` reason `tabular_answer`'s own
-`prepare`/`resolve` split exists: neither the tabular classification nor retrieval's embed-then-search
-sequence may hold a reference to the index across a gateway `.await`, so both happen in `commands.rs`,
-owning the index, before `mixed_answer::answer` is ever called.
+Documents and tables both selected (`GroundingTier::DocumentsAndTables`) is routed through **doors**, tried in order by `commands::sourced_answer`; the first that answers ends the question
+(`docs/SESSION-DATA-15-Mixed-Routing.md`, `docs/SESSION-DATA-16-Mixed-Tier.md`, then the TABULAR series, `docs/DECISIONS.md`, "Settled by the TABULAR series, wave 1"). Every file the
+question concerns is named by its **index key** and displayed by its plain path; both folders are read through `family_views_of`. A calculation follow-up (the two buttons under a figure, step 06)
+is tested before the doors and bypasses them on purpose.
 
 ```text
 question (documents and tables both selected)
-  → tabular classifier, over the tables alone → clearly data-only → tier 2's own engine, unchanged (session 15)
-  → otherwise: retrieval over the selected documents
-  → tabular_answer::prepare's own PendingAnswer:
-      Done(value | structural | a human choice)  → that is the whole answer; no generation, no model
-      TryModel (operation recognised, no filter resolved from the question's own words)
-          → entity linking: a retrieved excerpt's word anchored against the table's real column
-            values (`mixed_answer::entity_link`) — ambiguous between two columns → asked, nothing
-            computed; unique → the table's own filter, computed, no model
-          → neither: session 14's hidden interpreter, unchanged
-  → a computed Value (or no data question at all) and the document excerpts: one turn, two labelled
-    blocks ("Document excerpts", "Table results"), MIXED_INSTRUCTION — forbids computing, forbids
-    swapping one block for the other
-  → the model writes; every number it wrote is checked against the table's own value or an excerpt's
-    verbatim text afterward (`mixed_answer::verify_numbers`), and every bracketed citation against what
-    was actually supplied (`reject_citations`) — a mismatch is appended, never silently rewritten
-  → either side missing (no data question, or no document evidence, or the gateway unreachable for
-    generation) degrades to the side that still has something, with no gateway call when that is the
-    table alone
+  → door 0  « Demander à l'IA » under a nudge (skip_deterministic): the interpreter again for a data-side nudge
+            (tabular_tier), the writer again otherwise (mixed_tier)
+  → door 1  fill_tier: a merge request = a writing intent and (a distributive word, or an identifier found
+            in a data sheet of a named workbook); the named workbook wins and is the only one opened
+            → fill_plan::decide: a plan to approve | a question (which template, which sheet, which of
+              several workbooks) | a template drafted from the column names alone (NeedsDraft, step 09);
+              never a letter written by a model, never a row sent
+  → door 2  mixed_folder_tier: "how many documents", "which files mention X" → the folder engines, no model
+  → door 3  mixed_data_only_tier: an operation recognised and nothing left over (no document reference, no
+            writing or advisory intent) → the tabular engine alone, no model; a short follow-up is read first
+            with the carry-over the interface sent back (tabular::carry_over, validated, step 11)
+  → door 4  mixed_tier → mixed_answer::answer: the model writes (below)
 ```
 
-The model never receives a cell value or a row here either: the table block is built from
-`tabular::escalation::format_evidence`, the exact function tier 2 keeps unsent for this session, which
-already refuses to turn a row list into evidence. A mixed answer's `Source`-shaped half is `Computed`
-(the table) beside `Extracted`/`Recognised` (the documents) — never `ModelAsserted`: the model's prose is
-checked against both, not trusted as a third kind of fact.
+Door 4 is a Tauri-free module `commands::mixed_tier` calls into with an already-classified `tabular_answer::PendingAnswer` and whatever retrieval already found, for the same
+`IndexStore`-is-not-`Sync` reason `tabular_answer`'s own `prepare`/`resolve` split exists: neither the tabular classification nor retrieval's embed-then-search sequence may hold a reference to
+the index across a gateway `.await`, so both happen in `commands.rs`, owning the index, before `mixed_answer::answer` is ever called. **Tables only has the same writer** for an advisory
+question (`commands::advisory_tier`, decided by `tabular_answer::advisory_target` before anything is loaded, so the hidden interpreter is not asked): an explanation, a description, a comparison
+or a formula request is written from the cards, with no document.
+
+```text
+door 4
+  → which workbooks: tabular_answer::{named_workbooks, implied_workbooks} (judged on what the user ticked) → cards
+  → which documents: a document named exactly → DocumentPlan::OneFile + its Folder facts; otherwise
+    retrieval over the selected documents (skipped for an advisory question that designates no document)
+  → the table side, tabular_answer::prepare_for_mixed_with_carry_over's PendingAnswer:
+      Done(value | structural | a human choice)  → that is the table part; no model
+      TryModel → entity linking (mixed_answer::entity_link) → unique: the table's own filter, computed;
+                 ambiguous between two columns: asked → neither: session 14's hidden interpreter
+  → the turn, mixed_answer::build_turn_for, blocks in this order, each present only when it applies:
+      Document excerpts                       (retrieval over the selection)
+      Folder facts                            (a targeted document only)
+      Workbook cards                          (structure only, no data value; named and implied workbooks)
+      Table sample and profile                (tabular_rows_mode sample or auto; identifiers masked; engine's profile)
+      Table rows                              (tabular_rows_mode auto, a writing or advisory request, rows an
+                                               explicit filter designates; masked; engine's totals over them)
+      Table results (workbook "<path>")       (the engine's figure, or the calculation record)
+    + MIXED_INSTRUCTION, and the sentence of each of the optional blocks present
+  → the model writes; afterwards, never an edit of its text:
+      verify_numbers / reject_citations / arithmetic check (model_arithmetic) / formula check (one repair)
+  → either side missing (no data question, no document evidence, or the gateway unreachable for generation)
+    degrades to the side that still has something, with no gateway call when that is an ordinary computed figure
+  → the trace (workbook_use::trace) says, for every door, what was done with each workbook named, implied or
+    continued; the lines under the answer say what the model read (structure, N rows of M, rows chosen)
+```
+
+**What reaches the model, stated exactly (rewritten by step 12, 24 October 2026).** The old absolute "the model never receives a cell value or a row" was a design choice, never a law, and it no
+longer holds for door 4 and the advisory tier: since TABULAR step 03b a labelled **sample of rows** and the engine's column profile, and since step 10 the **rows an explicit filter of the
+question designates**, reach the writer, visibly, with identifiers masked and under the setting `tabular_rows_mode` (`off` | `sample` | `auto`, default `auto` while only fictional data is used,
+to be reviewed before any real document). **The absolute holds on the data-only paths:** door 3 (the engine alone), the hidden interpreter (the schema alone), the mail-merge doors including the
+drafted template (field names and kinds), « Expliquer le calcul » (the calculation record, no row) and the formula repair request. `format_evidence` still refuses a row list
+(`TabularValue::Rows`). What does not change in any path: every figure shown is the engine's, and a mixed answer's `Source`-shaped half is `Computed` (the table) beside
+`Extracted`/`Recognised` (the documents), never `ModelAsserted`: the model's prose is checked against both, not trusted as a third kind of fact.
 
 ## Runtimes are adapters, never the home of business logic
 

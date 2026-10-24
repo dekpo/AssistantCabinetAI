@@ -560,7 +560,14 @@ pub fn advisory_target(
 ) -> Option<AdvisoryTarget> {
     let chosen = chosen_workbooks(data, selection).ok()?;
     let named = named_workbooks(question, data, selection);
-    if !named.ambiguous.is_empty() || !named.not_selected.is_empty() {
+    // The stem of a file written in full (`Test/factures.xlsx` also reads as the bare name `factures` that
+    // two ticked files carry) is not a second name: an ambiguous name counts only when none of the files it
+    // may mean is already named exactly, as `locate_fill_source` reads it.
+    let ambiguous = named
+        .ambiguous
+        .iter()
+        .any(|(_, candidates)| !candidates.iter().any(|each| named.exact.contains(each)));
+    if ambiguous || !named.not_selected.is_empty() {
         return None;
     }
     let implied = implied_workbooks(question, data, selection, locale, entity_candidates);

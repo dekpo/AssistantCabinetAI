@@ -97,6 +97,7 @@ In the code, `commands::fill_tier` calls `tabular_answer::locate_fill_source`, w
 (« avant le 14 juillet 2026 », « 14 juin », « 14 novembre »; to check against the excerpts), contradict themselves (« Aucun document ne mentionne ... ») and raise no warning on a figure. The line « Cette question ne portait sur aucune de vos tables »
 is misleading here: the question named a table.
 To record for the owner's decision: a workbook named exactly in the question could win over the rest of the selection, as it already does elsewhere (`names_a_workbook`: « a question that names a workbook is never narrowed »).
+**Status (24 October 2026): closed by the TABULAR series.** Step 08 (`fix/named-file-wins`): the named workbook wins and is the only one opened (`FillLocation`), and a merge the program cannot prepare is asked about, never written by a model; step 09: with no template that fits, the template is drafted from the column names alone and shown for her to edit. Case H of the series plan. See `docs/DECISIONS.md`, "Settled by the TABULAR series, wave 1", rows W-4 and W-5.
 
 **H-2. In a mixed selection the model never reads a table, even one named exactly (important).**
 Her pasted case: the question is only `factures-fournisseurs-2026-t1-bureautique-leman-sa.xlsx`, everything ticked. The answer lists invoices of that supplier, all from `comptabilite/factures/*.docx|pdf` and `comptabilite/devis/*`, and says « Cette question ne portait sur aucune de vos tables ».
@@ -106,6 +107,7 @@ This is the designed behaviour (`docs/SELECTION-AND-MEMORY.md`, « Documents and
 - the search by meaning (retrieval) covers the documents only: workbooks are read by the engine, not cut into passages. So the sources can only be documents.
 It is not a filter and not a full context: nothing from the table was ever put in front of the model. The same question with spreadsheets only goes to the table engine instead, which cannot read an operation in it either and would answer with the file's columns and example questions, as in C8 (not tried; read from the code).
 Open decision: what a mixed question that names a workbook without an operation should do (say so plainly and offer the engine's examples, rather than answering from the documents about the same supplier).
+**Status (24 October 2026): closed by the TABULAR series.** Steps 02 and 03: the card of every named or implied workbook reaches the writer (structure only), so a named workbook with no operation is read and the misleading line is gone; step 03b adds a controlled sample and the engine's profile, step 04 the usage trace (a named file never disappears without a line). Case C of the series plan. See `docs/DECISIONS.md`, rows W-1 to W-3.
 
 **H-3. The routes towards the model after the deterministic engine (answer to « are documents priority? »).**
 Order in a mixed selection (`commands::sourced_answer`): 1) « Demander à l'IA » goes straight to the mixed tier; 2) a request to write a letter with one table and a template: a plan (`fill_tier`);
